@@ -22,8 +22,15 @@ installed before running `pip install cvxopf`.
 
 **Ubuntu / Debian**
 ```bash
-sudo apt-get install coinor-libipopt-dev
+sudo apt-get update
+sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev gfortran
 ```
+
+> **Note:** On Linux, `coinor-libipopt-dev` alone is not sufficient.
+> `liblapack-dev`, `libblas-dev`, and `gfortran` are also required because
+> IPOPT's internal linear solver (MUMPS) links against them at build time.
+> Without these, `pip install cvxopf` will fail when building `cyipopt`
+> with a linker error (`cannot find -llapack`, `cannot find -lblas`).
 
 **macOS**
 ```bash
