@@ -7,15 +7,20 @@ repository. Read this before making any changes.
 
 ## What this project is
 
-`cvxopf` is a Python package for AC optimal power flow (AC-OPF) using
-CVXPY's disciplined nonlinear programming (DNLP) framework, solved via
-IPOPT. It is designed for power systems research, with a focus on
-extensibility to multi-step optimization and energy storage models.
+`cvxopf` is a Python package for optimal power flow (OPF) using CVXPY,
+supporting multiple formulations:
+
+- **AC-OPF** via CVXPY's disciplined nonlinear programming (DNLP) framework,
+  solved via IPOPT (nonconvex)
+- **Lossy DC OPF** as a convex QP, solved via CLARABEL
+
+It is designed for power systems research, with a focus on extensibility to
+multi-step optimization and energy storage models.
 
 The package is developed by the CVX Group at Stanford. The primary near-term
 extension is a battery/storage model with state-of-charge dynamics
 (Milestone 5), which will be provided by the researcher and integrated via
-the coupling constraints hook in `build_acopf_multistep`.
+the coupling constraints hook in `build_opf_multistep`.
 
 ---
 
@@ -24,20 +29,25 @@ the coupling constraints hook in `build_acopf_multistep`.
 ```
 src/cvxopf/
   __init__.py         Import-time cyipopt check with helpful error message
-  network.py          Ybus construction, reindexing, incidence matrix
+  network.py          Ybus, incidence matrices, reindexing
   cost.py             Polynomial generator cost expressions (CVXPY)
   data.py             Input validation, time-series DataFrame ingestion
-  problem.py          OPFBuild dataclass, build_acopf, build_acopf_multistep
+  problem.py          Public API: OPFBuild, OPFOptions, build_opf,
+                      build_opf_multistep, deprecated aliases
+  ac_problem.py       AC-OPF internal helpers (DNLP formulation)
+  dc_problem.py       Lossy DC OPF internal helpers (convex QP)
   results.py          extract_results, compare_to_reference
   testcases/
     case9.py          9-bus, 3-generator MATPOWER test case
     case14.py         IEEE 14-bus MATPOWER test case
 tests/
-  conftest.py         Shared pytest fixtures
+  conftest.py
   fixtures/           Committed Pypower reference JSON files (static)
   test_network.py
   test_problem_single.py
   test_problem_multistep.py
+  test_problem_dc.py
+  test_problem_dc_multistep.py
   test_results.py
   test_vs_pypower_reference.py
 scripts/
@@ -46,6 +56,7 @@ examples/
   case9_single_step.py
   case14_single_step.py
   case9_multistep_flat_load.py
+  case14_lossy_dc.py
 ```
 
 ---
@@ -58,7 +69,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **163 passed, 0 failed, 0 skipped.**
+Expected result: **244 passed, 0 failed, 0 skipped.**
 
 To run a single test file:
 
@@ -79,72 +90,185 @@ wrong environment and fail to find dependencies.
 
 ## Critical: how to solve OPF problems
 
-AC-OPF problems built by this package are **nonconvex**. They will fail
-CVXPY's DCP check. The `nlp=True` argument is required to invoke DNLP
-canonicalization instead.
+**Always use the `build.solve()` convenience method. Never call
+`build.prob.solve()` directly.**
 
-**Always use the `build.solve()` convenience method:**
+`build.solve()` sets the correct solver defaults based on the formulation:
 
-```python
-build = build_acopf(case9())
-build.solve()                    # correct
-build.solve(verbose=True)        # correct, shows IPOPT output
-```
-
-**Never call `build.prob.solve()` directly in this codebase:**
+| `is_convex` | `formulation` | Solver default | `nlp` default |
+|---|---|---|---|
+| `False` | `"ac"` | `cp.IPOPT` | `True` |
+| `True` | `"lossy_dc"` | `cp.CLARABEL` | `False` |
 
 ```python
-build.prob.solve(solver=cp.IPOPT)          # wrong — missing nlp=True
-build.prob.solve(solver=cp.IPOPT, nlp=True) # technically correct but
-                                            # bypasses our API
+build = build_opf(case9(), formulation="ac")
+build.solve()                  # correct — IPOPT, nlp=True
+build.solve(verbose=True)      # correct — shows solver output
+
+build = build_opf(case9(), formulation="lossy_dc")
+build.solve()                  # correct — CLARABEL, nlp=False
 ```
 
-The `solve()` method on `OPFBuild` sets `solver=cp.IPOPT`, `nlp=True`,
-and `verbose=False` as defaults. Any of these can be overridden by passing
-keyword arguments:
+**Why `nlp=True` matters for AC:** AC-OPF problems are nonconvex and will
+fail CVXPY's DCP check. `nlp=True` bypasses the DCP check and invokes DNLP
+canonicalization instead. Calling `build.prob.solve(solver=cp.IPOPT)`
+without `nlp=True` will raise a `DCPError`.
+
+**Why `nlp=False` matters for DC:** Lossy DC OPF is a convex QP. Setting
+`nlp=True` on a convex problem is incorrect and may produce wrong results.
+
+---
+
+## Formulations
+
+### `"ac"` — Full AC-OPF (DNLP)
+
+The formulation uses auxiliary `(nb, nb)` matrices `P` and `Q` to express
+power flows via elementwise trig expressions on the Ybus sparsity pattern.
+Nodal injections `p`, `q` are row sums of `P`, `Q`. Generator variables
+`Pg`, `Qg` are linked via the incidence matrix `Cg`.
+
+Variables: `theta`, `v`, `P`, `Q`, `p`, `q`, `Pg`, `Qg`
+
+Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
+`p_net`, `q_net`
+
+Do not change this formulation without understanding the DNLP paper.
+
+### `"lossy_dc"` — Lossy DC OPF (convex QP)
+
+Reference: *Convex Optimization with Smart Grid Examples*,
+https://doi.org/10.2172/3018252
+
+Objective: minimize `G + loss_weight * L`
+- `G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)` — generation cost
+- `L = sum_e r_e * p_flows_e^2` — line losses
+- `loss_weight` is user-configurable via `OPFOptions.loss_weight` (default 1.0)
+
+Constraints:
+- `A @ p_flows + p_gen == Pd` — flow conservation at every bus
+- `|p_flows[e]| <= f_max[e]` — branch flow limits
+- Generator output bounds
+
+Variables: `p_flows`, `p_gen`
+
+Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`
+
+Note: `Vm`, `Va_deg`, `Qg`, `q_net` are **absent** from DC results.
+Code consuming results from either formulation should use
+`results.get('Vm')` rather than `results['Vm']`.
+
+There is no Pypower oracle for DC validation. Correctness is verified via
+internal consistency checks: flow conservation, bound feasibility, T=1
+equivalence with single-step.
+
+### Future formulations
+
+The dispatch architecture in `problem.py` accepts new formulation keys
+without API changes. Planned future formulations:
+
+| Key | Description |
+|---|---|
+| `"fast_decoupled"` | Fast-decoupled AC (convex) |
+| `"socp"` | SOCP relaxation (convex) |
+
+To add a new formulation: implement `_build_<name>_single` and
+`_build_<name>_multistep` in a new `src/cvxopf/<name>_problem.py`,
+add them to `_get_single_builders()` and `_get_multistep_builders()`
+in `problem.py`, and add `_extract_<name>_results` in `results.py`.
+
+---
+
+## Public API
+
+### Entry points
 
 ```python
-build.solve(verbose=True)         # show IPOPT output
-build.solve(warm_start=True)      # use variable .value as initial point
+build_opf(case, *, formulation="ac", options=None) -> OPFBuild
+build_opf_multistep(case, df_P, df_Q, *, T, formulation="ac",
+                    options=None, coupling_constraints=None) -> OPFBuild
 ```
 
-This is the single most important invariant in the codebase. Any new test,
-example, or documentation that calls `prob.solve()` directly is incorrect.
+### Deprecated aliases (will be removed in a future release)
+
+```python
+build_acopf(...)              # use build_opf(..., formulation="ac")
+build_acopf_multistep(...)    # use build_opf_multistep(..., formulation="ac")
+```
+
+Both emit `DeprecationWarning` when called.
+
+### `OPFOptions` fields
+
+| Field | Type | Default | Applies to |
+|---|---|---|---|
+| `enforce_vset` | bool | False | AC only |
+| `sparsity_tol` | float | 0.0 | AC only |
+| `init_flat` | bool | True | AC only |
+| `enforce_branch_limits` | bool | False | AC only (stub) |
+| `loss_weight` | float | 1.0 | DC only |
+| `branch_limit_sentinel` | float | 1e6 | DC only |
+
+### `OPFBuild` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `prob` | `cp.Problem` | The CVXPY problem |
+| `variables` | dict | Named CVXPY variables |
+| `data` | dict | Pre-computed numpy arrays and metadata |
+| `formulation` | str | `"ac"` or `"lossy_dc"` |
+| `is_convex` | bool | Drives solver defaults in `solve()` |
+
+---
+
+## Module responsibilities
+
+`problem.py` is the **only** public-facing module. It imports from
+`ac_problem.py` and `dc_problem.py` inside functions (not at module level)
+to avoid circular imports. The import chain is:
+
+```
+problem.py  →  ac_problem.py  →  network.py, cost.py, data.py
+problem.py  →  dc_problem.py  →  network.py, data.py
+results.py  →  problem.py (OPFBuild type only)
+```
+
+`ac_problem.py` must not import from `dc_problem.py` and vice versa.
 
 ---
 
 ## Key design decisions
 
-### Variable formulation
-The DNLP paper formulation is used: auxiliary `(nb, nb)` matrices `P` and
-`Q` express power flows via elementwise trig expressions on the Ybus
-sparsity pattern. Nodal injections `p`, `q` are row sums of `P`, `Q`.
-Generator variables `Pg`, `Qg` are linked via the incidence matrix `Cg`.
-Do not change this formulation without understanding the DNLP paper.
-
 ### Bus indexing
-All internal computation uses 0-based consecutive bus indices. The
-`reindex_case_to_consecutive` function in `network.py` handles remapping.
-The `ext_to_int` mapping is stored in `OPFBuild.data` for traceability.
+All internal computation uses 0-based consecutive bus indices.
+`reindex_case_to_consecutive` in `network.py` handles remapping.
+The `ext_to_int` mapping is stored in `OPFBuild.data`.
 MATPOWER test cases use 1-based bus IDs; reindexing is always applied.
 
 ### Units
 - Internal CVXPY variables are in **per-unit** (divided by `baseMVA`)
 - `extract_results` scales back to **engineering units** (MW, MVAr, degrees)
-- `gencost` polynomial costs expect `Pg` in **MW** (not p.u.) — this
-  scaling is applied inside `build_acopf` before passing to `poly_cost_expr`
+- Generator cost expressions receive `Pg` in **MW** — the `baseMVA`
+  scaling is applied before building cost expressions in both AC and DC
 
 ### Multi-step structure
-`build_acopf_multistep` builds a **single `cp.Problem`** containing T sets
+`build_opf_multistep` builds a **single `cp.Problem`** containing T sets
 of per-step variables and constraints. The objective is the sum of per-step
-costs. Coupling constraints (e.g., battery SoC dynamics) are passed in via
-the `coupling_constraints` parameter and appended without modification.
+costs. Coupling constraints (e.g., battery SoC dynamics) are passed via
+`coupling_constraints` and appended without modification.
+
+### Incidence matrices
+There are two distinct incidence matrices in `network.py`:
+
+- `make_incidence_matrix(case)` — generator-to-bus matrix `Cg`, shape
+  `(nb, ng)`. Used in both AC and DC to link generator variables to buses.
+- `make_branch_node_incidence_matrix(case)` — branch-node matrix `A`,
+  shape `(nb, nl)`. Used in DC for flow conservation `A @ p_flows + p_gen = Pd`.
+
+Do not confuse them. See the module-level comment in `network.py`.
 
 ### Pypower is not a dependency
-Pypower is used only to generate static reference fixture files. It is
-managed in a completely isolated `uv` environment via inline script
-dependencies. Never add pypower to `pyproject.toml`. See
-`scripts/generate_pypower_fixtures.py`.
+Never add pypower to `pyproject.toml`. See fixture generation below.
 
 ---
 
@@ -156,22 +280,22 @@ dependencies. Never add pypower to `pyproject.toml`. See
 | 1 — Port and modularize working code | ✅ Complete | |
 | 2 — Pypower fixture generation and validation | ✅ Complete | |
 | 3 — Multi-step problem builder | ✅ Complete | |
-| 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` |
-| 5 — Battery/storage model hook | 🔲 Architecture ready | `coupling_constraints` parameter in `build_acopf_multistep` |
+| 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
+| 5 — Battery/storage model hook | 🔲 Architecture ready | `coupling_constraints` in `build_opf_multistep` |
+| 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 
-### Milestone 4 — Branch flow limits
+### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
 `P`, `Q` matrices and enforce per-branch `rateA` constraints. The stub
-and `NotImplementedError` in both `build_acopf` and `build_acopf_multistep`
-must be replaced. Add tests that verify the constraint is binding when load
-is pushed high enough.
+and `NotImplementedError` in `ac_problem.py` must be replaced. Add tests
+that verify the constraint is binding when load is pushed high enough.
 
 ### Milestone 5 — Battery/storage model hook
 The researcher will provide example battery model code. The integration
-point is the `coupling_constraints` parameter of `build_acopf_multistep`.
-Battery SoC dynamics constraints will reference the per-step `Pg[t]`,
-`Qg[t]`, and `v[t]` variables in `OPFBuild.variables`. Do not implement
-this without the researcher's input.
+point is the `coupling_constraints` parameter of `build_opf_multistep`.
+Battery SoC dynamics constraints will reference per-step variables
+(`Pg[t]`, `Qg[t]`, `v[t]` for AC; `p_gen[t]`, `p_flows[t]` for DC)
+in `OPFBuild.variables`. Do not implement without researcher input.
 
 ---
 
@@ -231,11 +355,17 @@ docstring.
 
 - Do not add `pypower` to `pyproject.toml` or any runtime dependency
 - Do not call `build.prob.solve()` directly — use `build.solve()`
+- Do not use `build_acopf` or `build_acopf_multistep` — they are
+  deprecated; use `build_opf(..., formulation="ac")` instead
 - Do not change the DNLP variable formulation without understanding the paper
 - Do not regenerate fixture files in CI
 - Do not implement Milestone 5 without the researcher's battery model code
 - Do not pin `numpy` in `pyproject.toml` — the numpy pin exists only in
   the fixture generation script
-- Do not remove the `validate_case` call from `_parse_case` in `problem.py`
+- Do not remove the `validate_case` call from `_parse_case` in
+  `ac_problem.py` or `_parse_dc_case` in `dc_problem.py`
 - Do not change units inside CVXPY expressions — keep everything in p.u.
   internally and scale only in `extract_results`
+- Do not import `ac_problem` from `dc_problem` or vice versa
+- Do not set `nlp=True` for convex formulations (DC, SOCP, fast-decoupled)
+- Do not set `nlp=False` for the AC formulation

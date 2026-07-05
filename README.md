@@ -3,20 +3,30 @@
 [![CI](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml/badge.svg)](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/cvxgrp/cvxopf/graph/badge.svg?token=f16a3ea1-bcfd-409e-8592-77d5bce001f5)](https://codecov.io/gh/cvxgrp/cvxopf)
 
-AC optimal power flow (AC-OPF) via CVXPY's disciplined nonlinear programming
-(DNLP) framework, solved with IPOPT.
+Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP) and
+lossy DC OPF (convex QP).
 
 ## Overview
 
-`cvxopf` formulates AC-OPF problems as smooth nonlinear programs using the
-CVXPY DNLP interface (requires `cvxpy>=1.9`) and solves them with IPOPT. It
-is designed to:
+`cvxopf` formulates optimal power flow problems using CVXPY and solves them
+with appropriate solvers. It is designed to:
 
 - Run MATPOWER/Pypower test cases out of the box
+- Support multiple OPF formulations from a single entry point
 - Support single-shot optimization over multiple time steps
 - Accept time-varying nodal load as pandas DataFrames
 - Serve as a foundation for energy storage and battery models with
   state-of-charge dynamics (future work)
+
+### Formulations
+
+| Key | Description | Convex | Solver |
+|---|---|---|---|
+| `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
+| `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
+
+Reference for lossy DC OPF: *Convex Optimization with Smart Grid Examples*,
+https://doi.org/10.2172/3018252
 
 ## Prerequisites
 
@@ -53,7 +63,7 @@ https://coin-or.github.io/Ipopt/INSTALL.html
 Once the IPOPT system library is installed:
 
 ```bash
-pip install git+https://github.com/bmeyers/cvxopf.git
+pip install git+https://github.com/cvxgrp/cvxopf.git
 ```
 
 This will automatically install all Python dependencies including `cyipopt`
@@ -67,16 +77,33 @@ pip install cvxopf  # coming soon
 
 ## Quick start
 
+**AC-OPF:**
+
 ```python
 from cvxopf.testcases import case9
-from cvxopf.problem import build_acopf
+from cvxopf.problem import build_opf
 from cvxopf.results import extract_results
 
-build = build_acopf(case9())
+build = build_opf(case9(), formulation="ac")
 build.solve()
 results = extract_results(build)
 print(f"Objective: {results['objective']:.2f} $/hr")
 print(f"Pg (MW):   {results['Pg']}")
+```
+
+**Lossy DC OPF:**
+
+```python
+from cvxopf.testcases import case14
+from cvxopf.problem import build_opf
+from cvxopf.results import extract_results
+
+build = build_opf(case14(), formulation="lossy_dc")
+build.solve()
+results = extract_results(build)
+print(f"Objective:  {results['objective']:.2f} $/hr")
+print(f"Pg (MW):    {results['Pg']}")
+print(f"Flows (MW): {results['p_flows']}")
 ```
 
 ## Multi-step example
@@ -85,7 +112,7 @@ print(f"Pg (MW):   {results['Pg']}")
 import numpy as np
 import pandas as pd
 from cvxopf.testcases import case9
-from cvxopf.problem import build_acopf_multistep
+from cvxopf.problem import build_opf_multistep
 from cvxopf.results import extract_results
 
 ppc     = case9()
@@ -98,7 +125,7 @@ scales  = [0.8, 1.0, 1.2]
 df_P    = pd.DataFrame(np.outer(scales, Pd_base))
 df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
 
-build   = build_acopf_multistep(ppc, df_P, df_Q, T=T)
+build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac")
 build.solve()
 results = extract_results(build)
 print(f"Total objective: {results['objective']:.2f} $/hr")
@@ -109,8 +136,10 @@ print(f"Pg per step (MW):\n{results['Pg']}")
 
 ```
 src/cvxopf/           Core package
-  network.py          Ybus construction and bus/branch topology
-  problem.py          Single-step and multi-step OPF problem builders
+  problem.py          Public API: build_opf, build_opf_multistep
+  ac_problem.py       AC-OPF helpers (DNLP formulation)
+  dc_problem.py       Lossy DC OPF helpers (convex QP)
+  network.py          Ybus, incidence matrices, reindexing
   cost.py             Generator cost expression builders
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
@@ -157,5 +186,6 @@ package environment.
 - [x] Milestone 1: Port and modularize working code
 - [x] Milestone 2: Pypower fixture generation and validation tests
 - [x] Milestone 3: Multi-step problem builder
-- [ ] Milestone 4: Branch flow limits
+- [ ] Milestone 4: Branch flow limits (AC)
 - [ ] Milestone 5: Battery/storage model hook
+- [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
