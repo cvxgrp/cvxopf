@@ -3,40 +3,6 @@
 AC optimal power flow (AC-OPF) via CVXPY's disciplined nonlinear programming
 (DNLP) framework, solved with IPOPT.
 
-## Prerequisites — install these before `pip install cvxopf`
-
-`cvxopf` requires the IPOPT nonlinear solver. The system library must be
-installed first, then the Python interface `cyipopt`:
-
-**Ubuntu / Debian**
-```bash
-sudo apt-get install coinor-libipopt-dev
-pip install cyipopt
-```
-
-**macOS**
-```bash
-brew install ipopt
-pip install cyipopt
-```
-
-**Windows** (conda recommended)
-```bash
-conda install -c conda-forge ipopt
-pip install cyipopt
-```
-
-Full IPOPT installation documentation:
-https://coin-or.github.io/Ipopt/INSTALL.html
-
-## Installation
-
-Once the prerequisites above are satisfied:
-
-```bash
-pip install -e ".[dev]"
-```
-
 ## Overview
 
 `cvxopf` formulates AC-OPF problems as smooth nonlinear programs using the
@@ -48,6 +14,46 @@ is designed to:
 - Accept time-varying nodal load as pandas DataFrames
 - Serve as a foundation for energy storage and battery models with
   state-of-charge dynamics (future work)
+
+## Prerequisites
+
+`cvxopf` requires the IPOPT nonlinear solver system library. This must be
+installed before running `pip install cvxopf`.
+
+**Ubuntu / Debian**
+```bash
+sudo apt-get install coinor-libipopt-dev
+```
+
+**macOS**
+```bash
+brew install ipopt
+```
+
+**Windows** (conda recommended)
+```bash
+conda install -c conda-forge ipopt
+```
+
+Full IPOPT installation documentation:
+https://coin-or.github.io/Ipopt/INSTALL.html
+
+## Installation
+
+Once the IPOPT system library is installed:
+
+```bash
+pip install git+https://github.com/bmeyers/cvxopf.git
+```
+
+This will automatically install all Python dependencies including `cyipopt`
+(the Python interface to IPOPT), `cvxpy`, `numpy`, and `pandas`.
+
+When the package is published to PyPI, installation will simplify to:
+
+```bash
+pip install cvxopf  # coming soon
+```
 
 ## Quick start
 
@@ -64,34 +70,80 @@ print(f"Objective: {results['objective']:.2f} $/hr")
 print(f"Pg (MW):   {results['Pg']}")
 ```
 
-## Testing
+## Multi-step example
 
-```bash
-pytest
-```
+```python
+import numpy as np
+import pandas as pd
+import cvxpy as cp
+from cvxopf.testcases import case9
+from cvxopf.problem import build_acopf_multistep
+from cvxopf.results import extract_results
 
-Validation tests against Pypower reference data use committed fixture files
-in `tests/fixtures/`. To regenerate those fixtures (requires `uv`):
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
 
-```bash
-uv run scripts/generate_pypower_fixtures.py
+# Three time steps at 80%, 100%, 120% of base load
+scales  = [0.8, 1.0, 1.2]
+df_P    = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
+
+build   = build_acopf_multistep(ppc, df_P, df_Q, T=T)
+build.prob.solve(solver=cp.IPOPT)
+results = extract_results(build)
+print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
 ## Project structure
 
 ```
-src/cvxopf/       Core package
-tests/            Pytest test suite
-tests/fixtures/   Committed Pypower reference outputs (static)
-scripts/          Fixture generation script (uv-managed, isolated)
-examples/         Runnable example scripts
+src/cvxopf/           Core package
+  network.py          Ybus construction and bus/branch topology
+  problem.py          Single-step and multi-step OPF problem builders
+  cost.py             Generator cost expression builders
+  data.py             Input validation and time-series handling
+  results.py          Result extraction and comparison utilities
+  testcases/          Built-in MATPOWER test cases (case9, case14)
+tests/                Pytest test suite
+tests/fixtures/       Committed Pypower reference outputs (static)
+scripts/              Fixture generation script (uv-managed, isolated)
+examples/             Runnable example scripts
 ```
+
+## Development
+
+To install in editable mode with development dependencies:
+
+```bash
+git clone https://github.com/bmeyers/cvxopf.git
+cd cvxopf
+pip install -e ".[dev]"
+```
+
+To run the test suite:
+
+```bash
+pytest
+```
+
+To regenerate the Pypower reference fixtures (requires `uv`):
+
+```bash
+uv run scripts/generate_pypower_fixtures.py
+```
+
+Note: the fixture script runs in an isolated environment with pinned
+`pypower==5.1.19` and `numpy==2.2.6`. It does not affect the main
+package environment.
 
 ## Milestones
 
 - [x] Milestone 0: Repository skeleton
-- [ ] Milestone 1: Port and modularize working code
-- [ ] Milestone 2: Pypower fixture generation and validation tests
-- [ ] Milestone 3: Multi-step problem builder
+- [x] Milestone 1: Port and modularize working code
+- [x] Milestone 2: Pypower fixture generation and validation tests
+- [x] Milestone 3: Multi-step problem builder
 - [ ] Milestone 4: Branch flow limits
 - [ ] Milestone 5: Battery/storage model hook
