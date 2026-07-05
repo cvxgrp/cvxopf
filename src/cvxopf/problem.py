@@ -77,7 +77,7 @@ class OPFBuild:
     Attributes
     ----------
     prob : cp.Problem
-        The CVXPY problem. Call prob.solve(solver=cp.IPOPT) to solve.
+        The CVXPY problem. Call prob.solve(solver=cp.IPOPT, nlp=True) to solve.
     variables : dict
         Named CVXPY variables.
 
@@ -124,7 +124,7 @@ def build_acopf(
     -------
     build : OPFBuild
         Contains the cp.Problem, named variables, and pre-computed data.
-        Call build.prob.solve(solver=cp.IPOPT) to solve.
+        Call build.prob.solve(solver=cp.IPOPT, nlp=True) to solve.
         Warm-starting: set .value on any variable in build.variables before
         solving.
     """
