@@ -17,7 +17,7 @@ from cvxopf.results import extract_results, compare_to_reference
 
 def _solved_build(case_fn, options=None):
     build = build_acopf(case_fn(), options=options)
-    build.prob.solve(solver=cp.IPOPT)
+    build.prob.solve(solver=cp.IPOPT, nlp=True)
     return build
 
 
@@ -25,7 +25,7 @@ def _solved_multistep_build(case_fn, T, df_P, df_Q, options=None):
     build = build_acopf_multistep(
         case_fn(), df_P, df_Q, T=T, options=options
     )
-    build.prob.solve(solver=cp.IPOPT)
+    build.prob.solve(solver=cp.IPOPT, nlp=True)
     return build
 
 
