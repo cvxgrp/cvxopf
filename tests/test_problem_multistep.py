@@ -44,14 +44,14 @@ def _solve_multistep(case_fn, T, df_P=None, df_Q=None, options=None,
         case_fn(), df_P, df_Q, T=T, options=options,
         coupling_constraints=coupling_constraints,
     )
-    build.prob.solve(solver=cp.IPOPT)
+    build.prob.solve(solver=cp.IPOPT, nlp=True)
     results = extract_results(build)
     return build, results
 
 
 def _solve_single(case_fn, options=None):
     build = build_acopf(case_fn(), options=options)
-    build.prob.solve(solver=cp.IPOPT)
+    build.prob.solve(solver=cp.IPOPT, nlp=True)
     results = extract_results(build)
     return build, results
 
@@ -240,11 +240,11 @@ class TestVaryingLoad:
         ppc120["bus"][:, 3] = ppc["bus"][:, 3] * 1.2
 
         b80  = build_acopf(ppc80)
-        b80.prob.solve(solver=cp.IPOPT)
+        b80.prob.solve(solver=cp.IPOPT, nlp=True)
         r80  = extract_results(b80)
 
         b120 = build_acopf(ppc120)
-        b120.prob.solve(solver=cp.IPOPT)
+        b120.prob.solve(solver=cp.IPOPT, nlp=True)
         r120 = extract_results(b120)
 
         assert r80["objective"] < r120["objective"], \
@@ -322,6 +322,6 @@ class TestCouplingConstraints:
             case9(), df_P, df_Q, T=3,
             coupling_constraints=coupling,
         )
-        build2.prob.solve(solver=cp.IPOPT)
+        build2.prob.solve(solver=cp.IPOPT, nlp=True)
         results = extract_results(build2)
         assert results["status"] == "optimal"
