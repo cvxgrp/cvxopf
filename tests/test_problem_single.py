@@ -33,7 +33,7 @@ CASE14_OBJ = 8081.526257050759
 def _solve(case_fn, options=None):
     """Build and solve; return (build, results)."""
     build = build_acopf(case_fn(), options=options)
-    build.prob.solve(solver=cp.IPOPT, nlp=True)
+    build.solve()
     results = extract_results(build)
     return build, results
 
@@ -227,7 +227,7 @@ class TestWarmStart:
         build.variables["v"].value     = np.ones((nb, 1))
         build.variables["Pg"].value    = np.full(ng, 0.1)
         build.variables["Qg"].value    = np.zeros(ng)
-        build.prob.solve(solver=cp.IPOPT, nlp=True)
+        build.solve()
         results = extract_results(build)
         assert results["status"] == "optimal"
 

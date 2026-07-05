@@ -11,7 +11,6 @@ Run from the repository root:
 
 import numpy as np
 import pandas as pd
-import cvxpy as cp
 
 from cvxopf.testcases import case9
 from cvxopf.problem import build_acopf, build_acopf_multistep, OPFOptions
@@ -44,7 +43,7 @@ def main():
 
     # --- solve ---
     print("\nSolving with IPOPT ...")
-    build.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
+    build.solve()
 
     results = extract_results(build)
 
@@ -70,7 +69,7 @@ def main():
     print("=" * 60)
 
     build_s = build_acopf(ppc, options=options)
-    build_s.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
+    build_s.solve()
     results_s = extract_results(build_s)
 
     print(f"\n  {'Gen':>4}  {'Multi Pg':>12}  {'Single Pg':>12}  {'Diff':>10}")

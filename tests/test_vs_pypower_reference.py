@@ -77,7 +77,7 @@ def _load_fixture(name: str) -> dict:
 
 def _solve(case_fn) -> dict:
     build = build_acopf(case_fn())
-    build.prob.solve(solver=cp.IPOPT, nlp=True)
+    build.solve()
     return extract_results(build)
 
 

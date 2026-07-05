@@ -5,8 +5,6 @@ Run from the repository root:
     python examples/case9_single_step.py
 """
 
-import cvxpy as cp
-
 from cvxopf.testcases import case9
 from cvxopf.problem import build_acopf, OPFOptions
 from cvxopf.results import extract_results
@@ -26,7 +24,7 @@ def main():
 
     # --- solve ---
     print("\nSolving with IPOPT ...")
-    build.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
+    build.solve()
 
     # --- extract ---
     results = extract_results(build)

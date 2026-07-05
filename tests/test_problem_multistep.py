@@ -44,14 +44,14 @@ def _solve_multistep(case_fn, T, df_P=None, df_Q=None, options=None,
         case_fn(), df_P, df_Q, T=T, options=options,
         coupling_constraints=coupling_constraints,
     )
-    build.prob.solve(solver=cp.IPOPT, nlp=True)
+    build.solve()
     results = extract_results(build)
     return build, results
 
 
 def _solve_single(case_fn, options=None):
     build = build_acopf(case_fn(), options=options)
-    build.prob.solve(solver=cp.IPOPT, nlp=True)
+    build.solve()
     results = extract_results(build)
     return build, results
 

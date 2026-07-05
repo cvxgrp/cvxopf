@@ -68,13 +68,12 @@ pip install cvxopf  # coming soon
 ## Quick start
 
 ```python
-import cvxpy as cp
 from cvxopf.testcases import case9
 from cvxopf.problem import build_acopf
 from cvxopf.results import extract_results
 
 build = build_acopf(case9())
-build.prob.solve(solver=cp.IPOPT)
+build.solve()
 results = extract_results(build)
 print(f"Objective: {results['objective']:.2f} $/hr")
 print(f"Pg (MW):   {results['Pg']}")
@@ -85,7 +84,6 @@ print(f"Pg (MW):   {results['Pg']}")
 ```python
 import numpy as np
 import pandas as pd
-import cvxpy as cp
 from cvxopf.testcases import case9
 from cvxopf.problem import build_acopf_multistep
 from cvxopf.results import extract_results
@@ -101,7 +99,7 @@ df_P    = pd.DataFrame(np.outer(scales, Pd_base))
 df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
 
 build   = build_acopf_multistep(ppc, df_P, df_Q, T=T)
-build.prob.solve(solver=cp.IPOPT)
+build.solve()
 results = extract_results(build)
 print(f"Total objective: {results['objective']:.2f} $/hr")
 print(f"Pg per step (MW):\n{results['Pg']}")

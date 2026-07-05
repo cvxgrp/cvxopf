@@ -77,7 +77,7 @@ class OPFBuild:
     Attributes
     ----------
     prob : cp.Problem
-        The CVXPY problem. Call prob.solve(solver=cp.IPOPT, nlp=True) to solve.
+        The CVXPY problem. Call build.solve() to solve.
     variables : dict
         Named CVXPY variables.
 
@@ -97,6 +97,46 @@ class OPFBuild:
     prob:      cp.Problem
     variables: dict
     data:      dict
+
+    def solve(self, **kwargs) -> None:
+        """
+        Solve the OPF problem with IPOPT using DNLP canonicalization.
+
+        Wraps prob.solve() with the following defaults:
+            solver=cp.IPOPT   — the only solver that supports DNLP
+            nlp=True          — bypasses the DCP check and invokes DNLP
+                                canonicalization; required for AC-OPF
+            verbose=False     — suppresses IPOPT console output by default
+
+        Any keyword argument accepted by cp.Problem.solve() can be passed
+        to override these defaults.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to cp.Problem.solve(). Common
+            overrides:
+                verbose=True     show IPOPT iteration output
+                warm_start=True  use variable .value as initial point
+
+        Examples
+        --------
+        Basic solve:
+            build.solve()
+
+        Show IPOPT output:
+            build.solve(verbose=True)
+
+        Notes
+        -----
+        The nlp=True argument is what distinguishes DNLP from DCP solving in
+        CVXPY. AC-OPF problems are nonconvex and will fail the DCP check;
+        nlp=True is always required. This method ensures it is never forgotten.
+        """
+        kwargs.setdefault("solver", cp.IPOPT)
+        kwargs.setdefault("nlp", True)
+        kwargs.setdefault("verbose", False)
+        self.prob.solve(**kwargs)
 
 
 def build_acopf(
@@ -124,7 +164,7 @@ def build_acopf(
     -------
     build : OPFBuild
         Contains the cp.Problem, named variables, and pre-computed data.
-        Call build.prob.solve(solver=cp.IPOPT, nlp=True) to solve.
+        Call build.solve() to solve.
         Warm-starting: set .value on any variable in build.variables before
         solving.
     """
