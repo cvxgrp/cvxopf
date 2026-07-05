@@ -46,6 +46,7 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/cvxgrp/cvxopf"
 Repository = "https://github.com/cvxgrp/cvxopf"
+"IPOPT Installation" = "https://coin-or.github.io/Ipopt/INSTALL.html"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cvxopf"]
