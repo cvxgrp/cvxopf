@@ -10,7 +10,7 @@ name = "cvxopf"
 version = "0.1.0"
 description = "AC Optimal Power Flow using CVXPY's DNLP framework"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "BSD-2-Clause"}
 authors = [
     {name = "Stanford University Convex Optimization Group", email = "cvxgrp@stanford.edu"},
