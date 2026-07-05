@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from cvxopf.testcases import case9
-from cvxopf.problem import build_acopf, build_acopf_multistep, OPFOptions
+from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions
 from cvxopf.results import extract_results
 
 
@@ -36,7 +36,7 @@ def main():
 
     # --- build multi-step problem ---
     options = OPFOptions(init_flat=True)
-    build   = build_acopf_multistep(ppc, df_P, df_Q, T=T, options=options)
+    build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac", options=options)
 
     print(f"\nVariables  : {len(build.prob.variables())}")
     print(f"Constraints: {len(build.prob.constraints)}")
@@ -68,7 +68,7 @@ def main():
     print("Comparison: multi-step step 0  vs  single-step")
     print("=" * 60)
 
-    build_s = build_acopf(ppc, options=options)
+    build_s = build_opf(ppc, formulation="ac", options=options)
     build_s.solve()
     results_s = extract_results(build_s)
 

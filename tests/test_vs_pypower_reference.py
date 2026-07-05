@@ -29,7 +29,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_acopf
+from cvxopf.problem import build_opf
 from cvxopf.results import extract_results, compare_to_reference
 
 
@@ -76,7 +76,7 @@ def _load_fixture(name: str) -> dict:
 
 
 def _solve(case_fn) -> dict:
-    build = build_acopf(case_fn())
+    build = build_opf(case_fn(), formulation="ac")
     build.solve()
     return extract_results(build)
 

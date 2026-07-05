@@ -8,7 +8,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_acopf, build_acopf_multistep, OPFBuild, OPFOptions
+from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild, OPFOptions
 from cvxopf.results import extract_results
 
 
@@ -40,7 +40,7 @@ def _solve_multistep(case_fn, T, df_P=None, df_Q=None, options=None,
                      coupling_constraints=None):
     if df_P is None or df_Q is None:
         df_P, df_Q = _flat_load_dfs(case_fn, T)
-    build = build_acopf_multistep(
+    build = build_opf_multistep(
         case_fn(), df_P, df_Q, T=T, options=options,
         coupling_constraints=coupling_constraints,
     )
@@ -50,7 +50,7 @@ def _solve_multistep(case_fn, T, df_P=None, df_Q=None, options=None,
 
 
 def _solve_single(case_fn, options=None):
-    build = build_acopf(case_fn(), options=options)
+    build = build_opf(case_fn(), formulation="ac", options=options)
     build.solve()
     results = extract_results(build)
     return build, results
@@ -64,24 +64,24 @@ class TestReturnType:
 
     def test_returns_opfbuild(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         assert isinstance(build, OPFBuild)
 
     def test_prob_is_cvxpy_problem(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         assert isinstance(build.prob, cp.Problem)
 
     def test_variables_has_expected_keys(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         expected = {"theta", "v", "P", "Q", "p", "q", "Pg", "Qg"}
         assert set(build.variables.keys()) == expected
 
     def test_variable_lists_have_length_T(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
         T     = 3
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=T)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=T)
         for key in ("theta", "v", "P", "Q", "p", "q", "Pg", "Qg"):
             assert isinstance(build.variables[key], list)
             assert len(build.variables[key]) == T, \
@@ -89,18 +89,18 @@ class TestReturnType:
 
     def test_data_contains_T(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         assert build.data["T"] == 3
 
     def test_data_contains_Pd_series(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         assert "Pd_series" in build.data
         assert build.data["Pd_series"].shape == (3, 9)
 
     def test_data_contains_Qd_series(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(case9(), df_P, df_Q, T=3)
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3)
         assert "Qd_series" in build.data
         assert build.data["Qd_series"].shape == (3, 9)
 
@@ -114,26 +114,26 @@ class TestInputValidation:
     def test_T_mismatch_raises(self):
         df_P, df_Q = _flat_load_dfs(case9, 3)
         with pytest.raises(ValueError, match="T=5"):
-            build_acopf_multistep(case9(), df_P, df_Q, T=5)
+            build_opf_multistep(case9(), df_P, df_Q, T=5)
 
     def test_wrong_nb_columns_raises(self):
         ppc  = case9()
         df_P = pd.DataFrame(np.zeros((3, 5)))   # wrong number of columns
         df_Q = pd.DataFrame(np.zeros((3, 5)))
         with pytest.raises(ValueError, match="columns"):
-            build_acopf_multistep(ppc, df_P, df_Q, T=3)
+            build_opf_multistep(ppc, df_P, df_Q, T=3)
 
     def test_mismatched_df_rows_raises(self):
         ppc  = case9()
         df_P = pd.DataFrame(np.zeros((3, 9)))
         df_Q = pd.DataFrame(np.zeros((4, 9)))   # different number of rows
         with pytest.raises(ValueError, match="rows"):
-            build_acopf_multistep(ppc, df_P, df_Q, T=3)
+            build_opf_multistep(ppc, df_P, df_Q, T=3)
 
     def test_enforce_branch_limits_raises(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
         with pytest.raises(NotImplementedError, match="enforce_branch_limits"):
-            build_acopf_multistep(
+            build_opf_multistep(
                 case9(), df_P, df_Q, T=3,
                 options=OPFOptions(enforce_branch_limits=True),
             )
@@ -239,11 +239,11 @@ class TestVaryingLoad:
         ppc120["bus"][:, 2] = ppc["bus"][:, 2] * 1.2
         ppc120["bus"][:, 3] = ppc["bus"][:, 3] * 1.2
 
-        b80  = build_acopf(ppc80)
+        b80  = build_opf(ppc80, formulation="ac")
         b80.prob.solve(solver=cp.IPOPT, nlp=True)
         r80  = extract_results(b80)
 
-        b120 = build_acopf(ppc120)
+        b120 = build_opf(ppc120, formulation="ac")
         b120.prob.solve(solver=cp.IPOPT, nlp=True)
         r120 = extract_results(b120)
 
@@ -291,7 +291,7 @@ class TestCouplingConstraints:
 
     def test_empty_coupling_constraints_accepted(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(
+        build = build_opf_multistep(
             case9(), df_P, df_Q, T=3,
             coupling_constraints=[],
         )
@@ -299,7 +299,7 @@ class TestCouplingConstraints:
 
     def test_none_coupling_constraints_accepted(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(
+        build = build_opf_multistep(
             case9(), df_P, df_Q, T=3,
             coupling_constraints=None,
         )
@@ -311,14 +311,14 @@ class TestCouplingConstraints:
         verify the problem still solves to optimal.
         """
         df_P, df_Q = case9_multistep_load
-        build = build_acopf_multistep(
+        build = build_opf_multistep(
             case9(), df_P, df_Q, T=3,
         )
         # Pg[0][0] == Pg[1][0]: first generator output equal in steps 0 and 1
         coupling = [
             build.variables["Pg"][0][0] == build.variables["Pg"][1][0]
         ]
-        build2 = build_acopf_multistep(
+        build2 = build_opf_multistep(
             case9(), df_P, df_Q, T=3,
             coupling_constraints=coupling,
         )

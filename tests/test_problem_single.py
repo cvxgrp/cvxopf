@@ -7,7 +7,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_acopf, OPFBuild, OPFOptions
+from cvxopf.problem import build_opf, OPFBuild, OPFOptions
 from cvxopf.results import extract_results
 
 
@@ -32,7 +32,7 @@ CASE14_OBJ = 8081.526257050759
 
 def _solve(case_fn, options=None):
     """Build and solve; return (build, results)."""
-    build = build_acopf(case_fn(), options=options)
+    build = build_opf(case_fn(), formulation="ac", options=options)
     build.solve()
     results = extract_results(build)
     return build, results
@@ -45,20 +45,20 @@ def _solve(case_fn, options=None):
 class TestReturnType:
 
     def test_returns_opfbuild(self, case9_raw):
-        build = build_acopf(case9_raw)
+        build = build_opf(case9_raw, formulation="ac")
         assert isinstance(build, OPFBuild)
 
     def test_prob_is_cvxpy_problem(self, case9_raw):
-        build = build_acopf(case9_raw)
+        build = build_opf(case9_raw, formulation="ac")
         assert isinstance(build.prob, cp.Problem)
 
     def test_variables_has_expected_keys(self, case9_raw):
-        build = build_acopf(case9_raw)
+        build = build_opf(case9_raw, formulation="ac")
         expected = {"theta", "v", "P", "Q", "p", "q", "Pg", "Qg"}
         assert set(build.variables.keys()) == expected
 
     def test_data_has_expected_keys(self, case9_raw):
-        build = build_acopf(case9_raw)
+        build = build_opf(case9_raw, formulation="ac")
         expected = {
             "baseMVA", "nb", "ng", "ref", "pv", "ext_to_int",
             "Ybus", "G", "B", "E", "Z", "Pd", "Qd", "Cg",
@@ -67,7 +67,7 @@ class TestReturnType:
         assert expected.issubset(set(build.data.keys()))
 
     def test_variables_are_cvxpy_variables(self, case9_raw):
-        build = build_acopf(case9_raw)
+        build = build_opf(case9_raw, formulation="ac")
         for name, var in build.variables.items():
             assert isinstance(var, cp.Variable), \
                 f"variables['{name}'] should be a cp.Variable"
@@ -81,32 +81,32 @@ class TestVariableShapes:
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_theta_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["theta"].shape == (nb, 1)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_v_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["v"].shape == (nb, 1)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_P_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["P"].shape == (nb, nb)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_Q_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["Q"].shape == (nb, nb)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_Pg_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["Pg"].shape == (ng,)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_Qg_shape(self, case_fn, nb, ng):
-        build = build_acopf(case_fn())
+        build = build_opf(case_fn(), formulation="ac")
         assert build.variables["Qg"].shape == (ng,)
 
 
@@ -117,21 +117,21 @@ class TestVariableShapes:
 class TestFlatStart:
 
     def test_theta_initialised_to_zero(self, case9_raw):
-        build = build_acopf(case9_raw, options=OPFOptions(init_flat=True))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(init_flat=True))
         np.testing.assert_array_equal(
             build.variables["theta"].value,
             np.zeros((9, 1))
         )
 
     def test_v_initialised_to_one(self, case9_raw):
-        build = build_acopf(case9_raw, options=OPFOptions(init_flat=True))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(init_flat=True))
         np.testing.assert_array_equal(
             build.variables["v"].value,
             np.ones((9, 1))
         )
 
     def test_no_init_when_flat_false(self, case9_raw):
-        build = build_acopf(case9_raw, options=OPFOptions(init_flat=False))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(init_flat=False))
         assert build.variables["theta"].value is None
         assert build.variables["v"].value is None
 
@@ -220,7 +220,7 @@ class TestWarmStart:
 
     def test_custom_initial_point_does_not_break_solve(self, case9_raw):
         """Setting .value on variables before solve should not raise."""
-        build = build_acopf(case9_raw, options=OPFOptions(init_flat=False))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(init_flat=False))
         nb    = build.data["nb"]
         ng    = build.data["ng"]
         build.variables["theta"].value = np.zeros((nb, 1))
@@ -240,18 +240,18 @@ class TestOptions:
 
     def test_enforce_branch_limits_raises(self, case9_raw):
         with pytest.raises(NotImplementedError, match="enforce_branch_limits"):
-            build_acopf(case9_raw, options=OPFOptions(enforce_branch_limits=True))
+            build_opf(case9_raw, formulation="ac", options=OPFOptions(enforce_branch_limits=True))
 
     def test_enforce_vset_does_not_raise(self, case9_raw):
         """enforce_vset=True should build without error."""
-        build = build_acopf(case9_raw, options=OPFOptions(enforce_vset=True))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(enforce_vset=True))
         assert isinstance(build, OPFBuild)
 
     def test_sparsity_tol_accepted(self, case9_raw):
-        build = build_acopf(case9_raw, options=OPFOptions(sparsity_tol=1e-12))
+        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(sparsity_tol=1e-12))
         assert isinstance(build, OPFBuild)
 
     def test_default_options_when_none_passed(self, case9_raw):
         """Passing options=None should use OPFOptions defaults."""
-        build = build_acopf(case9_raw, options=None)
+        build = build_opf(case9_raw, formulation="ac", options=None)
         assert isinstance(build, OPFBuild)

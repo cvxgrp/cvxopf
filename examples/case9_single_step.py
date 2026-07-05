@@ -6,7 +6,7 @@ Run from the repository root:
 """
 
 from cvxopf.testcases import case9
-from cvxopf.problem import build_acopf, OPFOptions
+from cvxopf.problem import build_opf, OPFOptions
 from cvxopf.results import extract_results
 
 
@@ -17,7 +17,7 @@ def main():
 
     # --- build ---
     options = OPFOptions(init_flat=True)
-    build   = build_acopf(case9(), options=options)
+    build   = build_opf(case9(), formulation="ac", options=options)
 
     print(f"\nVariables : {build.prob.variables().__len__()}")
     print(f"Constraints: {len(build.prob.constraints)}")

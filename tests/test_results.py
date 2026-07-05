@@ -7,7 +7,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_acopf, build_acopf_multistep, OPFOptions
+from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions
 from cvxopf.results import extract_results, compare_to_reference
 
 
@@ -16,13 +16,13 @@ from cvxopf.results import extract_results, compare_to_reference
 # ---------------------------------------------------------------------------
 
 def _solved_build(case_fn, options=None):
-    build = build_acopf(case_fn(), options=options)
+    build = build_opf(case_fn(), formulation="ac", options=options)
     build.solve()
     return build
 
 
 def _solved_multistep_build(case_fn, T, df_P, df_Q, options=None):
-    build = build_acopf_multistep(
+    build = build_opf_multistep(
         case_fn(), df_P, df_Q, T=T, options=options
     )
     build.solve()
