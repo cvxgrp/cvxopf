@@ -8,7 +8,11 @@ No CVXPY in this module.
 
 import numpy as np
 
+# ---------------------------------------------------------------------------
 # MATPOWER column indices
+# ---------------------------------------------------------------------------
+
+# bus
 BUS_I    = 0
 BUS_TYPE = 1
 PD       = 2
@@ -18,17 +22,38 @@ BS       = 5
 VMAX     = 11
 VMIN     = 12
 
-F_BUS    = 0
-T_BUS    = 1
-BR_R     = 2
-BR_X     = 3
-BR_B     = 4
+# branch
+F_BUS     = 0
+T_BUS     = 1
+BR_R      = 2
+BR_X      = 3
+BR_B      = 4
+TAP       = 8
+SHIFT     = 9
 BR_STATUS = 10
-TAP      = 8
-SHIFT    = 9
 
+# gen
 GEN_BUS    = 0
 GEN_STATUS = 7
+
+# ---------------------------------------------------------------------------
+# Incidence matrices — there are two distinct incidence matrices in this
+# module; do not confuse them:
+#
+#   make_incidence_matrix(case)
+#       Generator-to-bus matrix Cg, shape (nb, ng).
+#       Entry Cg[i, k] = 1 if generator k is in-service at bus i.
+#       Used in AC and DC OPF to link per-generator variables to buses.
+#
+#   make_branch_node_incidence_matrix(case)
+#       Branch-node matrix A, shape (nb, nl).
+#       Entry A[i, e] = -1 if bus i is the from-bus of branch e,
+#                     = +1 if bus i is the to-bus of branch e,
+#                     =  0 otherwise.
+#       Out-of-service branches produce a column of zeros.
+#       Used in lossy DC OPF for flow conservation: A @ p_flows + p_gen = Pd.
+#       Sign convention: flow is positive from from-bus to to-bus.
+# ---------------------------------------------------------------------------
 
 
 def reindex_case_to_consecutive(case: dict) -> tuple[dict, dict | None]:
@@ -83,10 +108,10 @@ def reindex_case_to_consecutive(case: dict) -> tuple[dict, dict | None]:
             (ext_to_int[i] for i in arr), dtype=int, count=arr.size
         )
 
-    bus[:, BUS_I]      = np.arange(nb)
-    branch[:, F_BUS]   = remap(branch[:, F_BUS], "branch F_BUS")
-    branch[:, T_BUS]   = remap(branch[:, T_BUS], "branch T_BUS")
-    gen[:, GEN_BUS]    = remap(gen[:, GEN_BUS],  "gen GEN_BUS")
+    bus[:, BUS_I]    = np.arange(nb)
+    branch[:, F_BUS] = remap(branch[:, F_BUS], "branch F_BUS")
+    branch[:, T_BUS] = remap(branch[:, T_BUS], "branch T_BUS")
+    gen[:, GEN_BUS]  = remap(gen[:, GEN_BUS],  "gen GEN_BUS")
 
     return {**case, "bus": bus, "branch": branch, "gen": gen}, ext_to_int
 
@@ -153,9 +178,9 @@ def make_ybus_matpower(case: dict) -> np.ndarray:
         Y[t, f] += Ytf
         Y[t, t] += Ytt
 
-    gs  = bus[:, GS].astype(float) / baseMVA
-    bs  = bus[:, BS].astype(float) / baseMVA
-    Y  += np.diag(gs + 1j * bs)
+    gs = bus[:, GS].astype(float) / baseMVA
+    bs = bus[:, BS].astype(float) / baseMVA
+    Y += np.diag(gs + 1j * bs)
 
     return Y
 
@@ -175,7 +200,8 @@ def make_incidence_matrix(case: dict) -> np.ndarray:
     Returns
     -------
     Cg : np.ndarray, shape (nb, ng)
-        Generator incidence matrix.
+        Generator-to-bus incidence matrix. See module-level comment for
+        distinction from make_branch_node_incidence_matrix.
     """
     gen     = case["gen"]
     nb      = case["bus"].shape[0]
@@ -190,8 +216,59 @@ def make_incidence_matrix(case: dict) -> np.ndarray:
     return Cg
 
 
+def make_branch_node_incidence_matrix(case: dict) -> np.ndarray:
+    """
+    Build the branch-node incidence matrix A for DC power flow.
+
+    A[i, e] = -1  if bus i is the from-bus of branch e (flow leaves)
+    A[i, e] = +1  if bus i is the to-bus   of branch e (flow arrives)
+    A[i, e] =  0  otherwise
+
+    Out-of-service branches (BR_STATUS=0) produce a column of zeros and
+    are excluded from flow conservation constraints.
+
+    Sign convention: branch power flow p_flows[e] is positive when power
+    flows from the from-bus to the to-bus. Flow conservation at each bus
+    is then:
+
+        A @ p_flows + p_gen = Pd
+
+    where p_gen is nodal generation and Pd is nodal load.
+
+    Reference: Convex Optimization with Smart Grid Examples,
+    https://doi.org/10.2172/3018252
+
+    Parameters
+    ----------
+    case : dict
+        MATPOWER-format case dict with 0-based consecutive bus IDs
+        (i.e., after reindex_case_to_consecutive has been applied).
+
+    Returns
+    -------
+    A : np.ndarray, shape (nb, nl)
+        Branch-node incidence matrix. See module-level comment for
+        distinction from make_incidence_matrix.
+    """
+    branch = case["branch"]
+    nb     = case["bus"].shape[0]
+    nl     = branch.shape[0]
+
+    A = np.zeros((nb, nl))
+    for e in range(nl):
+        if int(branch[e, BR_STATUS]) == 0:
+            continue
+        f = int(branch[e, F_BUS])
+        t = int(branch[e, T_BUS])
+        A[f, e] = -1.0
+        A[t, e] = +1.0
+
+    return A
+
+
 def make_ybus_sparsity_mask(
-    Y: np.ndarray, tol: float = 0.0
+    Y: np.ndarray,
+    tol: float = 0.0,
 ) -> tuple[tuple, tuple]:
     """
     Compute the sparsity mask of Y for use in DNLP constraint construction.

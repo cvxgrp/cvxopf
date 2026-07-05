@@ -10,6 +10,7 @@ from cvxopf.network import (
     make_ybus_matpower,
     make_incidence_matrix,
     make_ybus_sparsity_mask,
+    make_branch_node_incidence_matrix
 )
 from cvxopf.testcases import case9, case14
 
@@ -286,3 +287,101 @@ class TestSparsityMask:
         z_set = set(zip(Z[0].tolist(), Z[1].tolist()))
         assert e_set == {(0, 0), (1, 1)}
         assert z_set == {(0, 1), (1, 0)}
+
+# ---------------------------------------------------------------------------
+# make_branch_node_incidence_matrix
+# ---------------------------------------------------------------------------
+
+
+class TestBranchNodeIncidenceMatrix:
+
+    @pytest.mark.parametrize("case_fn,nb,nl", [(case9, 9, 9), (case14, 14, 20)])
+    def test_shape(self, case_fn, nb, nl):
+        A = make_branch_node_incidence_matrix(_reindexed(case_fn))
+        assert A.shape == (nb, nl)
+
+    @pytest.mark.parametrize("case_fn", [case9, case14])
+    def test_entries_are_minus_one_zero_or_plus_one(self, case_fn):
+        A = make_branch_node_incidence_matrix(_reindexed(case_fn))
+        assert np.all((A == -1) | (A == 0) | (A == 1))
+
+    @pytest.mark.parametrize("case_fn", [case9, case14])
+    def test_each_in_service_column_sums_to_zero(self, case_fn):
+        """
+        Each in-service branch column has exactly one -1 and one +1,
+        so the column sum must be zero.
+        """
+        c      = _reindexed(case_fn)
+        A      = make_branch_node_incidence_matrix(c)
+        status = c["branch"][:, 10].astype(int)   # BR_STATUS
+        for e in range(A.shape[1]):
+            if status[e] == 1:
+                assert A[:, e].sum() == 0, \
+                    f"Column {e} (in-service branch) should sum to zero"
+
+    @pytest.mark.parametrize("case_fn", [case9, case14])
+    def test_from_bus_entry_is_minus_one(self, case_fn):
+        c      = _reindexed(case_fn)
+        A      = make_branch_node_incidence_matrix(c)
+        branch = c["branch"]
+        status = branch[:, 10].astype(int)
+        for e in range(A.shape[1]):
+            if status[e] == 1:
+                f = int(branch[e, 0])   # F_BUS
+                assert A[f, e] == -1.0, \
+                    f"Branch {e}: from-bus {f} entry should be -1"
+
+    @pytest.mark.parametrize("case_fn", [case9, case14])
+    def test_to_bus_entry_is_plus_one(self, case_fn):
+        c      = _reindexed(case_fn)
+        A      = make_branch_node_incidence_matrix(c)
+        branch = c["branch"]
+        status = branch[:, 10].astype(int)
+        for e in range(A.shape[1]):
+            if status[e] == 1:
+                t = int(branch[e, 1])   # T_BUS
+                assert A[t, e] == +1.0, \
+                    f"Branch {e}: to-bus {t} entry should be +1"
+
+    def test_out_of_service_branch_gives_zero_column(self, case9_raw):
+        c = case9_raw.copy()
+        c["branch"]       = c["branch"].copy()
+        c["branch"][0, 10] = 0   # BR_STATUS = 0 on branch 0
+        c, _              = reindex_case_to_consecutive(c)
+        A                 = make_branch_node_incidence_matrix(c)
+        np.testing.assert_array_equal(
+            A[:, 0], np.zeros(c["bus"].shape[0]),
+            err_msg="Out-of-service branch should produce a zero column"
+        )
+
+    def test_distinct_from_generator_incidence_matrix(self):
+        """
+        A and Cg have different shapes for case9 (9x9 vs 9x3) so they
+        cannot be confused. Verify shapes are distinct.
+        """
+        c  = _reindexed(case9)
+        A  = make_branch_node_incidence_matrix(c)
+        Cg = make_incidence_matrix(c)
+        assert A.shape != Cg.shape, \
+            "Branch-node matrix A and generator matrix Cg should have different shapes"
+
+    @pytest.mark.parametrize("case_fn", [case9, case14])
+    def test_each_in_service_column_has_exactly_two_nonzero_entries(
+        self, case_fn
+    ):
+        c      = _reindexed(case_fn)
+        A      = make_branch_node_incidence_matrix(c)
+        status = c["branch"][:, 10].astype(int)
+        for e in range(A.shape[1]):
+            if status[e] == 1:
+                nnz = int(np.count_nonzero(A[:, e]))
+                assert nnz == 2, \
+                    f"Branch {e}: expected 2 nonzero entries, got {nnz}"
+
+    def test_out_of_service_column_has_zero_nonzero_entries(self, case9_raw):
+        c = case9_raw.copy()
+        c["branch"]        = c["branch"].copy()
+        c["branch"][0, 10] = 0
+        c, _               = reindex_case_to_consecutive(c)
+        A                  = make_branch_node_incidence_matrix(c)
+        assert np.count_nonzero(A[:, 0]) == 0
