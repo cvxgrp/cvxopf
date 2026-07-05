@@ -1,5 +1,8 @@
 # cvxopf
 
+[![CI](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml/badge.svg)](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/cvxgrp/cvxopf/graph/badge.svg?token=f16a3ea1-bcfd-409e-8592-77d5bce001f5)](https://codecov.io/gh/cvxgrp/cvxopf)
+
 AC optimal power flow (AC-OPF) via CVXPY's disciplined nonlinear programming
 (DNLP) framework, solved with IPOPT.
 
