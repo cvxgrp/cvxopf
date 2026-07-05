@@ -21,8 +21,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install IPOPT system library
-        run: sudo apt-get install -y coinor-libipopt-dev
+      - name: Install IPOPT and linear algebra system libraries
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            coinor-libipopt-dev \
+            liblapack-dev \
+            libblas-dev \
+            gfortran
 
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
