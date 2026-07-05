@@ -23,7 +23,7 @@ Requirements
 This script is self-contained and manages its own dependencies via uv inline
 script metadata (see header above). Do NOT run it with the main package
 Python environment. It intentionally pins numpy==2.2.6 to work around the
-use of numpy.in1d in pypower==5.1.19, which was removed in numpy 2.0.
+use of numpy.in1d in pypower==5.1.19, which was removed in numpy 2.3.
 
 When to re-run
 --------------
