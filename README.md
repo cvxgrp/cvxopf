@@ -125,10 +125,10 @@ examples/             Runnable example scripts
 
 ## Development
 
-To install in editable mode with development dependencies:
+Clone the repository and install in editable mode with development dependencies:
 
 ```bash
-git clone https://github.com/bmeyers/cvxopf.git
+git clone https://github.com/cvxgrp/cvxopf.git
 cd cvxopf
 pip install -e ".[dev]"
 ```
@@ -136,7 +136,11 @@ pip install -e ".[dev]"
 To run the test suite:
 
 ```bash
-pytest
+# If using uv (recommended)
+uv run --extra dev pytest tests/ -v
+
+# If installed directly with pip
+pytest tests/ -v
 ```
 
 To regenerate the Pypower reference fixtures (requires `uv`):
