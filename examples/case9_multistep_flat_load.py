@@ -44,7 +44,7 @@ def main():
 
     # --- solve ---
     print("\nSolving with IPOPT ...")
-    build.prob.solve(solver=cp.IPOPT, verbose=False)
+    build.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
 
     results = extract_results(build)
 
@@ -70,7 +70,7 @@ def main():
     print("=" * 60)
 
     build_s = build_acopf(ppc, options=options)
-    build_s.prob.solve(solver=cp.IPOPT, verbose=False)
+    build_s.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
     results_s = extract_results(build_s)
 
     print(f"\n  {'Gen':>4}  {'Multi Pg':>12}  {'Single Pg':>12}  {'Diff':>10}")

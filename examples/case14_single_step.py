@@ -26,7 +26,7 @@ def main():
 
     # --- solve ---
     print("\nSolving with IPOPT ...")
-    build.prob.solve(solver=cp.IPOPT, verbose=False)
+    build.prob.solve(solver=cp.IPOPT, verbose=False, nlp=True)
 
     # --- extract ---
     results = extract_results(build)
