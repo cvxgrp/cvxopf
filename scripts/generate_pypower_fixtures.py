@@ -3,6 +3,7 @@
 # dependencies = [
 #   "pypower==5.1.19",
 #   "numpy==2.2.6",
+#   "scipy==1.18.0",
 # ]
 # ///
 """
