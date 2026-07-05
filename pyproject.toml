@@ -1,0 +1,55 @@
+# cvxopf - AC Optimal Power Flow using CVXPY and IPOPT
+# SPDX-License-Identifier: BSD-2-Clause
+
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cvxopf"
+version = "0.1.0"
+description = "AC Optimal Power Flow using CVXPY's DNLP framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "BSD-2-Clause"}
+authors = [
+    {name = "Stanford University Convex Optimization Group", email = "cvxgrp@stanford.edu"},
+    {name = "Bennet Meyers", email = "bmeyers@nlr.gov"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+# cyipopt requires the IPOPT system library to be installed BEFORE
+# running pip install. See README.md for platform-specific instructions.
+# cvxpy>=1.9 is required for the DNLP interface (cp.nlp.cos / cp.nlp.sin).
+dependencies = [
+    "cvxpy>=1.9",
+    "numpy",
+    "pandas",
+    "cyipopt",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/cvxgrp/cvxopf"
+Repository = "https://github.com/cvxgrp/cvxopf"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cvxopf"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
