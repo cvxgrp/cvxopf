@@ -53,7 +53,15 @@ class TestReturnType:
         assert isinstance(build.prob, cp.Problem)
 
     def test_variables_has_expected_keys(self, case9_raw):
+        # sparse_pq=True (default): P_vec/Q_vec instead of P/Q
         build = build_opf(case9_raw, formulation="ac")
+        expected = {"theta", "v", "P_vec", "Q_vec", "p", "q", "Pg", "Qg"}
+        assert set(build.variables.keys()) == expected
+
+    def test_variables_has_expected_keys_dense(self, case9_raw):
+        # sparse_pq=False: legacy P/Q keys
+        build = build_opf(case9_raw, formulation="ac",
+                          options=OPFOptions(sparse_pq=False))
         expected = {"theta", "v", "P", "Q", "p", "q", "Pg", "Qg"}
         assert set(build.variables.keys()) == expected
 
@@ -90,14 +98,28 @@ class TestVariableShapes:
         assert build.variables["v"].shape == (nb, 1)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
-    def test_P_shape(self, case_fn, nb, ng):
-        build = build_opf(case_fn(), formulation="ac")
+    def test_P_shape_dense(self, case_fn, nb, ng):
+        build = build_opf(case_fn(), formulation="ac",
+                          options=OPFOptions(sparse_pq=False))
         assert build.variables["P"].shape == (nb, nb)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
-    def test_Q_shape(self, case_fn, nb, ng):
-        build = build_opf(case_fn(), formulation="ac")
+    def test_Q_shape_dense(self, case_fn, nb, ng):
+        build = build_opf(case_fn(), formulation="ac",
+                          options=OPFOptions(sparse_pq=False))
         assert build.variables["Q"].shape == (nb, nb)
+
+    @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
+    def test_P_vec_shape_sparse(self, case_fn, nb, ng):
+        build = build_opf(case_fn(), formulation="ac")
+        nnz = len(build.data["rows"])
+        assert build.variables["P_vec"].shape == (nnz,)
+
+    @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
+    def test_Q_vec_shape_sparse(self, case_fn, nb, ng):
+        build = build_opf(case_fn(), formulation="ac")
+        nnz = len(build.data["rows"])
+        assert build.variables["Q_vec"].shape == (nnz,)
 
     @pytest.mark.parametrize("case_fn,nb,ng", [(case9, 9, 3), (case14, 14, 5)])
     def test_Pg_shape(self, case_fn, nb, ng):

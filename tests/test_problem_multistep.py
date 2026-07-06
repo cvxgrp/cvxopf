@@ -74,14 +74,35 @@ class TestReturnType:
 
     def test_variables_has_expected_keys(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
+        # sparse_pq=True (default): P_vec/Q_vec instead of P/Q
         build = build_opf_multistep(case9(), df_P, df_Q, T=3)
+        expected = {"theta", "v", "P_vec", "Q_vec", "p", "q", "Pg", "Qg"}
+        assert set(build.variables.keys()) == expected
+
+    def test_variables_has_expected_keys_dense(self, case9_multistep_load):
+        df_P, df_Q = case9_multistep_load
+        # sparse_pq=False: legacy P/Q keys
+        build = build_opf_multistep(case9(), df_P, df_Q, T=3,
+                                    options=OPFOptions(sparse_pq=False))
         expected = {"theta", "v", "P", "Q", "p", "q", "Pg", "Qg"}
         assert set(build.variables.keys()) == expected
 
     def test_variable_lists_have_length_T(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
         T     = 3
+        # sparse_pq=True (default): P_vec/Q_vec
         build = build_opf_multistep(case9(), df_P, df_Q, T=T)
+        for key in ("theta", "v", "P_vec", "Q_vec", "p", "q", "Pg", "Qg"):
+            assert isinstance(build.variables[key], list)
+            assert len(build.variables[key]) == T, \
+                f"variables['{key}'] should have length T={T}"
+
+    def test_variable_lists_have_length_T_dense(self, case9_multistep_load):
+        df_P, df_Q = case9_multistep_load
+        T     = 3
+        # sparse_pq=False: P/Q
+        build = build_opf_multistep(case9(), df_P, df_Q, T=T,
+                                    options=OPFOptions(sparse_pq=False))
         for key in ("theta", "v", "P", "Q", "p", "q", "Pg", "Qg"):
             assert isinstance(build.variables[key], list)
             assert len(build.variables[key]) == T, \

@@ -49,6 +49,7 @@ tests/
   test_problem_dc.py
   test_problem_dc_multistep.py
   test_results.py
+  test_sparse_pq.py
   test_vs_pypower_reference.py
 scripts/
   generate_pypower_fixtures.py   uv inline-dependency script (isolated env)
@@ -57,6 +58,10 @@ examples/
   case14_single_step.py
   case9_multistep_flat_load.py
   case14_lossy_dc.py
+  case118_sparse_vs_dense_ac.py
+notebooks/
+  benchmark_opf.py
+  cvxopf_demo.py
 ```
 
 ---
@@ -69,7 +74,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **286 passed, 0 failed, 0 skipped.**
+Expected result: **328 passed, 0 failed, 0 skipped.**
 
 To run a single test file:
 
@@ -310,7 +315,7 @@ Never add pypower to `pyproject.toml`. See fixture generation below.
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | 🔲 Future | |
 | 8 — Renewable generation | 🔲 Future | |
-| 9 — Sparse P/Q variables for AC-OPF | 🔲 In progress | `OPFOptions.sparse_pq`; default `True` |
+| 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -441,7 +446,7 @@ docstring.
 ## Fresh coding sessions
 
 1. Read `CLAUDE.md` (this document) before touching code
-2. Run `uv run --extra dev pytest tests/` first to confirm baseline (286 passed)
+2. Run `uv run --extra dev pytest tests/` first to confirm baseline (328 passed)
 3. Check `git log --oneline -10` to orient on recent work
 
 ---

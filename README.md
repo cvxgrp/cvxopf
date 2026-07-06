@@ -106,7 +106,7 @@ print(f"Pg (MW):    {results['Pg']}")
 print(f"Flows (MW): {results['p_flows']}")
 ```
 
-## Interactive notebook
+## Interactive notebooks
 
 ```bash
 uv run --extra notebook marimo run notebooks/cvxopf_demo.py
@@ -115,6 +115,12 @@ uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
 adjust generator limits, branch flow limits, and load scale interactively.
 Results update automatically after each solve.
+
+```bash
+uv run --extra notebook marimo run notebooks/benchmark_opf.py
+```
+
+Select number of repititions and run timing study across all test cases and OPF configurations.
 
 ## Multi-step example
 
@@ -202,4 +208,4 @@ package environment.
 - [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
 - [ ] Milestone 7: HVDC transmission links
 - [ ] Milestone 8: Renewable generation (solar and wind)
-- [ ] Milestone 9: Sparse P/Q variables for AC-OPF
+- [x] Milestone 9: Sparse P/Q variables for AC-OPF

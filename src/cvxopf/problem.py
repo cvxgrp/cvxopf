@@ -61,6 +61,16 @@ class OPFOptions:
         Substitute value (MW) used when a branch has rateA=0 in the
         MATPOWER case (meaning no limit is defined). A UserWarning is
         emitted for each affected branch. DC only. Default 1e6 MW.
+    sparse_pq : bool
+        If True (default), represent P and Q as flat (nnz,) CVXPY variables
+        P_vec and Q_vec over the Ybus sparsity pattern, eliminating
+        nb^2 - nnz trivially-zero variables and their P[Z]==0 / Q[Z]==0
+        fixing constraints. Nodal injections are recovered via a
+        precomputed (nb, nnz) scatter matrix Rp: p = Rp @ P_vec.
+        If False, use legacy dense (nb, nb) variables P and Q with
+        explicit zero-fixing constraints. Use False for research comparison
+        and timing measurements against the sparse path.
+        AC only. Default True.
     """
     enforce_vset:           bool  = False
     sparsity_tol:           float = 0.0
@@ -68,6 +78,7 @@ class OPFOptions:
     enforce_branch_limits:  bool  = False
     loss_weight:            float = 1.0
     branch_limit_sentinel:  float = 1e6
+    sparse_pq:              bool  = True
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +97,10 @@ class OPFBuild:
     variables : dict
         Named CVXPY variables.
 
-        AC single-step keys:
+        AC single-step keys (sparse_pq=True, default):
+            theta, v, P_vec, Q_vec, p, q, Pg, Qg
+
+        AC single-step keys (sparse_pq=False):
             theta, v, P, Q, p, q, Pg, Qg
 
         AC multi-step: each value is a list of length T.
