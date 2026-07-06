@@ -189,3 +189,5 @@ package environment.
 - [ ] Milestone 4: Branch flow limits (AC)
 - [ ] Milestone 5: Battery/storage model hook
 - [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
+- [ ] Milestone 7: HVDC transmission links
+- [ ] Milestone 8: Renewable generation (solar and wind)

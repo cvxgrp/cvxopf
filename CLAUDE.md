@@ -283,6 +283,8 @@ Never add pypower to `pyproject.toml`. See fixture generation below.
 | 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
 | 5 — Battery/storage model hook | 🔲 Architecture ready | `coupling_constraints` in `build_opf_multistep` |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
+| 7 — HVDC transmission links | 🔲 Future | |
+| 8 — Renewable generation | 🔲 Future | |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -296,6 +298,39 @@ point is the `coupling_constraints` parameter of `build_opf_multistep`.
 Battery SoC dynamics constraints will reference per-step variables
 (`Pg[t]`, `Qg[t]`, `v[t]` for AC; `p_gen[t]`, `p_flows[t]` for DC)
 in `OPFBuild.variables`. Do not implement without researcher input.
+
+### Milestone 7 — HVDC transmission links
+Model HVDC links as controllable point-to-point power injections between
+two buses, subject to capacity limits. Follows the MATPOWER `dcline`
+table format (data format to be confirmed by researcher). Applies to both
+AC and lossy DC formulations. Supports multi-step scheduling (the power
+transfer on each DC link can vary per time step). Converter loss modeling
+is deferred to implementation time.
+
+Do not implement until the researcher provides the MATPOWER `dcline` data
+format details.
+
+### Milestone 8 — Renewable generation (solar and wind)
+Model renewables as "can-take" generators: the available output at each
+time step is given (from a PV or wind engineering model), the source can
+be curtailed down to zero, and curtailment carries zero cost.
+
+Key design points:
+- Bus-connected, like conventional generators
+- Zero cost: renewable generators contribute nothing to the objective
+  regardless of output level. Do not add a curtailment penalty.
+- Output bounded between 0 and available MW at each step
+- Single-step: scalar available MW per renewable unit (or T=1 degenerate
+  case of the time series interface — choose whichever is simpler for
+  the user)
+- Multi-step: time series of available MW as a pandas DataFrame, matching
+  the load time series interface (one column per renewable unit, one row
+  per time step)
+- Data structure: to be determined by researcher. Likely bus-connected
+  similar to the existing generator model.
+
+Do not implement until the researcher provides the data structure
+specification and example input data.
 
 ---
 
