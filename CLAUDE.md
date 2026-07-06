@@ -69,7 +69,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **244 passed, 0 failed, 0 skipped.**
+Expected result: **286 passed, 0 failed, 0 skipped.**
 
 To run a single test file:
 

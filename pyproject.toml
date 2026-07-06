@@ -42,6 +42,11 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+notebook = [
+    "marimo>=0.23.13",
+    "networkx>=3.6.1",
+    "matplotlib>=3.11.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/cvxgrp/cvxopf"

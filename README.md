@@ -106,6 +106,16 @@ print(f"Pg (MW):    {results['Pg']}")
 print(f"Flows (MW): {results['p_flows']}")
 ```
 
+## Interactive notebook
+
+```bash
+uv run --extra notebook marimo run notebooks/cvxopf_demo.py
+```
+
+Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
+adjust generator limits, branch flow limits, and load scale interactively.
+Results update automatically after each solve.
+
 ## Multi-step example
 
 ```python
@@ -143,10 +153,11 @@ src/cvxopf/           Core package
   cost.py             Generator cost expression builders
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
-  testcases/          Built-in MATPOWER test cases (case9, case14)
+  testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)
-scripts/              Fixture generation script (uv-managed, isolated)
+scripts/              Fixture and test case generation scripts
+notebooks/            Interactive marimo notebooks
 examples/             Runnable example scripts
 ```
 
