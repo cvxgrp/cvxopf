@@ -88,6 +88,17 @@ wrong environment and fail to find dependencies.
 
 ---
 
+## Running the notebook
+
+```bash
+uv run --extra notebook marimo run notebooks/cvxopf_demo.py
+```
+
+Requires the `notebook` extra: `marimo`, `networkx`, `matplotlib`.
+Install with: `uv sync --extra dev --extra notebook`
+
+---
+
 ## Critical: how to solve OPF problems
 
 **Always use the `build.solve()` convenience method. Never call
