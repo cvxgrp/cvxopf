@@ -240,7 +240,7 @@ to avoid circular imports. The import chain is:
 
 ```
 problem.py  →  ac_problem.py  →  network.py, cost.py, data.py
-problem.py  →  dc_problem.py  →  network.py, data.py
+problem.py  →  dc_problem.py  →  network.py, cost.py, data.py
 results.py  →  problem.py (OPFBuild type only)
 ```
 
@@ -261,6 +261,11 @@ MATPOWER test cases use 1-based bus IDs; reindexing is always applied.
 - `extract_results` scales back to **engineering units** (MW, MVAr, degrees)
 - Generator cost expressions receive `Pg` in **MW** — the `baseMVA`
   scaling is applied before building cost expressions in both AC and DC
+- `poly_cost_expr` in `cost.py` uses an explicit monomial sum (not Horner's
+  method) so that CVXPY's DCP checker can verify convexity for quadratic costs.
+  Horner's method produces `(affine * affine)` products when leading coefficients
+  are zero, which CVXPY rejects as not DCP even though the polynomial is convex.
+  This matters for the DC formulation; AC bypasses DCP via DNLP/IPOPT.
 
 ### Multi-step structure
 `build_opf_multistep` builds a **single `cp.Problem`** containing T sets

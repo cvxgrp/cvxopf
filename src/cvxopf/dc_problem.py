@@ -43,6 +43,7 @@ from cvxopf.network import (
     make_branch_node_incidence_matrix,
     make_incidence_matrix,
 )
+from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
 
 # ---------------------------------------------------------------------------
@@ -116,13 +117,6 @@ def _parse_dc_case(case: dict, options) -> dict:
         if status[k] != 1:
             Pgmin[k] = Pgmax[k] = 0.0
 
-    # generator cost coefficients (for vectorised expression)
-    # gencost columns: model, startup, shutdown, n, c(n-1), ..., c0
-    # For MODEL=2, n=3: columns 4,5,6 are c2, c1, c0
-    c2 = gencost[:, 4].astype(float)
-    c1 = gencost[:, 5].astype(float)
-    c0 = gencost[:, 6].astype(float)
-
     # non-generator bus indices
     all_buses    = set(range(nb))
     gen_bus_set  = set(gen_bus[status == 1].tolist())
@@ -137,20 +131,10 @@ def _parse_dc_case(case: dict, options) -> dict:
         Pd=Pd,
         status=status, gen_bus=gen_bus,
         Pgmin=Pgmin, Pgmax=Pgmax,
-        c0=c0, c1=c1, c2=c2,
+        gencost=gencost,
         nogen_buses=nogen_buses,
         loss_weight=options.loss_weight,
     )
-
-
-def _make_dc_step_variables(nb: int, suffix: str):
-    """Construct one set of per-step DC CVXPY variables."""
-    def name(s):
-        return f"{s}{suffix}"
-
-    p_flows = cp.Variable(nb, name=name("p_flows"))   # nb is nl here
-    p_gen   = cp.Variable(nb, name=name("p_gen"), nonneg=True)
-    return p_flows, p_gen
 
 
 def _make_dc_step_constraints(
@@ -169,11 +153,14 @@ def _make_dc_step_constraints(
     return constr
 
 
-def _make_dc_step_cost(p_gen, gen_bus, c0, c1, c2, baseMVA,
-                       r, p_flows, loss_weight) -> cp.Expression:
+def _make_dc_step_cost(
+    p_gen, gen_bus, gencost, baseMVA,
+    r, p_flows, loss_weight,
+) -> cp.Expression:
     """Build the per-step DC cost expression."""
-    Pg_MW = baseMVA * p_gen[gen_bus]
-    G     = cp.sum(c0 + cp.multiply(c1, Pg_MW) + cp.multiply(c2, cp.square(Pg_MW)))
+    ng    = len(gen_bus)
+    Pg_MW = [baseMVA * p_gen[int(gen_bus[k])] for k in range(ng)]
+    G     = poly_cost_expr(gencost, Pg_MW)
     L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
     return G + loss_weight * L
 
@@ -188,9 +175,6 @@ def _build_lossy_dc_single(case: dict, options) -> "OPFBuild":
 
     d = _parse_dc_case(case, options)
 
-    p_flows, p_gen = _make_dc_step_variables(d["nb"], suffix="")
-    # note: p_flows shape is (nl,) but we reuse nb variable name in helper;
-    # create correctly shaped variables here directly
     p_flows = cp.Variable(d["nl"], name="p_flows")
     p_gen   = cp.Variable(d["nb"], name="p_gen", nonneg=True)
 
@@ -202,7 +186,7 @@ def _build_lossy_dc_single(case: dict, options) -> "OPFBuild":
     )
 
     cost = _make_dc_step_cost(
-        p_gen, d["gen_bus"], d["c0"], d["c1"], d["c2"], d["baseMVA"],
+        p_gen, d["gen_bus"], d["gencost"], d["baseMVA"],
         d["r"], p_flows, d["loss_weight"],
     )
 
@@ -273,7 +257,7 @@ def _build_lossy_dc_multistep(
             d["nogen_buses"],
         )
         step_cost = _make_dc_step_cost(
-            p_gen_t, d["gen_bus"], d["c0"], d["c1"], d["c2"], d["baseMVA"],
+            p_gen_t, d["gen_bus"], d["gencost"], d["baseMVA"],
             d["r"], p_flows_t, d["loss_weight"],
         )
 
