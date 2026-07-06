@@ -397,6 +397,14 @@ docstring.
 
 ---
 
+## Fresh coding sessions
+
+1. Read `CLAUDE.md` (this document) before touching code
+2. Run `uv run --extra dev pytest tests/` first to confirm baseline (286 passed)
+3. Check `git log --oneline -10` to orient on recent work
+
+---
+
 ## What not to do
 
 - Do not add `pypower` to `pyproject.toml` or any runtime dependency
