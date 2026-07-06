@@ -202,3 +202,4 @@ package environment.
 - [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
 - [ ] Milestone 7: HVDC transmission links
 - [ ] Milestone 8: Renewable generation (solar and wind)
+- [ ] Milestone 9: Sparse P/Q variables for AC-OPF

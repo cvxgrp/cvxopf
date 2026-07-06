@@ -139,7 +139,15 @@ power flows via elementwise trig expressions on the Ybus sparsity pattern.
 Nodal injections `p`, `q` are row sums of `P`, `Q`. Generator variables
 `Pg`, `Qg` are linked via the incidence matrix `Cg`.
 
-Variables: `theta`, `v`, `P`, `Q`, `p`, `q`, `Pg`, `Qg`
+Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
+- `P_vec`, `Q_vec` — shape `(nnz,)` flat vectors over the Ybus sparsity
+  pattern when `OPFOptions.sparse_pq=True` (default). Nodal injections are
+  recovered via a precomputed `(nb, nnz)` scatter matrix `Rp`:
+  `p = Rp @ P_vec`, `q = Rp @ Q_vec`. Eliminates `nb²-nnz` trivially-zero
+  variables and their fixing constraints.
+- `P`, `Q` — shape `(nb, nb)` dense matrices when `OPFOptions.sparse_pq=False`.
+  Off-sparsity entries are fixed to zero via `P[Z]==0`, `Q[Z]==0` constraints.
+  Use for research comparison and timing measurements against the sparse path.
 
 Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
 `p_net`, `q_net`
@@ -219,13 +227,14 @@ Both emit `DeprecationWarning` when called.
 | `enforce_branch_limits` | bool | False | AC only (stub) |
 | `loss_weight` | float | 1.0 | DC only |
 | `branch_limit_sentinel` | float | 1e6 | DC only |
+| `sparse_pq` | bool | True | AC only |
 
 ### `OPFBuild` fields
 
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables |
+| `variables` | dict | Named CVXPY variables. For AC, P/Q keys depend on `sparse_pq`: `P_vec`/`Q_vec` (shape `(nnz,)`) when `True`; `P`/`Q` (shape `(nb, nb)`) when `False`. All other AC keys (`theta`, `v`, `p`, `q`, `Pg`, `Qg`) are present in both cases. |
 | `data` | dict | Pre-computed numpy arrays and metadata |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
@@ -301,6 +310,7 @@ Never add pypower to `pyproject.toml`. See fixture generation below.
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | 🔲 Future | |
 | 8 — Renewable generation | 🔲 Future | |
+| 9 — Sparse P/Q variables for AC-OPF | 🔲 In progress | `OPFOptions.sparse_pq`; default `True` |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -347,6 +357,32 @@ Key design points:
 
 Do not implement until the researcher provides the data structure
 specification and example input data.
+
+### Milestone 9 — Sparse P/Q variables for AC-OPF
+Controlled by `OPFOptions.sparse_pq` (default `True`).
+
+When `sparse_pq=True`, `P` and `Q` are declared as flat `(nnz,)` CVXPY
+variables `P_vec` and `Q_vec` over the Ybus sparsity pattern rather than
+dense `(nb, nb)` matrices. This eliminates `2*(nb²-nnz)` trivially-zero
+variables and the `P[Z]==0` / `Q[Z]==0` equality constraints that exist
+only to compensate for the dense declaration. For case118, this reduces
+P+Q variable count from ~27,848 to ~594.
+
+Nodal injections use a precomputed `(nb, nnz)` scatter matrix `Rp` (stored
+in `OPFBuild.data`) such that `p = Rp @ P_vec` and `q = Rp @ Q_vec`.
+
+When `sparse_pq=False`, the legacy dense formulation is used unchanged.
+This path is preserved for research comparison and timing benchmarks;
+`notebooks/benchmark_opf.py` times both paths across all test cases.
+
+Files changed: `ac_problem.py`, `problem.py` (`OPFOptions`),
+`tests/test_problem_single.py`, `tests/test_problem_multistep.py`,
+new `tests/test_sparse_pq.py`, new `examples/case9_sparse_vs_dense_ac.py`,
+updated `notebooks/benchmark_opf.py`.
+
+Do not set `sparse_pq=True` and then access `build.variables["P"]` —
+the key will not exist. Use `build.variables.get("P_vec")` or check
+`build.variables` keys when writing formulation-agnostic code.
 
 ---
 
@@ -428,3 +464,9 @@ docstring.
 - Do not import `ac_problem` from `dc_problem` or vice versa
 - Do not set `nlp=True` for convex formulations (DC, SOCP, fast-decoupled)
 - Do not set `nlp=False` for the AC formulation
+- Do not access `build.variables["P"]` or `build.variables["Q"]` for AC builds
+  without checking `sparse_pq` — with the default `sparse_pq=True` these keys
+  do not exist; use `build.variables.get("P_vec")` instead
+- Do not implement Milestone 9 branch flow limits (Milestone 4) using `P_vec`/`Q_vec`
+  until Milestone 9 is complete — Milestone 4 notes currently reference `P`, `Q`
+  matrices and must be updated as part of Milestone 9
