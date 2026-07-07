@@ -45,6 +45,13 @@ from cvxopf.network import (
 )
 from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.storage import (
+    StorageUnitIdeal,
+    _validate_storage,
+    _make_storage_incidence_matrix,
+    _make_storage_soc_constraints,
+)
+from cvxopf.network import BUS_I
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
@@ -64,7 +71,7 @@ RATE_A     = 5
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_dc_case(case: dict, options) -> dict:
+def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
     Returns a flat dict consumed by the DC single-step and multistep builders.
@@ -122,6 +129,36 @@ def _parse_dc_case(case: dict, options) -> dict:
     gen_bus_set  = set(gen_bus[status == 1].tolist())
     nogen_buses  = sorted(all_buses - gen_bus_set)
 
+    # Parse storage if present
+    storage_data = {}
+    if storage is not None:
+        # Validate storage units
+        _validate_storage(storage, set(bus[:, BUS_I].astype(int).tolist()))
+        
+        # Create storage incidence matrix
+        Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
+        
+        # Extract storage parameters
+        storage_bus = np.array([
+            ext_to_int[u.bus] if ext_to_int is not None else u.bus
+            for u in storage
+        ], dtype=int)
+        storage_apparent_power_rating = np.array([u.apparent_power_rating for u in storage])
+        storage_capacity = np.array([u.capacity for u in storage])
+        storage_initial_soc = np.array([u.initial_soc for u in storage])
+        storage_aging_weight = np.array([u.aging_weight for u in storage])
+
+        storage_data = dict(
+            ns=len(storage),
+            Cs=Cs,
+            storage_bus=storage_bus,
+            storage_apparent_power_rating=storage_apparent_power_rating,
+            storage_capacity=storage_capacity,
+            storage_initial_soc=storage_initial_soc,
+            storage_delta=float(delta),
+            storage_aging_weight=storage_aging_weight,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         nb=nb, ng=ng, nl=nl,
@@ -134,22 +171,46 @@ def _parse_dc_case(case: dict, options) -> dict:
         gencost=gencost,
         nogen_buses=nogen_buses,
         loss_weight=options.loss_weight,
+        **storage_data,
     )
 
 
 def _make_dc_step_constraints(
     p_flows, p_gen,
     A, Pd, f_max, gen_bus, Pgmin, Pgmax, nogen_buses,
+    baseMVA: float,
+    ns: int = 0,
+    Cs=None,
+    S_max=None,
+    storage_capacity=None,
+    b_t=None,
+    soc_t=None,
 ) -> list:
     """Build the list of CVXPY constraints for one DC time step."""
-    constr = [
-        A @ p_flows + p_gen == Pd,
-        cp.abs(p_flows) <= f_max,
-        p_gen[gen_bus] >= Pgmin,
-        p_gen[gen_bus] <= Pgmax,
-    ]
+    # Section 1: Nodal real power balance
+    if ns > 0:
+        constr = [A @ p_flows + p_gen + cp.multiply((1.0 / baseMVA), Cs @ b_t) == Pd]
+    else:
+        constr = [A @ p_flows + p_gen == Pd]
+    
+    # Section 2: Branch flow limits
+    constr.append(cp.abs(p_flows) <= f_max)
+    
+    # Section 3: Generator bounds
+    constr += [p_gen[gen_bus] >= Pgmin, p_gen[gen_bus] <= Pgmax]
+    
+    # Section 4: Non-generator bus zeroing
     if nogen_buses:
         constr.append(p_gen[nogen_buses] == 0.0)
+    
+    # Section 5: Storage real power bounds (omitted when ns == 0)
+    if ns > 0:
+        constr += [b_t >= -S_max, b_t <= S_max]
+    
+    # Section 6: Storage SoC bounds (omitted when ns == 0)
+    if ns > 0:
+        constr += [soc_t >= 0.0, soc_t <= storage_capacity]
+    
     return constr
 
 
@@ -159,39 +220,80 @@ def _make_dc_step_cost(
 ) -> cp.Expression:
     """Build the per-step DC cost expression."""
     ng    = len(gen_bus)
-    Pg_MW = [baseMVA * p_gen[int(gen_bus[k])] for k in range(ng)]
+    Pg_MW = [cp.multiply(baseMVA, p_gen[int(gen_bus[k])]) for k in range(ng)]
     G     = poly_cost_expr(gencost, Pg_MW)
     L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
-    return G + loss_weight * L
+    return G + cp.multiply(loss_weight, L)
 
 
 # ---------------------------------------------------------------------------
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_lossy_dc_single(case: dict, options) -> "OPFBuild":
+def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> "OPFBuild":
     """Build a single time-step lossy DC OPF problem."""
     from cvxopf.problem import OPFBuild
 
-    d = _parse_dc_case(case, options)
+    # Emit warning if storage is present in DC formulation
+    if storage is not None:
+        warnings.warn(
+            "Storage apparent_power_rating is applied as a real power limit "
+            "only for formulation='lossy_dc'. Reactive power is not modelled "
+            "in the DC formulation.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    d = _parse_dc_case(case, options, storage, delta)
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
     p_gen   = cp.Variable(d["nb"], name="p_gen", nonneg=True)
+
+    # Create storage variables if present
+    b_t = soc_t = None
+    if "ns" in d and d["ns"] > 0:
+        ns = d["ns"]
+        b_t = cp.Variable(ns, name="b")
+        soc_t = cp.Variable(ns, name="soc")
 
     constr = _make_dc_step_constraints(
         p_flows, p_gen,
         d["A"], d["Pd"], d["f_max"],
         d["gen_bus"], d["Pgmin"], d["Pgmax"],
         d["nogen_buses"],
+        baseMVA=d["baseMVA"],
+        ns=d.get("ns", 0),
+        Cs=d.get("Cs"),
+        S_max=d.get("storage_apparent_power_rating"),
+        storage_capacity=d.get("storage_capacity"),
+        b_t=b_t,
+        soc_t=soc_t,
     )
 
     cost = _make_dc_step_cost(
         p_gen, d["gen_bus"], d["gencost"], d["baseMVA"],
         d["r"], p_flows, d["loss_weight"],
     )
+    
+    # Add storage aging cost if present
+    if "ns" in d and d["ns"] > 0:
+        cost = cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+
+    # Add storage SoC dynamics constraints if present
+    if "ns" in d and d["ns"] > 0:
+        storage_coupling = _make_storage_soc_constraints(
+            [b_t], [soc_t],
+            d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        )
+        constr.extend(storage_coupling)
 
     prob      = cp.Problem(cp.Minimize(cost), constr)
     variables = dict(p_flows=p_flows, p_gen=p_gen)
+    
+    # Add storage variables if present
+    if "ns" in d and d["ns"] > 0:
+        variables["b"] = b_t
+        variables["soc"] = soc_t
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
@@ -202,6 +304,19 @@ def _build_lossy_dc_single(case: dict, options) -> "OPFBuild":
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
     )
+    
+    # Add storage data if present
+    if "ns" in d and d["ns"] > 0:
+        data.update(
+            ns=d["ns"],
+            Cs=d["Cs"],
+            storage_bus=d["storage_bus"],
+            storage_apparent_power_rating=d["storage_apparent_power_rating"],
+            storage_capacity=d["storage_capacity"],
+            storage_initial_soc=d["storage_initial_soc"],
+            storage_delta=d["storage_delta"],
+            storage_aging_weight=d["storage_aging_weight"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
@@ -215,6 +330,8 @@ def _build_lossy_dc_multistep(
     T: int,
     options,
     coupling_constraints: list,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
 ) -> "OPFBuild":
     """Build a T-step lossy DC OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -227,13 +344,23 @@ def _build_lossy_dc_multistep(
             stacklevel=3,
         )
 
+    # Emit warning if storage is present in DC formulation
+    if storage is not None:
+        warnings.warn(
+            "Storage apparent_power_rating is applied as a real power limit "
+            "only for formulation='lossy_dc'. Reactive power is not modelled "
+            "in the DC formulation.",
+            UserWarning,
+            stacklevel=3,
+        )
+
     # Use df_P only for load; construct a dummy df_Q with zeros for the
     # shared timeseries loader (which expects matching shapes).
     df_Q_dummy = pd.DataFrame(
         np.zeros_like(df_P.to_numpy()), columns=df_P.columns
     )
 
-    d = _parse_dc_case(case, options)
+    d = _parse_dc_case(case, options, storage, delta)
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
 
     if Pd_series.shape[0] != T:
@@ -243,6 +370,8 @@ def _build_lossy_dc_multistep(
 
     p_flows_list = []
     p_gen_list   = []
+    b_list       = []
+    soc_list     = []
     all_constr   = []
     total_cost   = 0
 
@@ -250,26 +379,63 @@ def _build_lossy_dc_multistep(
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
         p_gen_t   = cp.Variable(d["nb"], name=f"p_gen_{t}", nonneg=True)
 
+        # Create storage variables if present
+        b_t = soc_t = None
+        if "ns" in d and d["ns"] > 0:
+            ns = d["ns"]
+            b_t = cp.Variable(ns, name=f"b_{t}")
+            soc_t = cp.Variable(ns, name=f"soc_{t}")
+
         step_constr = _make_dc_step_constraints(
             p_flows_t, p_gen_t,
             d["A"], Pd_series[t], d["f_max"],
             d["gen_bus"], d["Pgmin"], d["Pgmax"],
             d["nogen_buses"],
+            baseMVA=d["baseMVA"],
+            ns=d.get("ns", 0),
+            Cs=d.get("Cs"),
+            S_max=d.get("storage_apparent_power_rating"),
+            storage_capacity=d.get("storage_capacity"),
+            b_t=b_t,
+            soc_t=soc_t,
         )
         step_cost = _make_dc_step_cost(
             p_gen_t, d["gen_bus"], d["gencost"], d["baseMVA"],
             d["r"], p_flows_t, d["loss_weight"],
         )
+        
+        # Add storage aging cost if present
+        if "ns" in d and d["ns"] > 0:
+            step_cost = step_cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
 
         all_constr.extend(step_constr)
         total_cost  = total_cost + step_cost
         p_flows_list.append(p_flows_t)
         p_gen_list.append(p_gen_t)
+        
+        # Add storage variables to lists
+        if "ns" in d and d["ns"] > 0:
+            b_list.append(b_t)
+            soc_list.append(soc_t)
+
+    # Add storage SoC dynamics constraints if present
+    if "ns" in d and d["ns"] > 0:
+        storage_coupling = _make_storage_soc_constraints(
+            b_list, soc_list,
+            d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        )
+        all_constr.extend(storage_coupling)
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
     variables = dict(p_flows=p_flows_list, p_gen=p_gen_list)
+    
+    # Add storage variables if present
+    if "ns" in d and d["ns"] > 0:
+        variables["b"] = b_list
+        variables["soc"] = soc_list
+    
     data      = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
@@ -281,6 +447,19 @@ def _build_lossy_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
+    
+    # Add storage data if present
+    if "ns" in d and d["ns"] > 0:
+        data.update(
+            ns=d["ns"],
+            Cs=d["Cs"],
+            storage_bus=d["storage_bus"],
+            storage_apparent_power_rating=d["storage_apparent_power_rating"],
+            storage_capacity=d["storage_capacity"],
+            storage_initial_soc=d["storage_initial_soc"],
+            storage_delta=d["storage_delta"],
+            storage_aging_weight=d["storage_aging_weight"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,

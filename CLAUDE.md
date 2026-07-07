@@ -37,6 +37,8 @@ src/cvxopf/
   ac_problem.py       AC-OPF internal helpers (DNLP formulation)
   dc_problem.py       Lossy DC OPF internal helpers (convex QP)
   results.py          extract_results, compare_to_reference
+  storage.py          StorageUnitIdeal dataclass, validation, incidence matrix,
+                      SoC coupling constraint helper
   testcases/
     case9.py          9-bus, 3-generator MATPOWER test case
     case14.py         IEEE 14-bus MATPOWER test case
@@ -51,6 +53,7 @@ tests/
   test_results.py
   test_sparse_pq.py
   test_vs_pypower_reference.py
+  test_storage.py
 scripts/
   generate_pypower_fixtures.py   uv inline-dependency script (isolated env)
 examples/
@@ -59,6 +62,10 @@ examples/
   case9_multistep_flat_load.py
   case14_lossy_dc.py
   case118_sparse_vs_dense_ac.py
+  case9_storage_ac.py
+  case9_storage_dc.py
+  case9_storage_ac_24h.py
+  case9_storage_dc_24h.py
 notebooks/
   benchmark_opf.py
   cvxopf_demo.py
@@ -74,7 +81,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **328 passed, 0 failed, 0 skipped.**
+Expected result: **429 passed, 0 failed, 0 skipped.**
 
 To run a single test file:
 
@@ -154,6 +161,14 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
   Off-sparsity entries are fixed to zero via `P[Z]==0`, `Q[Z]==0` constraints.
   Use for research comparison and timing measurements against the sparse path.
 
+**Storage variables** (present only when `storage` is not None):
+- `b` — real power (ns,) MW, positive = discharging
+- `b_q` — reactive power (ns,) MVAr, positive = injecting
+- `soc` — state of charge (ns,) MWh
+- Operating set: `b_t[s]^2 + b_q_t[s]^2 <= S_max[s]^2` (apparent power circle)
+- Nodal balance modified: `p = Cg @ Pg - Pd + (1/baseMVA) * Cs @ b_t`
+- Reactive balance modified: `q = Cg @ Qg - Qd + (1/baseMVA) * Cs @ b_q_t`
+
 Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
 `p_net`, `q_net`
 
@@ -175,6 +190,13 @@ Constraints:
 - Generator output bounds
 
 Variables: `p_flows`, `p_gen`
+
+**Storage variables** (present only when `storage` is not None):
+- `b` — real power (ns,) MW, positive = discharging
+- `b_q` absent — DC has no reactive power
+- `soc` — state of charge (ns,) MWh
+- Operating set: `|b_t[s]| <= S_max[s]` (real power bound; UserWarning emitted)
+- Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t = Pd`
 
 Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`
 
@@ -208,9 +230,11 @@ in `problem.py`, and add `_extract_<name>_results` in `results.py`.
 ### Entry points
 
 ```python
-build_opf(case, *, formulation="ac", options=None) -> OPFBuild
+build_opf(case, *, formulation="ac", options=None,
+          storage=None, delta=1.0) -> OPFBuild
 build_opf_multistep(case, df_P, df_Q, *, T, formulation="ac",
-                    options=None, coupling_constraints=None) -> OPFBuild
+                    options=None, coupling_constraints=None,
+                    storage=None, delta=1.0) -> OPFBuild
 ```
 
 ### Deprecated aliases (will be removed in a future release)
@@ -234,15 +258,34 @@ Both emit `DeprecationWarning` when called.
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
 
+`delta` is not an `OPFOptions` field. It is a separate parameter on
+`build_opf` and `build_opf_multistep`, only meaningful when `storage` is
+not None. Validated (`delta > 0`) only when storage is present; silently
+ignored otherwise.
+
 ### `OPFBuild` fields
 
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. For AC, P/Q keys depend on `sparse_pq`: `P_vec`/`Q_vec` (shape `(nnz,)`) when `True`; `P`/`Q` (shape `(nb, nb)`) when `False`. All other AC keys (`theta`, `v`, `p`, `q`, `Pg`, `Qg`) are present in both cases. |
-| `data` | dict | Pre-computed numpy arrays and metadata |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq`
+(`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]`multistep. All storage keys absent when `storage=None`. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. Storage keys absent when `storage=None`. Detection: `"ns" in build.data`. |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
+
+### `StorageUnitIdeal` fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `bus` | int | required | External (MATPOWER) bus ID |
+| `apparent_power_rating` | float | required | S_max (MVA); AC: circle constraint; DC: real power bound |
+| `capacity` | float | required | Energy capacity Q (MWh) |
+| `initial_soc` | float | required | Initial state of charge (MWh); 0 ≤ initial_soc ≤ capacity |
+| `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ ($/MW); 0.0 = zero-cost storage |
+
+`delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
+global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).
 
 ---
 
@@ -253,9 +296,17 @@ Both emit `DeprecationWarning` when called.
 to avoid circular imports. The import chain is:
 
 ```
-problem.py  →  ac_problem.py  →  network.py, cost.py, data.py
-problem.py  →  dc_problem.py  →  network.py, cost.py, data.py
-results.py  →  problem.py (OPFBuild type only)
+problem.py    →  storage.py          (StorageUnitIdeal, re-exported)
+problem.py    →  ac_problem.py       (deferred, inside functions)
+problem.py    →  dc_problem.py       (deferred, inside functions)
+ac_problem.py →  storage.py          (StorageUnitIdeal, _validate_storage,
+                                      _make_storage_incidence_matrix,
+                                      _make_storage_soc_constraints)
+ac_problem.py →  network.py, cost.py, data.py   (unchanged)
+dc_problem.py →  storage.py          (same as ac_problem.py)
+dc_problem.py →  network.py, cost.py, data.py   (unchanged)
+results.py    →  problem.py          (OPFBuild type only, unchanged)
+storage.py    →  numpy only          (no other cvxopf imports)
 ```
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
@@ -300,6 +351,31 @@ Do not confuse them. See the module-level comment in `network.py`.
 ### Pypower is not a dependency
 Never add pypower to `pyproject.toml`. See fixture generation below.
 
+### Storage units
+
+`StorageUnitIdeal` lives in `storage.py`, which has zero imports from other
+cvxopf modules. This avoids circular imports since both `ac_problem.py` and
+`dc_problem.py` import from it, and both are imported (deferred) by
+`problem.py`. `StorageUnitIdeal` is re-exported from `problem.py` for the
+public API.
+
+`delta` (time step duration, hours) is a global problem parameter on
+`build_opf` / `build_opf_multistep`, not a field on `StorageUnitIdeal`.
+It applies uniformly to all storage units in a given problem.
+
+The aging cost uses `cp.multiply(aging_weight, cp.abs(b_t))` — never
+`numpy_array * cp.abs(cp_var)` or `np.multiply(...)`. NumPy intercepts `*`
+via `__array_ufunc__` and routes through CVXPY's deprecated matrix
+multiplication path, causing `CvxpyDeprecationWarning`.
+
+`_make_step_constraints` (AC) is organised into five labelled sections in
+fixed order. The nodal balance constraint on `p` (Section 3) is the only
+place where storage power enters the AC balance. Never add a second `p ==`
+constraint from the caller.
+
+Storage keys are absent from `build.data` when `storage=None`. The
+detection contract is `"ns" in build.data`. Never add `ns=0` as a default.
+
 ---
 
 ## Milestones
@@ -311,7 +387,7 @@ Never add pypower to `pyproject.toml`. See fixture generation below.
 | 2 — Pypower fixture generation and validation | ✅ Complete | |
 | 3 — Multi-step problem builder | ✅ Complete | |
 | 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
-| 5 — Battery/storage model hook | 🔲 Architecture ready | `coupling_constraints` in `build_opf_multistep` |
+| 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep` |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | 🔲 Future | |
 | 8 — Renewable generation | 🔲 Future | |
@@ -323,12 +399,19 @@ When implementing, add apparent power flow expressions derived from the
 and `NotImplementedError` in `ac_problem.py` must be replaced. Add tests
 that verify the constraint is binding when load is pushed high enough.
 
-### Milestone 5 — Battery/storage model hook
-The researcher will provide example battery model code. The integration
-point is the `coupling_constraints` parameter of `build_opf_multistep`.
-Battery SoC dynamics constraints will reference per-step variables
-(`Pg[t]`, `Qg[t]`, `v[t]` for AC; `p_gen[t]`, `p_flows[t]` for DC)
-in `OPFBuild.variables`. Do not implement without researcher input.
+### Milestone 5 — Battery/storage model
+
+`StorageUnitIdeal` in `src/cvxopf/storage.py`. Passed as `storage=` to
+`build_opf` and `build_opf_multistep`. Time step duration `delta` (hours,
+default 1.0) is a separate global parameter.
+
+AC formulation uses an apparent power circle constraint
+`b_t^2 + b_q_t^2 <= S_max^2`. DC formulation uses a real power bound
+`|b_t| <= S_max` with a `UserWarning`. SoC dynamics are cross-step equality
+constraints generated by `_make_storage_soc_constraints` after the time step
+loop. Aging cost `lambda * sum_t |b_t|` follows Nnorom et al. (2026).
+
+`StorageUnitLossy` (asymmetric charge/discharge efficiency) is deferred.
 
 ### Milestone 7 — HVDC transmission links
 Model HVDC links as controllable point-to-point power injections between
@@ -475,3 +558,15 @@ docstring.
 - Do not implement Milestone 9 branch flow limits (Milestone 4) using `P_vec`/`Q_vec`
   until Milestone 9 is complete — Milestone 4 notes currently reference `P`, `Q`
   matrices and must be updated as part of Milestone 9
+  - Do not import `StorageUnitIdeal` from `problem.py` inside `ac_problem.py`
+  or `dc_problem.py` — import from `storage.py` directly
+- Do not add `delta` to `StorageUnitIdeal` — it is a global problem parameter
+- Do not add `ns=0` to `build.data` when `storage=None` — breaks detection
+- Do not use `numpy_array * cp.abs(cp_var)` for the aging cost — use
+  `cp.multiply(numpy_array, cp.abs(cp_var))` to avoid CvxpyDeprecationWarning
+- Do not add a second `p ==` or `q ==` constraint after `_make_step_constraints`
+  returns — it owns all balance constraints
+- Do not multiply `b`, `b_q`, or `soc` result values by `baseMVA` in
+  `extract_results` — they are already in MW/MVAr/MWh
+- Do not implement `StorageUnitLossy` without a separate plan — separate
+  charge/discharge variables require structural changes to `_make_step_constraints`

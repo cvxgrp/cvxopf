@@ -120,7 +120,9 @@ Results update automatically after each solve.
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
 ```
 
-Select number of repititions and run timing study across all test cases and OPF configurations.
+Select number of repetitions and run timing study across all test cases and OPF configurations. The results should look something like this:
+
+![OPF benchmark: AC sparse vs AC dense vs lossy DC](notebooks/benchmark_opf_result.png)
 
 ## Multi-step example
 
@@ -204,7 +206,7 @@ package environment.
 - [x] Milestone 2: Pypower fixture generation and validation tests
 - [x] Milestone 3: Multi-step problem builder
 - [ ] Milestone 4: Branch flow limits (AC)
-- [ ] Milestone 5: Battery/storage model hook
+- [x] Milestone 5: Battery/storage model hook
 - [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
 - [ ] Milestone 7: HVDC transmission links
 - [ ] Milestone 8: Renewable generation (solar and wind)

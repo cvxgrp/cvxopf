@@ -148,7 +148,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     multistep = isinstance(var["Pg"], list)
 
     if not multistep:
-        return dict(
+        results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = var["Pg"].value * baseMVA,
@@ -158,6 +158,17 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             p_net     = var["p"].value * baseMVA,
             q_net     = var["q"].value * baseMVA,
         )
+        
+        # Add storage results if present
+        if "ns" in data:
+            results["b"] = var["b"].value
+            results["b_q"] = var["b_q"].value
+            results["soc"] = var["soc"].value
+            results["storage_cost"] = float(
+                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            )
+        
+        return results
 
     T       = data["T"]
     Pg_rows = []
@@ -167,6 +178,16 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     p_rows  = []
     q_rows  = []
 
+    Pg_rows = []
+    Qg_rows = []
+    Vm_rows = []
+    Va_rows = []
+    p_rows  = []
+    q_rows  = []
+    b_rows  = []
+    b_q_rows = []
+    soc_rows = []
+
     for t in range(T):
         Pg_rows.append(var["Pg"][t].value)
         Qg_rows.append(var["Qg"][t].value)
@@ -174,8 +195,14 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         Va_rows.append(var["theta"][t].value.flatten())
         p_rows.append(var["p"][t].value)
         q_rows.append(var["q"][t].value)
+        
+        # Extract storage results if present
+        if "ns" in data:
+            b_rows.append(var["b"][t].value)
+            b_q_rows.append(var["b_q"][t].value)
+            soc_rows.append(var["soc"][t].value)
 
-    return dict(
+    results = dict(
         status    = prob.status,
         objective = float(prob.value),
         Pg        = np.array(Pg_rows) * baseMVA,
@@ -185,6 +212,17 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         p_net     = np.array(p_rows) * baseMVA,
         q_net     = np.array(q_rows) * baseMVA,
     )
+    
+    # Add storage results if present
+    if "ns" in data:
+        results["b"] = np.array(b_rows)
+        results["b_q"] = np.array(b_q_rows)
+        results["soc"] = np.array(soc_rows)
+        results["storage_cost"] = float(
+            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+        )
+    
+    return results
 
 
 def _extract_dc_results(build: OPFBuild) -> dict:
@@ -217,19 +255,31 @@ def _extract_dc_results(build: OPFBuild) -> dict:
                 p_net     = None,
             )
 
-        return dict(
+        results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = p_gen_val[gen_bus] * baseMVA,
             p_flows   = p_flows_val * baseMVA,
             p_net     = (p_gen_val - Pd) * baseMVA,
         )
+        
+        # Add storage results if present
+        if "ns" in data:
+            results["b"] = var["b"].value
+            results["soc"] = var["soc"].value
+            results["storage_cost"] = float(
+                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            )
+        
+        return results
 
     T            = data["T"]
     Pd_series    = data["Pd_series"]
     Pg_rows      = []
     p_flows_rows = []
     p_net_rows   = []
+    b_rows       = []
+    soc_rows     = []
 
     for t in range(T):
         p_gen_t   = var["p_gen"][t].value
@@ -245,11 +295,26 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         Pg_rows.append(p_gen_t[gen_bus])
         p_flows_rows.append(p_flows_t)
         p_net_rows.append(p_gen_t - Pd_series[t])
+        
+        # Extract storage results if present
+        if "ns" in data:
+            b_rows.append(var["b"][t].value)
+            soc_rows.append(var["soc"][t].value)
 
-    return dict(
+    results = dict(
         status    = prob.status,
         objective = float(prob.value),
         Pg        = np.array(Pg_rows) * baseMVA,
         p_flows   = np.array(p_flows_rows) * baseMVA,
         p_net     = np.array(p_net_rows) * baseMVA,
     )
+    
+    # Add storage results if present
+    if "ns" in data:
+        results["b"] = np.array(b_rows)
+        results["soc"] = np.array(soc_rows)
+        results["storage_cost"] = float(
+            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+        )
+    
+    return results

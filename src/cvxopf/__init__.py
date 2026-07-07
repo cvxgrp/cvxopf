@@ -48,3 +48,18 @@ except ImportError as e:
     raise ImportError(_IPOPT_INSTALL_HINT) from e
 
 __version__ = "0.1.0"
+
+# Re-export public API
+from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
+from cvxopf.results import extract_results, compare_to_reference
+from cvxopf.storage import StorageUnitIdeal
+
+__all__ = [
+    "build_opf",
+    "build_opf_multistep",
+    "OPFOptions",
+    "OPFBuild",
+    "extract_results",
+    "compare_to_reference",
+    "StorageUnitIdeal",
+]
