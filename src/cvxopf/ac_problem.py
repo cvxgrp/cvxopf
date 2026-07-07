@@ -22,6 +22,12 @@ from cvxopf.network import (
 )
 from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.storage import (
+    StorageUnitIdeal,
+    _validate_storage,
+    _make_storage_incidence_matrix,
+    _make_storage_soc_constraints,
+)
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
@@ -77,7 +83,7 @@ def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndar
     return Rp
 
 
-def _parse_case(case: dict, options) -> dict:
+def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
     Returns a flat dict consumed by the AC single-step and multistep builders.
@@ -126,6 +132,42 @@ def _parse_case(case: dict, options) -> dict:
     Cg      = make_incidence_matrix(case)
     gen_bus = gen[:, GEN_BUS].astype(int)
 
+    # Parse storage if present
+    storage_data = {}
+    if storage is not None:
+        # Get external bus IDs for validation
+        if ext_to_int is not None:
+            ext_bus_ids = set(ext_to_int.keys())
+        else:
+            ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+        
+        # Validate storage units
+        _validate_storage(storage, ext_bus_ids)
+        
+        # Create storage incidence matrix
+        Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
+        
+        # Extract storage parameters
+        storage_bus = np.array([
+            ext_to_int[u.bus] if ext_to_int else u.bus
+            for u in storage
+        ], dtype=int)
+        storage_apparent_power_rating = np.array([u.apparent_power_rating for u in storage])
+        storage_capacity = np.array([u.capacity for u in storage])
+        storage_initial_soc = np.array([u.initial_soc for u in storage])
+        storage_aging_weight = np.array([u.aging_weight for u in storage])
+        
+        storage_data = dict(
+            ns=len(storage),
+            Cs=Cs,
+            storage_bus=storage_bus,
+            storage_apparent_power_rating=storage_apparent_power_rating,
+            storage_capacity=storage_capacity,
+            storage_initial_soc=storage_initial_soc,
+            storage_delta=float(delta),
+            storage_aging_weight=storage_aging_weight,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         bus=bus, gen=gen, gencost=gencost,
@@ -139,6 +181,7 @@ def _parse_case(case: dict, options) -> dict:
         Pgmin=Pgmin, Pgmax=Pgmax,
         Qgmin=Qgmin, Qgmax=Qgmax,
         Cg=Cg,
+        **storage_data,
     )
 
 
@@ -198,22 +241,39 @@ def _make_step_constraints(
     enforce_vset: bool,
     VG_col: int,
     sparse_pq: bool,
+    baseMVA: float,
+    # Storage — all None when storage=None
+    ns: int = 0,
+    Cs=None,
+    S_max=None,
+    storage_capacity=None,
+    b_t=None,
+    b_q_t=None,
+    soc_t=None,
 ) -> list:
     """
-    Build the list of CVXPY constraints for one AC time step.
+    Build the complete list of CVXPY constraints for one AC time step.
 
-    Branches on sparse_pq:
-      True  — PQ_P and PQ_Q are flat (nnz,) vectors; nodal injections
-              use the scatter matrix Rp @ PQ_P.
-      False — PQ_P and PQ_Q are dense (nb, nb) matrices; nodal injections
-              use cp.sum(..., axis=1). Identical to pre-Milestone 9 behaviour.
+    Internal structure (five sections — do not reorder or split):
+      1. Reference bus angle fix
+      2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
+      3. Nodal power balance: exactly one p== and one q== constraint,
+         incorporating storage injection if present
+      4. Storage operating constraints (apparent power circle, SoC bounds)
+         — omitted when ns==0
+      5. Voltage setpoint pinning — omitted when enforce_vset=False
+
+    The caller must not append additional p== or q== constraints after
+    this function returns.
     """
-    constr = [
-        theta[ref] == 0.0,
-        p == Cg @ Pg - Pd,
-        q == Cg @ Qg - Qd,
-    ]
+    # ------------------------------------------------------------------
+    # Section 1: Reference bus
+    # ------------------------------------------------------------------
+    constr = [theta[ref] == 0.0]
 
+    # ------------------------------------------------------------------
+    # Section 2: Flow definitions — p and q from P/Q matrix
+    # ------------------------------------------------------------------
     if sparse_pq:
         # TODO: vectorize once https://github.com/cvxpy/cvxpy/issues/3442 is
         # resolved. The natural vectorised form:
@@ -252,8 +312,6 @@ def _make_step_constraints(
         vvT = v @ v.T
 
         constr += [
-            p == cp.sum(PQ_P, axis=1),
-            q == cp.sum(PQ_Q, axis=1),
             PQ_P[E] == cp.multiply(
                 vvT[E],
                 cp.multiply(G[E], C[E]) + cp.multiply(B[E], S[E])
@@ -264,8 +322,41 @@ def _make_step_constraints(
             ),
             PQ_P[Z] == 0.0,
             PQ_Q[Z] == 0.0,
+            p == cp.sum(PQ_P, axis=1),
+            q == cp.sum(PQ_Q, axis=1),
         ]
 
+    # ------------------------------------------------------------------
+    # Section 3: Nodal power balance
+    # Exactly one p== and one q== constraint.
+    # Storage injection added here if present; otherwise original balance.
+    # ------------------------------------------------------------------
+    if ns > 0:
+        # b_t and b_q_t are in MW and MVAr respectively.
+        # Divide by baseMVA to convert to p.u. for the balance equation.
+        constr.append(p == Cg @ Pg - Pd + (1.0 / baseMVA) * (Cs @ b_t))
+        constr.append(q == Cg @ Qg - Qd + (1.0 / baseMVA) * (Cs @ b_q_t))
+    else:
+        constr.append(p == Cg @ Pg - Pd)
+        constr.append(q == Cg @ Qg - Qd)
+
+    # ------------------------------------------------------------------
+    # Section 4: Storage operating constraints
+    # Apparent power circle (AC) and SoC bounds.
+    # Omitted entirely when ns == 0.
+    # ------------------------------------------------------------------
+    if ns > 0:
+        for s in range(ns):
+            constr.append(
+                cp.sum_squares(cp.vstack([b_t[s], b_q_t[s]])) <= float(S_max[s]) ** 2
+            )
+        constr.append(soc_t >= 0.0)
+        constr.append(soc_t <= storage_capacity)
+
+    # ------------------------------------------------------------------
+    # Section 5: Voltage setpoint pinning
+    # Omitted when enforce_vset=False.
+    # ------------------------------------------------------------------
     if enforce_vset:
         for b in np.r_[np.array([ref]), pv]:
             idx = np.where((gen_bus == int(b)) & (status == 1))[0]
@@ -279,7 +370,7 @@ def _make_step_constraints(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_ac_single(case: dict, options) -> "OPFBuild":
+def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -289,8 +380,9 @@ def _build_ac_single(case: dict, options) -> "OPFBuild":
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options)
+    d = _parse_case(case, options, storage, delta)
 
+    # Create step variables
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
         d["nb"], d["ng"],
         d["vmin_arr"], d["vmax_arr"],
@@ -302,6 +394,15 @@ def _build_ac_single(case: dict, options) -> "OPFBuild":
         sparse_pq=options.sparse_pq,
     )
 
+    # Create storage variables if present
+    b_t = b_q_t = soc_t = None
+    if "ns" in d and d["ns"] > 0:
+        ns = d["ns"]
+        # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
+        b_t = cp.Variable(ns, name="b")
+        b_q_t = cp.Variable(ns, name="b_q")
+        soc_t = cp.Variable(ns, name="soc")
+
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
@@ -311,18 +412,50 @@ def _build_ac_single(case: dict, options) -> "OPFBuild":
         enforce_vset=options.enforce_vset,
         VG_col=VG,
         sparse_pq=options.sparse_pq,
+        baseMVA=d["baseMVA"],
+        ns=d.get("ns", 0),
+        Cs=d.get("Cs"),
+        S_max=d.get("storage_apparent_power_rating"),
+        storage_capacity=d.get("storage_capacity"),
+        b_t=b_t,
+        b_q_t=b_q_t,
+        soc_t=soc_t,
     )
 
-    cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg)
-    prob = cp.Problem(cp.Minimize(cost), constr)
+    # Build cost: generation cost plus storage aging cost
+    gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg)
+    if "ns" in d and d["ns"] > 0:
+        # L1 aging penalty on real power cycling
+        storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+        total_cost = gen_cost + storage_cost
+    else:
+        total_cost = gen_cost
+    
+    # Add storage SoC dynamics constraints if present
+    if "ns" in d and d["ns"] > 0:
+        storage_coupling = _make_storage_soc_constraints(
+            [b_t], [soc_t],
+            d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        )
+        constr.extend(storage_coupling)
+    
+    prob = cp.Problem(cp.Minimize(total_cost), constr)
 
+    # Build variables dict
     if options.sparse_pq:
         variables = dict(theta=theta, v=v, P_vec=PQ_P, Q_vec=PQ_Q,
                          p=p, q=q, Pg=Pg, Qg=Qg)
     else:
         variables = dict(theta=theta, v=v, P=PQ_P, Q=PQ_Q,
                          p=p, q=q, Pg=Pg, Qg=Qg)
+    
+    # Add storage variables if present
+    if "ns" in d and d["ns"] > 0:
+        variables["b"] = b_t
+        variables["b_q"] = b_q_t
+        variables["soc"] = soc_t
 
+    # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
@@ -333,6 +466,19 @@ def _build_ac_single(case: dict, options) -> "OPFBuild":
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
     )
+    
+    # Add storage data if present
+    if "ns" in d:
+        data.update(
+            ns=d["ns"],
+            Cs=d["Cs"],
+            storage_bus=d["storage_bus"],
+            storage_apparent_power_rating=d["storage_apparent_power_rating"],
+            storage_capacity=d["storage_capacity"],
+            storage_initial_soc=d["storage_initial_soc"],
+            storage_delta=d["storage_delta"],
+            storage_aging_weight=d["storage_aging_weight"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
@@ -346,6 +492,8 @@ def _build_ac_multistep(
     T: int,
     options,
     coupling_constraints: list,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -356,7 +504,7 @@ def _build_ac_multistep(
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options)
+    d = _parse_case(case, options, storage, delta)
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
 
     if Pd_series.shape[0] != T:
@@ -364,12 +512,15 @@ def _build_ac_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
+    # Initialize lists for variables
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
     p_list, q_list, Pg_list, Qg_list          = [], [], [], []
+    b_list, b_q_list, soc_list               = [], [], []
     all_constr  = []
     total_cost  = 0
 
     for t in range(T):
+        # Create step variables
         theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t = \
             _make_step_variables(
                 d["nb"], d["ng"],
@@ -382,6 +533,14 @@ def _build_ac_multistep(
                 sparse_pq=options.sparse_pq,
             )
 
+        # Create storage variables if present
+        b_t = b_q_t = soc_t = None
+        if "ns" in d and d["ns"] > 0:
+            ns = d["ns"]
+            b_t = cp.Variable(ns, name=f"b_{t}")
+            b_q_t = cp.Variable(ns, name=f"b_q_{t}")
+            soc_t = cp.Variable(ns, name=f"soc_{t}")
+
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
@@ -391,12 +550,21 @@ def _build_ac_multistep(
             enforce_vset=options.enforce_vset,
             VG_col=VG,
             sparse_pq=options.sparse_pq,
+            baseMVA=d["baseMVA"],
+            ns=d.get("ns", 0),
+            Cs=d.get("Cs"),
+            S_max=d.get("storage_apparent_power_rating"),
+            storage_capacity=d.get("storage_capacity"),
+            b_t=b_t,
+            b_q_t=b_q_t,
+            soc_t=soc_t,
         )
 
         all_constr.extend(step_constr)
-        total_cost = total_cost + poly_cost_expr(
-            d["gencost"], d["baseMVA"] * Pg_t
-        )
+        
+        # Add generation cost
+        gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
+        total_cost = total_cost + gen_cost
 
         theta_list.append(theta_t)
         v_list.append(v_t)
@@ -406,10 +574,32 @@ def _build_ac_multistep(
         q_list.append(q_t)
         Pg_list.append(Pg_t)
         Qg_list.append(Qg_t)
+        
+        # Add storage variables to lists
+        if "ns" in d and d["ns"] > 0:
+            b_list.append(b_t)
+            b_q_list.append(b_q_t)
+            soc_list.append(soc_t)
+
+    # Add storage aging cost if present
+    if "ns" in d and d["ns"] > 0:
+        for t in range(T):
+            # L1 aging penalty on real power cycling
+            storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_list[t])))
+            total_cost = total_cost + storage_cost
+
+    # Add storage SoC dynamics constraints if present
+    if "ns" in d and d["ns"] > 0:
+        storage_coupling = _make_storage_soc_constraints(
+            b_list, soc_list,
+            d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        )
+        all_constr.extend(storage_coupling)
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
+    # Build variables dict
     if options.sparse_pq:
         variables = dict(
             theta=theta_list, v=v_list,
@@ -422,7 +612,14 @@ def _build_ac_multistep(
             P=PQ_P_list, Q=PQ_Q_list,
             p=p_list, q=q_list, Pg=Pg_list, Qg=Qg_list,
         )
+    
+    # Add storage variables if present
+    if "ns" in d and d["ns"] > 0:
+        variables["b"] = b_list
+        variables["b_q"] = b_q_list
+        variables["soc"] = soc_list
 
+    # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
@@ -436,6 +633,19 @@ def _build_ac_multistep(
         Pd_series=Pd_series,
         Qd_series=Qd_series,
     )
+    
+    # Add storage data if present
+    if "ns" in d:
+        data.update(
+            ns=d["ns"],
+            Cs=d["Cs"],
+            storage_bus=d["storage_bus"],
+            storage_apparent_power_rating=d["storage_apparent_power_rating"],
+            storage_capacity=d["storage_capacity"],
+            storage_initial_soc=d["storage_initial_soc"],
+            storage_delta=d["storage_delta"],
+            storage_aging_weight=d["storage_aging_weight"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,

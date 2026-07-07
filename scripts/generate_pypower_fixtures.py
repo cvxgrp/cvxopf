@@ -37,6 +37,7 @@ Output
 ------
 tests/fixtures/case9_pypower_reference.json
 tests/fixtures/case14_pypower_reference.json
+tests/fixtures/case57_pypower_reference.json
 
 Fixture schema
 --------------
@@ -57,7 +58,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from pypower.api import case9, case14, runopf
+from pypower.api import case9, case14, case57, runopf
 from pypower.idx_bus import VM, VA
 from pypower.idx_gen import PG, QG
 from pypower import ppoption
@@ -167,6 +168,7 @@ def main() -> int:
     cases = [
         (case9,  "case9",  "case9_pypower_reference.json"),
         (case14, "case14", "case14_pypower_reference.json"),
+        (case57, "case57", "case57_pypower_reference.json"),
     ]
 
     failed = False

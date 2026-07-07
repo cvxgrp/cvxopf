@@ -25,6 +25,9 @@ import numpy as np
 import pandas as pd
 import cvxpy as cp
 
+# Import storage types for public API
+from cvxopf.storage import StorageUnitIdeal
+
 
 # ---------------------------------------------------------------------------
 # Options dataclass
@@ -110,6 +113,10 @@ class OPFBuild:
 
         DC multi-step: each value is a list of length T.
 
+        When storage is present:
+            b (real power, MW), b_q (reactive power, MVAr, AC only),
+            soc (state of charge, MWh)
+
     data : dict
         Pre-computed numpy arrays and metadata.
 
@@ -120,6 +127,9 @@ class OPFBuild:
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
         Multi-step additionally: T, Pd_series (and Qd_series for AC)
+        When storage is present: ns, Cs, storage_bus,
+                 storage_apparent_power_rating, storage_capacity,
+                 storage_initial_soc, storage_delta, storage_aging_weight
 
     formulation : str
         The formulation used to build this problem.
@@ -199,6 +209,8 @@ def build_opf(
     *,
     formulation: str = "ac",
     options: OPFOptions | None = None,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -216,6 +228,13 @@ def build_opf(
             https://doi.org/10.2172/3018252
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
+    storage : list[StorageUnitIdeal] | None, optional
+        List of energy storage units. If None, no storage is modelled.
+        Each unit is a StorageUnitIdeal dataclass instance.
+    delta : float, optional
+        Time step duration in hours (default 1.0). Used for storage SoC
+        dynamics when storage is present. Ignored when storage is None.
+        Must be > 0 when storage is present.
 
     Returns
     -------
@@ -225,13 +244,17 @@ def build_opf(
     if options is None:
         options = OPFOptions()
 
+    # Validate delta when storage is present
+    if storage is not None and delta <= 0:
+        raise ValueError(f"delta must be > 0, got {delta}")
+
     builders = _get_single_builders()
     if formulation not in builders:
         raise ValueError(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
-    return builders[formulation](case, options)
+    return builders[formulation](case, options, storage, delta)
 
 
 def build_opf_multistep(
@@ -243,6 +266,8 @@ def build_opf_multistep(
     formulation: str = "ac",
     options: OPFOptions | None = None,
     coupling_constraints: list[cp.Constraint] | None = None,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -267,6 +292,14 @@ def build_opf_multistep(
         Additional constraints linking variables across time steps (e.g.,
         battery SoC dynamics). Appended to the problem without modification.
         Default: empty list.
+    storage : list[StorageUnitIdeal] | None, optional
+        List of energy storage units. If None, no storage is modelled.
+        Each unit is a StorageUnitIdeal dataclass instance. Storage SoC
+        dynamics are automatically added as coupling constraints.
+    delta : float, optional
+        Time step duration in hours (default 1.0). Used for storage SoC
+        dynamics when storage is present. Ignored when storage is None.
+        Must be > 0 when storage is present.
 
     Returns
     -------
@@ -278,6 +311,10 @@ def build_opf_multistep(
     if coupling_constraints is None:
         coupling_constraints = []
 
+    # Validate delta when storage is present
+    if storage is not None and delta <= 0:
+        raise ValueError(f"delta must be > 0, got {delta}")
+
     builders = _get_multistep_builders()
     if formulation not in builders:
         raise ValueError(
@@ -285,7 +322,7 @@ def build_opf_multistep(
             f"Supported: {sorted(builders.keys())}"
         )
     return builders[formulation](
-        case, df_P, df_Q, T, options, coupling_constraints
+        case, df_P, df_Q, T, options, coupling_constraints, storage, delta
     )
 
 
