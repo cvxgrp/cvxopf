@@ -25,8 +25,10 @@ with appropriate solvers. It is designed to:
 | `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 
-Reference for lossy DC OPF: *Convex Optimization with Smart Grid Examples*,
-https://doi.org/10.2172/3018252
+References:
+
+- AC OPF: *Disciplined Nonlinear Programming*, https://stanford.edu/~boyd/papers/dnlp.html
+- lossy DC OPF: *Convex Optimization with Smart Grid Examples*, https://doi.org/10.2172/3018252
 
 ## Prerequisites
 
