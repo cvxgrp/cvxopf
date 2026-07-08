@@ -110,6 +110,8 @@ print(f"Flows (MW): {results['p_flows']}")
 
 ## Interactive notebooks
 
+We recommend using `uv` (https://docs.astral.sh/uv/) to run the notebooks. From the project root, run the following:
+
 ```bash
 uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 ```
