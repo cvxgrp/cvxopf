@@ -176,7 +176,20 @@ Clone the repository and install in editable mode with development dependencies:
 ```bash
 git clone https://github.com/cvxgrp/cvxopf.git
 cd cvxopf
+```
+
+If you have `uv` installed, that's it. Just run things with `uv` from the project root. 
+
+If you are managing your own virtual environment, then install the development dependencies with pip:
+
+```bash
 pip install -e ".[dev]"
+```
+
+If you want to run the Marimo notebooks, you'll want the notebook dependencies as well:
+
+```bash
+pip install -e ".[dev,notebook]"
 ```
 
 To run the test suite:
