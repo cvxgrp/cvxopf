@@ -92,13 +92,13 @@ def main():
         b_q_t    = r["b_q"][t, 0]
         soc_t    = r["soc"][t, 0]
         apparent = np.sqrt(b_t**2 + b_q_t**2)
-        marker   = " ◄" if abs(b_t) > 1.0 else ""
+        marker = " ◄" if b_t < -1.0 else " ►" if b_t > 1.0 else ""
         print(f"{t:>3}  {scales[t]:>6.3f}  {total_Pg:>9.2f}  "
               f"{b_t:>8.3f}  {b_q_t:>10.3f}  {soc_t:>10.3f}  "
               f"{apparent:>10.3f}{marker}")
 
     print()
-    print("(◄ marks steps where storage dispatches more than 1 MW real power)")
+    print("(► marks steps where storage generates more than 1 MW real power, ◄ marks steps where storage charges more than 1 MW real power)")
 
     # ------------------------------------------------------------------
     # SoC dynamics verification

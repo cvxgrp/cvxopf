@@ -110,12 +110,12 @@ def main():
         b_t       = r["b"][t, 0]
         soc_t     = r["soc"][t, 0]
         utilisation = abs(b_t) / unit.apparent_power_rating
-        marker    = " ◄" if abs(b_t) > 1.0 else ""
+        marker = " ◄" if b_t < -1.0 else " ►" if b_t > 1.0 else ""
         print(f"{t:>3}  {scales[t]:>6.3f}  {total_Pg:>9.2f}  "
               f"{b_t:>8.3f}  {soc_t:>10.3f}  {utilisation:>10.1%}{marker}")
 
     print()
-    print("(◄ marks steps where storage dispatches more than 1 MW)")
+    print("(► marks steps where storage generates more than 1 MW real power, ◄ marks steps where storage charges more than 1 MW real power)")
 
     # ------------------------------------------------------------------
     # SoC dynamics verification
