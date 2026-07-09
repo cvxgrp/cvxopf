@@ -27,7 +27,7 @@ with appropriate solvers. It is designed to:
 
 References:
 
-- AC OPF: *Disciplined Nonlinear Programming*, https://stanford.edu/~boyd/papers/dnlp.html
+- AC OPF: *Disciplined Nonlinear Programming*, https://stanford.edu/~boyd/papers/dnlp.html, https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb
 - lossy DC OPF: *Convex Optimization with Smart Grid Examples*, https://doi.org/10.2172/3018252
 
 ## Prerequisites
