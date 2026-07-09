@@ -28,6 +28,12 @@ from cvxopf.storage import (
     _make_storage_incidence_matrix,
     _make_storage_soc_constraints,
 )
+from cvxopf.nondispatchable import (
+    NondispatchableUnit,
+    _validate_nondispatchable,
+    _make_nd_incidence_matrix,
+    _parse_nd_timeseries,
+)
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
@@ -83,7 +89,7 @@ def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndar
     return Rp
 
 
-def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> dict:
+def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
     Returns a flat dict consumed by the AC single-step and multistep builders.
@@ -132,18 +138,23 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
     Cg      = make_incidence_matrix(case)
     gen_bus = gen[:, GEN_BUS].astype(int)
 
+    # Get external bus IDs for validation (needed for both storage and nondispatchable)
+    if ext_to_int is not None:
+        ext_bus_ids = set(ext_to_int.keys())
+    else:
+        ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+    
     # Parse storage if present
     storage_data = {}
     if storage is not None:
-        # Get external bus IDs for validation
-        if ext_to_int is not None:
-            ext_bus_ids = set(ext_to_int.keys())
-        else:
-            ext_bus_ids = set(bus[:, 0].astype(int).tolist())
-        
-        # Validate storage units
         _validate_storage(storage, ext_bus_ids)
-        
+    
+    # Validate nondispatchable units
+    if nondispatchable is not None and len(nondispatchable) > 0:
+        _validate_nondispatchable(nondispatchable, ext_bus_ids)
+    
+    # Parse storage if present (continued)
+    if storage is not None:
         # Create storage incidence matrix
         Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
         
@@ -168,6 +179,31 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
             storage_aging_weight=storage_aging_weight,
         )
 
+    # Parse nondispatchable if present
+    nd_data = {}
+    if nondispatchable is not None and len(nondispatchable) > 0:
+        # Validate nondispatchable units
+        _validate_nondispatchable(nondispatchable, ext_bus_ids)
+        
+        # Create nondispatchable incidence matrix
+        Cnd = _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int)
+        
+        # Extract nondispatchable parameters
+        nd_bus = np.array([
+            ext_to_int[u.bus] if ext_to_int else u.bus
+            for u in nondispatchable
+        ], dtype=int)
+        nd_apparent_power_rating = np.array([u.apparent_power_rating for u in nondispatchable])
+        nd_p_available = np.array([u.p_available for u in nondispatchable])
+        
+        nd_data = dict(
+            nnd=len(nondispatchable),
+            Cnd=Cnd,
+            nd_bus=nd_bus,
+            nd_apparent_power_rating=nd_apparent_power_rating,
+            nd_p_available=nd_p_available,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         bus=bus, gen=gen, gencost=gencost,
@@ -175,6 +211,7 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
         ref=ref, pv=pv, ext_to_int=ext_to_int,
+        ext_bus_ids=ext_bus_ids,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
         status=status, gen_bus=gen_bus,
@@ -182,6 +219,7 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
         Qgmin=Qgmin, Qgmax=Qgmax,
         Cg=Cg,
         **storage_data,
+        **nd_data,
     )
 
 
@@ -250,17 +288,26 @@ def _make_step_constraints(
     b_t=None,
     b_q_t=None,
     soc_t=None,
+    # Nondispatchable — all None when nondispatchable=None
+    nnd: int = 0,
+    Cnd=None,
+    nd_apparent_power_rating=None,
+    nd_p_available_t=None,
+    p_nd_t=None,
+    q_nd_t=None,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
 
-    Internal structure (five sections — do not reorder or split):
+    Internal structure (six sections — do not reorder or split):
       1. Reference bus angle fix
       2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
       3. Nodal power balance: exactly one p== and one q== constraint,
-         incorporating storage injection if present
+         incorporating storage and nondispatchable injection if present
       4. Storage operating constraints (apparent power circle, SoC bounds)
          — omitted when ns==0
+      4b. Nondispatchable operating constraints (apparent power circle, real power bounds)
+          — omitted when nnd==0
       5. Voltage setpoint pinning — omitted when enforce_vset=False
 
     The caller must not append additional p== or q== constraints after
@@ -329,16 +376,15 @@ def _make_step_constraints(
     # ------------------------------------------------------------------
     # Section 3: Nodal power balance
     # Exactly one p== and one q== constraint.
-    # Storage injection added here if present; otherwise original balance.
+    # Storage and nondispatchable injection added here if present.
     # ------------------------------------------------------------------
-    if ns > 0:
-        # b_t and b_q_t are in MW and MVAr respectively.
-        # Divide by baseMVA to convert to p.u. for the balance equation.
-        constr.append(p == Cg @ Pg - Pd + (1.0 / baseMVA) * (Cs @ b_t))
-        constr.append(q == Cg @ Qg - Qd + (1.0 / baseMVA) * (Cs @ b_q_t))
-    else:
-        constr.append(p == Cg @ Pg - Pd)
-        constr.append(q == Cg @ Qg - Qd)
+    storage_injection_p = (1.0 / baseMVA) * (Cs @ b_t) if ns > 0 else 0
+    storage_injection_q = (1.0 / baseMVA) * (Cs @ b_q_t) if ns > 0 else 0
+    nd_injection_p = (1.0 / baseMVA) * (Cnd @ p_nd_t) if nnd > 0 else 0
+    nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
+    
+    constr.append(p == Cg @ Pg - Pd + storage_injection_p + nd_injection_p)
+    constr.append(q == Cg @ Qg - Qd + storage_injection_q + nd_injection_q)
 
     # ------------------------------------------------------------------
     # Section 4: Storage operating constraints
@@ -352,6 +398,21 @@ def _make_step_constraints(
             )
         constr.append(soc_t >= 0.0)
         constr.append(soc_t <= storage_capacity)
+
+    # ------------------------------------------------------------------
+    # Section 4b: Nondispatchable operating constraints
+    # Apparent power circle and real power bounds.
+    # Omitted entirely when nnd == 0.
+    # ------------------------------------------------------------------
+    if nnd > 0:
+        for n in range(nnd):
+            # Upper bound: available real power (time-varying), engineering units (MW)
+            constr.append(p_nd_t[n] <= float(nd_p_available_t[n]))
+            # Apparent power circle, engineering units (MW² + MVAr² ≤ MVA²)
+            constr.append(
+                cp.sum_squares(cp.vstack([p_nd_t[n], q_nd_t[n]])) <= float(nd_apparent_power_rating[n]) ** 2
+            )
+        # Lower bound already encoded via nonneg=True on p_nd_t variable declaration
 
     # ------------------------------------------------------------------
     # Section 5: Voltage setpoint pinning
@@ -370,7 +431,7 @@ def _make_step_constraints(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> "OPFBuild":
+def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -380,7 +441,7 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta)
+    d = _parse_case(case, options, storage, delta, nondispatchable)
 
     # Create step variables
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
@@ -403,6 +464,14 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         b_q_t = cp.Variable(ns, name="b_q")
         soc_t = cp.Variable(ns, name="soc")
 
+    # Create nondispatchable variables if present
+    p_nd_t = q_nd_t = None
+    if "nnd" in d and d["nnd"] > 0:
+        nnd = d["nnd"]
+        # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
+        p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
+        q_nd_t = cp.Variable(nnd, name="q_nd")
+
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
@@ -420,6 +489,12 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         b_t=b_t,
         b_q_t=b_q_t,
         soc_t=soc_t,
+        nnd=d.get("nnd", 0),
+        Cnd=d.get("Cnd"),
+        nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+        nd_p_available_t=d.get("nd_p_available"),
+        p_nd_t=p_nd_t,
+        q_nd_t=q_nd_t,
     )
 
     # Build cost: generation cost plus storage aging cost
@@ -455,6 +530,11 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         variables["b_q"] = b_q_t
         variables["soc"] = soc_t
 
+    # Add nondispatchable variables if present
+    if "nnd" in d and d["nnd"] > 0:
+        variables["p_nd"] = p_nd_t
+        variables["q_nd"] = q_nd_t
+
     # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
@@ -479,6 +559,16 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             storage_delta=d["storage_delta"],
             storage_aging_weight=d["storage_aging_weight"],
         )
+
+    # Add nondispatchable data if present
+    if "nnd" in d:
+        data.update(
+            nnd=d["nnd"],
+            Cnd=d["Cnd"],
+            nd_bus=d["nd_bus"],
+            nd_apparent_power_rating=d["nd_apparent_power_rating"],
+            nd_p_available=d["nd_p_available"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
@@ -494,6 +584,8 @@ def _build_ac_multistep(
     coupling_constraints: list,
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    df_nd: pd.DataFrame | None = None,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -504,8 +596,13 @@ def _build_ac_multistep(
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta)
+    d = _parse_case(case, options, storage, delta, nondispatchable)
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
+    
+    # Parse nondispatchable timeseries if present
+    if "nnd" in d and df_nd is not None:
+        nd_available = _parse_nd_timeseries(df_nd, T, d["ext_bus_ids"], d["ext_to_int"])
+        d["nd_available"] = nd_available
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -516,6 +613,7 @@ def _build_ac_multistep(
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
     p_list, q_list, Pg_list, Qg_list          = [], [], [], []
     b_list, b_q_list, soc_list               = [], [], []
+    p_nd_list, q_nd_list                     = [], []
     all_constr  = []
     total_cost  = 0
 
@@ -541,6 +639,16 @@ def _build_ac_multistep(
             b_q_t = cp.Variable(ns, name=f"b_q_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
 
+        # Create nondispatchable variables if present
+        p_nd_t = q_nd_t = None
+        if "nnd" in d and d["nnd"] > 0:
+            nnd = d["nnd"]
+            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+            q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
+
+        # Get available power for this time step
+        nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
+        
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
@@ -558,6 +666,12 @@ def _build_ac_multistep(
             b_t=b_t,
             b_q_t=b_q_t,
             soc_t=soc_t,
+            nnd=d.get("nnd", 0),
+            Cnd=d.get("Cnd"),
+            nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+            nd_p_available_t=nd_p_available_t,
+            p_nd_t=p_nd_t,
+            q_nd_t=q_nd_t,
         )
 
         all_constr.extend(step_constr)
@@ -580,6 +694,11 @@ def _build_ac_multistep(
             b_list.append(b_t)
             b_q_list.append(b_q_t)
             soc_list.append(soc_t)
+
+        # Add nondispatchable variables to lists
+        if "nnd" in d and d["nnd"] > 0:
+            p_nd_list.append(p_nd_t)
+            q_nd_list.append(q_nd_t)
 
     # Add storage aging cost if present
     if "ns" in d and d["ns"] > 0:
@@ -619,6 +738,11 @@ def _build_ac_multistep(
         variables["b_q"] = b_q_list
         variables["soc"] = soc_list
 
+    # Add nondispatchable variables if present
+    if "nnd" in d and d["nnd"] > 0:
+        variables["p_nd"] = p_nd_list
+        variables["q_nd"] = q_nd_list
+
     # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
@@ -645,6 +769,16 @@ def _build_ac_multistep(
             storage_initial_soc=d["storage_initial_soc"],
             storage_delta=d["storage_delta"],
             storage_aging_weight=d["storage_aging_weight"],
+        )
+
+    # Add nondispatchable data if present
+    if "nnd" in d:
+        data.update(
+            nnd=d["nnd"],
+            Cnd=d["Cnd"],
+            nd_bus=d["nd_bus"],
+            nd_apparent_power_rating=d["nd_apparent_power_rating"],
+            nd_available=d.get("nd_available"),  # Only present in multistep
         )
     return OPFBuild(
         prob=prob, variables=variables, data=data,

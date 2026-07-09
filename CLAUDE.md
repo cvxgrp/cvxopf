@@ -17,10 +17,7 @@ supporting multiple formulations:
 It is designed for power systems research, with a focus on extensibility to
 multi-step optimization and energy storage models.
 
-The package is developed by the CVX Group at Stanford. The primary near-term
-extension is a battery/storage model with state-of-charge dynamics
-(Milestone 5), which will be provided by the researcher and integrated via
-the coupling constraints hook in `build_opf_multistep`.
+The package is developed by the CVX Group at Stanford.
 
 ---
 
@@ -28,23 +25,25 @@ the coupling constraints hook in `build_opf_multistep`.
 
 ```
 src/cvxopf/
-  __init__.py         Import-time cyipopt check with helpful error message
-  network.py          Ybus, incidence matrices, reindexing
-  cost.py             Polynomial generator cost expressions (CVXPY)
-  data.py             Input validation, time-series DataFrame ingestion
-  problem.py          Public API: OPFBuild, OPFOptions, build_opf,
-                      build_opf_multistep, deprecated aliases
-  ac_problem.py       AC-OPF internal helpers (DNLP formulation)
-  dc_problem.py       Lossy DC OPF internal helpers (convex QP)
-  results.py          extract_results, compare_to_reference
-  storage.py          StorageUnitIdeal dataclass, validation, incidence matrix,
-                      SoC coupling constraint helper
+  __init__.py             Import-time cyipopt check with helpful error message
+  network.py              Ybus, incidence matrices, reindexing
+  cost.py                 Polynomial generator cost expressions (CVXPY)
+  data.py                 Input validation, time-series DataFrame ingestion
+  problem.py              Public API: OPFBuild, OPFOptions, build_opf,
+                          build_opf_multistep, deprecated aliases
+  ac_problem.py           AC-OPF internal helpers (DNLP formulation)
+  dc_problem.py           Lossy DC OPF internal helpers (convex QP)
+  results.py              extract_results, compare_to_reference
+  storage.py              StorageUnitIdeal dataclass, validation, incidence
+                          matrix, SoC coupling constraint helper
+  nondispatchable.py      NondispatchableUnit dataclass, validation, incidence
+                          matrix, timeseries parsing
   testcases/
-    case9.py          9-bus, 3-generator MATPOWER test case
-    case14.py         IEEE 14-bus MATPOWER test case
+    case9.py              9-bus, 3-generator MATPOWER test case
+    case14.py             IEEE 14-bus MATPOWER test case
 tests/
   conftest.py
-  fixtures/           Committed Pypower reference JSON files (static)
+  fixtures/               Committed Pypower reference JSON files (static)
   test_network.py
   test_problem_single.py
   test_problem_multistep.py
@@ -54,6 +53,7 @@ tests/
   test_sparse_pq.py
   test_vs_pypower_reference.py
   test_storage.py
+  test_nondispatchable.py
 scripts/
   generate_pypower_fixtures.py   uv inline-dependency script (isolated env)
 examples/
@@ -66,6 +66,8 @@ examples/
   case9_storage_dc.py
   case9_storage_ac_24h.py
   case9_storage_dc_24h.py
+  case9_multistep_nondispatchable_ac.py
+  case9_nondispatchable_dc.py
 notebooks/
   benchmark_opf.py
   cvxopf_demo.py
@@ -81,7 +83,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **429 passed, 0 failed, 0 skipped.**
+Expected result: **512 passed, 0 failed, 0 skipped.**
 
 To run a single test file:
 
@@ -169,6 +171,15 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 - Nodal balance modified: `p = Cg @ Pg - Pd + (1/baseMVA) * Cs @ b_t`
 - Reactive balance modified: `q = Cg @ Qg - Qd + (1/baseMVA) * Cs @ b_q_t`
 
+**Nondispatchable variables** (present only when `nondispatchable` is not None):
+- `p_nd` — real power (nnd,) MW, non-negative, bounded above by available power
+- `q_nd` — reactive power (nnd,) MVAr
+- Operating set: `p_nd_t[n]^2 + q_nd_t[n]^2 <= P_max[n]^2` (apparent power
+  circle) and `0 <= p_nd_t[n] <= R_t[n]` (available power upper bound)
+- Nodal balance modified: `p = Cg @ Pg - Pd + (1/baseMVA) * Cs @ b_t + (1/baseMVA) * Cnd @ p_nd_t`
+- Reactive balance modified: `q = Cg @ Qg - Qd + (1/baseMVA) * Cs @ b_q_t + (1/baseMVA) * Cnd @ q_nd_t`
+- Storage terms absent when `storage=None`; ND terms absent when `nondispatchable=None`
+
 Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
 `p_net`, `q_net`
 
@@ -197,6 +208,14 @@ Variables: `p_flows`, `p_gen`
 - `soc` — state of charge (ns,) MWh
 - Operating set: `|b_t[s]| <= S_max[s]` (real power bound; UserWarning emitted)
 - Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t = Pd`
+
+**Nondispatchable variables** (present only when `nondispatchable` is not None):
+- `p_nd` — real power (nnd,) MW, non-negative, bounded above by available power
+- `q_nd` absent — DC has no reactive power
+- Operating set: `0 <= p_nd_t[n] <= R_t[n]` (available power upper bound only;
+  apparent power rating is stored but not used as a constraint in DC)
+- Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t + (1/baseMVA) * Cnd @ p_nd_t = Pd`
+- Storage term absent when `storage=None`; ND term absent when `nondispatchable=None`
 
 Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`
 
@@ -231,10 +250,13 @@ in `problem.py`, and add `_extract_<name>_results` in `results.py`.
 
 ```python
 build_opf(case, *, formulation="ac", options=None,
-          storage=None, delta=1.0) -> OPFBuild
+          storage=None, delta=1.0,
+          nondispatchable=None) -> OPFBuild
+
 build_opf_multistep(case, df_P, df_Q, *, T, formulation="ac",
                     options=None, coupling_constraints=None,
-                    storage=None, delta=1.0) -> OPFBuild
+                    storage=None, delta=1.0,
+                    nondispatchable=None, df_nd=None) -> OPFBuild
 ```
 
 ### Deprecated aliases (will be removed in a future release)
@@ -268,9 +290,8 @@ ignored otherwise.
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq`
-(`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]`multistep. All storage keys absent when `storage=None`. |
-| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. Storage keys absent when `storage=None`. Detection: `"ns" in build.data`. |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 
@@ -287,6 +308,20 @@ ignored otherwise.
 `delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
 global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).
 
+### `NondispatchableUnit` fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `bus` | int | required | External (MATPOWER) bus ID |
+| `p_available` | float | required | Available real power (MW); >= 0. Used directly in single-step. In multistep, serves as a constant fallback if `df_nd` is not provided. |
+| `apparent_power_rating` | float | required | P_max (MVA); inverter nameplate rating. AC: radius of apparent power circle. DC: stored but not used as a constraint. Must be > 0. |
+
+`df_nd` (available power time series) is **not** a field on `NondispatchableUnit`.
+It is a separate parameter on `build_opf_multistep`, with shape `(T, nnd)` and
+column names equal to external bus IDs. If `nondispatchable` is not None but
+`df_nd` is None, `p_available` is tiled across all T steps and a `UserWarning`
+is emitted.
+
 ---
 
 ## Module responsibilities
@@ -296,17 +331,24 @@ global problem parameter passed to `build_opf` / `build_opf_multistep` (default 
 to avoid circular imports. The import chain is:
 
 ```
-problem.py    →  storage.py          (StorageUnitIdeal, re-exported)
-problem.py    →  ac_problem.py       (deferred, inside functions)
-problem.py    →  dc_problem.py       (deferred, inside functions)
-ac_problem.py →  storage.py          (StorageUnitIdeal, _validate_storage,
-                                      _make_storage_incidence_matrix,
-                                      _make_storage_soc_constraints)
+problem.py    →  storage.py              (StorageUnitIdeal, re-exported)
+problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
+problem.py    →  ac_problem.py           (deferred, inside functions)
+problem.py    →  dc_problem.py           (deferred, inside functions)
+ac_problem.py →  storage.py             (StorageUnitIdeal, _validate_storage,
+                                          _make_storage_incidence_matrix,
+                                          _make_storage_soc_constraints)
+ac_problem.py →  nondispatchable.py     (NondispatchableUnit,
+                                          _validate_nondispatchable,
+                                          _make_nd_incidence_matrix,
+                                          _parse_nd_timeseries)
 ac_problem.py →  network.py, cost.py, data.py   (unchanged)
-dc_problem.py →  storage.py          (same as ac_problem.py)
+dc_problem.py →  storage.py             (same as ac_problem.py)
+dc_problem.py →  nondispatchable.py     (same as ac_problem.py)
 dc_problem.py →  network.py, cost.py, data.py   (unchanged)
-results.py    →  problem.py          (OPFBuild type only, unchanged)
-storage.py    →  numpy only          (no other cvxopf imports)
+results.py    →  problem.py             (OPFBuild type only, unchanged)
+storage.py    →  numpy only             (no other cvxopf imports)
+nondispatchable.py → numpy only         (no other cvxopf imports)
 ```
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
@@ -322,10 +364,19 @@ The `ext_to_int` mapping is stored in `OPFBuild.data`.
 MATPOWER test cases use 1-based bus IDs; reindexing is always applied.
 
 ### Units
-- Internal CVXPY variables are in **per-unit** (divided by `baseMVA`)
-- `extract_results` scales back to **engineering units** (MW, MVAr, degrees)
-- Generator cost expressions receive `Pg` in **MW** — the `baseMVA`
-  scaling is applied before building cost expressions in both AC and DC
+Variable units are **not** uniform across all CVXPY variable types:
+
+- **Conventional generator and power flow variables** (`Pg`, `Qg`, `p_flows`,
+  `p`, `q`) are in **per-unit** internally (divided by `baseMVA`) and scaled
+  to engineering units (MW, MVAr) in `extract_results`.
+- **Storage variables** (`b`, `b_q`, `soc`) and **nondispatchable variables**
+  (`p_nd`, `q_nd`) are in **engineering units** internally (MW, MVAr, MWh).
+  They are **not** divided by `baseMVA` at declaration and are **not**
+  multiplied by `baseMVA` in `extract_results`. They enter the nodal balance
+  divided by `baseMVA` at the point of constraint construction — that division
+  is the only place `baseMVA` appears for these variables.
+- Generator cost expressions receive `Pg` in **MW** — the `baseMVA` scaling
+  is applied before building cost expressions in both AC and DC.
 - `poly_cost_expr` in `cost.py` uses an explicit monomial sum (not Horner's
   method) so that CVXPY's DCP checker can verify convexity for quadratic costs.
   Horner's method produces `(affine * affine)` products when leading coefficients
@@ -348,6 +399,11 @@ There are two distinct incidence matrices in `network.py`:
 
 Do not confuse them. See the module-level comment in `network.py`.
 
+A third incidence matrix `Cnd`, shape `(nb, nnd)`, maps nondispatchable units
+to buses. It is constructed by `_make_nd_incidence_matrix` in
+`nondispatchable.py` and stored in `build.data["Cnd"]`. A fourth, `Cs`, shape
+`(nb, ns)`, maps storage units to buses. Both follow the same structure as `Cg`.
+
 ### Pypower is not a dependency
 Never add pypower to `pyproject.toml`. See fixture generation below.
 
@@ -369,12 +425,42 @@ via `__array_ufunc__` and routes through CVXPY's deprecated matrix
 multiplication path, causing `CvxpyDeprecationWarning`.
 
 `_make_step_constraints` (AC) is organised into five labelled sections in
-fixed order. The nodal balance constraint on `p` (Section 3) is the only
-place where storage power enters the AC balance. Never add a second `p ==`
-constraint from the caller.
+fixed order, with Section 4b added for nondispatchable constraints:
+  1. Reference bus angle fix
+  2. Power flow definitions
+  3. Nodal power balance (exactly one `p ==` and one `q ==` constraint;
+     all injection terms — storage and nondispatchable — combined here)
+  4. Storage operating constraints
+  4b. Nondispatchable operating constraints
+  5. Voltage setpoint pinning
+
+Never add a second `p ==` or `q ==` constraint from outside this function.
 
 Storage keys are absent from `build.data` when `storage=None`. The
 detection contract is `"ns" in build.data`. Never add `ns=0` as a default.
+
+### Nondispatchable units
+
+`NondispatchableUnit` lives in `nondispatchable.py`, which has zero imports
+from other cvxopf modules. Same circular-import reasoning as `storage.py`.
+`NondispatchableUnit` is re-exported from `problem.py` for the public API.
+
+Nondispatchable units have no cost, no aging weight, no SoC dynamics, and
+no coupling constraints across time steps. The only cross-step structure is
+the time-varying available power `R_t[n]`, which is supplied via `df_nd`.
+
+In multistep, `df_nd` column names are external bus IDs (integers). This is
+an intentional asymmetry with `df_P`/`df_Q` (which use positional indices) —
+nondispatchable units are sparse across buses, so bus-ID-as-column is more
+natural. This convention may be revisited in a future API release.
+
+Nondispatchable keys are absent from `build.data` when `nondispatchable=None`.
+The detection contract is `"nnd" in build.data`. Never add `nnd=0` as a default.
+
+`"nd_p_available"` (shape `(nnd,)`) and `"nd_available"` (shape `(T, nnd)`)
+are mutually exclusive in `build.data`: single-step builds populate the former,
+multistep builds populate the latter. Code reading either key must check which
+is present.
 
 ---
 
@@ -390,7 +476,7 @@ detection contract is `"ns" in build.data`. Never add `ns=0` as a default.
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep` |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | 🔲 Future | |
-| 8 — Renewable generation | 🔲 Future | |
+| 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
 
 ### Milestone 4 — Branch flow limits (AC)
@@ -424,27 +510,23 @@ is deferred to implementation time.
 Do not implement until the researcher provides the MATPOWER `dcline` data
 format details.
 
-### Milestone 8 — Renewable generation (solar and wind)
-Model renewables as "can-take" generators: the available output at each
-time step is given (from a PV or wind engineering model), the source can
-be curtailed down to zero, and curtailment carries zero cost.
+### Milestone 8 — Nondispatchable generators
 
-Key design points:
-- Bus-connected, like conventional generators
-- Zero cost: renewable generators contribute nothing to the objective
-  regardless of output level. Do not add a curtailment penalty.
-- Output bounded between 0 and available MW at each step
-- Single-step: scalar available MW per renewable unit (or T=1 degenerate
-  case of the time series interface — choose whichever is simpler for
-  the user)
-- Multi-step: time series of available MW as a pandas DataFrame, matching
-  the load time series interface (one column per renewable unit, one row
-  per time step)
-- Data structure: to be determined by researcher. Likely bus-connected
-  similar to the existing generator model.
+`NondispatchableUnit` in `src/cvxopf/nondispatchable.py`. Passed as
+`nondispatchable=` to `build_opf` and `build_opf_multistep`. Available
+power time series supplied via `df_nd` (multistep only).
 
-Do not implement until the researcher provides the data structure
-specification and example input data.
+AC formulation uses an apparent power circle constraint
+`p_nd_t^2 + q_nd_t^2 <= P_max^2` intersected with `0 <= p_nd_t <= R_t`.
+DC formulation uses only the real power bound `0 <= p_nd_t <= R_t`;
+apparent power rating is stored but not enforced as a constraint.
+No cost term. No curtailment penalty. No SoC dynamics.
+
+Variables `p_nd` and `q_nd` are in engineering units (MW, MVAr) internally,
+matching the storage convention. They enter the nodal balance divided by
+`baseMVA` and are not rescaled in `extract_results`.
+
+Results include `p_nd`, `q_nd` (AC only), and `curtailment = R_t - p_nd`.
 
 ### Milestone 9 — Sparse P/Q variables for AC-OPF
 Controlled by `OPFOptions.sparse_pq` (default `True`).
@@ -529,7 +611,7 @@ docstring.
 ## Fresh coding sessions
 
 1. Read `CLAUDE.md` (this document) before touching code
-2. Run `uv run --extra dev pytest tests/` first to confirm baseline (328 passed)
+2. Run `uv run --extra dev pytest tests/` first to confirm baseline
 3. Check `git log --oneline -10` to orient on recent work
 
 ---
@@ -542,31 +624,48 @@ docstring.
   deprecated; use `build_opf(..., formulation="ac")` instead
 - Do not change the DNLP variable formulation without understanding the paper
 - Do not regenerate fixture files in CI
-- Do not implement Milestone 5 without the researcher's battery model code
 - Do not pin `numpy` in `pyproject.toml` — the numpy pin exists only in
   the fixture generation script
 - Do not remove the `validate_case` call from `_parse_case` in
   `ac_problem.py` or `_parse_dc_case` in `dc_problem.py`
-- Do not change units inside CVXPY expressions — keep everything in p.u.
-  internally and scale only in `extract_results`
+- Do not treat all CVXPY variables as per-unit — `b`, `b_q`, `soc`,
+  `p_nd`, and `q_nd` are in engineering units (MW, MVAr, MWh); only
+  generator and power flow variables are in per-unit
+- Do not divide `b`, `b_q`, `p_nd`, or `q_nd` by `baseMVA` at variable
+  declaration or inside constraint loops — the only `baseMVA` division for
+  these variables is in the nodal balance term
+- Do not multiply `b`, `b_q`, `soc`, `p_nd`, or `q_nd` result values by
+  `baseMVA` in `extract_results` — they are already in engineering units
 - Do not import `ac_problem` from `dc_problem` or vice versa
 - Do not set `nlp=True` for convex formulations (DC, SOCP, fast-decoupled)
 - Do not set `nlp=False` for the AC formulation
 - Do not access `build.variables["P"]` or `build.variables["Q"]` for AC builds
   without checking `sparse_pq` — with the default `sparse_pq=True` these keys
   do not exist; use `build.variables.get("P_vec")` instead
-- Do not implement Milestone 9 branch flow limits (Milestone 4) using `P_vec`/`Q_vec`
+- Do not implement Milestone 4 branch flow limits using `P_vec`/`Q_vec`
   until Milestone 9 is complete — Milestone 4 notes currently reference `P`, `Q`
   matrices and must be updated as part of Milestone 9
-  - Do not import `StorageUnitIdeal` from `problem.py` inside `ac_problem.py`
+- Do not import `StorageUnitIdeal` from `problem.py` inside `ac_problem.py`
   or `dc_problem.py` — import from `storage.py` directly
+- Do not import `NondispatchableUnit` from `problem.py` inside `ac_problem.py`
+  or `dc_problem.py` — import from `nondispatchable.py` directly
 - Do not add `delta` to `StorageUnitIdeal` — it is a global problem parameter
 - Do not add `ns=0` to `build.data` when `storage=None` — breaks detection
+- Do not add `nnd=0` to `build.data` when `nondispatchable=None` — breaks detection
 - Do not use `numpy_array * cp.abs(cp_var)` for the aging cost — use
   `cp.multiply(numpy_array, cp.abs(cp_var))` to avoid CvxpyDeprecationWarning
 - Do not add a second `p ==` or `q ==` constraint after `_make_step_constraints`
-  returns — it owns all balance constraints
-- Do not multiply `b`, `b_q`, or `soc` result values by `baseMVA` in
-  `extract_results` — they are already in MW/MVAr/MWh
+  returns — it owns all balance constraints including storage and nondispatchable
+  injection terms
 - Do not implement `StorageUnitLossy` without a separate plan — separate
   charge/discharge variables require structural changes to `_make_step_constraints`
+- Do not add a cost term or curtailment penalty for nondispatchable generators
+- Do not add `q_nd` to DC variables or results — nondispatchable reactive power
+  is AC only
+- Do not use `nd_available` in single-step `build.data` or `nd_p_available`
+  in multistep `build.data` — these keys are mutually exclusive; check which
+  is present before reading
+- Do not pass `df_nd` to `_parse_case` or `_parse_dc_case` — it is processed
+  separately in the multistep builder after the parse function returns
+- Do not emit a `UserWarning` when `apparent_power_rating` is not used as a
+  constraint in the DC nondispatchable path — no warning is needed here

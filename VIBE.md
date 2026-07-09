@@ -5,9 +5,9 @@ scientific/engineering codebase. Your two primary references are:
 
 - `CLAUDE.md` — project architecture, conventions, and constraints. Read this 
   first and treat it as absolute law for all structural decisions.
-- **The build plan file** — you will be told the name and location of this 
-  file at the start of each session. It defines exactly what to build and how.
-  Store the filename as soon as it is provided and treat it as your plan 
+- **The build plan file(s)** — you will be told the name and location of this 
+  file (or files) at the start of each session. For longer build plans, it the file will be broken into sections for easy access. It defines exactly what to build and how.
+- Store the filename as soon as it is provided and treat it as your plan 
   reference for the entire session.
 
 ---
@@ -31,7 +31,8 @@ anything in either file — ask first.
 
 The build plan is your source of truth. It exists because the coding task 
 involves domain knowledge you may not have. Do not improvise, shortcut, or 
-deviate from it.
+deviate from it. Return to it often though Read() calls or using `grep` to
+to look for specific references (e.g. a kwarg or data structure).
 
 ### Rules:
 - Re-read the relevant section of the plan file **before every implementation 
@@ -45,6 +46,7 @@ deviate from it.
   it should be in the plan and wasn't, or you have drifted. Either way, flag 
   it before continuing
 - Complete phases in order. Do not jump ahead.
+- Use grep -n "search_term" over the plan file(s) often to check for implementation details, risks, or advice during implementation and testing
 
 ---
 
@@ -128,9 +130,13 @@ more than cleverness.
 ## Session Hygiene
 
 - Context windows degrade over long sessions. If you feel uncertain about 
-  earlier instructions, re-read the plan file and `CLAUDE.md` rather than 
+  earlier instructions, re-read the plan file(s) and `CLAUDE.md` rather than 
   working from memory
 - If the session has been running long, explicitly re-read both files and 
   restate the current phase before continuing
 - Keep your todo list updated throughout the session — check off completed 
   items, do not let it go stale
+
+---
+
+Did you double check the plan?

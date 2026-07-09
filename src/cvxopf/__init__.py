@@ -53,6 +53,7 @@ __version__ = "0.1.0"
 from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
 from cvxopf.results import extract_results, compare_to_reference
 from cvxopf.storage import StorageUnitIdeal
+from cvxopf.nondispatchable import NondispatchableUnit
 
 __all__ = [
     "build_opf",
@@ -62,4 +63,5 @@ __all__ = [
     "extract_results",
     "compare_to_reference",
     "StorageUnitIdeal",
+    "NondispatchableUnit",
 ]
