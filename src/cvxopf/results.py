@@ -168,6 +168,16 @@ def _extract_ac_results(build: OPFBuild) -> dict:
                 np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
             )
         
+        # Add nondispatchable results if present
+        if "nnd" in data:
+            results["p_nd"] = var["p_nd"].value
+            results["q_nd"] = var["q_nd"].value
+            # Curtailment = available - actual production
+            if "nd_p_available" in data:  # single-step
+                results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+            else:  # multistep - this shouldn't happen in single-step path
+                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
+        
         return results
 
     T       = data["T"]
@@ -177,16 +187,11 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     Va_rows = []
     p_rows  = []
     q_rows  = []
-
-    Pg_rows = []
-    Qg_rows = []
-    Vm_rows = []
-    Va_rows = []
-    p_rows  = []
-    q_rows  = []
     b_rows  = []
     b_q_rows = []
     soc_rows = []
+    p_nd_rows = []
+    q_nd_rows = []
 
     for t in range(T):
         Pg_rows.append(var["Pg"][t].value)
@@ -201,6 +206,11 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             b_rows.append(var["b"][t].value)
             b_q_rows.append(var["b_q"][t].value)
             soc_rows.append(var["soc"][t].value)
+        
+        # Extract nondispatchable results if present
+        if "nnd" in data:
+            p_nd_rows.append(var["p_nd"][t].value)
+            q_nd_rows.append(var["q_nd"][t].value)
 
     results = dict(
         status    = prob.status,
@@ -221,6 +231,16 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         results["storage_cost"] = float(
             np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
         )
+    
+    # Add nondispatchable results if present
+    if "nnd" in data:
+        results["p_nd"] = np.array(p_nd_rows)
+        results["q_nd"] = np.array(q_nd_rows)
+        # Curtailment = available - actual production
+        if "nd_available" in data:  # multistep
+            results["curtailment"] = data["nd_available"] - results["p_nd"]
+        else:  # single-step - this shouldn't happen in multistep path
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
     
     return results
 
@@ -271,6 +291,15 @@ def _extract_dc_results(build: OPFBuild) -> dict:
                 np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
             )
         
+        # Add nondispatchable results if present
+        if "nnd" in data:
+            results["p_nd"] = var["p_nd"].value
+            # Curtailment = available - actual production
+            if "nd_p_available" in data:  # single-step
+                results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+            else:  # multistep - this shouldn't happen in single-step path
+                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
+        
         return results
 
     T            = data["T"]
@@ -280,6 +309,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     p_net_rows   = []
     b_rows       = []
     soc_rows     = []
+    p_nd_rows    = []
 
     for t in range(T):
         p_gen_t   = var["p_gen"][t].value
@@ -300,6 +330,10 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         if "ns" in data:
             b_rows.append(var["b"][t].value)
             soc_rows.append(var["soc"][t].value)
+        
+        # Extract nondispatchable results if present
+        if "nnd" in data:
+            p_nd_rows.append(var["p_nd"][t].value)
 
     results = dict(
         status    = prob.status,
@@ -316,5 +350,14 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         results["storage_cost"] = float(
             np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
         )
+    
+    # Add nondispatchable results if present
+    if "nnd" in data:
+        results["p_nd"] = np.array(p_nd_rows)
+        # Curtailment = available - actual production
+        if "nd_available" in data:  # multistep
+            results["curtailment"] = data["nd_available"] - results["p_nd"]
+        else:  # single-step - this shouldn't happen in multistep path
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
     
     return results

@@ -51,6 +51,12 @@ from cvxopf.storage import (
     _make_storage_incidence_matrix,
     _make_storage_soc_constraints,
 )
+from cvxopf.nondispatchable import (
+    NondispatchableUnit,
+    _validate_nondispatchable,
+    _make_nd_incidence_matrix,
+    _parse_nd_timeseries,
+)
 from cvxopf.network import BUS_I
 
 # ---------------------------------------------------------------------------
@@ -71,7 +77,7 @@ RATE_A     = 5
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> dict:
+def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
     Returns a flat dict consumed by the DC single-step and multistep builders.
@@ -129,11 +135,14 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
     gen_bus_set  = set(gen_bus[status == 1].tolist())
     nogen_buses  = sorted(all_buses - gen_bus_set)
 
+    # Get external bus IDs for validation
+    ext_bus_ids = set(bus[:, BUS_I].astype(int).tolist())
+    
     # Parse storage if present
     storage_data = {}
     if storage is not None:
         # Validate storage units
-        _validate_storage(storage, set(bus[:, BUS_I].astype(int).tolist()))
+        _validate_storage(storage, ext_bus_ids)
         
         # Create storage incidence matrix
         Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
@@ -159,10 +168,36 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
             storage_aging_weight=storage_aging_weight,
         )
 
+    # Parse nondispatchable if present
+    nd_data = {}
+    if nondispatchable is not None and len(nondispatchable) > 0:
+        # Validate nondispatchable units
+        _validate_nondispatchable(nondispatchable, ext_bus_ids)
+        
+        # Create nondispatchable incidence matrix
+        Cnd = _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int)
+        
+        # Extract nondispatchable parameters
+        nd_bus = np.array([
+            ext_to_int[u.bus] if ext_to_int is not None else u.bus
+            for u in nondispatchable
+        ], dtype=int)
+        nd_apparent_power_rating = np.array([u.apparent_power_rating for u in nondispatchable])
+        nd_p_available = np.array([u.p_available for u in nondispatchable])
+        
+        nd_data = dict(
+            nnd=len(nondispatchable),
+            Cnd=Cnd,
+            nd_bus=nd_bus,
+            nd_apparent_power_rating=nd_apparent_power_rating,
+            nd_p_available=nd_p_available,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         nb=nb, ng=ng, nl=nl,
         ext_to_int=ext_to_int,
+        ext_bus_ids=ext_bus_ids,
         A=A, Cg=Cg,
         r=r, f_max=f_max,
         Pd=Pd,
@@ -172,6 +207,7 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
         nogen_buses=nogen_buses,
         loss_weight=options.loss_weight,
         **storage_data,
+        **nd_data,
     )
 
 
@@ -185,13 +221,16 @@ def _make_dc_step_constraints(
     storage_capacity=None,
     b_t=None,
     soc_t=None,
+    nnd: int = 0,
+    Cnd=None,
+    nd_p_available_t=None,
+    p_nd_t=None,
 ) -> list:
     """Build the list of CVXPY constraints for one DC time step."""
     # Section 1: Nodal real power balance
-    if ns > 0:
-        constr = [A @ p_flows + p_gen + cp.multiply((1.0 / baseMVA), Cs @ b_t) == Pd]
-    else:
-        constr = [A @ p_flows + p_gen == Pd]
+    storage_term = cp.multiply((1.0 / baseMVA), Cs @ b_t) if ns > 0 else 0
+    nd_term = cp.multiply((1.0 / baseMVA), Cnd @ p_nd_t) if nnd > 0 else 0
+    constr = [A @ p_flows + p_gen + storage_term + nd_term == Pd]
     
     # Section 2: Branch flow limits
     constr.append(cp.abs(p_flows) <= f_max)
@@ -206,6 +245,11 @@ def _make_dc_step_constraints(
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
         constr += [b_t >= -S_max, b_t <= S_max]
+    
+    # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
+    if nnd > 0:
+        constr += [p_nd_t <= nd_p_available_t]
+        # p_nd_t >= 0 encoded via nonneg=True on variable declaration
     
     # Section 6: Storage SoC bounds (omitted when ns == 0)
     if ns > 0:
@@ -230,7 +274,7 @@ def _make_dc_step_cost(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0) -> "OPFBuild":
+def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> "OPFBuild":
     """Build a single time-step lossy DC OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -244,7 +288,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
             stacklevel=3,
         )
 
-    d = _parse_dc_case(case, options, storage, delta)
+    d = _parse_dc_case(case, options, storage, delta, nondispatchable)
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
     p_gen   = cp.Variable(d["nb"], name="p_gen", nonneg=True)
@@ -255,6 +299,12 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         ns = d["ns"]
         b_t = cp.Variable(ns, name="b")
         soc_t = cp.Variable(ns, name="soc")
+
+    # Create nondispatchable variables if present
+    p_nd_t = None
+    if "nnd" in d and d["nnd"] > 0:
+        nnd = d["nnd"]
+        p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
 
     constr = _make_dc_step_constraints(
         p_flows, p_gen,
@@ -268,6 +318,10 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         storage_capacity=d.get("storage_capacity"),
         b_t=b_t,
         soc_t=soc_t,
+        nnd=d.get("nnd", 0),
+        Cnd=d.get("Cnd"),
+        nd_p_available_t=d.get("nd_p_available"),
+        p_nd_t=p_nd_t,
     )
 
     cost = _make_dc_step_cost(
@@ -294,6 +348,10 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
     if "ns" in d and d["ns"] > 0:
         variables["b"] = b_t
         variables["soc"] = soc_t
+
+    # Add nondispatchable variables if present
+    if "nnd" in d and d["nnd"] > 0:
+        variables["p_nd"] = p_nd_t
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
@@ -317,6 +375,16 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
             storage_delta=d["storage_delta"],
             storage_aging_weight=d["storage_aging_weight"],
         )
+
+    # Add nondispatchable data if present
+    if "nnd" in d and d["nnd"] > 0:
+        data.update(
+            nnd=d["nnd"],
+            Cnd=d["Cnd"],
+            nd_bus=d["nd_bus"],
+            nd_apparent_power_rating=d["nd_apparent_power_rating"],
+            nd_p_available=d["nd_p_available"],
+        )
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
@@ -332,6 +400,8 @@ def _build_lossy_dc_multistep(
     coupling_constraints: list,
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    df_nd: pd.DataFrame | None = None,
 ) -> "OPFBuild":
     """Build a T-step lossy DC OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -360,8 +430,13 @@ def _build_lossy_dc_multistep(
         np.zeros_like(df_P.to_numpy()), columns=df_P.columns
     )
 
-    d = _parse_dc_case(case, options, storage, delta)
+    d = _parse_dc_case(case, options, storage, delta, nondispatchable)
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
+    
+    # Parse nondispatchable timeseries if present
+    if "nnd" in d and df_nd is not None:
+        nd_available = _parse_nd_timeseries(df_nd, T, d["ext_bus_ids"], d["ext_to_int"])
+        d["nd_available"] = nd_available
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -372,6 +447,7 @@ def _build_lossy_dc_multistep(
     p_gen_list   = []
     b_list       = []
     soc_list     = []
+    p_nd_list    = []
     all_constr   = []
     total_cost   = 0
 
@@ -386,6 +462,15 @@ def _build_lossy_dc_multistep(
             b_t = cp.Variable(ns, name=f"b_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
 
+        # Create nondispatchable variables if present
+        p_nd_t = None
+        if "nnd" in d and d["nnd"] > 0:
+            nnd = d["nnd"]
+            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+
+        # Get available power for this time step
+        nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
+        
         step_constr = _make_dc_step_constraints(
             p_flows_t, p_gen_t,
             d["A"], Pd_series[t], d["f_max"],
@@ -398,6 +483,10 @@ def _build_lossy_dc_multistep(
             storage_capacity=d.get("storage_capacity"),
             b_t=b_t,
             soc_t=soc_t,
+            nnd=d.get("nnd", 0),
+            Cnd=d.get("Cnd"),
+            nd_p_available_t=nd_p_available_t,
+            p_nd_t=p_nd_t,
         )
         step_cost = _make_dc_step_cost(
             p_gen_t, d["gen_bus"], d["gencost"], d["baseMVA"],
@@ -418,6 +507,10 @@ def _build_lossy_dc_multistep(
             b_list.append(b_t)
             soc_list.append(soc_t)
 
+        # Add nondispatchable variables to lists
+        if "nnd" in d and d["nnd"] > 0:
+            p_nd_list.append(p_nd_t)
+
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
         storage_coupling = _make_storage_soc_constraints(
@@ -435,6 +528,10 @@ def _build_lossy_dc_multistep(
     if "ns" in d and d["ns"] > 0:
         variables["b"] = b_list
         variables["soc"] = soc_list
+
+    # Add nondispatchable variables if present
+    if "nnd" in d and d["nnd"] > 0:
+        variables["p_nd"] = p_nd_list
     
     data      = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
@@ -459,6 +556,16 @@ def _build_lossy_dc_multistep(
             storage_initial_soc=d["storage_initial_soc"],
             storage_delta=d["storage_delta"],
             storage_aging_weight=d["storage_aging_weight"],
+        )
+
+    # Add nondispatchable data if present
+    if "nnd" in d and d["nnd"] > 0:
+        data.update(
+            nnd=d["nnd"],
+            Cnd=d["Cnd"],
+            nd_bus=d["nd_bus"],
+            nd_apparent_power_rating=d["nd_apparent_power_rating"],
+            nd_available=d.get("nd_available"),  # Only present in multistep
         )
     return OPFBuild(
         prob=prob, variables=variables, data=data,

@@ -25,8 +25,9 @@ import numpy as np
 import pandas as pd
 import cvxpy as cp
 
-# Import storage types for public API
+# Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
+from cvxopf.nondispatchable import NondispatchableUnit
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +212,7 @@ def build_opf(
     options: OPFOptions | None = None,
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -235,6 +237,10 @@ def build_opf(
         Time step duration in hours (default 1.0). Used for storage SoC
         dynamics when storage is present. Ignored when storage is None.
         Must be > 0 when storage is present.
+    nondispatchable : list[NondispatchableUnit] | None, optional
+        List of nondispatchable generator units (wind, solar, etc.).
+        If None, no nondispatchable generation is modelled.
+        Each unit is a NondispatchableUnit dataclass instance.
 
     Returns
     -------
@@ -254,7 +260,7 @@ def build_opf(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
-    return builders[formulation](case, options, storage, delta)
+    return builders[formulation](case, options, storage, delta, nondispatchable)
 
 
 def build_opf_multistep(
@@ -268,6 +274,8 @@ def build_opf_multistep(
     coupling_constraints: list[cp.Constraint] | None = None,
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    df_nd: pd.DataFrame | None = None,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -300,6 +308,16 @@ def build_opf_multistep(
         Time step duration in hours (default 1.0). Used for storage SoC
         dynamics when storage is present. Ignored when storage is None.
         Must be > 0 when storage is present.
+    nondispatchable : list[NondispatchableUnit] | None, optional
+        List of nondispatchable generator units (wind, solar, etc.).
+        If None, no nondispatchable generation is modelled.
+        Each unit is a NondispatchableUnit dataclass instance.
+    df_nd : pd.DataFrame | None, optional
+        Nondispatchable available power time series in MW.
+        Shape (T, nnd) where nnd = len(nondispatchable).
+        Column names must be external bus IDs (integers).
+        If None and nondispatchable is not None, the p_available field
+        from each NondispatchableUnit is tiled across all T steps.
 
     Returns
     -------
@@ -315,6 +333,25 @@ def build_opf_multistep(
     if storage is not None and delta <= 0:
         raise ValueError(f"delta must be > 0, got {delta}")
 
+    # Validate and handle df_nd tiling fallback
+    if nondispatchable is not None and df_nd is None:
+        warnings.warn(
+            "df_nd not provided; tiling p_available from each NondispatchableUnit "
+            "across all T steps.",
+            UserWarning,
+            stacklevel=2,
+        )
+        # Create df_nd by tiling p_available from each unit
+        df_nd = pd.DataFrame(
+            {u.bus: [u.p_available] * T for u in nondispatchable}
+        )
+    elif nondispatchable is None and df_nd is not None:
+        warnings.warn(
+            "df_nd is ignored because nondispatchable=None.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     builders = _get_multistep_builders()
     if formulation not in builders:
         raise ValueError(
@@ -322,7 +359,7 @@ def build_opf_multistep(
             f"Supported: {sorted(builders.keys())}"
         )
     return builders[formulation](
-        case, df_P, df_Q, T, options, coupling_constraints, storage, delta
+        case, df_P, df_Q, T, options, coupling_constraints, storage, delta, nondispatchable, df_nd
     )
 
 

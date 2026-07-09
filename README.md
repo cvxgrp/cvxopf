@@ -15,8 +15,9 @@ with appropriate solvers. It is designed to:
 - Support multiple OPF formulations from a single entry point
 - Support single-shot optimization over multiple time steps
 - Accept time-varying nodal load as pandas DataFrames
-- Serve as a foundation for energy storage and battery models with
-  state-of-charge dynamics (future work)
+- Model energy storage with state-of-charge dynamics
+- Model nondispatchable generators (wind, solar, run-of-river hydro) with
+  curtailable output and reactive power support
 
 ### Formulations
 
@@ -28,7 +29,7 @@ with appropriate solvers. It is designed to:
 References:
 
 - AC OPF: *Disciplined Nonlinear Programming*, https://stanford.edu/~boyd/papers/dnlp.html, https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb
-- lossy DC OPF: *Convex Optimization with Smart Grid Examples*, https://doi.org/10.2172/3018252
+- Lossy DC OPF: *Convex Optimization with Smart Grid Examples*, https://doi.org/10.2172/3018252
 
 ## Prerequisites
 
@@ -110,7 +111,8 @@ print(f"Flows (MW): {results['p_flows']}")
 
 ## Interactive notebooks
 
-We recommend using `uv` (https://docs.astral.sh/uv/) to run the notebooks. From the project root, run the following:
+We recommend using `uv` (https://docs.astral.sh/uv/) to run the notebooks.
+From the project root:
 
 ```bash
 uv run --extra notebook marimo run notebooks/cvxopf_demo.py
@@ -124,7 +126,8 @@ Results update automatically after each solve.
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
 ```
 
-Select number of repetitions and run timing study across all test cases and OPF configurations. The results should look something like this:
+Select number of repetitions and run a timing study across all test cases
+and OPF configurations. The results should look something like this:
 
 ![OPF benchmark: AC sparse vs AC dense vs lossy DC](notebooks/benchmark_opf_result.png)
 
@@ -154,6 +157,87 @@ print(f"Total objective: {results['objective']:.2f} $/hr")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
+## Battery storage example
+
+```python
+import numpy as np
+import pandas as pd
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf_multistep, StorageUnitIdeal
+from cvxopf.results import extract_results
+
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
+
+scales = [0.8, 1.0, 1.2]
+df_P   = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q   = pd.DataFrame(np.outer(scales, Qd_base))
+
+unit = StorageUnitIdeal(
+    bus=5,
+    apparent_power_rating=50.0,  # MVA
+    capacity=100.0,              # MWh
+    initial_soc=50.0,            # MWh
+    aging_weight=1e-2,           # $/MW
+)
+
+build = build_opf_multistep(
+    ppc, df_P, df_Q, T=T, formulation="ac",
+    storage=[unit], delta=1.0,
+)
+build.solve()
+results = extract_results(build)
+print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Storage real power (MW): {results['b']}")
+print(f"State of charge (MWh):   {results['soc']}")
+```
+
+## Nondispatchable generator example
+
+Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
+produce up to a time-varying available power `R_t` determined by ambient
+conditions. The OPF can curtail freely; there is no cost for generation or
+curtailment. In AC, the inverter also provides reactive power support within
+its apparent power rating.
+
+```python
+import numpy as np
+import pandas as pd
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf_multistep, NondispatchableUnit
+from cvxopf.results import extract_results
+
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
+
+scales = [0.8, 1.0, 1.2]
+df_P   = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q   = pd.DataFrame(np.outer(scales, Qd_base))
+
+# Wind unit on bus 5: available power ramps down over three steps
+unit  = NondispatchableUnit(
+    bus=5,
+    p_available=100.0,       # MW — fallback for single-step
+    apparent_power_rating=120.0,  # MVA — inverter nameplate
+)
+df_nd = pd.DataFrame({5: [100.0, 75.0, 50.0]})  # MW available per step
+
+build = build_opf_multistep(
+    ppc, df_P, df_Q, T=T, formulation="ac",
+    nondispatchable=[unit], df_nd=df_nd,
+)
+build.solve()
+results = extract_results(build)
+print(f"Total objective:      {results['objective']:.2f} $/hr")
+print(f"ND real power (MW):   {results['p_nd']}")
+print(f"ND reactive (MVAr):   {results['q_nd']}")
+print(f"Curtailment (MW):     {results['curtailment']}")
+```
+
 ## Project structure
 
 ```
@@ -165,6 +249,8 @@ src/cvxopf/           Core package
   cost.py             Generator cost expression builders
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
+  storage.py          StorageUnitIdeal dataclass and helpers
+  nondispatchable.py  NondispatchableUnit dataclass and helpers
   testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)
@@ -182,15 +268,18 @@ git clone https://github.com/cvxgrp/cvxopf.git
 cd cvxopf
 ```
 
-If you have `uv` installed, that's it. Just run things with `uv` from the project root. 
+If you have `uv` installed, that's it. Just run things with `uv` from the
+project root.
 
-If you are managing your own virtual environment, then install the development dependencies with pip:
+If you are managing your own virtual environment, install the development
+dependencies with pip:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-If you want to run the Marimo notebooks, you'll want the notebook dependencies as well:
+If you want to run the Marimo notebooks, you'll want the notebook
+dependencies as well:
 
 ```bash
 pip install -e ".[dev,notebook]"
@@ -226,5 +315,5 @@ package environment.
 - [x] Milestone 5: Battery/storage model hook
 - [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
 - [ ] Milestone 7: HVDC transmission links
-- [ ] Milestone 8: Renewable generation (solar and wind)
+- [x] Milestone 8: Nondispatchable generators
 - [x] Milestone 9: Sparse P/Q variables for AC-OPF
