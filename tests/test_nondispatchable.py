@@ -14,6 +14,7 @@ Tests cover:
 import numpy as np
 import pandas as pd
 import pytest
+import warnings
 
 from cvxopf import (
     build_opf,
@@ -38,6 +39,15 @@ def _flat_nd_df(unit, T, p_available=None):
     """DataFrame with T identical rows; column name = unit.bus."""
     val = p_available if p_available is not None else unit.p_available
     return pd.DataFrame({unit.bus: [val] * T})
+
+def _flat_load_dfs(case_fn, T):
+    """Return (df_P, df_Q) with T identical rows matching base case load."""
+    ppc     = case_fn()
+    Pd_base = ppc["bus"][:, 2].copy()
+    Qd_base = ppc["bus"][:, 3].copy()
+    df_P    = pd.DataFrame(np.tile(Pd_base, (T, 1)))
+    df_Q    = pd.DataFrame(np.tile(Qd_base, (T, 1)))
+    return df_P, df_Q
 
 def _solve_ac_single_nd(nondispatchable=None):
     build = build_opf(case9(), formulation="ac", nondispatchable=nondispatchable)
@@ -165,6 +175,45 @@ class TestNondispatchableValidation:
         nd_available = build.data["nd_available"]
         assert nd_available.shape == (3, 1)
         assert np.allclose(nd_available, 80.0)
+
+    def test_validate_empty_list_returns_cleanly(self):
+        # Directly exercise the early-return branch
+        from cvxopf.nondispatchable import _validate_nondispatchable
+        _validate_nondispatchable([], set())  # should not raise
+        _validate_nondispatchable(None, set())  # should not raise
+
+    def test_make_nd_incidence_matrix_no_remapping(self):
+        from cvxopf.nondispatchable import _make_nd_incidence_matrix
+        unit = NondispatchableUnit(bus=0, p_available=50.0, apparent_power_rating=100.0)
+        Cnd = _make_nd_incidence_matrix([unit], nb=3, ext_to_int=None)
+        assert Cnd.shape == (3, 1)
+        assert Cnd[0, 0] == 1.0
+
+    def test_parse_nd_timeseries_non_integer_column_raises(self):
+        from cvxopf.nondispatchable import _parse_nd_timeseries
+        df = pd.DataFrame({"not_a_bus": [50.0, 60.0]})
+        with pytest.raises(ValueError, match="column"):
+            _parse_nd_timeseries(df, T=2, ext_bus_ids={1, 2, 3}, ext_to_int={1:0,2:1,3:2})
+
+    def test_parse_nd_timeseries_negative_values_raises(self):
+        from cvxopf.nondispatchable import _parse_nd_timeseries
+        df = pd.DataFrame({5: [50.0, -1.0]})
+        with pytest.raises(ValueError, match="negative"):
+            _parse_nd_timeseries(df, T=2, ext_bus_ids={5}, ext_to_int={5:0})
+
+    def test_df_nd_provided_without_nondispatchable_emits_warning(self):
+        df_P, df_Q = _flat_load_dfs(case9, T=3)
+        df_nd = pd.DataFrame({5: [80.0, 80.0, 80.0]})
+        with pytest.warns(UserWarning, match="df_nd is ignored"):
+            build_opf_multistep(case9(), df_P, df_Q, T=3, formulation="ac",
+                                nondispatchable=None, df_nd=df_nd)
+
+    def test_df_nd_provided_without_nondispatchable_emits_warning_dc(self):
+        df_P, df_Q = _flat_load_dfs(case9, T=3)
+        df_nd = pd.DataFrame({5: [80.0, 80.0, 80.0]})
+        with pytest.warns(UserWarning, match="df_nd is ignored"):
+            build_opf_multistep(case9(), df_P, df_Q, T=3, formulation="lossy_dc",
+                                nondispatchable=None, df_nd=df_nd)
 
 
 class TestNondispatchableNoUnits:
@@ -520,6 +569,32 @@ class TestNondispatchableDCMultistep:
         assert "p_nd" in results
         for t in range(T):
             assert results["p_nd"][t, 0] <= df_nd.iloc[t, 0] + VAL_ATOL
+
+    def test_extract_dc_multistep_none_guard_with_nondispatchable(self):
+        # Build but do not solve — variables have None values
+        unit = NondispatchableUnit(bus=5, p_available=80.0, apparent_power_rating=100.0)
+        df_P, df_Q = _flat_load_dfs(case9, T=3)
+        df_nd = _flat_nd_df(unit, T=3)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            build = build_opf_multistep(
+                case9(), df_P, df_Q, T=3, formulation="lossy_dc",
+                nondispatchable=[unit], df_nd=df_nd,
+            )
+        # Do not call build.solve() — p_gen values will be None
+        r = extract_results(build)
+        assert r["Pg"] is None
+        assert r["p_flows"] is None
+
+    def test_extract_dc_multistep_p_nd_shape_with_explicit_df_nd(self):
+        unit = NondispatchableUnit(bus=5, p_available=80.0, apparent_power_rating=100.0)
+        df_P, df_Q = _flat_load_dfs(case9, T=3)
+        df_nd = _flat_nd_df(unit, T=3)
+        build, r = _solve_dc_multistep_nd(3, df_P, df_Q,
+                                           nondispatchable=[unit], df_nd=df_nd)
+        assert r["p_nd"].shape == (3, 1)
+        assert r["curtailment"].shape == (3, 1)
+        assert np.all(r["curtailment"] >= -1e-3)
 
 
 class TestNondispatchableNodal:

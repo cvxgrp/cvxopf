@@ -7,7 +7,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions
+from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
 from cvxopf.results import extract_results, compare_to_reference
 
 
@@ -282,3 +282,19 @@ class TestCompareToReference:
         comp = compare_to_reference(results, ref)
         assert comp["Pg"]["abs_diff"][0] > 9.9, \
             "A 10 MW perturbation should show up as abs_diff > 9.9"
+
+
+# ---------------------------------------------------------------------------
+# test_edge_cases
+# ---------------------------------------------------------------------------
+
+class TestEdgeCases:
+
+    def test_extract_results_unknown_formulation_raises(self):
+        dummy = OPFBuild(
+            prob=cp.Problem(cp.Minimize(0)),
+            variables={}, data={},
+            formulation="unknown", is_convex=True,
+        )
+        with pytest.raises(ValueError, match="unknown formulation"):
+            extract_results(dummy)

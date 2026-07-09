@@ -176,7 +176,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             if "nd_p_available" in data:  # single-step
                 results["curtailment"] = data["nd_p_available"] - results["p_nd"]
             else:  # multistep - this shouldn't happen in single-step path
-                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"]
+                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
         
         return results
 
@@ -240,7 +240,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         if "nd_available" in data:  # multistep
             results["curtailment"] = data["nd_available"] - results["p_nd"]
         else:  # single-step - this shouldn't happen in multistep path
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
     
     return results
 
@@ -298,7 +298,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             if "nd_p_available" in data:  # single-step
                 results["curtailment"] = data["nd_p_available"] - results["p_nd"]
             else:  # multistep - this shouldn't happen in single-step path
-                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"]
+                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
         
         return results
 
@@ -358,6 +358,6 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         if "nd_available" in data:  # multistep
             results["curtailment"] = data["nd_available"] - results["p_nd"]
         else:  # single-step - this shouldn't happen in multistep path
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
     
     return results
