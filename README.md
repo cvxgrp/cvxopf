@@ -6,6 +6,32 @@
 Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP) and
 lossy DC OPF (convex QP).
 
+## Motivation
+
+Grid resiliency events rarely happen in an instant. The most dangerous
+scenarios unfold over days: solar suppressed by sustained weather systems,
+load elevated beyond seasonal norms, and battery storage depleted by
+controllers that optimize for the current hour. Studying the 
+behavior of the modern grid under these conditions and developing optimal
+control policies requires an optimization framework that is simultaneously
+time-aware and physically grounded, that is able to plan dispatch strategy 
+across a full multi-day horizon and able to enforce the AC network
+constraints that determine whether a plan is actually executable. 
+
+`cvxopf` is designed with this application in mind. It formulates optimal power
+flow problems using CVXPY, supports both full AC-OPF and a convex lossy DC
+relaxation from a single entry point (with more to come), and handles multi-step
+optimization with time-varying load, battery storage, and nondispatchable generation
+(wind, solar, hydro) natively. The intended use case is resiliency research:
+studying how battery controllers should behave under adverse multi-day
+conditions, how much temporal foresight matters, and how well convex
+approximations track AC feasibility across extended horizons.
+
+Because it is built on CVXPY, the problem structure is transparent and
+composable. Researchers can modify objectives, add contingency constraints,
+or experiment with formulations — including multi-forecast Model Predictive
+Control — without rewriting solver interfaces.
+
 ## Overview
 
 `cvxopf` formulates optimal power flow problems using CVXPY and solves them
@@ -26,10 +52,20 @@ with appropriate solvers. It is designed to:
 | `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 
+The intended workflow for large-scale resiliency studies is hierarchical:
+solve the convex `lossy_dc` formulation over the full planning horizon to
+obtain a globally optimal battery SoC trajectory and dispatch plan, then use
+the AC formulation over a short receding horizon to verify and correct for
+true network physics, with SoC targets inherited from the convex layer as
+boundary constraints.
+
 References:
 
-- AC OPF: *Disciplined Nonlinear Programming*, https://stanford.edu/~boyd/papers/dnlp.html, https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb
-- Lossy DC OPF: *Convex Optimization with Smart Grid Examples*, https://doi.org/10.2172/3018252
+- AC OPF: *Disciplined Nonlinear Programming*,
+  https://stanford.edu/~boyd/papers/dnlp.html,
+  https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb
+- Lossy DC OPF: *Convex Optimization with Smart Grid Examples*,
+  https://doi.org/10.2172/3018252
 
 ## Prerequisites
 
@@ -133,6 +169,11 @@ and OPF configurations. The results should look something like this:
 
 ## Multi-step example
 
+Time-varying load is passed as a DataFrame — one row per timestep, one
+column per bus. This is the foundation for resiliency studies: feed in
+a multi-day solar and load profile and the optimizer plans dispatch
+across the full horizon in a single solve.
+
 ```python
 import numpy as np
 import pandas as pd
@@ -158,6 +199,12 @@ print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
 ## Battery storage example
+
+Battery state-of-charge evolves across timesteps, coupling decisions made
+at hour 1 to feasibility at hour 72. This intertemporal coupling is why
+multi-step optimization matters for resiliency: the optimizer can see that
+conditions worsen on day 3 and hold reserves accordingly rather than
+depleting storage on day 1.
 
 ```python
 import numpy as np
@@ -200,7 +247,9 @@ Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
 produce up to a time-varying available power `R_t` determined by ambient
 conditions. The OPF can curtail freely; there is no cost for generation or
 curtailment. In AC, the inverter also provides reactive power support within
-its apparent power rating.
+its apparent power rating. Passing a multi-day solar availability profile
+via `df_nd` lets the optimizer account for sustained generation shortfalls
+across the full planning horizon.
 
 ```python
 import numpy as np
@@ -218,10 +267,11 @@ scales = [0.8, 1.0, 1.2]
 df_P   = pd.DataFrame(np.outer(scales, Pd_base))
 df_Q   = pd.DataFrame(np.outer(scales, Qd_base))
 
-# Wind unit on bus 5: available power ramps down over three steps
+# Solar unit on bus 5: available output ramps down over three steps,
+# simulating a multi-day irradiance suppression event
 unit  = NondispatchableUnit(
     bus=5,
-    p_available=100.0,       # MW — fallback for single-step
+    p_available=100.0,            # MW — fallback for single-step
     apparent_power_rating=120.0,  # MVA — inverter nameplate
 )
 df_nd = pd.DataFrame({5: [100.0, 75.0, 50.0]})  # MW available per step
@@ -261,7 +311,8 @@ examples/             Runnable example scripts
 
 ## Development
 
-Clone the repository and install in editable mode with development dependencies:
+Clone the repository and install in editable mode with development
+dependencies:
 
 ```bash
 git clone https://github.com/cvxgrp/cvxopf.git
@@ -305,15 +356,15 @@ Note: the fixture script runs in an isolated environment with pinned
 `pypower==5.1.19` and `numpy==2.2.6`. It does not affect the main
 package environment.
 
-## Milestones
+## Roadmap
 
-- [x] Milestone 0: Repository skeleton
-- [x] Milestone 1: Port and modularize working code
-- [x] Milestone 2: Pypower fixture generation and validation tests
-- [x] Milestone 3: Multi-step problem builder
-- [ ] Milestone 4: Branch flow limits (AC)
-- [x] Milestone 5: Battery/storage model hook
-- [x] Milestone 6: Lossy DC OPF and multi-formulation architecture
-- [ ] Milestone 7: HVDC transmission links
-- [x] Milestone 8: Nondispatchable generators
-- [x] Milestone 9: Sparse P/Q variables for AC-OPF
+- [x] Repository skeleton
+- [x] Port and modularize working code
+- [x] Pypower fixture generation and validation tests
+- [x] Multi-step problem builder
+- [ ] Branch flow limits (AC)
+- [x] Battery/storage model
+- [x] Lossy DC OPF and multi-formulation architecture
+- [ ] HVDC transmission links
+- [x] Nondispatchable generators
+- [x] Sparse P/Q variables for AC-OPF
