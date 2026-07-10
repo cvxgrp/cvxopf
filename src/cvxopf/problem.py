@@ -186,18 +186,22 @@ class OPFBuild:
 def _get_single_builders():
     from cvxopf.ac_problem import _build_ac_single
     from cvxopf.dc_problem import _build_lossy_dc_single
+    from cvxopf.singlenode_dc_problem import _build_singlenode_dc_single
     return {
         "ac":       _build_ac_single,
         "lossy_dc": _build_lossy_dc_single,
+        "singlenode_dc": _build_singlenode_dc_single,
     }
 
 
 def _get_multistep_builders():
     from cvxopf.ac_problem import _build_ac_multistep
     from cvxopf.dc_problem import _build_lossy_dc_multistep
+    from cvxopf.singlenode_dc_problem import _build_singlenode_dc_multistep
     return {
         "ac":       _build_ac_multistep,
         "lossy_dc": _build_lossy_dc_multistep,
+        "singlenode_dc": _build_singlenode_dc_multistep,
     }
 
 
