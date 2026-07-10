@@ -368,3 +368,8 @@ package environment.
 - [ ] HVDC transmission links
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
+- [ ] Single-node equivalent "copper plate" model
+- [ ] SOCP network model
+- [ ] Extend battery parameters: final SoC, penalty vs constraint
+- [ ] Implement cvxpy parameters for problem data
+- [ ] Vectorize time constraints (currently built with iterative loop)
