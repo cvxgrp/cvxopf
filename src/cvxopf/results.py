@@ -10,6 +10,12 @@ AC results keys:
 DC (lossy_dc) results keys:
     status, objective, Pg, p_flows, p_net
     (Vm, Va_deg, Qg, q_net are absent — not modelled in DC formulation)
+
+Singlenode DC (singlenode_dc) results keys:
+    status, objective, Pg, p_net
+    (p_flows, Vm, Va_deg, Qg, q_net absent — not modelled)
+    (b, soc, storage_cost present when storage is not None)
+    (p_nd, curtailment present when nondispatchable is not None)
 """
 
 from __future__ import annotations
@@ -66,19 +72,31 @@ def extract_results(build: OPFBuild) -> dict:
         Code consuming results from either formulation should use
         results.get('Vm') rather than results['Vm'].
 
+        Singlenode DC single-step keys:
+            status      str          CVXPY solve status
+            objective   float        Optimal cost ($/hr)
+            Pg          np.ndarray   (ng,)  Per-generator output, MW
+            p_net       float        Net generation minus load, MW
+                                     (near zero at optimum)
+
+        Singlenode DC multi-step: Pg is (T, ng); p_net is (T,).
+
     Raises
     ------
     ValueError
-        If build.formulation is not a recognised formulation string.
+        If build.formulation is not one of 'ac', 'lossy_dc',
+        'singlenode_dc'.
     """
     if build.formulation == "ac":
         return _extract_ac_results(build)
     elif build.formulation == "lossy_dc":
         return _extract_dc_results(build)
+    elif build.formulation == "singlenode_dc":
+        return _extract_singlenode_dc_results(build)
     else:
         raise ValueError(
             f"extract_results: unknown formulation '{build.formulation}'. "
-            f"Supported: 'ac', 'lossy_dc'."
+            f"Supported: 'ac', 'lossy_dc', 'singlenode_dc'."
         )
 
 
@@ -360,4 +378,106 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         else:  # single-step - this shouldn't happen in multistep path
             results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
     
+    return results
+
+
+def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
+    """
+    Extract results for single-node DC formulation (single-step or multi-step).
+
+    For single-node DC, Pg is (ng,) in single-step or (T, ng) in multi-step.
+    p_net is a scalar float in single-step or (T,) array in multi-step.
+    """
+    var     = build.variables
+    data    = build.data
+    baseMVA = float(data["baseMVA"])
+    prob    = build.prob
+
+    # Detect single-step vs multi-step by checking if Pg is a list
+    multistep = isinstance(var["Pg"], list)
+
+    if not multistep:
+        # Single-step extraction
+        Pg_val = var["Pg"].value
+
+        # Guard: solver may return None values if problem is infeasible
+        if Pg_val is None:
+            return dict(
+                status    = prob.status,
+                objective = float("nan"),
+                Pg        = None,
+                p_net     = None,
+            )
+
+        results = dict(
+            status    = prob.status,
+            objective = float(prob.value),
+            Pg        = Pg_val * baseMVA,          # (ng,) MW
+            p_net     = float(np.sum(Pg_val) * baseMVA - data["Pd_total"] * baseMVA),  # scalar MW
+        )
+
+        # Add storage results if present
+        if "ns" in data:
+            results["b"] = var["b"].value
+            results["soc"] = var["soc"].value
+            results["storage_cost"] = float(
+                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            )
+
+        # Add nondispatchable results if present
+        if "nnd" in data:
+            results["p_nd"] = var["p_nd"].value
+            # Curtailment = available - actual production
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+
+        return results
+
+    # Multi-step extraction
+    T = data["T"]
+    Pg_rows = []
+    b_rows = []
+    soc_rows = []
+    p_nd_rows = []
+
+    for t in range(T):
+        Pg_val = var["Pg"][t].value
+        if Pg_val is None:
+            return dict(
+                status=prob.status,
+                objective=float("nan"),
+                Pg=None,
+                p_net=None,
+            )
+        Pg_rows.append(Pg_val)
+        if "ns" in data:
+            b_rows.append(var["b"][t].value)
+            soc_rows.append(var["soc"][t].value)
+        if "nnd" in data:
+            p_nd_rows.append(var["p_nd"][t].value)
+
+    Pd_series = data["Pd_series"]  # shape (T,)
+
+    results = dict(
+        status    = prob.status,
+        objective = float(prob.value),
+        Pg        = np.array(Pg_rows) * baseMVA,  # (T, ng)
+        p_net     = (np.array([np.sum(r) for r in Pg_rows]) - Pd_series) * baseMVA,  # (T,)
+    )
+
+    # Add storage results if present
+    if "ns" in data:
+        results["b"] = np.array(b_rows)      # (T, ns)
+        results["soc"] = np.array(soc_rows)  # (T, ns)
+        results["storage_cost"] = float(
+            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+        )
+
+    # Add nondispatchable results if present
+    if "nnd" in data:
+        results["p_nd"] = np.array(p_nd_rows)  # (T, nnd)
+        if "nd_available" in data:
+            results["curtailment"] = data["nd_available"] - results["p_nd"]
+        else:
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+
     return results

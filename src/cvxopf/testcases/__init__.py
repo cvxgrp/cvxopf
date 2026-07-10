@@ -10,13 +10,19 @@ case39  :  39-bus,  10-generator New England test case
 case57  :  57-bus,   7-generator IEEE test case
 case118 : 118-bus,  54-generator IEEE test case
 
+Convenience constructors
+-------------------------
+make_singlenode_case : Build a minimal single-node case for singlenode_dc
+
 Usage
 -----
     from cvxopf.testcases import case9, case14, case30
     from cvxopf.testcases import case39, case57, case118
+    from cvxopf.testcases import make_singlenode_case
 
     ppc = case9()
     ppc = case118()
+    ppc = make_singlenode_case(250.0, generators)
 """
 
 from cvxopf.testcases.case9   import case9
@@ -25,5 +31,6 @@ from cvxopf.testcases.case30  import case30
 from cvxopf.testcases.case39  import case39
 from cvxopf.testcases.case57  import case57
 from cvxopf.testcases.case118 import case118
+from cvxopf.testcases.singlenode import make_singlenode_case
 
-__all__ = ["case9", "case14", "case30", "case39", "case57", "case118"]
+__all__ = ["case9", "case14", "case30", "case39", "case57", "case118", "make_singlenode_case"]

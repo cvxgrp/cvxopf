@@ -75,6 +75,12 @@ class OPFOptions:
         explicit zero-fixing constraints. Use False for research comparison
         and timing measurements against the sparse path.
         AC only. Default True.
+
+    Notes
+    -----
+    None of the above fields affect the 'singlenode_dc' formulation.
+    OPFOptions is accepted for API consistency but all fields are ignored
+    when formulation='singlenode_dc'.
     """
     enforce_vset:           bool  = False
     sparsity_tol:           float = 0.0
@@ -114,6 +120,11 @@ class OPFBuild:
 
         DC multi-step: each value is a list of length T.
 
+        Singlenode DC single-step keys:
+            Pg
+
+        Singlenode DC multi-step: each value is a list of length T.
+
         When storage is present:
             b (real power, MW), b_q (reactive power, MVAr, AC only),
             soc (state of charge, MWh)
@@ -127,18 +138,22 @@ class OPFBuild:
         DC keys: baseMVA, nb, ng, nl, ext_to_int,
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
+        Singlenode DC keys: baseMVA, nb, ng, ext_to_int,
+                 Pd_total, Pgmin, Pgmax, gencost
         Multi-step additionally: T, Pd_series (and Qd_series for AC)
+        For singlenode_dc, Pd_series has shape (T,) — one scalar per step,
+        not (T, nb).
         When storage is present: ns, Cs, storage_bus,
                  storage_apparent_power_rating, storage_capacity,
                  storage_initial_soc, storage_delta, storage_aging_weight
 
     formulation : str
         The formulation used to build this problem.
-        One of: "ac", "lossy_dc".
+        One of: "ac", "lossy_dc", "singlenode_dc".
 
     is_convex : bool
-        True for convex formulations (lossy_dc); False for nonconvex (ac).
-        Controls solver defaults in solve().
+        True for convex formulations (lossy_dc, singlenode_dc); False for
+        nonconvex (ac). Controls solver defaults in solve().
     """
     prob:        cp.Problem
     variables:   dict
@@ -186,18 +201,22 @@ class OPFBuild:
 def _get_single_builders():
     from cvxopf.ac_problem import _build_ac_single
     from cvxopf.dc_problem import _build_lossy_dc_single
+    from cvxopf.singlenode_dc_problem import _build_singlenode_dc_single
     return {
         "ac":       _build_ac_single,
         "lossy_dc": _build_lossy_dc_single,
+        "singlenode_dc": _build_singlenode_dc_single,
     }
 
 
 def _get_multistep_builders():
     from cvxopf.ac_problem import _build_ac_multistep
     from cvxopf.dc_problem import _build_lossy_dc_multistep
+    from cvxopf.singlenode_dc_problem import _build_singlenode_dc_multistep
     return {
         "ac":       _build_ac_multistep,
         "lossy_dc": _build_lossy_dc_multistep,
+        "singlenode_dc": _build_singlenode_dc_multistep,
     }
 
 
@@ -228,6 +247,12 @@ def build_opf(
             Lossy DC OPF (convex QP). Solved by CLARABEL.
             Reference: Convex Optimization with Smart Grid Examples,
             https://doi.org/10.2172/3018252
+        "singlenode_dc"
+            Single-node (copper-plate) DC dispatch. No network, no branch
+            flows, no reactive power. Collapses all buses to one node and
+            enforces scalar real power balance. Convex QP solved by CLARABEL.
+            Accepts storage= and nondispatchable= in the same way as
+            'lossy_dc'. df_Q is accepted but ignored in build_opf_multistep.
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
     storage : list[StorageUnitIdeal] | None, optional
@@ -288,12 +313,13 @@ def build_opf_multistep(
         Active load time series in MW.
     df_Q : pd.DataFrame, shape (T, nb)
         Reactive load time series in MVAr. Used for formulation="ac" only.
-        For formulation="lossy_dc", df_Q is accepted but ignored and a
-        UserWarning is emitted.
+        For formulation='lossy_dc' or formulation='singlenode_dc', df_Q is
+        accepted but ignored and a UserWarning is emitted.
     T : int
         Number of time steps. Must equal df_P.shape[0].
     formulation : str
-        Same options as build_opf.
+        Same options as build_opf, including "singlenode_dc"
+        (single-node copper-plate DC dispatch; df_Q ignored).
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
     coupling_constraints : list of cp.Constraint, optional
