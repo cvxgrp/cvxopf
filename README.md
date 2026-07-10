@@ -3,8 +3,8 @@
 [![CI](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml/badge.svg)](https://github.com/cvxgrp/cvxopf/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/cvxgrp/cvxopf/graph/badge.svg?token=f16a3ea1-bcfd-409e-8592-77d5bce001f5)](https://codecov.io/gh/cvxgrp/cvxopf)
 
-Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP) and
-lossy DC OPF (convex QP).
+Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP),
+lossy DC OPF (convex QP), and single-node DC dispatch (convex QP).
 
 ## Motivation
 
@@ -19,8 +19,9 @@ across a full multi-day horizon and able to enforce the AC network
 constraints that determine whether a plan is actually executable. 
 
 `cvxopf` is designed with this application in mind. It formulates optimal power
-flow problems using CVXPY, supports both full AC-OPF and a convex lossy DC
-relaxation from a single entry point (with more to come), and handles multi-step
+flow problems using CVXPY, supports full AC-OPF, a convex lossy DC relaxation,
+and single-node economic dispatch from a single entry point (with more to
+come), and handles multi-step
 optimization with time-varying load, battery storage, and nondispatchable generation
 (wind, solar, hydro) natively. The intended use case is resiliency research:
 studying how battery controllers should behave under adverse multi-day
@@ -51,6 +52,12 @@ with appropriate solvers. It is designed to:
 |---|---|---|---|
 | `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
+| `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
+
+The `"singlenode_dc"` formulation collapses the whole network to a single
+bus: no branch flows, no transmission limits, no losses, no reactive power —
+just total generation equals total load. It is the classic economic dispatch
+problem, useful as a fast baseline and for large-horizon energy planning.
 
 The intended workflow for large-scale resiliency studies is hierarchical:
 solve the convex `lossy_dc` formulation over the full planning horizon to
@@ -144,6 +151,36 @@ print(f"Objective:  {results['objective']:.2f} $/hr")
 print(f"Pg (MW):    {results['Pg']}")
 print(f"Flows (MW): {results['p_flows']}")
 ```
+
+**Single-node DC dispatch:**
+
+Any MATPOWER case works (the branch table is ignored), or use the
+`make_singlenode_case` convenience constructor to build a minimal
+economic-dispatch problem without a full network:
+
+```python
+from cvxopf.testcases import make_singlenode_case
+from cvxopf.problem import build_opf
+from cvxopf.results import extract_results
+
+case = make_singlenode_case(
+    P_load_MW=250.0,
+    generators=[
+        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},  # (c0, c1, c2)
+        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+    ],
+)
+
+build = build_opf(case, formulation="singlenode_dc")
+build.solve()
+results = extract_results(build)
+print(f"Objective: {results['objective']:.2f} $/hr")
+print(f"Pg (MW):   {results['Pg']}")
+```
+
+The `examples/case14_formulation_comparison.py` script solves the IEEE
+14-bus case with all three formulations side by side and contrasts their
+dispatch and implied losses.
 
 ## Interactive notebooks
 
@@ -295,6 +332,7 @@ src/cvxopf/           Core package
   problem.py          Public API: build_opf, build_opf_multistep
   ac_problem.py       AC-OPF helpers (DNLP formulation)
   dc_problem.py       Lossy DC OPF helpers (convex QP)
+  singlenode_dc_problem.py  Single-node DC dispatch helpers (convex QP)
   network.py          Ybus, incidence matrices, reindexing
   cost.py             Generator cost expression builders
   data.py             Input validation and time-series handling
@@ -368,7 +406,7 @@ package environment.
 - [ ] HVDC transmission links
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
-- [ ] Single-node equivalent "copper plate" model
+- [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
