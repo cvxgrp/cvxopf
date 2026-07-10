@@ -422,5 +422,52 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
 
         return results
 
-    # Multi-step extraction (will be implemented in Step 4)
-    raise NotImplementedError("singlenode_dc multistep results extraction not yet implemented")
+    # Multi-step extraction
+    T = data["T"]
+    Pg_rows = []
+    b_rows = []
+    soc_rows = []
+    p_nd_rows = []
+
+    for t in range(T):
+        Pg_val = var["Pg"][t].value
+        if Pg_val is None:
+            return dict(
+                status=prob.status,
+                objective=float("nan"),
+                Pg=None,
+                p_net=None,
+            )
+        Pg_rows.append(Pg_val)
+        if "ns" in data:
+            b_rows.append(var["b"][t].value)
+            soc_rows.append(var["soc"][t].value)
+        if "nnd" in data:
+            p_nd_rows.append(var["p_nd"][t].value)
+
+    Pd_series = data["Pd_series"]  # shape (T,)
+
+    results = dict(
+        status    = prob.status,
+        objective = float(prob.value),
+        Pg        = np.array(Pg_rows) * baseMVA,  # (T, ng)
+        p_net     = (np.array([np.sum(r) for r in Pg_rows]) - Pd_series) * baseMVA,  # (T,)
+    )
+
+    # Add storage results if present
+    if "ns" in data:
+        results["b"] = np.array(b_rows)      # (T, ns)
+        results["soc"] = np.array(soc_rows)  # (T, ns)
+        results["storage_cost"] = float(
+            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+        )
+
+    # Add nondispatchable results if present
+    if "nnd" in data:
+        results["p_nd"] = np.array(p_nd_rows)  # (T, nnd)
+        if "nd_available" in data:
+            results["curtailment"] = data["nd_available"] - results["p_nd"]
+        else:
+            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+
+    return results

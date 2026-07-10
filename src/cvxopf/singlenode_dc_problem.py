@@ -440,5 +440,207 @@ def _build_singlenode_dc_multistep(
     nondispatchable: list[NondispatchableUnit] | None = None,
     df_nd: pd.DataFrame | None = None,
 ) -> "OPFBuild":
-    """Stub implementation - will be replaced in Step 4."""
-    raise NotImplementedError("singlenode_dc multistep builder not yet implemented")
+    """
+    Build a multi-step single-node DC dispatch problem.
+
+    A single cp.Problem containing T sets of per-step variables and
+    constraints. The objective is the sum of per-step costs. Storage SoC
+    dynamics couple consecutive steps.
+
+    Parameters
+    ----------
+    case : dict
+        MATPOWER case dict.
+    df_P : pd.DataFrame
+        Real load time series, shape (T, nb). Bus loads are summed across
+        columns each step to form a scalar total.
+    df_Q : pd.DataFrame or None
+        Reactive load time series. Ignored (no reactive power in DC);
+        a UserWarning is emitted when not None.
+    T : int
+        Number of time steps.
+    options : OPFOptions
+        Options (not used by this formulation).
+    coupling_constraints : list
+        Extra constraints appended without modification.
+    storage : list[StorageUnitIdeal] | None
+        Storage units, if any.
+    delta : float
+        Time step duration in hours (used only when storage is present).
+    nondispatchable : list[NondispatchableUnit] | None
+        Nondispatchable units, if any.
+    df_nd : pd.DataFrame | None
+        Available power time series, shape (T, nnd), columns = external bus
+        IDs. Never None when nondispatchable is not None (problem.py tiles
+        p_available upstream).
+
+    Returns
+    -------
+    OPFBuild
+        Problem container with formulation="singlenode_dc", is_convex=True.
+    """
+    import warnings
+
+    from cvxopf.problem import OPFBuild
+
+    # df_Q is ignored for the DC formulation
+    if df_Q is not None:
+        warnings.warn(
+            "df_Q is ignored for formulation='singlenode_dc'. "
+            "Reactive power is not modelled in the DC formulation.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    # Parse the case
+    d = _parse_singlenode_dc_case(case, options, storage, delta, nondispatchable)
+
+    # Validate df_P column count before summing
+    if df_P.shape[1] != d["nb"]:
+        raise ValueError(
+            f"df_P has {df_P.shape[1]} columns but case has {d['nb']} buses."
+        )
+
+    # Compute total load per step (scalar per step, not per-bus)
+    Pd_series = df_P.values.sum(axis=1) / d["baseMVA"]  # shape (T,)
+    if Pd_series.shape[0] != T:
+        raise ValueError(
+            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
+        )
+
+    # Parse nondispatchable time series (if present)
+    if "nnd" in d and df_nd is not None:
+        d["nd_available"] = _parse_nd_timeseries(
+            df_nd, T, d["ext_bus_ids"], d["ext_to_int"]
+        )
+
+    # Accumulators
+    Pg_list = []
+    b_list = []
+    soc_list = []
+    p_nd_list = []
+    all_constr = []
+    total_cost = 0
+
+    for t in range(T):
+        # Declare per-step variables
+        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}", nonneg=True)
+
+        b_t = None
+        soc_t = None
+        if "ns" in d:
+            b_t = cp.Variable(d["ns"], name=f"b_{t}")
+            soc_t = cp.Variable(d["ns"], name=f"soc_{t}")
+
+        p_nd_t = None
+        if "nnd" in d:
+            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}", nonneg=True)
+
+        # Determine available ND power for this step
+        if "nnd" in d:
+            if "nd_available" in d:
+                nd_p_available_t = d["nd_available"][t, :]
+            else:
+                nd_p_available_t = d["nd_p_available"]
+        else:
+            nd_p_available_t = None
+
+        # Per-step constraints
+        step_constr = _make_singlenode_dc_step_constraints(
+            Pg=Pg_t,
+            Pd_total_t=float(Pd_series[t]),
+            Pgmin=d["Pgmin"],
+            Pgmax=d["Pgmax"],
+            baseMVA=d["baseMVA"],
+            ns=d.get("ns", 0),
+            S_max=d.get("storage_apparent_power_rating"),
+            storage_capacity=d.get("storage_capacity"),
+            b_t=b_t,
+            soc_t=soc_t,
+            nnd=d.get("nnd", 0),
+            nd_p_available_t=nd_p_available_t,
+            p_nd_t=p_nd_t,
+        )
+        all_constr.extend(step_constr)
+
+        # Per-step cost
+        step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
+        if "ns" in d:
+            step_cost = step_cost + cp.sum(
+                cp.multiply(d["storage_aging_weight"], cp.abs(b_t))
+            )
+        total_cost = total_cost + step_cost
+
+        # Accumulate variables
+        Pg_list.append(Pg_t)
+        if "ns" in d:
+            b_list.append(b_t)
+            soc_list.append(soc_t)
+        if "nnd" in d:
+            p_nd_list.append(p_nd_t)
+
+    # Storage SoC dynamics (cross-step coupling)
+    if "ns" in d:
+        soc_constr = _make_storage_soc_constraints(
+            b_list, soc_list, d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        )
+        all_constr.extend(soc_constr)
+
+    # Append user coupling constraints unchanged
+    all_constr.extend(coupling_constraints)
+
+    # Build the problem
+    prob = cp.Problem(cp.Minimize(total_cost), all_constr)
+
+    # Assemble variables dict
+    variables = {"Pg": Pg_list}
+    if "ns" in d:
+        variables["b"] = b_list
+        variables["soc"] = soc_list
+    if "nnd" in d:
+        variables["p_nd"] = p_nd_list
+
+    # Assemble data dict
+    data = dict(
+        baseMVA=d["baseMVA"],
+        nb=d["nb"],
+        ng=d["ng"],
+        ext_to_int=d["ext_to_int"],
+        Pgmin=d["Pgmin"],
+        Pgmax=d["Pgmax"],
+        gencost=d["gencost"],
+        T=T,
+        Pd_series=Pd_series,
+    )
+
+    if "ns" in d:
+        data.update(
+            ns=d["ns"],
+            Cs=d["Cs"],
+            storage_bus=d["storage_bus"],
+            storage_apparent_power_rating=d["storage_apparent_power_rating"],
+            storage_capacity=d["storage_capacity"],
+            storage_initial_soc=d["storage_initial_soc"],
+            storage_delta=d["storage_delta"],
+            storage_aging_weight=d["storage_aging_weight"],
+        )
+
+    if "nnd" in d:
+        data.update(
+            nnd=d["nnd"],
+            Cnd=d["Cnd"],
+            nd_bus=d["nd_bus"],
+            nd_apparent_power_rating=d["nd_apparent_power_rating"],
+        )
+        if "nd_available" in d:
+            data["nd_available"] = d["nd_available"]
+        else:
+            data["nd_p_available"] = d["nd_p_available"]
+
+    return OPFBuild(
+        prob=prob,
+        variables=variables,
+        data=data,
+        formulation="singlenode_dc",
+        is_convex=True,
+    )

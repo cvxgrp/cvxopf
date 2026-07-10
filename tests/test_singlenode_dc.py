@@ -238,13 +238,6 @@ class TestParseSinglenodeDcCase:
         assert "nnd" in d
         assert d["nnd"] == 1
 
-    def test_build_opf_multistep_singlenode_dc_raises_not_implemented(self):
-        # Create minimal df_P and df_Q with 1 row and 9 columns
-        df_P = pd.DataFrame(np.zeros((1, 9)))
-        df_Q = pd.DataFrame(np.zeros((1, 9)))
-        with pytest.raises(NotImplementedError, match="singlenode_dc multistep builder not yet implemented"):
-            build_opf_multistep(case9(), df_P, df_Q, T=1, formulation="singlenode_dc")
-
 
 class TestSinglenodeDcSingleReturnType:
     """Step 3: Return type and structure of the single-step builder."""
