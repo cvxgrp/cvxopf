@@ -11,6 +11,9 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
+import sys
+from pathlib import Path
+
 from cvxopf.testcases import case9, case14, make_singlenode_case
 from cvxopf.problem import (
     build_opf, build_opf_multistep, OPFBuild, OPFOptions,
@@ -272,8 +275,9 @@ class TestSinglenodeDcLongHorizon:
 class TestSinglenodeDcExampleScript:
 
     def test_example_script_runs_without_error(self):
+        script = Path(__file__).parent.parent / "examples" / "case9_singlenode_dc.py"
         result = subprocess.run(
-            ["uv", "run", "python", "examples/case9_singlenode_dc.py"],
+            [sys.executable, str(script)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0, (
@@ -283,8 +287,9 @@ class TestSinglenodeDcExampleScript:
         )
 
     def test_example_script_prints_optimal(self):
+        script = Path(__file__).parent.parent / "examples" / "case9_singlenode_dc.py"
         result = subprocess.run(
-            ["uv", "run", "python", "examples/case9_singlenode_dc.py"],
+            [sys.executable, str(script)],
             capture_output=True, text=True,
         )
         assert "optimal" in result.stdout.lower(), (
