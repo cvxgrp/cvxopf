@@ -54,6 +54,7 @@ from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
 from cvxopf.results import extract_results, compare_to_reference
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
+from cvxopf.testcases import make_singlenode_case
 
 __all__ = [
     "build_opf",
@@ -64,4 +65,5 @@ __all__ = [
     "compare_to_reference",
     "StorageUnitIdeal",
     "NondispatchableUnit",
+    "make_singlenode_case",
 ]
