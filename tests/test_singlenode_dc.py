@@ -528,3 +528,40 @@ class TestSinglenodeDcSingleNondispatchable:
         build = build_opf(make_singlenode_case(100.0, SIMPLE_GENS),
                           formulation="singlenode_dc")
         assert "nnd" not in build.data
+
+
+class TestSinglenodeDcPublicAPI:
+    """Step 5: Public API surface — imports and dispatch registration."""
+
+    def test_make_singlenode_case_importable_from_cvxopf(self):
+        from cvxopf import make_singlenode_case  # noqa: F401
+
+    def test_make_singlenode_case_importable_from_testcases(self):
+        from cvxopf.testcases import make_singlenode_case  # noqa: F401
+
+    def test_singlenode_dc_in_single_builders(self):
+        from cvxopf.problem import _get_single_builders
+        assert "singlenode_dc" in _get_single_builders()
+
+    def test_singlenode_dc_in_multistep_builders(self):
+        from cvxopf.problem import _get_multistep_builders
+        assert "singlenode_dc" in _get_multistep_builders()
+
+    def test_unknown_formulation_error_message(self):
+        with pytest.raises(ValueError) as exc_info:
+            build_opf(case9(), formulation="banana")
+        assert "singlenode_dc" in str(exc_info.value)
+
+    def test_opfoptions_accepted_and_ignored(self):
+        build = build_opf(case9(), formulation="singlenode_dc",
+                          options=OPFOptions(loss_weight=99.0))
+        assert isinstance(build, OPFBuild)
+
+    def test_storage_unit_ideal_importable_from_cvxopf(self):
+        from cvxopf import StorageUnitIdeal  # noqa: F401
+
+    def test_nondispatchable_unit_importable_from_cvxopf(self):
+        from cvxopf import NondispatchableUnit  # noqa: F401
+
+    def test_extract_results_importable_from_cvxopf(self):
+        from cvxopf import extract_results  # noqa: F401

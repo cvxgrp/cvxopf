@@ -227,6 +227,31 @@ There is no Pypower oracle for DC validation. Correctness is verified via
 internal consistency checks: flow conservation, bound feasibility, T=1
 equivalence with single-step.
 
+### `"singlenode_dc"` — Single-node DC dispatch (convex QP)
+
+Collapses the entire network to a single bus. No branch flows, no
+transmission constraints, no line losses, no reactive power. Enforces
+scalar real power balance:
+
+    sum(Pg) + (1/baseMVA)*sum(b) + (1/baseMVA)*sum(p_nd) == Pd_total
+
+where Pd_total = sum(bus[:, PD]) / baseMVA.
+
+Objective: minimize generation cost G (same polynomial cost as AC and
+lossy DC) plus storage aging cost when storage is present.
+
+Variables: Pg (ng,) per-unit, b/soc when storage present,
+p_nd when nondispatchable present.
+
+Results keys: status, objective, Pg, p_net
+(p_flows, Vm, Va_deg, Qg, q_net absent)
+
+Accepts make_singlenode_case() to build a minimal case dict without
+requiring a full MATPOWER case. Also accepts any standard MATPOWER case
+dict — the branch table is present but ignored.
+
+The default solver is CLARABEL (nlp=False).
+
 ### Future formulations
 
 The dispatch architecture in `problem.py` accepts new formulation keys
@@ -478,6 +503,7 @@ is present.
 | 7 — HVDC transmission links | 🔲 Future | |
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
+| 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -669,3 +695,8 @@ docstring.
   separately in the multistep builder after the parse function returns
 - Do not emit a `UserWarning` when `apparent_power_rating` is not used as a
   constraint in the DC nondispatchable path — no warning is needed here
+- Do not call `validate_case` inside `_parse_singlenode_dc_case` — it does
+  not call `validate_case` by design, because `make_singlenode_case`
+  produces a dict with an empty branch table that `validate_case` rejects
+- Do not store `Pd_series` as shape `(T, nb)` for `singlenode_dc` — it is
+  shape `(T,)` because the formulation has no per-bus structure

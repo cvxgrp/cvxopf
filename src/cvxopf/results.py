@@ -72,10 +72,20 @@ def extract_results(build: OPFBuild) -> dict:
         Code consuming results from either formulation should use
         results.get('Vm') rather than results['Vm'].
 
+        Singlenode DC single-step keys:
+            status      str          CVXPY solve status
+            objective   float        Optimal cost ($/hr)
+            Pg          np.ndarray   (ng,)  Per-generator output, MW
+            p_net       float        Net generation minus load, MW
+                                     (near zero at optimum)
+
+        Singlenode DC multi-step: Pg is (T, ng); p_net is (T,).
+
     Raises
     ------
     ValueError
-        If build.formulation is not a recognised formulation string.
+        If build.formulation is not one of 'ac', 'lossy_dc',
+        'singlenode_dc'.
     """
     if build.formulation == "ac":
         return _extract_ac_results(build)
