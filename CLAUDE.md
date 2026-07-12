@@ -533,9 +533,9 @@ loop. Aging cost `lambda * sum_t |b_t|` follows Nnorom et al. (2026).
 ### Milestone 7 — HVDC transmission links
 Model HVDC links as controllable point-to-point power injections between
 two buses, subject to capacity limits. Follows the MATPOWER `dcline`
-table format (data format to be confirmed by researcher). Applies to both
-AC and lossy DC formulations. Supports multi-step scheduling (the power
-transfer on each DC link can vary per time step).
+table format. Applies to both AC and lossy DC formulations. Supports
+multi-step scheduling (the power transfer on each DC link can vary per time
+step).
 
 The build plan lives in `plans/milestone-7-hvdc.md`. Key modeling decisions
 recorded there: HVDC terminals are modelled as **generator-like objects**
@@ -549,8 +549,27 @@ is **not** DCP-valid and must never be used — select an affine branch by the
 known flow direction instead. Fixed converter loss (`LOSS0`) and full
 sign-switching lossy behavior are deferred to Milestone 15.
 
-Do not implement until the researcher provides the MATPOWER `dcline` data
-format details.
+**Standard test case (`pypower.t.t_case9_dcline`) — MVP vs M15 handling.**
+The `dcline` table format is now verified against this Pypower fixture; the
+loss law is `Pt = Pf - loss0 - loss1*Pf`, confirming `loss1` is a per-unit
+fraction (`loss_percent = loss1 * 100`). What the MVP (Milestone 7) models
+from this case, and what it does not:
+
+| `dcline` column(s) | MVP (M7) | Full lossy (M15) |
+|---|---|---|
+| `Pf` | sending-terminal setpoint (`p_scheduled_mw`, pins `p_in`) | same |
+| `Pmin`/`Pmax` | `p_in` box bounds (`band`/`downward` presets) | same |
+| `loss1` (proportional) | modelled on fixed-direction steps | modelled everywhere |
+| `loss0` (fixed/no-load) | **dropped**; `UserWarning` when nonzero | modelled via charge/discharge split |
+| `Qf,Qt,Qmin*,Qmax*` (reactive) | **dropped** (unity-PF MVP) | out of scope (unity-PF) |
+| `Vf,Vt` (terminal voltage setpoints) | **dropped** (no HVDC voltage control) | out of scope |
+| `dclinecost` | `cost_coeffs=(c0,c1,c2)` polynomial | same |
+
+**Consequence:** importing `t_case9_dcline` will **not** reproduce Pypower's
+solution exactly — row 0 has `loss0=1`, which the MVP ignores. This is a
+documented, intended approximation (see the plan doc + Milestone 15), not a
+bug. Fixtures for this case are generated with the existing
+`scripts/generate_pypower_fixtures.py` script (see "Fixture generation").
 
 ### Milestone 15 — Full lossy HVDC (sign-switching converter losses)
 Extends Milestone 7 to carry losses when the flow direction is itself a

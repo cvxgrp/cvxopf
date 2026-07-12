@@ -88,15 +88,18 @@ injected at one node is withdrawn at the other).
 - `"downward"` -- one-directional by construction, so the sign is fixed and
   the matching branch is selected.
 - `"band"` -- per step, compute the intersected `p_in` interval
-  `[p_sched_t - bw, p_sched_t + bw] ∩ [-p_max, p_max]`. If it does not
+  `[p_sched_t - bw, p_sched_t + bw] ∩ [p_min, p_max]`. If it does not
   straddle zero (`lo >= 0` or `hi <= 0`), the direction is fixed and the
   matching branch is used. If it straddles zero, fall back to the lossless
   branch for that step and emit a `UserWarning` naming the link and the time
-  step. Clamping to `±p_max` can only shrink the interval, so it never turns
-  a fixed-direction band into a straddling one -- the gate is computed on the
-  **intersected** interval.
-- `"free"` -- always lossless (`p_out = -p_in`); the direction is
-  unconstrained across the full `[-p_max, p_max]` range.
+  step. Clamping to `[p_min, p_max]` can only shrink the interval, so it never
+  turns a fixed-direction band into a straddling one -- the gate is computed on
+  the **intersected** interval.
+- `"free"` -- lossless when the box `[p_min, p_max]` straddles zero (the
+  default symmetric `[-p_max, p_max]` case); if an explicit one-sided
+  `[p_min, p_max]` fixes the direction, the matching lossy branch is used. The
+  zero-crossing gate (not the mode name) is the single source of truth -- see
+  the Operational modes note.
 
 `loss_percent` defaults to 0.0 (lossless everywhere).
 
@@ -105,12 +108,20 @@ with the lossy battery model): a charge/discharge-style split of `p_in`
 into non-negative positive/negative parts would let `"free"` and
 zero-straddling `"band"` steps carry losses. Out of scope for this MVP.
 
-**Fixed converter loss (`loss_mw_fixed` / MATPOWER `LOSS0`) is also deferred**
-to that milestone. The MVP models only proportional loss (`loss_percent` /
-`LOSS1`). A constant no-load offset is second-order, has no verified data path
-(the `dcline` mapping is unverified -- R1), and its direction-dependent sign
-is cleaner to introduce alongside the charge/discharge split. There is no
-`loss_mw_fixed` field on `HVDCLink` in the MVP.
+**Fixed converter loss (MATPOWER `LOSS0`) is NOT modelled in the first
+implementation.** The MVP models only proportional loss (`loss_percent` /
+`LOSS1`). Although fixed loss *could* be added affinely on a fixed-direction
+branch (`p_out = coeff * p_in + sign(p_in) * loss0`, sign now verified against
+the `t_case9_dcline` fixture -- see R1/R8), it is deliberately excluded: it is
+second-order, and forcing every fixed-direction branch to carry it while
+`free` / zero-straddling `band` steps cannot would create an inconsistent
+seam (a no-load loss that vanishes whenever the optimizer's interval straddles
+zero). Keeping the MVP purely proportional preserves the exact
+`hvdc_loss = p_in + p_out` identity (Step 6) and defers all fixed-loss
+modeling to the full-lossy HVDC milestone (Milestone 15), where the
+charge/discharge split removes the seam. There is **no** `loss_mw_fixed` field
+on `HVDCLink` in the MVP, and `hvdc_from_dcline` drops the `LOSS0` column
+(warning on nonzero `LOSS0` -- see Step 1).
 
 **Forward note (terminal flow vs nodal injection).** Bounds and the
 zero-crossing gate attach to `p_in` (the fundamental from-bus injection).
@@ -122,24 +133,54 @@ the MVP box bound on `p_in` is sufficient here.
 ### Operational modes (resolved)
 
 `p_in` bounds are on the from-bus nodal injection (the fundamental variable);
-`p_out` is always a `cp.Variable` tied to `p_in` by the loss equality.
+`p_out` is always a `cp.Variable` tied to `p_in` by the loss equality. The
+fundamental bound is a **general affine box `p_in ∈ [lo, hi]`**; the four named
+modes are just presets that fill in `[lo, hi]` (and, for `scheduled`, add a
+pinning equality). The MATPOWER `[Pmin, Pmax]` maps straight onto this box.
+The per-step loss decision depends only on whether `[lo, hi]` straddles zero,
+so it is uniform across every mode -- fixed-direction boxes get the matching
+lossy branch, zero-straddling boxes get the lossless branch (+`UserWarning`).
 
 | Mode | p_in (free DOF, bounds) | loss model |
 |---|---|---|
 | scheduled | 0 DOF; `cp.Variable` pinned `p_in == p_scheduled_mw` (sending setpoint) | sign-split branch selected from `p_scheduled_mw` |
-| band (default) | 1 DOF; `p_in ∈ [p_sched-bw, p_sched+bw] ∩ [-p_max, p_max]` | per step: matching branch if intersected interval doesn't straddle 0, else lossless + `UserWarning` |
+| band (default) | 1 DOF; `p_in ∈ [p_sched-bw, p_sched+bw] ∩ [p_min, p_max]` | per step: matching branch if intersected interval doesn't straddle 0, else lossless + `UserWarning` |
 | downward | 1 DOF; `p_in ∈ [0, p_sched]` if p_sched>=0 else `[p_sched, 0]` | direction fixed by construction → matching branch |
-| free | 1 DOF; `p_in ∈ [-p_max, p_max]` | always lossless (`p_out = -p_in`) |
+| free | 1 DOF; `p_in ∈ [p_min, p_max]` (default `[-p_max, p_max]`) | matching branch if box doesn't straddle 0, else lossless |
+
+Note: with an explicit `p_min_mw`, `free` is no longer *necessarily* lossless
+-- a `free` link whose `[p_min, p_max]` box is one-sided is fixed-direction and
+gets the lossy branch. "Always lossless" holds only for the default symmetric
+`[-p_max, p_max]`. This is the `[Pmin, Pmax]`-box generalization; the
+zero-crossing gate is the single source of truth.
 
 `p_scheduled_mw` is the **sending-terminal** setpoint: in `"scheduled"` mode
 `p_in` is pinned to it and `p_out` is derived, so delivered power is *below*
 the scheduled number by the loss. Document this in the `HVDCLink` field docs.
 
 ### Cost term (resolved)
+The per-link cost is the full MATPOWER `dclinecost` polynomial in the transfer
+magnitude, `c2 * |p_in|^2 + c1 * |p_in| + c0`. Because `(|x|)^2 = x^2`, the
+quadratic term is written directly on `p_in` (no `abs` needed) and the linear
+term keeps `cp.abs` so cost is symmetric in flow direction:
 ```
-cost += cp.multiply(cost_coefficient, cp.abs(p_in))   # per link, per step
+cost += (c2 * cp.square(p_in)                 # quadratic; = c2*|p_in|^2
+         + cp.multiply(c1, cp.abs(p_in))       # linear magnitude cost
+         + c0)                                 # constant (line on)
 ```
-Default `cost_coefficient = 0.0`. Mirrors storage `aging_weight`. Use `cp.multiply`, never `scalar * cp.abs(...)` (CvxpyDeprecationWarning). `cp.abs` in the **objective** is legal (convex). Since `p_in` is always a `cp.Variable` (even scheduled, where it is pinned by equality), the cost term is always a CVXPY expression.
+Both `cp.square` and `cp.abs` are convex → legal in the **objective**.
+Follow the `poly_cost_expr` monomial-sum pattern in `cost.py` (explicit
+monomials, **not** Horner) so the DCP checker accepts the quadratic; the same
+caveat the generator cost documents applies. Use `cp.multiply`, never
+`scalar * cp.abs(...)` (CvxpyDeprecationWarning). Since `p_in` is always a
+`cp.Variable` (even scheduled, where it is pinned by equality), the cost term
+is always a CVXPY expression.
+
+`HVDCLink.cost_coeffs` is a `(c0, c1, c2)` tuple (default `(0.0, 0.0, 0.0)`),
+mirroring the generator `cost_coeffs` convention in `make_singlenode_case`.
+The `c0` constant only affects the reported objective (it does not change the
+optimum) and is meaningful only while the line is energized; the MVP always
+adds it for objective consistency.
 
 ### Formulation coverage (resolved)
 - `"ac"` -- real-power injection added to the single `p ==` balance in `_make_step_constraints` (Section 3). No `q ==` change.
@@ -151,8 +192,19 @@ Default `cost_coefficient = 0.0`. Mirrors storage `aging_weight`. Use `cp.multip
 - Detection contract: `"n_hvdc" in build.data`. **Never add `n_hvdc=0` as a default.**
 - `hvdc.py` imports **numpy only** -- no other cvxopf modules (same rule as `storage.py`).
 
-### MATPOWER dcline mapping (UNVERIFIED -- see Risk R1)
-The handoff column map is reproduced in code as documented assumptions. The one value that cannot be checked against the repo (no existing dcline code) is whether MATPOWER `LOSS1` is a fraction (0-1) or percent (0-100). Plan assumes `loss_percent = LOSS1 * 100` and marks it `# TODO(verify)`. One-line change if wrong; does not block any other step.
+### MATPOWER dcline mapping (VERIFIED against `t_case9_dcline`)
+The column order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF
+QminT QmaxT loss0 loss1` and the loss-unit question are now confirmed against
+the Pypower `t_case9_dcline` fixture. Pypower's loss law is
+`Pt = Pf - loss0 - loss1 * Pf`; the fixture's row 0 (`loss0=1, loss1=0.01,
+Pf=10 → Pt=8.9`) and row 3 (`loss0=0, loss1=0.05, Pf=10 → Pt=9.5`) both check
+out. So **`loss1` is a per-unit fraction** and `loss_percent = loss1 * 100`
+is correct (drop the old `# TODO(verify)`). `Pf` is the sending-terminal
+setpoint (`p_in`); `Pt` is the derived receiving injection magnitude,
+consistent with our `p_out = -(1 - loss_frac) * p_in` branch for `Pf > 0`.
+`loss0` (fixed loss) is real in the fixture but intentionally **not** modelled
+in the MVP (see Loss model); `hvdc_from_dcline` drops it with a `UserWarning`
+when nonzero.
 
 ---
 
@@ -160,12 +212,65 @@ The handoff column map is reproduced in code as documented assumptions. The one 
 
 Follow the verification progression: offline unit tests for pure logic, then wiring tests, then the live solve as its own commit. Commit after each green gate.
 
+### Step 0 -- `t_case9_dcline` test artifacts (standalone scripts; do FIRST)
+This step touches only the two self-contained `uv` inline-dependency scripts in
+`scripts/` (each pins its own deps) and their committed output artifacts. It
+depends on nothing else in the milestone and must be completed first, because
+every downstream solve gate (Gates 4/5/6/6b) consumes the `case9_dcline` case
+file it produces.
+
+**0a -- static case file via `scripts/generate_testcases.py`.**
+- Extend `_generate_source` (and `_check_consistency`) to emit `dcline` /
+  `dclinecost` tables when present in the source `ppc`. Existing cases without
+  these keys are unaffected (conditional emission, like the `areas` block).
+- Add a `t_case9_dcline` entry sourced from `pypower.t.t_case9_dcline`. Output
+  `src/cvxopf/testcases/case9_dcline.py`, function `case9_dcline()`.
+- **Static input only.** The script reads the Pypower case *dict* and never
+  calls `toggle_dcline`/`runopf`, so the numpy-2.x float-indexing bug in
+  `toggle_dcline` is never triggered here. No monkeypatch needed in this script.
+- Reactive/voltage columns are preserved *in the case file* (faithful to the
+  source), and dropped only later at `hvdc_from_dcline` import time (Step 1).
+
+**0b -- Pypower reference fixture via `scripts/generate_pypower_fixtures.py`.**
+- Add `t_case9_dcline` to the fixture `cases` list; output
+  `tests/fixtures/case9_dcline_pypower_reference.json`, schema matching the
+  existing fixtures (`case`, `solver`, `status`, `objective`, `Pg`, `Qg`,
+  `Vm`, `Va_deg`).
+- **This is a solved-OPF oracle**, so it must activate the DC line
+  (`toggle_dcline(ppc, 'on')`) before `runopf`. That path triggers the
+  numpy-2.x float-indexing bug in `toggle_dcline` (see R9). Mitigation: a
+  **scoped monkeypatch** that coerces integer-valued float index arrays to int
+  for the duration of the dcline `toggle_dcline`+`runopf` call only, leaving the
+  existing case9/14/57 code path untouched. Confine the patch with a
+  `try/finally` (or context manager) so it is reverted immediately after the
+  solve. Document it inline as a Pypower/numpy-2.x workaround, not a cvxopf
+  concern.
+- The fixture is an **approximate** oracle: Pypower models `loss0` (row 0 has
+  `loss0=1`) which the MVP drops, so a cvxopf solve will not match exactly. This
+  is expected and consumed accordingly by Gate 6b.
+
+**Gate 0 (offline, own commit):**
+- `uv run scripts/generate_testcases.py` produces `case9_dcline.py`;
+  `case9_dcline()` imports and loads; `dcline`/`dclinecost` arrays match the
+  Pypower source shapes (4 dcline rows, 4 dclinecost rows).
+- `uv run scripts/generate_pypower_fixtures.py` produces
+  `case9_dcline_pypower_reference.json` with `status == "optimal"`.
+- No solve in the test suite here -- these are script runs producing committed
+  artifacts. The generated files are what the suite consumes.
+
 ### Step 1 -- `src/cvxopf/hvdc.py` (pure logic)
 Mirror `storage.py` structure/docstrings:
-- `HVDCLink` dataclass: `from_bus, to_bus, p_max_mw, p_scheduled_mw=0.0, bandwidth_mw=0.0, mode="band", loss_percent=0.0, cost_coefficient=0.0`. Docstring: `p_scheduled_mw` is the **sending-terminal setpoint** pinning `p_in` (the from-bus nodal injection); `p_out` is always derived, so delivered power is below the schedule by the loss.
-- `_validate_hvdc(links, ext_bus_ids)`: `from_bus != to_bus`; both buses in `ext_bus_ids`; `p_max_mw > 0`; `bandwidth_mw >= 0`; `loss_percent >= 0`; `cost_coefficient >= 0`; `mode` in the four allowed values. Indexed `ValueError` messages like `_validate_storage`.
+- `HVDCLink` dataclass: `from_bus, to_bus, p_max_mw, p_min_mw=None, p_scheduled_mw=0.0, bandwidth_mw=0.0, mode="band", loss_percent=0.0, cost_coeffs=(0.0, 0.0, 0.0)`. Docstring: `p_scheduled_mw` is the **sending-terminal setpoint** pinning `p_in` (the from-bus nodal injection); `p_out` is always derived, so delivered power is below the schedule by the loss. `cost_coeffs` is `(c0, c1, c2)`. `p_min_mw` is the lower `p_in` bound; when `None`, defaults per mode (`band`/`free`: `-p_max_mw`; `downward`: `0`) so existing modes are unchanged.
+- `_validate_hvdc(links, ext_bus_ids)`: `from_bus != to_bus`; both buses in `ext_bus_ids`; `p_max_mw > 0`; `p_min_mw <= p_max_mw` when given; `bandwidth_mw >= 0`; `loss_percent >= 0`; `c2 >= 0` (convex quadratic) and `c1 >= 0` (nonneg magnitude cost); `mode` in the allowed values. Indexed `ValueError` messages like `_validate_storage`.
 - `_make_hvdc_incidence_matrices(links, nb, ext_to_int)` -> `(Ch_from, Ch_to)`, each `(nb, n_hvdc)`; `np.empty((nb,0))` pair for empty input.
-- `hvdc_from_dcline(dcline_table)` -> `list[HVDCLink]`; skip `BR_STATUS==0`; `# TODO(verify)` on `LOSS1 * 100`; `mode="scheduled"` on conversion.
+- `hvdc_from_dcline(dcline_table, dclinecost=None)` -> `list[HVDCLink]`. Column map is now **verified** against the `t_case9_dcline` fixture (see R1) -- header order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT loss0 loss1`. Skip `status==0` rows. Mapping:
+  - `from_bus=fbus`, `to_bus=tbus`.
+  - `loss_percent = loss1 * 100` (verified: `loss1` is a per-unit fraction; `Pt = Pf - loss0 - loss1*Pf`).
+  - `[Pmin, Pmax]` → `p_min_mw` / `p_max_mw` (the fundamental `p_in` box). `mode="band"` with `p_scheduled_mw = Pf` as the setpoint; the per-step zero-crossing gate then auto-selects lossy (fixed-direction) vs lossless (straddling), so no separate `"scheduled"`/`"downward"` inference is needed. A row with `Pmin >= 0` or `Pmax <= 0` is naturally fixed-direction and gets the lossy branch; a straddling `[Pmin, Pmax]` is lossless.
+  - `loss0` (fixed loss) is **dropped**; if any active row has `loss0 != 0`, emit a `UserWarning` that the imported model omits fixed converter loss (deferred to Milestone 15) and will not match Pypower exactly.
+  - `Qf, Qt, QminF, QmaxF, QminT, QmaxT` (reactive) and `Vf, Vt` (voltage setpoints) are dropped -- MVP is unity-PF, no HVDC voltage control. Note in the docstring.
+  - `dclinecost` (optional, same polynomial layout as `gencost`) maps to `cost_coeffs=(c0, c1, c2)`; only model-2 polynomial rows up to quadratic are read (higher-order terms rejected with a clear error). When the `case9_dcline` case file (Step 0a) is the source, `dclinecost` is present and passed through; when absent, `cost_coeffs` defaults to `(0.0, 0.0, 0.0)`.
+  - **Test artifact source:** `hvdc_from_dcline(case9_dcline()["dcline"], case9_dcline()["dclinecost"])` is the intended entry point for downstream gates -- 4 rows, one inactive (`status==0`) skipped -> 3 links; `loss0!=0` on row 0 emits the documented `UserWarning`.
 
 **Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `hvdc_from_dcline` incl. inactive-line skip. No solve.
 
@@ -185,12 +290,16 @@ Mirror `storage.py` structure/docstrings:
     - `scheduled`: sign of `p_scheduled_mw` selects the branch.
     - `downward`: sign fixed by construction selects the branch.
     - `band`: compute intersected `p_in` interval `[p_sched-bw, p_sched+bw] ∩
-      [-p_max, p_max]`; if it straddles 0, use lossless (`p_out == -p_in`)
+      [p_min, p_max]`; if it straddles 0, use lossless (`p_out == -p_in`)
       and `warnings.warn` naming link + step; else use the matching branch.
-    - `free`: always lossless (`p_out == -p_in`).
-- `cost_expr`: summed `cp.multiply(cost_coefficient, cp.abs(p_in))`. Always a
-  CVXPY expression (`p_in` is always a variable). `cp.abs` in the objective is
-  legal.
+    - `free`: lossless when `[p_min, p_max]` straddles 0 (default symmetric
+      box); matching branch when an explicit one-sided box fixes direction.
+    The gate is on the box, uniform across modes.
+- `cost_expr`: summed per-link polynomial `c2*cp.square(p_in) +
+  cp.multiply(c1, cp.abs(p_in)) + c0` (from `cost_coeffs`). Always a CVXPY
+  expression (`p_in` is always a variable). `cp.square` and `cp.abs` in the
+  objective are legal (convex); build as an explicit monomial sum, not Horner
+  (matches `poly_cost_expr`).
 - bounds are on `p_in`; built once here and reused by both builders.
 Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA, ...)`.
 
@@ -253,10 +362,17 @@ Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA
 
 **Gate 6:** extend Gate 4/5 tests to assert results carry `p_hvdc_in/out/loss` with correct shapes and derived values.
 
+**Gate 6b (live, Pypower approximate match):** `tests/test_hvdc.py::TestHVDCPypowerApprox` compares a solved cvxopf run on the `case9_dcline()` case (Step 0a) against the committed `case9_dcline_pypower_reference.json` fixture (Step 0b). This is an **approximate** comparison, **not** exact, because the MVP drops `loss0` (row 0 has `loss0=1`). Consume it in exactly one of these documented ways (pick at implementation time):
+- (a) loose tolerance on `objective`/`Pg` that absorbs the `loss0` discrepancy, or
+- (b) tight assertions restricted to the `loss0==0` links (rows 1 and 3), loose elsewhere, or
+- (c) internal-consistency assertions (flow conservation + the `p_out = -(1-loss1)*p_in` loss law on the fixed-direction links) rather than a strict Pypower oracle.
+
+Whichever is chosen, the test docstring must state *why* it is approximate (the dropped `loss0`) and cite the MVP-vs-M15 handling table -- mirroring the existing "known acceptable discrepancies vs Pypower" pattern in `CLAUDE.md`. This gate depends on both AC (Step 5) and DC (Step 4) integration and runs just before the full-suite gate.
+
 ### Step 7 -- public API, examples, docs
 - `__init__.py`: re-export `HVDCLink`, `hvdc_from_dcline`; add to `__all__`.
 - `examples/case9_hvdc_ac.py`, `examples/case9_hvdc_dc.py` (small, runnable).
-- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s, DOF is 0 scheduled / 1 otherwise; sign-split affine loss branches + the rule that lossy branches are only used when the flow direction is fixed pre-construction; `p_scheduled_mw` = sending setpoint pinning `p_in`; `HVDCLink` field table; `hvdc=`/`df_hvdc=` on entry points; results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch in `free` mode or in a zero-straddling `band` step; **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
+- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s, DOF is 0 scheduled / 1 otherwise; sign-split affine loss branches + the rule that lossy branches are only used when the flow direction is fixed pre-construction; `p_scheduled_mw` = sending setpoint pinning `p_in`; the `[Pmin, Pmax]`/`p_min_mw` box as the fundamental bound with band/downward/free as presets; the `cost_coeffs=(c0, c1, c2)` polynomial cost (`cp.square` for quadratic, `cp.abs` for linear); `hvdc_from_dcline` column map verified against `t_case9_dcline` with `loss0`/reactive/voltage columns dropped; `HVDCLink` field table; `hvdc=`/`df_hvdc=` on entry points; results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch in `free` mode or in a zero-straddling `band` step; **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
 
 **Gate 7 (full suite):** `uv run --extra dev pytest tests/` -- expect `702 + new` passed, 0 failed. `uv run ruff format .` and `uv run ruff check .` clean.
 
@@ -264,7 +380,7 @@ Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA
 
 ## Section 3 -- Risks
 
-**R1 -- MATPOWER `LOSS1` units (unverified).** Cannot be checked against the repo (no existing dcline code) and must not be confabulated. Mitigation: documented assumption `loss_percent = LOSS1 * 100` with `# TODO(verify)`; one-line fix if wrong; no solve test depends on it (tests use `HVDCLink` directly). Confirm with the researcher before trusting `hvdc_from_dcline` on real dcline data.
+**R1 -- MATPOWER `dcline`/`LOSS1` mapping (RESOLVED, verified against `t_case9_dcline`).** Previously unverifiable (no dcline code in the repo). The Pypower `t_case9_dcline` fixture confirms the column order and the loss law `Pt = Pf - loss0 - loss1 * Pf`: rows 0 (`loss0=1, loss1=0.01, Pf=10 → Pt=8.9`) and 3 (`loss0=0, loss1=0.05, Pf=10 → Pt=9.5`) both check out, so `loss1` is a per-unit fraction and `loss_percent = loss1 * 100` is correct. Residual risk: only the `t_case9_dcline` fixture was checked; confirm with the researcher that other `dcline` datasets share this scaling before treating `hvdc_from_dcline` as general. The MVP does not depend on it for solve gates (tests build `HVDCLink` directly).
 
 **R2 -- Convention-B sign of the balance addend.** Both HVDC terminals are
 signed nodal injections and enter the balance with `+`:
@@ -312,10 +428,29 @@ charge/discharge split (see the deferred-milestone note in Section 1). The MVP
 models proportional loss only, so `hvdc_loss = p_in + p_out` is exact and
 `≥ 0` in both directions. No open sub-item remains.
 
+**R9 -- `toggle_dcline` numpy-2.x float-indexing bug in the fixture script
+(Step 0b).** Generating a *solved* Pypower oracle for `t_case9_dcline` requires
+`toggle_dcline(ppc, 'on')`, which does float-array indexing at multiple sites
+(`e2i[dc[:, F_BUS]]`, `ppc['bus'][dc[:, F_BUS], ...]`, and more across its
+ext2int/int2ext hooks). numpy 2.x rejects float indices as a hard `IndexError`
+(numpy 1.x only warned) -- same family as the documented `in1d` breakage that
+forced the `numpy==2.2.6` pin, but pervasive, not a single site. Verified
+empirically this session: patching one site surfaces the next. Downgrading numpy
+is not viable in this env (`scipy==1.18.0` requires numpy>=2; older scipy has no
+cp313 wheel and builds from source fail). Mitigation (planned): a **scoped
+monkeypatch** in `generate_pypower_fixtures.py` coercing integer-valued float
+index arrays to int for the duration of the dcline `toggle_dcline`+`runopf` call
+only, reverted in a `finally`; the case9/14/57 path is untouched. It is a
+Pypower/numpy-compat workaround in an isolated generation script -- **not** in
+the package -- and is only run when regenerating fixtures (never in CI). Residual
+risk: the monkeypatch is coupled to `toggle_dcline`'s internals; if a future
+Pypower/numpy bump changes them, the patch must be revisited. Documented inline
+at the patch site.
+
 ---
 
 ## Open items status
-- Item 1 (LOSS1 units): unresolved -- flagged R1; does not block implementation.
+- Item 1 (LOSS1 units): **resolved** -- verified against the `t_case9_dcline` fixture (`Pt = Pf - loss0 - loss1*Pf`); `loss1` is a per-unit fraction, `loss_percent = loss1 * 100`. R1 downgraded to a residual "confirm other datasets share the scaling" note.
 - Item 2 (singlenode handling): resolved (silent ignore, no warning).
 - Item 3 (test case): resolved -- synthetic `bus 4 -> bus 9` on case9 + pure unit tests; no new case constructor.
 - Item 4 (`hvdc_from_dcline` location): resolved -- `hvdc.py`.
@@ -335,7 +470,35 @@ models proportional loss only, so `hvdc_loss = p_in + p_out` is exact and
   `p_hvdc_in/out`. Fixed a latent sign bug (terminal-flow addend mixed with
   Convention-B loss branches). Terminal flow is derived on demand for a future
   branch-limit milestone.
-- Item 8 (fixed converter loss): resolved -- `loss_mw_fixed` removed from the
-  MVP (was a buggy leftover of the illegal loss equation); proportional loss
-  only. Fixed converter loss (`LOSS0`) deferred to the full-lossy milestone
-  alongside the charge/discharge split. See R8.
+- Item 8 (fixed converter loss): resolved -- deliberately **not modelled in the
+  first implementation**. The `t_case9_dcline` fixture now verifies its sign
+  (`+sign(p_in)*loss0`, from `Pt = Pf - loss0 - loss1*Pf`), so it *could* be
+  added affinely on fixed-direction branches; it is excluded by choice, not by
+  blocker (second-order; would create an inconsistent seam where the no-load
+  loss vanishes on zero-straddling steps). MVP is purely proportional; `LOSS0`
+  deferred to Milestone 15. No `loss_mw_fixed` field; `hvdc_from_dcline` warns
+  on nonzero `loss0`. See R8.
+- Item 9 (cost model): resolved -- generalized from a single linear coefficient
+  to the full `dclinecost` polynomial `cost_coeffs=(c0, c1, c2)`. Quadratic uses
+  `cp.square(p_in)` (since `(|x|)^2 = x^2`), linear uses `cp.abs(p_in)`; both
+  convex in the objective. `dclinecost` maps model-2 polynomial rows up to
+  quadratic.
+- Item 10 (`[Pmin, Pmax]` bounds): resolved -- the fundamental `p_in` bound is a
+  general affine box; `band`/`downward`/`free` are presets over it and MATPOWER
+  `[Pmin, Pmax]` maps straight on. `HVDCLink` gains `p_min_mw` (defaults keep the
+  named modes unchanged). The per-step zero-crossing gate on the box is the
+  single source of truth for lossy-vs-lossless, uniform across modes.
+- Item 11 (test artifacts / Step 0): resolved -- `t_case9_dcline` becomes a
+  committed static case file (`src/cvxopf/testcases/case9_dcline.py` via extended
+  `generate_testcases.py`, static input only, no solve) **and** a committed
+  Pypower reference fixture (`tests/fixtures/case9_dcline_pypower_reference.json`
+  via extended `generate_pypower_fixtures.py`, solved oracle needing the
+  `toggle_dcline` monkeypatch -- see R9). Step 0 is done first; both artifacts
+  feed downstream gates. The case file is the shared input for Gates 1/4/5/6;
+  the fixture is consumed by Gate 6b.
+- Item 12 (Pypower comparison scope / Gate 6b): resolved -- the Pypower match on
+  `case9_dcline` is **approximate, not exact**, because the MVP drops `loss0`
+  (row 0 `loss0=1`). Gate 6b consumes the fixture via one of: loose tolerance,
+  `loss0==0`-links-only tight assertions, or internal-consistency checks. The
+  test must document why it is approximate and cite the MVP-vs-M15 table,
+  mirroring the existing "known acceptable discrepancies vs Pypower" pattern.
