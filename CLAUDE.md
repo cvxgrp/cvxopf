@@ -508,6 +508,7 @@ is present.
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | 🔲 Future | |
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
+| 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -534,11 +535,32 @@ Model HVDC links as controllable point-to-point power injections between
 two buses, subject to capacity limits. Follows the MATPOWER `dcline`
 table format (data format to be confirmed by researcher). Applies to both
 AC and lossy DC formulations. Supports multi-step scheduling (the power
-transfer on each DC link can vary per time step). Converter loss modeling
-is deferred to implementation time.
+transfer on each DC link can vary per time step).
+
+The build plan lives in `plans/milestone-7-hvdc.md`. Key modeling decisions
+recorded there: HVDC terminals are modelled as **generator-like objects**
+with signed nodal injections `p_in`/`p_out` as the fundamental variables
+(Convention B — positive = injection into the grid, both balance terms enter
+with `+`). The loss model is **proportional only** (`loss_percent`), applied
+via sign-split affine branches selected pre-construction: lossy in
+`scheduled`/`downward`/fixed-direction `band` steps, lossless in `free` and
+zero-straddling `band` steps. A non-affine `abs`-in-equality loss constraint
+is **not** DCP-valid and must never be used — select an affine branch by the
+known flow direction instead. Fixed converter loss (`LOSS0`) and full
+sign-switching lossy behavior are deferred to Milestone 15.
 
 Do not implement until the researcher provides the MATPOWER `dcline` data
 format details.
+
+### Milestone 15 — Full lossy HVDC (sign-switching converter losses)
+Extends Milestone 7 to carry losses when the flow direction is itself a
+decision (i.e. `free` mode and zero-straddling `band` steps), plus fixed
+converter loss (MATPOWER `LOSS0`). The mechanism is a charge/discharge-style
+split of `p_in` into non-negative positive/negative parts (same machinery as
+the deferred lossy battery model), which keeps the loss equality affine while
+letting the direction vary. Deferred because the MVP (Milestone 7) covers the
+dominant proportional loss on fixed-direction links, and the fixed-loss sign
+and `dcline` `LOSS0` units are cleaner to settle alongside this split.
 
 ### Milestone 8 — Nondispatchable generators
 

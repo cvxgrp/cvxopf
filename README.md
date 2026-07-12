@@ -403,7 +403,8 @@ package environment.
 - [ ] Branch flow limits (AC)
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
-- [ ] HVDC transmission links
+- [ ] HVDC transmission links (lossless + fixed-direction proportional loss)
+- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split)
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
