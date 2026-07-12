@@ -504,6 +504,10 @@ is present.
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
+| 11 — SOCP (convex) network model | 🔲 Future | |
+| 12 — Extend battery parameters: final SoC, penalty vs constraint | 🔲 Future | |
+| 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
+| 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
