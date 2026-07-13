@@ -369,18 +369,42 @@ tested separately in Gate 1):
 
 ### Step 3 -- `problem.py` wiring
 - module-level import + re-export of `HVDCLink`, `hvdc_from_dcline`.
-- add `hvdc=None` to `build_opf`; `hvdc=None, df_hvdc=None` to `build_opf_multistep`.
-- `df_hvdc` tiling fallback + `UserWarning` when `hvdc is not None and df_hvdc is None`, mirroring the `df_nd` block; columns are integer indices `0..n_hvdc-1`.
-- forward `hvdc` (single) / `hvdc, df_hvdc` (multistep) to **all** builders through
-  the single unified positional call site -- including the singlenode builders,
-  which accept the new params and **drop them silently** (no warning). This is
-  the storage/nd threading pattern: every builder shares one signature, so the
-  params reach singlenode too; singlenode simply does not populate `"n_hvdc"` in
-  `build.data`. The silent-ignore contract is thus "accepted and dropped," not
-  "omitted from the call path." See R4.
+- add `hvdc=None` to `build_opf`; `hvdc=None, df_hvdc_min=None, df_hvdc_max=None` to `build_opf_multistep`.
+- **`df_hvdc_min` / `df_hvdc_max` carry the per-step box** -- the sole internal
+  representation (see Representation / Operational modes). Two aligned frames,
+  each `(T, n_hvdc)`, following the **`df_P`/`df_Q` two-frame precedent** (one
+  frame per quantity), **not** the single-frame `df_nd` shape. Cell `[t, k]` is
+  link `k`'s `p_min_t` / `p_max_t` at step `t` (engineering units, MW). Columns
+  are **positional integers `0..n_hvdc-1`** (an HVDC link spans two buses, so it
+  has no single bus-ID key -- this is a **deliberate** departure from `df_nd`'s
+  bus-ID columns, matching `df_P`/`df_Q` positional indexing instead; state it
+  explicitly so it does not read as an oversight). Validate `df_hvdc_min[t,k] <=
+  df_hvdc_max[t,k]` per cell (the same box invariant `_validate_hvdc` checks
+  statically).
+- **The mode helpers always run to produce a static box; the frames override it
+  per step when provided.** Add `_hvdc_static_box(links)` (in `hvdc.py`, Step 1)
+  that maps each `HVDCLink`'s `mode` + `p_min_mw`/`p_max_mw`/`p_scheduled_mw`/
+  `bandwidth_mw` to its static `(p_min, p_max)` box -- this is the upstream
+  box-generating helper the Step 2 helper's inputs come from, and the `scheduled`
+  degenerate-box / `band` intersection / `downward` / `free` mappings from
+  Operational modes live here. **Fallback (either frame `None`):** run
+  `_hvdc_static_box` once and **tile** the result across all `T` steps (a `free`
+  link tiles `[p_min, p_max]`; a `scheduled` link tiles `[p_sched, p_sched]`;
+  etc.), mirroring the `df_nd` tile-to-fill fallback, with the same `UserWarning`
+  when `hvdc is not None` and the frames are `None`. **Time-varying `free`
+  bounds** (a box that changes shape per step beyond what the mode helper emits)
+  are expressible *only* by supplying the frames explicitly; the tiled fallback
+  is always static across `T`.
+- forward `hvdc` (single) / `hvdc, df_hvdc_min, df_hvdc_max` (multistep) to **all**
+  builders through the single unified positional call site -- including the
+  singlenode builders, which accept the new params and **drop them silently** (no
+  warning). This is the storage/nd threading pattern: every builder shares one
+  signature, so the params reach singlenode too; singlenode simply does not
+  populate `"n_hvdc"` in `build.data`. The silent-ignore contract is thus
+  "accepted and dropped," not "omitted from the call path." See R4.
 - **do not** branch the dispatch on `formulation`; keep the single call site.
 
-**Gate 3 (wiring):** `tests/test_hvdc.py::TestSinglenodeIgnore` -- three silent-ignore tests (single identical, multistep identical + df_hvdc ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
+**Gate 3 (wiring):** `tests/test_hvdc.py::TestSinglenodeIgnore` -- three silent-ignore tests (single identical, multistep identical + `df_hvdc_min`/`df_hvdc_max` ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
 
 ### Step 4 -- `dc_problem.py` integration (simpler network formulation first)
 - module-level import from `hvdc.py` (matches existing storage/nd imports).
