@@ -337,14 +337,24 @@ file it produces.
   existing fixtures (`case`, `solver`, `status`, `objective`, `Pg`, `Qg`,
   `Vm`, `Va_deg`).
 - **This is a solved-OPF oracle**, so it must activate the DC line
-  (`toggle_dcline(ppc, 'on')`) before `runopf`. That path triggers the
-  numpy-2.x float-indexing bug in `toggle_dcline` (see R9). Mitigation: a
-  **scoped monkeypatch** that coerces integer-valued float index arrays to int
-  for the duration of the dcline `toggle_dcline`+`runopf` call only, leaving the
-  existing case9/14/57 code path untouched. Confine the patch with a
-  `try/finally` (or context manager) so it is reverted immediately after the
-  solve. Document it inline as a Pypower/numpy-2.x workaround, not a cvxopf
-  concern.
+  (`toggle_dcline(ppc, 'on')`) before `runopf`. That path triggers a **chain**
+  of numpy-2.x incompatibilities in `toggle_dcline`/`userfcn_dcline_ext2int`
+  (see R9), not the single float-index site originally assumed. **Approach
+  (revised 2026-07-13):** the scoped-monkeypatch route was attempted and
+  abandoned -- each patched site exposed the next (float indices -> `ppc.gencost=`
+  attr-set + `zeros(a,b)` -> float `nc` in `range()` -> off-by-one gencost width),
+  turning a targeted patch into a full reimplementation-by-patching of a
+  function that is effectively unrun on this path. **Instead**, a hand-built
+  `_dcline_to_gens` transform reproduces the dcline->dummy-generator conversion's
+  *intent* directly (the same "two generators in the loadflow" model Pypower's
+  `toggle_dcline` and pandapower's `create_dcline` both implement). It is
+  **validated row-for-row against a real (throwaway-patched) `toggle_dcline` run
+  in `scripts/_probe_dcline_transform.py` (Gate 0b-iii)** before being wired into
+  the committed fixture script, so the committed path never carries the fragile
+  patch. pandapower was evaluated as an alternative oracle and shelved: its OPF
+  wraps the *same* PYPOWER engine, so it is not an independent implementation and
+  carries the same bug-chain risk. Document the transform inline as a
+  Pypower/numpy-2.x workaround, not a cvxopf concern.
 - The fixture is an **approximate** oracle: Pypower models `loss0` (row 0 has
   `loss0=1`) which the MVP drops, so a cvxopf solve will not match exactly. This
   is expected and consumed accordingly by Gate 6b.
@@ -684,15 +694,22 @@ ext2int/int2ext hooks). numpy 2.x rejects float indices as a hard `IndexError`
 forced the `numpy==2.2.6` pin, but pervasive, not a single site. Verified
 empirically this session: patching one site surfaces the next. Downgrading numpy
 is not viable in this env (`scipy==1.18.0` requires numpy>=2; older scipy has no
-cp313 wheel and builds from source fail). Mitigation (planned): a **scoped
-monkeypatch** in `generate_pypower_fixtures.py` coercing integer-valued float
-index arrays to int for the duration of the dcline `toggle_dcline`+`runopf` call
-only, reverted in a `finally`; the case9/14/57 path is untouched. It is a
-Pypower/numpy-compat workaround in an isolated generation script -- **not** in
-the package -- and is only run when regenerating fixtures (never in CI). Residual
-risk: the monkeypatch is coupled to `toggle_dcline`'s internals; if a future
-Pypower/numpy bump changes them, the patch must be revisited. Documented inline
-at the patch site.
+cp313 wheel and builds from source fail). **Mitigation (revised 2026-07-13 --
+scoped monkeypatch ABANDONED):** the scoped-monkeypatch route was attempted and
+abandoned mid-session; the bug chain (float indices -> `ppc.gencost=` attr-set +
+`zeros(a,b)` -> float `nc` in `range()` -> off-by-one gencost width) turned it
+into a full reimplementation-by-patching. **The chosen path is a hand-built
+`_dcline_to_gens` transform** (Step 0b) that reproduces the
+dcline->dummy-generator conversion directly, **validated row-for-row against a
+real (throwaway-patched) `toggle_dcline` run** (`scripts/_probe_dcline_transform.py`,
+Gate 0b-iii) before wiring into the committed fixture script -- so no fragile
+patch lands in the committed generator. pandapower was evaluated as an
+independent oracle and shelved (its OPF wraps the same PYPOWER engine; not
+independent, same bug-chain risk). Residual risk: `_dcline_to_gens` reproduces
+Pypower's transform by hand, so the 0b-iii row-for-row validation against real
+Pypower is what makes the resulting fixture a trustworthy oracle; if it does not
+match, the fixture is not usable for Gate 6b. Documented inline in the probe and
+(once wired) the fixture script.
 
 ---
 
