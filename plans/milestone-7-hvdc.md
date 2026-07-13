@@ -38,7 +38,7 @@ So scheduled mode still builds `cp.Variable`s (pinned by an equality), it is
 expression. Under Convention B (signed injections) both terminals enter the
 balance with a **`+`**:
 ```
-p == Cg @ Pg - Pd + ... + (1/baseMVA) * (Ch_from @ p_in_vec + Ch_to @ p_out_vec)
+p == Cg @ Pg - Pd + ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)
 ```
 and likewise as the right-hand addend to `A @ p_flows + p_gen + ... == Pd`.
 
@@ -185,7 +185,7 @@ adds it for objective consistency.
 ### Formulation coverage (resolved)
 - `"ac"` -- real-power injection added to the single `p ==` balance in `_make_step_constraints` (Section 3). No `q ==` change.
 - `"lossy_dc"` -- injection added to `A @ p_flows + p_gen + ... == Pd` in `_make_dc_step_constraints` (Section 1).
-- `"singlenode_dc"` -- **silently ignored.** Implemented in `problem.py` before dispatch: do not forward `hvdc`/`df_hvdc` into the singlenode builders. No warning. `"n_hvdc"` never appears in `build.data` for singlenode builds.
+- `"singlenode_dc"` -- **silently ignored (accepted and dropped).** `hvdc`/`df_hvdc` are forwarded to the singlenode builders through the shared call site (like `storage`/`nondispatchable`), which drop them without building anything. No warning. `"n_hvdc"` never appears in `build.data` for singlenode builds. See R4.
 
 ### Units and detection contract
 - `p_in`, `p_out` are in **engineering units (MW)**, like `b`/`p_nd`. Enter the balance divided by `baseMVA`; not rescaled in `extract_results`.
@@ -275,13 +275,27 @@ Mirror `storage.py` structure/docstrings:
 **Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `hvdc_from_dcline` incl. inactive-line skip. No solve.
 
 ### Step 2 -- injection + bounds helper in `hvdc.py`
-`_make_hvdc_step_injections(links, p_sched_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in_list, p_out_list, cost_expr, constraints)`:
-- **Both `p_in` and `p_out` are `cp.Variable`s per link, every mode** (uniform
+`_make_hvdc_step_injections(links, p_sched_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, cost_expr, constraints)`:
+- **Container shape (matches storage/nd).** `p_in` and `p_out` are each a
+  **single `cp.Variable((n_hvdc,))`** for the step -- **not** Python lists of
+  per-link scalar Variables. `build.variables["p_hvdc_in"]` is therefore one
+  `(n_hvdc,)` Variable single-step, and a `list[cp.Variable]` of length `T`
+  (one `(n_hvdc,)` Variable per step) multistep, exactly like
+  `variables["b"]`/`variables["p_nd"]`. `extract_results` walks it the same way
+  (`var["p_hvdc_in"][t].value` per step).
+- **Both `p_in` and `p_out` are `cp.Variable`s (every mode)** (uniform
   representation). `constraints` carries: the loss-branch equality tying
   `p_out` to `p_in`; the per-mode bound on `p_in`; and in scheduled mode the
-  extra pin `p_in == p_scheduled_mw`.
+  extra pin `p_in == p_scheduled_mw`. These are **vectorized over the
+  `(n_hvdc,)` Variable** where the branch/bound is uniform, or built per link
+  and stacked -- but the stored objects are the two `(n_hvdc,)` Variables, not
+  lists. Note the per-step loss branch can differ per link (each link's box may
+  or may not straddle zero), so the loss equality is assembled as a vector
+  equality `p_out == coeff_vec * p_in` with a per-link `coeff_vec` (an
+  `(n_hvdc,)` numpy array of `-(1 ± loss_frac)` / `-1` entries chosen
+  pre-construction), keeping it a single affine vector equality.
 - balance addend (per-unit, **Convention B -- both `+`**):
-  `(1/baseMVA) * (Ch_from @ p_in_vec + Ch_to @ p_out_vec)`. Always a CVXPY
+  `(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)`. Always a CVXPY
   expression (both terminals are variables in every mode).
 - **`p_out` loss equality** is the affine branch selected for that link/step
   (see Loss model in Section 1) -- never an `abs`-in-equality. The branch
@@ -321,8 +335,14 @@ Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA
 - module-level import + re-export of `HVDCLink`, `hvdc_from_dcline`.
 - add `hvdc=None` to `build_opf`; `hvdc=None, df_hvdc=None` to `build_opf_multistep`.
 - `df_hvdc` tiling fallback + `UserWarning` when `hvdc is not None and df_hvdc is None`, mirroring the `df_nd` block; columns are integer indices `0..n_hvdc-1`.
-- **silent-ignore:** for `singlenode_dc`, do not forward `hvdc`/`df_hvdc` to the builder; singlenode builder signatures unchanged; no warning.
-- forward `hvdc` (single) / `hvdc, df_hvdc` (multistep) to `ac`/`lossy_dc` builders.
+- forward `hvdc` (single) / `hvdc, df_hvdc` (multistep) to **all** builders through
+  the single unified positional call site -- including the singlenode builders,
+  which accept the new params and **drop them silently** (no warning). This is
+  the storage/nd threading pattern: every builder shares one signature, so the
+  params reach singlenode too; singlenode simply does not populate `"n_hvdc"` in
+  `build.data`. The silent-ignore contract is thus "accepted and dropped," not
+  "omitted from the call path." See R4.
+- **do not** branch the dispatch on `formulation`; keep the single call site.
 
 **Gate 3 (wiring):** `tests/test_hvdc.py::TestSinglenodeIgnore` -- three silent-ignore tests (single identical, multistep identical + df_hvdc ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
 
@@ -351,7 +371,7 @@ Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA
 **Gate 5 (live, deterministic):** `tests/test_hvdc.py::TestHVDCAC` on the same synthetic link. IPOPT converges; `q_net` structurally unaffected; scheduled transfer shifts real dispatch; lossy scheduled/fixed-direction-band loss fraction correct (`|p_hvdc_out| = (1-loss_frac)|p_hvdc_in|`); zero-straddling band falls back to lossless. case9 AC no-hvdc baseline as reference.
 
 ### Step 6 -- `results.py` extraction
-- `_extract_ac_results` and `_extract_dc_results`: guard on `"n_hvdc" in data`; add `p_hvdc_in` (from_bus injection variable value), `p_hvdc_out` (to_bus injection variable value), `hvdc_loss` (derived). Both injections are read directly from the `cp.Variable`s (every mode, including scheduled). Shapes `(n_hvdc,)` single / `(T, n_hvdc)` multi. Document `p_hvdc_in`/`p_hvdc_out` as **signed nodal injections** (positive = injection into grid), not directional flows.
+- `_extract_ac_results` and `_extract_dc_results`: guard on `"n_hvdc" in data`; add `p_hvdc_in` (from_bus injection), `p_hvdc_out` (to_bus injection), `hvdc_loss` (derived). Both injections are read off the single `(n_hvdc,)` `cp.Variable` per step (every mode, including scheduled) -- `var["p_hvdc_in"].value` single-step, `var["p_hvdc_in"][t].value` stacked over `t` multistep, matching the storage `b`/nd `p_nd` extraction walk (Step 2 container shape). Result-array shapes `(n_hvdc,)` single / `(T, n_hvdc)` multi. Document `p_hvdc_in`/`p_hvdc_out` as **signed nodal injections** (positive = injection into grid), not directional flows.
   - **`hvdc_loss` definition:** total power lost = sending-terminal magnitude −
     receiving-terminal magnitude, always ≥ 0. Under Convention B (pure
     proportional loss) this is exactly `hvdc_loss = p_in + p_out`, verified for
@@ -398,7 +418,21 @@ type-branching risk entirely.
 
 **R3 -- single-`p==` invariant (AC).** Section 3 owns the only `p ==` constraint. hvdc term must be added inside that expression, bounds in a separate sub-section. Mitigation: CLAUDE.md invariant + targeted test.
 
-**R4 -- dispatch signature drift.** Adding positional `hvdc`/`df_hvdc` risks passing them to singlenode builders. Mitigation: singlenode signatures unchanged; `problem.py` omits them from the singlenode call path (the silent-ignore mechanism).
+**R4 -- single positional call site (silent-ignore mechanism).** All three
+builders, including `_build_singlenode_dc_single`/`multistep`, share the
+identical positional signature, and `problem.py` dispatches through one unified
+call site per entry point. There is no way to forward `hvdc`/`df_hvdc` to
+ac/lossy_dc but not to singlenode without either (a) branching the dispatch on
+`formulation` or (b) giving every builder the new params. We choose **(b)**: it
+matches how `storage`/`delta`/`nondispatchable`/`df_nd` are already threaded
+through every builder including singlenode. The singlenode builders accept
+`hvdc`/`df_hvdc` and **drop them silently** -- no warning, and `"n_hvdc"` is
+never added to `build.data` for singlenode builds. Consequently "silent ignore"
+means **accepted and dropped**, not "signatures unchanged / omitted from the
+call path" (the earlier wording, which was mechanically impossible). Mitigation:
+Gate 3 asserts `"n_hvdc" not in build.data` and that no `UserWarning` fires;
+the drop is documented in the singlenode builder, the entry-point docstrings,
+and CLAUDE.md.
 
 **R5 -- affine loss branch depends on pre-construction direction choice.**
 The loss equality is only affine because the flow direction (sign of
@@ -454,7 +488,7 @@ at the patch site.
 - Item 2 (singlenode handling): resolved (silent ignore, no warning).
 - Item 3 (test case): resolved -- synthetic `bus 4 -> bus 9` on case9 + pure unit tests; no new case constructor.
 - Item 4 (`hvdc_from_dcline` location): resolved -- `hvdc.py`.
-- Item 5 (results keys): resolved -- `p_hvdc_in`, `p_hvdc_out` (both read from `cp.Variable`s), `hvdc_loss` (derived, ≥0); `(n_hvdc,)` single / `(T, n_hvdc)` multi. Documented as signed nodal injections, not directional flows.
+- Item 5 (results keys): resolved -- `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, ≥0); `(n_hvdc,)` single / `(T, n_hvdc)` multi. **Container:** each of `p_hvdc_in`/`p_hvdc_out` is a single `(n_hvdc,)` `cp.Variable` per step (list of length `T` multistep), matching the storage `b`/nd `p_nd` pattern -- **not** a list of per-link scalar Variables. `extract_results` walks it exactly like `b`/`p_nd`. Documented as signed nodal injections, not directional flows.
 - Item 6 (loss model): **corrected** -- the original `abs`-in-equality form was
   not DCP-valid (convex) nor a valid smooth equality (nonconvex). Resolved to
   sign-split affine branches selected pre-construction: `scheduled`/`downward`
