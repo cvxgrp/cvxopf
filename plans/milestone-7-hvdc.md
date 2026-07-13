@@ -306,7 +306,13 @@ Mirror `storage.py` structure/docstrings:
 **Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `hvdc_from_dcline` incl. inactive-line skip. No solve.
 
 ### Step 2 -- injection + bounds helper in `hvdc.py`
-`_make_hvdc_step_injections(links, p_sched_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, cost_expr, constraints)`:
+`_make_hvdc_step_injections(links, p_min_t, p_max_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, cost_expr, constraints)`:
+- **The helper consumes the per-step box, not a mode.** Its box inputs are two
+  `(n_hvdc,)` numpy arrays `p_min_t`, `p_max_t` -- the box for this step, already
+  computed by the upstream mode helper (Step 3 / Operational modes). There is
+  **no mode branching in this function**: it sees only the box. (The upstream
+  helper is what turned `scheduled`/`band`/`downward`/`free` + `p_scheduled_mw`
+  into these two arrays; by the time we are here, that distinction is gone.)
 - **Container shape (matches storage/nd).** `p_in` and `p_out` are each a
   **single `cp.Variable((n_hvdc,))`** for the step -- **not** Python lists of
   per-link scalar Variables. `build.variables["p_hvdc_in"]` is therefore one
@@ -314,50 +320,49 @@ Mirror `storage.py` structure/docstrings:
   (one `(n_hvdc,)` Variable per step) multistep, exactly like
   `variables["b"]`/`variables["p_nd"]`. `extract_results` walks it the same way
   (`var["p_hvdc_in"][t].value` per step).
-- **Both `p_in` and `p_out` are `cp.Variable`s (every mode)** (uniform
-  representation). `constraints` carries: the loss-branch equality tying
-  `p_out` to `p_in`; the per-mode bound on `p_in`; and in scheduled mode the
-  extra pin `p_in == p_scheduled_mw`. These are **vectorized over the
-  `(n_hvdc,)` Variable** where the branch/bound is uniform, or built per link
-  and stacked -- but the stored objects are the two `(n_hvdc,)` Variables, not
-  lists. Note the per-step loss branch can differ per link (each link's box may
-  or may not straddle zero), so the loss equality is assembled as a vector
-  equality `p_out == coeff_vec * p_in` with a per-link `coeff_vec` (an
-  `(n_hvdc,)` numpy array of `-(1 ± loss_frac)` / `-1` entries chosen
-  pre-construction), keeping it a single affine vector equality.
+- **`constraints` carries exactly two things:** (1) the **box bound**
+  `p_min_t <= p_in <= p_max_t` -- a single vector inequality pair; a degenerate
+  entry `p_min_t[k] == p_max_t[k]` pins that link's `p_in` by **coincident
+  bounds**, with **no** separate `p_in == p_scheduled_mw` equality; and (2) the
+  **loss-branch equality** tying `p_out` to `p_in`. There is no third
+  "scheduled pin" constraint -- that case is just a zero-width box.
+- **Loss-branch equality is a single vector equality read from the box.** The
+  per-link branch can differ (each link's box may or may not straddle zero), so
+  it is assembled as `p_out == coeff_vec * p_in` with a per-link `coeff_vec` --
+  an `(n_hvdc,)` numpy array whose entry `k` is chosen **pre-construction from
+  link `k`'s box** (see Loss model): `-(1 - loss_frac)` if `p_min_t[k] >= 0`,
+  `-(1 + loss_frac)` if `p_max_t[k] <= 0`, else `-1` (zero-straddling → lossless,
+  and `warnings.warn` naming the link + step). Because `coeff_vec` is numpy and
+  fixed before the equality is built, `p_out == coeff_vec * p_in` stays a single
+  affine vector equality -- never an `abs`-in-equality, never a per-link Python
+  loop of scalar equalities.
 - balance addend (per-unit, **Convention B -- both `+`**):
   `(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)`. Always a CVXPY
-  expression (both terminals are variables in every mode).
-- **`p_out` loss equality** is the affine branch selected for that link/step
-  (see Loss model in Section 1) -- never an `abs`-in-equality. The branch
-  coefficient `-(1 ± loss_frac)` is a numpy scalar chosen *before* building
-  the equality, so `p_out == coeff * p_in` stays affine:
-    - `scheduled`: sign of `p_scheduled_mw` selects the branch.
-    - `downward`: sign fixed by construction selects the branch.
-    - `band`: compute intersected `p_in` interval `[p_sched-bw, p_sched+bw] ∩
-      [p_min, p_max]`; if it straddles 0, use lossless (`p_out == -p_in`)
-      and `warnings.warn` naming link + step; else use the matching branch.
-    - `free`: lossless when `[p_min, p_max]` straddles 0 (default symmetric
-      box); matching branch when an explicit one-sided box fixes direction.
-    The gate is on the box, uniform across modes.
+  expression (both terminals are variables regardless of box shape).
 - `cost_expr`: summed per-link polynomial `c2*cp.square(p_in) +
   cp.multiply(c1, cp.abs(p_in)) + c0` (from `cost_coeffs`). Always a CVXPY
   expression (`p_in` is always a variable). `cp.square` and `cp.abs` in the
   objective are legal (convex); build as an explicit monomial sum, not Horner
   (matches `poly_cost_expr`).
-- bounds are on `p_in`; built once here and reused by both builders.
 Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA, ...)`.
 
-**Gate 2 (offline logic):** extend `test_hvdc.py` --
-- scheduled link builds `cp.Variable`s for `p_in`/`p_out` (not numpy) plus the
-  `p_in == p_scheduled_mw` pin; injection addend is a CVXPY expression.
-- lossy scheduled link (`loss_percent>0`, `p_scheduled_mw>0`): loss equality
-  is `p_out == -(1-loss_frac)*p_in`; reverse schedule
-  (`p_scheduled_mw<0`) selects the `-(1+loss_frac)` branch.
-- band with `p_in` interval straddling 0 emits `UserWarning` (link + step) and
-  yields lossless equality `p_out == -p_in`; band with fixed-direction
-  interval yields the matching branch coefficient.
-- free link: lossless `p_out == -p_in`. No solve.
+**Gate 2 (offline logic):** extend `test_hvdc.py` -- assertions are stated in
+terms of the **box** passed to the helper (the upstream mode→box mapping is
+tested separately in Gate 1):
+- **degenerate box** (`p_min_t[k] == p_max_t[k]`): the helper builds
+  `cp.Variable`s for `p_in`/`p_out` (not numpy) and the pin comes from the box
+  bound `p_min_t <= p_in <= p_max_t` -- assert there is **no** separate
+  `p_in == p_scheduled_mw` equality in `constraints`; injection addend is a
+  CVXPY expression.
+- **fixed-direction lossy box** (`loss_percent>0`): a positive box
+  (`p_min_t[k] >= 0`) gives `coeff_vec[k] == -(1-loss_frac)`; a negative box
+  (`p_max_t[k] <= 0`) gives `-(1+loss_frac)`.
+- **zero-straddling box** (`p_min_t[k] < 0 < p_max_t[k]`): `coeff_vec[k] == -1`
+  (lossless) and a `UserWarning` naming link + step fires.
+- **mixed batch:** one straddling + one fixed-direction link in the same step
+  yields a single vector equality `p_out == coeff_vec * p_in` with the correct
+  per-link `coeff_vec` entries (guards against a per-link scalar-loop
+  implementation). No solve.
 - **sign check:** for a lossless link with `p_in > 0`, assert the balance
   addend injects `+p_in/baseMVA` at from_bus and `-p_in/baseMVA` at to_bus
   (Convention B: both terms `+`, `p_out == -p_in`).
