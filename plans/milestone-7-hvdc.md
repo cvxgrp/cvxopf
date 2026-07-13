@@ -517,15 +517,18 @@ tested separately in Gate 1):
   are expressible *only* by supplying the frames explicitly; the tiled fallback
   is always static across `T`.
 - forward `hvdc` (single) / `hvdc, df_hvdc_min, df_hvdc_max` (multistep) to **all**
-  builders through the single unified positional call site -- including the
-  singlenode builders, which accept the new params and **drop them silently** (no
-  warning). This is the storage/nd threading pattern: every builder shares one
+  builders through the single unified call site, passed **keyword-only**
+  (`hvdc=`, `df_hvdc_min=`, `df_hvdc_max=`) rather than appended to the positional
+  tuple -- including the singlenode builders, which accept the new params and
+  **drop them silently** (no warning). This is the storage/nd threading pattern: every builder shares one
   signature, so the params reach singlenode too; singlenode simply does not
   populate `"n_hvdc"` in `build.data`. The silent-ignore contract is thus
   "accepted and dropped," not "omitted from the call path." See R4.
 - **do not** branch the dispatch on `formulation`; keep the single call site.
 
-**Gate 3 (wiring):** `tests/test_hvdc.py::TestSinglenodeIgnore` -- three silent-ignore tests (single identical, multistep identical + `df_hvdc_min`/`df_hvdc_max` ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
+**Gate 3 (wiring):** `tests/test_hvdc.py::TestHVDCWiring` -- two complementary halves guarding the silent-drop convention from both sides:
+- *Silent-ignore (singlenode):* three tests (single identical, multistep identical + `df_hvdc_min`/`df_hvdc_max` ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
+- *Positive wiring (ac & lossy_dc):* passing `hvdc=[...]` must yield `"n_hvdc" in build.data` with `n_hvdc > 0` and the `p_hvdc_in`/`p_hvdc_out` variables present. This catches a builder that *should* wire HVDC but silently drops it -- the accept-and-ignore convention (R4) makes that failure otherwise invisible. Without this half, Gate 3 only proves silent-ignore is *clean*, never that supported formulations actually *wire*.
 
 ### Step 4 -- `dc_problem.py` integration (simpler network formulation first)
 - module-level import from `hvdc.py` (matches existing storage/nd imports).
@@ -621,12 +624,20 @@ call site per entry point. There is no way to forward
 ac/lossy_dc but not to singlenode without either (a) branching the dispatch on
 `formulation` or (b) giving every builder the new params. We choose **(b)**: it
 matches how `storage`/`delta`/`nondispatchable`/`df_nd` are already threaded
-through every builder including singlenode. The singlenode builders accept
+through every builder including singlenode. The new params are passed
+**keyword-only** at the dispatch site (`hvdc=`, `df_hvdc_min=`, `df_hvdc_max=`),
+not appended to the positional tuple -- so adding a component does not force a
+silent positional-arity change across all three builder signatures, and a
+misaligned arg cannot land in the wrong slot. (The general case -- components
+threaded by composition rather than as per-builder positional args -- is an
+M16 concern; see the Step 7 doc note.) The singlenode builders accept
 `hvdc`/`df_hvdc_min`/`df_hvdc_max` and **drop them silently** -- no warning, and `"n_hvdc"` is
 never added to `build.data` for singlenode builds. Consequently "silent ignore"
 means **accepted and dropped**, not "signatures unchanged / omitted from the
 call path" (the earlier wording, which was mechanically impossible). Mitigation:
-Gate 3 asserts `"n_hvdc" not in build.data` and that no `UserWarning` fires;
+Gate 3's silent-ignore half asserts `"n_hvdc" not in build.data` and that no
+`UserWarning` fires (its positive-wiring half separately guards that ac/lossy_dc
+do *not* drop HVDC -- see Step 3);
 the drop is documented in the singlenode builder, the entry-point docstrings,
 and CLAUDE.md.
 
