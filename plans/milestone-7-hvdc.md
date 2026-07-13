@@ -201,8 +201,8 @@ Follow the `poly_cost_expr` monomial-sum pattern in `cost.py` (explicit
 monomials, **not** Horner) so the DCP checker accepts the quadratic; the same
 caveat the generator cost documents applies. Use `cp.multiply`, never
 `scalar * cp.abs(...)` (CvxpyDeprecationWarning). Since `p_in` is always a
-`cp.Variable` (even scheduled, where it is pinned by equality), the cost term
-is always a CVXPY expression.
+`cp.Variable` (even a degenerate box, where it is pinned by coincident bounds),
+the cost term is always a CVXPY expression.
 
 `HVDCLink.cost_coeffs` is a `(c0, c1, c2)` tuple (default `(0.0, 0.0, 0.0)`),
 mirroring the generator `cost_coeffs` convention in `make_singlenode_case`.
@@ -291,7 +291,7 @@ file it produces.
 
 ### Step 1 -- `src/cvxopf/hvdc.py` (pure logic)
 Mirror `storage.py` structure/docstrings:
-- `HVDCLink` dataclass: `from_bus, to_bus, p_max_mw, p_min_mw=None, p_scheduled_mw=0.0, bandwidth_mw=0.0, mode="band", loss_percent=0.0, cost_coeffs=(0.0, 0.0, 0.0)`. Docstring: `p_scheduled_mw` is the **sending-terminal setpoint** for `p_in` (the from-bus nodal injection); it **pins `p_in` only in `"scheduled"` mode** -- in `band`/`free`/`downward` it is a non-binding reference (band centre / reporting / optional warm-start), and `hvdc_from_dcline` imports use it that way (`mode="free"`, optimized over `[Pmin, Pmax]`). `p_out` is always derived, so delivered power is below `|p_in|` by the loss. `cost_coeffs` is `(c0, c1, c2)`. `p_min_mw` is the lower `p_in` bound; when `None`, defaults per mode (`band`/`free`: `-p_max_mw`; `downward`: `0`) so existing modes are unchanged.
+- `HVDCLink` dataclass: `from_bus, to_bus, p_max_mw, p_min_mw=None, p_scheduled_mw=0.0, bandwidth_mw=0.0, mode="band", loss_percent=0.0, cost_coeffs=(0.0, 0.0, 0.0)`. **These fields are inputs to the upstream box-generating helper (Step 2), not distinct internal formulations** -- `mode` + `p_min_mw`/`p_max_mw`/`p_scheduled_mw`/`bandwidth_mw` are consumed once to produce the per-step box `[p_min_t, p_max_t]`, which is the sole thing the builder sees (see Representation / Operational modes). Docstring: `p_scheduled_mw` is the **sending-terminal setpoint** for `p_in` (the from-bus nodal injection); it places a **degenerate (zero-width) box `[p_sched, p_sched]` only in `"scheduled"` mode** (a pin via coincident bounds, **not** a separate equality) -- in `band`/`free`/`downward` it is a non-binding reference (band centre / reporting / optional warm-start), and `hvdc_from_dcline` imports use it that way (`mode="free"`, optimized over `[Pmin, Pmax]`). `p_out` is always derived, so delivered power is below `|p_in|` by the loss. `cost_coeffs` is `(c0, c1, c2)`. `p_min_mw` is the lower `p_in` bound; when `None`, the helper defaults it per mode (`band`/`free`: `-p_max_mw`; `downward`: `0`) so the named modes are unchanged.
 - `_validate_hvdc(links, ext_bus_ids)`: `from_bus != to_bus`; both buses in `ext_bus_ids`; `p_max_mw > 0`; `p_min_mw <= p_max_mw` when given; `bandwidth_mw >= 0`; `loss_percent >= 0`; `c2 >= 0` (convex quadratic) and `c1 >= 0` (nonneg magnitude cost); `mode` in the allowed values. Indexed `ValueError` messages like `_validate_storage`.
 - `_make_hvdc_incidence_matrices(links, nb, ext_to_int)` -> `(Ch_from, Ch_to)`, each `(nb, n_hvdc)`; `np.empty((nb,0))` pair for empty input.
 - `hvdc_from_dcline(dcline_table, dclinecost=None)` -> `list[HVDCLink]`. Column map is now **verified** against the `t_case9_dcline` fixture (see R1) -- header order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT loss0 loss1`. Skip `status==0` rows. Mapping:
