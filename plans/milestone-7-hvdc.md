@@ -149,33 +149,42 @@ The physical line rating limits *terminal flow* = `|p_in|` (sending) /
 milestone that needs true crossing power derives it from `p_in`/`p_out`;
 the MVP box bound on `p_in` is sufficient here.
 
-### Operational modes (resolved)
+### Operational modes (resolved) -- upstream box-generating helpers
 
-`p_in` bounds are on the from-bus nodal injection (the fundamental variable);
-`p_out` is always a `cp.Variable` tied to `p_in` by the loss equality. The
-fundamental bound is a **general affine box `p_in ∈ [lo, hi]`**; the four named
-modes are just presets that fill in `[lo, hi]` (and, for `scheduled`, add a
-pinning equality). The MATPOWER `[Pmin, Pmax]` maps straight onto this box.
-The per-step loss decision depends only on whether `[lo, hi]` straddles zero,
-so it is uniform across every mode -- fixed-direction boxes get the matching
-lossy branch, zero-straddling boxes get the lossless branch (+`UserWarning`).
+The builder has **one** representation: the per-step box `p_in ∈ [p_min_t,
+p_max_t]` (see Representation). The four "modes" are **not** distinct internal
+formulations -- they are **convenience helper functions** that compute the
+`(p_min_t, p_max_t)` box from friendlier higher-level inputs *before* the
+builder runs. Once a helper has produced the box, the builder and the loss gate
+treat every link identically; there is no mode branching downstream.
 
-| Mode | p_in (free DOF, bounds) | loss model |
+| Helper | Box it produces per step | resulting DOF |
 |---|---|---|
-| scheduled | 0 DOF; `cp.Variable` pinned `p_in == p_scheduled_mw` (sending setpoint) | sign-split branch selected from `p_scheduled_mw` |
-| band (default) | 1 DOF; `p_in ∈ [p_sched-bw, p_sched+bw] ∩ [p_min, p_max]` | per step: matching branch if intersected interval doesn't straddle 0, else lossless + `UserWarning` |
-| downward | 1 DOF; `p_in ∈ [0, p_sched]` if p_sched>=0 else `[p_sched, 0]` | direction fixed by construction → matching branch |
-| free | 1 DOF; `p_in ∈ [p_min, p_max]` (default `[-p_max, p_max]`) | matching branch if box doesn't straddle 0, else lossless |
+| `scheduled` | `[p_sched_t, p_sched_t]` (degenerate; **coincident bounds** pin `p_in`, no separate equality) | 0 |
+| `band` (default) | `[p_sched_t - bw, p_sched_t + bw] ∩ [p_min, p_max]` | 1 (0 if the intersection is a point) |
+| `downward` | `[0, p_sched_t]` if `p_sched_t >= 0` else `[p_sched_t, 0]` | 1 |
+| `free` | `[p_min, p_max]` (default symmetric `[-p_max, p_max]`) | 1 |
 
-Note: with an explicit `p_min_mw`, `free` is no longer *necessarily* lossless
--- a `free` link whose `[p_min, p_max]` box is one-sided is fixed-direction and
-gets the lossy branch. "Always lossless" holds only for the default symmetric
-`[-p_max, p_max]`. This is the `[Pmin, Pmax]`-box generalization; the
-zero-crossing gate is the single source of truth.
+The loss branch is then selected **from the box alone** (fixed-direction →
+matching lossy branch; zero-straddling → lossless + `UserWarning`), uniformly
+for every helper -- see Loss model. So, e.g., a `free` link is **not**
+necessarily lossless: a one-sided `[p_min, p_max]` box is fixed-direction and
+gets the lossy branch; "always lossless" holds only for the default symmetric
+`[-p_max, p_max]`. The zero-crossing gate on the box is the single source of
+truth.
 
-`p_scheduled_mw` is the **sending-terminal** setpoint: in `"scheduled"` mode
-`p_in` is pinned to it and `p_out` is derived, so delivered power is *below*
-the scheduled number by the loss. Document this in the `HVDCLink` field docs.
+`scheduled` is the important special case to state plainly: it produces a
+**degenerate (zero-width) box** `p_min_t == p_max_t == p_scheduled_mw`, and the
+ordinary box bound `p_min_t <= p_in <= p_max_t` *is* the pin -- there is **no**
+separate `p_in == p_scheduled_mw` equality. `downward` is retained purely as a
+readable convenience for "no reverse flow"; internally it is just another box
+generator with no special status.
+
+`p_scheduled_mw` is the **sending-terminal** setpoint used by the
+`scheduled`/`band` helpers to place the box (and carried as a non-binding
+reference by `free`/`downward`, e.g. `hvdc_from_dcline` imports -- see Step 1).
+Because `p_out` is always derived by the loss equality, delivered power is
+*below* `|p_in|` by the loss. Document this in the `HVDCLink` field docs.
 
 ### Cost term (resolved)
 The per-link cost is the full MATPOWER `dclinecost` polynomial in the transfer
