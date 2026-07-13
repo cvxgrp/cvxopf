@@ -412,3 +412,4 @@ package environment.
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
+- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)

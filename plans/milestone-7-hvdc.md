@@ -48,9 +48,37 @@ So a degenerate box still builds `cp.Variable`s (pinned by coincident bounds,
 addend is therefore always a CVXPY expression. Under Convention B (signed
 injections) both terminals enter the balance with a **`+`**:
 ```
-p == Cg @ Pg - Pd + ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)
+p == Cg @ Pg - Pd + ... + inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
 ```
 and likewise as the right-hand addend to `A @ p_flows + p_gen + ... == Pd`.
+
+**Component-method interface (not an omnibus helper).** HVDC is a
+formulation-agnostic **model component**: `hvdc.py` exposes named builder
+methods that a constructor *calls and composes*, rather than one tuple-returning
+helper. The full method inventory is specified in Step 1/Step 2; the two that
+bear on this section are the **injection method** (creates the `p_in`/`p_out`
+`cp.Variable`s and returns the balance addend above) and `hvdc_cost_expr` (the
+cost term, Cost term section). Each OPF constructor (AC / lossy DC / future
+SOCP) pulls the pieces it needs and wires the injection into *its own* balance
+line and the cost into *its own* objective -- "model the component once, plug
+into any network formulation." This is why the addend is owned by the
+component, not re-synthesized per constructor.
+
+**The `inv_baseMVA` scaling is a late-bound `cp.Parameter`.** The injection
+method builds `inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)` against a scalar
+`cp.Parameter` **without knowing `baseMVA`**; the calling constructor sets
+`inv_baseMVA.value = 1.0 / baseMVA` before `solve()`. This is the project's
+first use of `cp.Parameter`, chosen here as a **lazy-construction / late-binding
+seam** that keeps the component case-agnostic (the component owns the scaled
+addend; the constructor supplies the scale), **not** for fast re-solves over
+changing data -- `baseMVA` is fixed for a given problem. The fast-resolve use of
+parameterization is a *separate* future item (Milestone 13); this seam does not
+pull it forward. Confirmed empirically that a `cp.Parameter` coefficient flows
+through the `nlp=True` DNLP/IPOPT path and honors `.value`, so the same scaled
+addend works unchanged in AC, lossy DC, and singlenode. The parameter absorbs
+the old AC-vs-DC idiom difference (`(1.0/baseMVA) * (...)` vs
+`cp.multiply(1.0/baseMVA, ...)`) entirely -- both constructors receive one
+already-scaled `cp.Parameter`-carrying expression.
 
 ### Loss model (resolved)
 
@@ -188,37 +216,78 @@ Because `p_out` is always derived by the loss equality, delivered power is
 
 ### Cost term (resolved)
 The per-link cost is the full MATPOWER `dclinecost` polynomial in the transfer
-magnitude, `c2 * |p_in|^2 + c1 * |p_in| + c0`. Because `(|x|)^2 = x^2`, the
-quadratic term is written directly on `p_in` (no `abs` needed) and the linear
-term keeps `cp.abs` so cost is symmetric in flow direction:
+magnitude, `c2 * |p_in|^2 + c1 * |p_in| + c0`. It is built by **`hvdc_cost_expr`,
+a named cost method co-located in `hvdc.py`** with the other HVDC component
+methods (not built inline inside the injection helper, and not a `cost.py`
+function -- see the component-placement note below). The constructor calls it
+and adds the result to its own objective. Because `(|x|)^2 = x^2`, the quadratic
+term is written directly on `p_in` (no `abs` needed) and the linear term keeps
+`cp.abs` so cost is symmetric in flow direction:
 ```
-cost += (c2 * cp.square(p_in)                 # quadratic; = c2*|p_in|^2
-         + cp.multiply(c1, cp.abs(p_in))       # linear magnitude cost
-         + c0)                                 # constant (line on)
+hvdc_cost_expr(cost_coeffs, p_in):
+    c0, c1, c2 = cost_coeffs
+    return (c2 * cp.square(p_in)               # quadratic; = c2*|p_in|^2
+            + cp.multiply(c1, cp.abs(p_in))    # linear magnitude cost
+            + c0)                              # constant (line on)
 ```
-Both `cp.square` and `cp.abs` are convex → legal in the **objective**.
-Follow the `poly_cost_expr` monomial-sum pattern in `cost.py` (explicit
-monomials, **not** Horner) so the DCP checker accepts the quadratic; the same
-caveat the generator cost documents applies. Use `cp.multiply`, never
-`scalar * cp.abs(...)` (CvxpyDeprecationWarning). Since `p_in` is always a
-`cp.Variable` (even a degenerate box, where it is pinned by coincident bounds),
-the cost term is always a CVXPY expression.
+Both `cp.square` and `cp.abs` are convex → legal in the **objective**. Build as
+an explicit monomial sum, **not** Horner, so the DCP checker accepts the
+quadratic (the same caveat the generator cost documents applies). Use
+`cp.multiply`, never `scalar * cp.abs(...)` (CvxpyDeprecationWarning). Since
+`p_in` is always a `cp.Variable` (even a degenerate box, where it is pinned by
+coincident bounds), the cost term is always a CVXPY expression.
+
+**HVDC cost deliberately does *not* reuse `cost.py`'s `poly_cost_expr`.** That
+function builds cost on the **signed** generator variable `Pg` (`cf * x`,
+`cf * cp.square(x)`), consumed identically by all three current formulations off
+the highest-first `gencost` array. HVDC cost must instead act on the transfer
+**magnitude** `|p_in|` -- the linear term needs `cp.abs(p_in)` so the cost is
+symmetric in flow direction (a link that can flow either way must not be cheaper
+reversed). Feeding `p_in` through `poly_cost_expr` would yield `c1 * p_in`
+(signed), silently breaking that symmetry. `hvdc_cost_expr` is therefore a
+separate function; a future reader must not "unify" the two.
 
 `HVDCLink.cost_coeffs` is a `(c0, c1, c2)` tuple (default `(0.0, 0.0, 0.0)`),
-mirroring the generator `cost_coeffs` convention in `make_singlenode_case`.
+lowest-first -- the package's user-facing cost-input convention (the same order
+`make_singlenode_case` accepts and that every formulation's generator cost flows
+through before the `make_*`/import boundary translates it into the highest-first
+`gencost`/`dclinecost` array that `poly_cost_expr` consumes; see C2 in Step 1).
 The `c0` constant only affects the reported objective (it does not change the
 optimum) and is meaningful only while the line is energized; the MVP always
 adds it for objective consistency.
 
+**Component placement (why cost lives in `hvdc.py`, not `cost.py`).** Every grid
+component should own its full model surface -- data struct, validation,
+incidence, constraint-set builders, **and** cost -- in one file, consumed by any
+OPF constructor via composition. So `hvdc_cost_expr` lives in `hvdc.py`
+alongside the injection and constraint methods, keeping the HVDC component
+self-contained and avoiding an `hvdc.py → cost.py` cvxopf-internal import (which
+would re-introduce the circular-import risk the import rule guards against).
+`cost.py`/`poly_cost_expr` is best understood as the not-yet-refactored
+dispatchable-generator component (it predates the component pattern, having been
+ported from Pypower); unifying it is Milestone 16 (staged in Step 7). HVDC is
+the **reference implementation** of the component pattern that the storage/nd
+refactor and future SOCP formulation will copy.
+
 ### Formulation coverage (resolved)
 - `"ac"` -- real-power injection added to the single `p ==` balance in `_make_step_constraints` (Section 3). No `q ==` change.
 - `"lossy_dc"` -- injection added to `A @ p_flows + p_gen + ... == Pd` in `_make_dc_step_constraints` (Section 1).
-- `"singlenode_dc"` -- **silently ignored (accepted and dropped).** `hvdc`/`df_hvdc` are forwarded to the singlenode builders through the shared call site (like `storage`/`nondispatchable`), which drop them without building anything. No warning. `"n_hvdc"` never appears in `build.data` for singlenode builds. See R4.
+- `"singlenode_dc"` -- **silently ignored (accepted and dropped).** `hvdc`/`df_hvdc_min`/`df_hvdc_max` are forwarded to the singlenode builders through the shared call site (like `storage`/`nondispatchable`), which drop them without building anything. No warning. `"n_hvdc"` never appears in `build.data` for singlenode builds. See R4.
 
 ### Units and detection contract
 - `p_in`, `p_out` are in **engineering units (MW)**, like `b`/`p_nd`. Enter the balance divided by `baseMVA`; not rescaled in `extract_results`.
 - Detection contract: `"n_hvdc" in build.data`. **Never add `n_hvdc=0` as a default.**
-- `hvdc.py` imports **numpy only** -- no other cvxopf modules (same rule as `storage.py`).
+- `hvdc.py` imports **`cvxpy` + `numpy`** -- and **no other cvxopf module**. It
+  is a CVXPY-touching model-component module by design (it carries the
+  injection/constraint/cost builder methods), so "numpy only" does *not* apply.
+  The rule that *does* matter -- and the real content of the `storage.py`
+  precedent -- is **no cvxopf-internal imports**: that is what preserves the
+  circular-import safeguard (`hvdc.py` is imported by both `ac_problem.py` and
+  `dc_problem.py`, themselves deferred-imported by `problem.py`). `cvxpy` is an
+  external package and does not threaten that cycle. (CLAUDE.md still describes
+  `storage.py`/`nondispatchable.py` as "numpy only"; that accurately reflects
+  today's code and is left as-is -- the `cvxpy`+`numpy` component rule is the
+  forward pattern, tracked under Milestone 16.)
 
 ### MATPOWER dcline mapping (VERIFIED against `t_case9_dcline`)
 The column order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF
@@ -305,27 +374,47 @@ Mirror `storage.py` structure/docstrings:
   `-p_max_mw`; `downward`: `0`) here, so those defaults live in exactly one
   place. The result is what the multistep builder tiles across `T` when
   `df_hvdc_min`/`df_hvdc_max` are not supplied (Step 3), and what the
-  single-step builder uses directly; `_make_hvdc_step_injections` (Step 2) takes
-  these two arrays as its box inputs.
+  single-step builder uses directly; the Step 2 component methods
+  (`hvdc_injections` / `dc_operating_constraints`) take these two arrays as
+  their box inputs.
+The remaining members are the **CVXPY component methods** -- the reusable
+builders a formulation constructor calls and composes (this is why `hvdc.py`
+imports `cvxpy`; see the corrected import rule in Section 1). They are the
+by-method interface (not one omnibus tuple) so each constructor grabs exactly
+the pieces its formulation needs -- the pattern the storage refactor and future
+SOCP formulation will copy (Milestone 16); HVDC is the reference implementation.
+- `hvdc_injections(links, p_min_t, p_max_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, inv_baseMVA)`. Creates the per-step `p_in`/`p_out` `cp.Variable`s (each a single `(n_hvdc,)` variable, matching storage/nd), and returns the **already-scaled** balance addend `inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)` (Convention B, both `+`). `inv_baseMVA` is a scalar **`cp.Parameter`** the method creates but does **not** set -- the constructor sets `.value = 1.0/baseMVA` before solving (the late-binding seam from Section 1; empirically DNLP-compatible). Returning the scaled term absorbs the old AC `(1.0/baseMVA)*` vs DC `cp.multiply` idiom split into one parameter expression. The constructor adds this addend to *its own* `p ==` / flow-conservation line.
+- `dc_operating_constraints(p_in, p_out, p_min_t, p_max_t)` -> `list` of constraints: the box bound `p_min_t <= p_in <= p_max_t` (a degenerate `p_min_t == p_max_t` entry pins by coincident bounds -- **no** separate `p_in == p_scheduled_mw` equality) and the `p_out` loss-branch equality `p_out == coeff_vec * p_in` (the affine branch, `coeff_vec` an `(n_hvdc,)` numpy vector selected from the box's zero-crossing per Section 1 -- never an `abs`-in-equality). No `baseMVA`, no reactive term.
+- `ac_operating_constraints(p_in, p_out, p_min_t, p_max_t)` -> **pass-through to `dc_operating_constraints`** (verbatim delegate). For HVDC the AC and DC operating regions are genuinely identical (unity-PF, no reactive coupling), so the AC method is a one-line delegate -- but the `ac_*`/`dc_*` fork is present so the interface *shape* matches what storage/SOCP need (where the AC circle and DC box genuinely diverge). Models the full component pattern without duplicated bodies.
+- `hvdc_cost_expr(cost_coeffs, p_in)` -> a CVXPY objective term `c2*cp.square(p_in) + cp.multiply(c1, cp.abs(p_in)) + c0` (signature and body per the Section 1 Cost-term block). Written to accept a single link's `(c0, c1, c2)` and its `p_in` slice; the constructor (or a thin all-links wrapper) sums over the `n_hvdc` links. Convex (legal in the objective); explicit monomial sum, not Horner (same DCP discipline as `poly_cost_expr`, which it deliberately does **not** reuse -- magnitude `|p_in|` vs signed `Pg`; see Cost term). The constructor adds the summed term to *its own* objective.
 - `hvdc_from_dcline(dcline_table, dclinecost=None)` -> `list[HVDCLink]`. Column map is now **verified** against the `t_case9_dcline` fixture (see R1) -- header order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT loss0 loss1`. Skip `status==0` rows. Mapping:
   - `from_bus=fbus`, `to_bus=tbus`.
   - `loss_percent = loss1 * 100` (verified: `loss1` is a per-unit fraction; `Pt = Pf - loss0 - loss1*Pf`).
   - `[Pmin, Pmax]` → `p_min_mw` / `p_max_mw` (the fundamental `p_in` box). **`mode="free"`** so the optimizer schedules `p_in` freely within `[Pmin, Pmax]` -- importing a dcline yields a *controllable resource optimized over its rated range*, matching the Pypower semantics, **not** a fixed injection. **`Pf` is carried as a non-binding reference only** (`p_scheduled_mw = Pf`, used for reporting / optional warm-start), **never** as a pin: the MVP does **not** emit a `"scheduled"` link from an import, so `bandwidth_mw` stays at its `0.0` default and no degenerate zero-width band is ever produced. The per-step zero-crossing gate on `[Pmin, Pmax]` then auto-selects lossy (fixed-direction box) vs lossless (straddling box), uniform with every other `free` link -- no separate `"scheduled"`/`"downward"`/`"band"` inference is needed. A row with `Pmin >= 0` or `Pmax <= 0` is naturally fixed-direction and gets the lossy branch; a straddling `[Pmin, Pmax]` is lossless. (For `t_case9_dcline`: row 1 `[2,10]` and row 3 `[0,10]` are both fixed-direction → lossy branch; the optimizer chooses `p_in` in-range rather than being pinned at `Pf`.)
   - `loss0` (fixed loss) is **dropped**; if any active row has `loss0 != 0`, emit a `UserWarning` that the imported model omits fixed converter loss (deferred to Milestone 15) and will not match Pypower exactly.
   - `Qf, Qt, QminF, QmaxF, QminT, QmaxT` (reactive) and `Vf, Vt` (voltage setpoints) are dropped -- MVP is unity-PF, no HVDC voltage control. Note in the docstring.
-  - `dclinecost` (optional, same polynomial layout as `gencost`) maps to `cost_coeffs=(c0, c1, c2)`; only model-2 polynomial rows up to quadratic are read (higher-order terms rejected with a clear error). When the `case9_dcline` case file (Step 0a) is the source, `dclinecost` is present and passed through; when absent, `cost_coeffs` defaults to `(0.0, 0.0, 0.0)`.
+  - `dclinecost` (optional, model-2 polynomial rows, same row layout as `gencost`) maps to `HVDCLink.cost_coeffs=(c0, c1, c2)`. **The coefficient order flips at this boundary -- note it explicitly (C2):** a MATPOWER model-2 row is `[2, startup, shutdown, n, c_{n-1}, ..., c_1, c_0]`, stored **highest-power-first** (the same layout `poly_cost_expr` consumes across AC/DC/singlenode). `HVDCLink.cost_coeffs` is **lowest-first `(c0, c1, c2)`** -- the package-wide user-facing cost convention (see Section 1 Cost term) -- so `hvdc_from_dcline` must **reverse** when reading a row into the tuple. This is the mirror image of the `make_*` write boundary (lowest-first arg -> highest-first array); do the flip in this one clearly-commented place. **The reversal is `n`-dependent, not a fixed 3-element flip:** read `n` (field 4); a linear row (`n=2`, row `[..., 2, c_1, c_0]`) maps to `(c_0, c_1, 0.0)` (**pad `c2=0`**); a quadratic row (`n=3`, row `[..., 3, c_2, c_1, c_0]`) maps to `(c_0, c_1, c_2)`; reject `n>3` with a clear error (higher-order terms unsupported). A hardcoded 3-element reverse would misread every linear row (reading `c_1` as `c2`, `c_0` as `c1`, `shutdown` as `c0`) -- this is the specific bug the C2 caution and the Gate 1 assertion below guard against. When the `case9_dcline` case file (Step 0a) is the source, `dclinecost` is present and passed through (its row 3 is `n=2, c_1=7.3, c_0=0` -> `(0.0, 7.3, 0.0)`, exercising the linear-row `c2=0` padding); when absent, `cost_coeffs` defaults to `(0.0, 0.0, 0.0)`.
   - **Test artifact source:** `hvdc_from_dcline(case9_dcline()["dcline"], case9_dcline()["dclinecost"])` is the intended entry point for downstream gates -- 4 rows, one inactive (`status==0`) skipped -> 3 links; `loss0!=0` on row 0 emits the documented `UserWarning`.
 
-**Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `_hvdc_static_box` mode->box mappings (`scheduled` -> degenerate `p_min == p_max`; `downward` -> `[0, p_sched]`/`[p_sched, 0]` by sign; `band` -> intersected interval, incl. the `bandwidth_mw=0` degenerate case; `free` -> `[p_min, p_max]`; and the `p_min_mw=None` per-mode defaults), `hvdc_from_dcline` incl. inactive-line skip. No solve.
+**Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `_hvdc_static_box` mode->box mappings (`scheduled` -> degenerate `p_min == p_max`; `downward` -> `[0, p_sched]`/`[p_sched, 0]` by sign; `band` -> intersected interval, incl. the `bandwidth_mw=0` degenerate case; `free` -> `[p_min, p_max]`; and the `p_min_mw=None` per-mode defaults), `hvdc_from_dcline` incl. inactive-line skip, and the CVXPY component methods' pure-logic surface: `ac_operating_constraints` returns the *same* constraint list as `dc_operating_constraints` (delegate check), and `hvdc_cost_expr` builds the expected `c2*square + c1*abs + c0` term (assert convex / DCP-valid). **Cost-coefficient reversal + `n`-padding (C2):** assert `hvdc_from_dcline` on a synthetic **quadratic** `dclinecost` row with **distinct nonzero `c0 != c1 != c2`** (e.g. `[2, 0, 0, 3, 5.0, 3.0, 1.0]`) produces `cost_coeffs == (1.0, 3.0, 5.0)` -- `c2` (the highest-power coeff, `5.0`) lands in the quadratic slot, `c0` (`1.0`) in the constant slot. Distinct nonzero values are required so a reversed-index or `c0<->c2` swap actually *fails* the assertion (an all-`c0=0` or all-equal row would let the bug pass silently, exactly the Gate 6b blind spot). And assert a **linear** row (`[2, 0, 0, 2, 7.3, 0.0]`) maps to `(0.0, 7.3, 0.0)` -- the `n=2` `c2=0` padding. No solve.
 
-### Step 2 -- injection + bounds helper in `hvdc.py`
-`_make_hvdc_step_injections(links, p_min_t, p_max_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, cost_expr, constraints)`:
-- **The helper consumes the per-step box, not a mode.** Its box inputs are two
-  `(n_hvdc,)` numpy arrays `p_min_t`, `p_max_t` -- the box for this step, already
-  computed by the upstream mode helper (Step 3 / Operational modes). There is
-  **no mode branching in this function**: it sees only the box. (The upstream
-  helper is what turned `scheduled`/`band`/`downward`/`free` + `p_scheduled_mw`
-  into these two arrays; by the time we are here, that distinction is gone.)
+### Step 2 -- HVDC component methods in `hvdc.py`
+The HVDC CVXPY component surface (see the Step 1 method inventory) is a set of
+**named methods the constructor calls and composes** -- not one omnibus helper
+returning a big tuple. Each method **consumes the per-step box, not a mode**:
+its box inputs are two `(n_hvdc,)` numpy arrays `p_min_t`, `p_max_t` -- the box
+for this step, already computed upstream by `_hvdc_static_box` (single-step) or
+read from `df_hvdc_min`/`df_hvdc_max` (multistep). There is **no mode branching
+in any of these methods**: they see only the box. (The upstream helper is what
+turned `scheduled`/`band`/`downward`/`free` + `p_scheduled_mw` into these two
+arrays; by the time we are here, that distinction is gone.) The constructor
+calls `hvdc_injections` for the variables + balance addend, one of
+`ac_operating_constraints`/`dc_operating_constraints` for the operating set, and
+`hvdc_cost_expr` for the cost term -- adding each to *its own* balance /
+constraint list / objective. This is the reference implementation of the
+component pattern (Milestone 16).
+
+**`hvdc_injections(links, p_min_t, p_max_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, inv_baseMVA)`:**
 - **Container shape (matches storage/nd).** `p_in` and `p_out` are each a
   **single `cp.Variable((n_hvdc,))`** for the step -- **not** Python lists of
   per-link scalar Variables. `build.variables["p_hvdc_in"]` is therefore one
@@ -333,40 +422,59 @@ Mirror `storage.py` structure/docstrings:
   (one `(n_hvdc,)` Variable per step) multistep, exactly like
   `variables["b"]`/`variables["p_nd"]`. `extract_results` walks it the same way
   (`var["p_hvdc_in"][t].value` per step).
-- **`constraints` carries exactly two things:** (1) the **box bound**
-  `p_min_t <= p_in <= p_max_t` -- a single vector inequality pair; a degenerate
-  entry `p_min_t[k] == p_max_t[k]` pins that link's `p_in` by **coincident
-  bounds**, with **no** separate `p_in == p_scheduled_mw` equality; and (2) the
-  **loss-branch equality** tying `p_out` to `p_in`. There is no third
-  "scheduled pin" constraint -- that case is just a zero-width box.
-- **Loss-branch equality is a single vector equality read from the box.** The
-  per-link branch can differ (each link's box may or may not straddle zero), so
-  it is assembled as `p_out == coeff_vec * p_in` with a per-link `coeff_vec` --
-  an `(n_hvdc,)` numpy array whose entry `k` is chosen **pre-construction from
-  link `k`'s box** (see Loss model): `-(1 - loss_frac)` if `p_min_t[k] >= 0`,
-  `-(1 + loss_frac)` if `p_max_t[k] <= 0`, else `-1` (zero-straddling → lossless,
-  and `warnings.warn` naming the link + step). Because `coeff_vec` is numpy and
-  fixed before the equality is built, `p_out == coeff_vec * p_in` stays a single
-  affine vector equality -- never an `abs`-in-equality, never a per-link Python
-  loop of scalar equalities.
-- balance addend (per-unit, **Convention B -- both `+`**):
-  `(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)`. Always a CVXPY
-  expression (both terminals are variables regardless of box shape).
-- `cost_expr`: summed per-link polynomial `c2*cp.square(p_in) +
-  cp.multiply(c1, cp.abs(p_in)) + c0` (from `cost_coeffs`). Always a CVXPY
-  expression (`p_in` is always a variable). `cp.square` and `cp.abs` in the
-  objective are legal (convex); build as an explicit monomial sum, not Horner
-  (matches `poly_cost_expr`).
-Match each caller idiom: AC `(1.0/baseMVA) * (...)`, DC `cp.multiply(1.0/baseMVA, ...)`.
+- **Creates `p_in`/`p_out` and returns the already-scaled balance addend.**
+  The addend is (**Convention B -- both `+`**)
+  `inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)`, where **`inv_baseMVA` is a
+  scalar `cp.Parameter`** the method creates but does **not** set. It also
+  returns the parameter so the constructor can bind it (`inv_baseMVA.value =
+  1.0/baseMVA`) before solving -- the late-binding seam (Section 1;
+  empirically DNLP-compatible). Returning the *scaled* term via the parameter
+  absorbs the old AC `(1.0/baseMVA)*` vs DC `cp.multiply` idiom split into one
+  parameterized expression, so both constructors consume an identical addend.
+  Always a CVXPY expression (both terminals are variables regardless of box
+  shape). The constructor adds this addend to *its own* `p ==` /
+  flow-conservation line.
+
+**`dc_operating_constraints(p_in, p_out, p_min_t, p_max_t)` -> `list`** (and
+**`ac_operating_constraints(...)` -> verbatim pass-through to it**): returns
+exactly two constraints, no `baseMVA`, no reactive term:
+- (1) the **box bound** `p_min_t <= p_in <= p_max_t` -- a single vector
+  inequality pair; a degenerate entry `p_min_t[k] == p_max_t[k]` pins that
+  link's `p_in` by **coincident bounds**, with **no** separate
+  `p_in == p_scheduled_mw` equality. There is no third "scheduled pin"
+  constraint -- that case is just a zero-width box.
+- (2) the **loss-branch equality**, a single vector equality read from the box.
+  The per-link branch can differ (each link's box may or may not straddle
+  zero), so it is assembled as `p_out == coeff_vec * p_in` with a per-link
+  `coeff_vec` -- an `(n_hvdc,)` numpy array whose entry `k` is chosen
+  **pre-construction from link `k`'s box** (see Loss model): `-(1 - loss_frac)`
+  if `p_min_t[k] >= 0`, `-(1 + loss_frac)` if `p_max_t[k] <= 0`, else `-1`
+  (zero-straddling → lossless, and `warnings.warn` naming the link + step).
+  Because `coeff_vec` is numpy and fixed before the equality is built,
+  `p_out == coeff_vec * p_in` stays a single affine vector equality -- never an
+  `abs`-in-equality, never a per-link Python loop of scalar equalities.
+
+`ac_operating_constraints` is a one-line delegate because HVDC's AC and DC
+operating regions are genuinely identical (unity-PF, no reactive coupling); the
+fork exists so the interface *shape* matches what storage/SOCP will need (their
+AC circle vs DC box genuinely diverge). The constructor appends the returned
+list to *its own* constraints.
+
+**`hvdc_cost_expr(cost_coeffs, p_in)`** (Section 1): the per-link polynomial
+`c2*cp.square(p_in) + cp.multiply(c1, cp.abs(p_in)) + c0`; the constructor (or a
+thin all-links wrapper) sums over links and adds to *its own* objective.
+`cp.square`/`cp.abs` are convex → legal in the objective; explicit monomial sum,
+not Horner (matches `poly_cost_expr`, which it deliberately does not reuse --
+magnitude vs signed `Pg`).
 
 **Gate 2 (offline logic):** extend `test_hvdc.py` -- assertions are stated in
-terms of the **box** passed to the helper (the upstream mode→box mapping is
+terms of the **box** passed to the methods (the upstream mode→box mapping is
 tested separately in Gate 1):
-- **degenerate box** (`p_min_t[k] == p_max_t[k]`): the helper builds
+- **degenerate box** (`p_min_t[k] == p_max_t[k]`): `hvdc_injections` builds
   `cp.Variable`s for `p_in`/`p_out` (not numpy) and the pin comes from the box
-  bound `p_min_t <= p_in <= p_max_t` -- assert there is **no** separate
-  `p_in == p_scheduled_mw` equality in `constraints`; injection addend is a
-  CVXPY expression.
+  bound `p_min_t <= p_in <= p_max_t` in the `dc_operating_constraints` list --
+  assert there is **no** separate `p_in == p_scheduled_mw` equality in that
+  list; injection addend is a CVXPY expression.
 - **fixed-direction lossy box** (`loss_percent>0`): a positive box
   (`p_min_t[k] >= 0`) gives `coeff_vec[k] == -(1-loss_frac)`; a negative box
   (`p_max_t[k] <= 0`) gives `-(1+loss_frac)`.
@@ -422,9 +530,10 @@ tested separately in Gate 1):
 ### Step 4 -- `dc_problem.py` integration (simpler network formulation first)
 - module-level import from `hvdc.py` (matches existing storage/nd imports).
 - `_parse_dc_case` gains `hvdc`; validate, build `Ch_from/Ch_to`, store `n_hvdc` + arrays.
-- `_make_dc_step_constraints` gains hvdc params (the per-step box arrays `p_min_t`/`p_max_t`); add injection to the single balance line; append the box bound `p_min_t <= p_in <= p_max_t` (pinning a degenerate box by coincident bounds) and the `p_out` loss-branch equality. No per-mode branching -- the box is already resolved upstream by `_hvdc_static_box`/`df_hvdc_min`/`df_hvdc_max`.
-- cost: add hvdc `cost_expr` (in builder, like storage aging cost).
-- both single/multistep builders thread `hvdc`/`df_hvdc_min`/`df_hvdc_max`; per-step `p_in`/`p_out` vars; populate `variables["p_hvdc_in"]`, `variables["p_hvdc_out"]`, `data["n_hvdc"]`, etc. Single-step uses `_hvdc_static_box(links)` directly for the box; multistep reads the per-step box `(p_min_t, p_max_t)` from `df_hvdc_min`/`df_hvdc_max` row `t` (falling back to the tiled `_hvdc_static_box` result when either frame is `None`, per Step 3). `_make_hvdc_step_injections` (Step 2) receives those two `(n_hvdc,)` box arrays -- there is no per-mode branching in the builder.
+- **`_make_dc_step_constraints` composes the HVDC component by calling its methods** -- it does **not** re-synthesize the box/loss math. Given the per-step box arrays `p_min_t`/`p_max_t`, it calls `hvdc_injections(...)` (getting `injection_expr`, the `p_in`/`p_out` variables, and the `inv_baseMVA` parameter), adds `injection_expr` to the single flow-conservation line, and calls `dc_operating_constraints(p_in, p_out, p_min_t, p_max_t)` and appends the returned list (box bound incl. the coincident-bounds degenerate pin, plus the `p_out` loss-branch equality). No per-mode branching -- the box is already resolved upstream by `_hvdc_static_box`/`df_hvdc_min`/`df_hvdc_max`.
+- cost: the builder calls `hvdc_cost_expr(cost_coeffs, p_in)` per link and adds the summed term to its objective (like storage aging cost).
+- **`inv_baseMVA` binding:** the builder sets `inv_baseMVA.value = 1.0/baseMVA` on the parameter returned by `hvdc_injections` before solving (the late-binding seam, Section 1).
+- both single/multistep builders thread `hvdc`/`df_hvdc_min`/`df_hvdc_max`; per-step `p_in`/`p_out` vars; populate `variables["p_hvdc_in"]`, `variables["p_hvdc_out"]`, `data["n_hvdc"]`, etc. Single-step uses `_hvdc_static_box(links)` directly for the box; multistep reads the per-step box `(p_min_t, p_max_t)` from `df_hvdc_min`/`df_hvdc_max` row `t` (falling back to the tiled `_hvdc_static_box` result when either frame is `None`, per Step 3). The Step 2 methods (`hvdc_injections` / `dc_operating_constraints`) receive those two `(n_hvdc,)` box arrays -- there is no per-mode branching in the builder.
 
 **Gate 4 (live, deterministic, own commit):** `tests/test_hvdc.py::TestHVDCLossyDC` on case9 synthetic `bus 4 -> bus 9`:
 - lossless free-mode solves; balance holds; `p_hvdc_out == -p_hvdc_in`.
@@ -437,8 +546,9 @@ tested separately in Gate 1):
 
 ### Step 5 -- `ac_problem.py` integration
 - `_parse_case` gains `hvdc`; same data population.
-- `_make_step_constraints` Section 3: add the HVDC injection addend `(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)` (Convention B, both terms `+` -- see Section 1) to the `p ==` line only; **leave `q ==` untouched**. Add the per-step box bound `p_min_t <= p_in <= p_max_t` (which also pins a degenerate box by coincident bounds) plus the `p_out` loss-branch equality as a new labelled **`Section 4c: HVDC operating constraints`** -- placed after the storage (§4) and nondispatchable (§4b) operating-constraint sections, matching the established convention that all operating constraints follow the §3 balance (not a `3b` between balance and storage). Preserve the single-`p==` rule.
-- cost: add hvdc cost to `total_cost` alongside storage aging cost.
+- `_make_step_constraints` **composes the same HVDC component methods** (identical component-method calls as the DC builder makes -- this is what `ac_operating_constraints` being a pass-through to `dc_operating_constraints` buys). Section 3: add the `injection_expr` returned by `hvdc_injections(...)` (the already-`inv_baseMVA`-scaled `Ch_from @ p_in + Ch_to @ p_out` addend, Convention B both terms `+` -- see Section 1) to the `p ==` line only; **leave `q ==` untouched**. Append the list from `ac_operating_constraints(p_in, p_out, p_min_t, p_max_t)` (box bound incl. the coincident-bounds degenerate pin, plus the `p_out` loss-branch equality) as a new labelled **`Section 4c: HVDC operating constraints`** -- placed after the storage (§4) and nondispatchable (§4b) operating-constraint sections, matching the established convention that all operating constraints follow the §3 balance (not a `3b` between balance and storage). Preserve the single-`p==` rule.
+- cost: the builder calls `hvdc_cost_expr(cost_coeffs, p_in)` per link and adds the summed term to `total_cost` alongside storage aging cost.
+- **`inv_baseMVA` binding:** set `inv_baseMVA.value = 1.0/baseMVA` before solving, same as the DC builder (Step 4).
 - thread through single/multistep builders.
 
 **Gate 5 (live, deterministic):** `tests/test_hvdc.py::TestHVDCAC` on the same synthetic link. IPOPT converges; `q_net` structurally unaffected; scheduled transfer shifts real dispatch; lossy scheduled/fixed-direction-band loss fraction correct (`|p_hvdc_out| = (1-loss_frac)|p_hvdc_in|`); zero-straddling band falls back to lossless. case9 AC no-hvdc baseline as reference.
@@ -465,7 +575,9 @@ Options (a)/(b) are genuine oracle checks now that C5 is resolved (the operating
 ### Step 7 -- public API, examples, docs
 - `__init__.py`: re-export `HVDCLink`, `hvdc_from_dcline`; add to `__all__`.
 - `examples/case9_hvdc_ac.py`, `examples/case9_hvdc_dc.py` (small, runnable).
-- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s; the **per-step box `[p_min_t, p_max_t]` is the sole internal representation** and the four named modes are upstream box-generating helpers (`_hvdc_static_box`), not distinct builder formulations; DOF is a property of the box (0 for a degenerate `p_min_t == p_max_t` box, pinned by coincident bounds -- not a separate equality; 1 for a proper box); sign-split affine loss branches selected purely from the box's zero-crossing (lossy iff the box is fixed-direction), with no per-mode branch logic downstream; `p_scheduled_mw` places a degenerate box (a pin via coincident bounds) only in `"scheduled"` mode and is a non-binding reference otherwise; the `cost_coeffs=(c0, c1, c2)` polynomial cost (`cp.square` for quadratic, `cp.abs` for linear); `hvdc_from_dcline` column map verified against `t_case9_dcline` with `loss0`/reactive/voltage columns dropped; `HVDCLink` field table; `hvdc=` on entry points and `df_hvdc_min=`/`df_hvdc_max=` on `build_opf_multistep` (two aligned `(T, n_hvdc)` box frames, `df_P`/`df_Q` precedent, positional columns); results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch for a zero-straddling box (`p_min_t < 0 < p_max_t`) -- the lossy branch is valid only when the box is fixed-direction (`p_min_t >= 0` or `p_max_t <= 0`); **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
+- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s; the **per-step box `[p_min_t, p_max_t]` is the sole internal representation** and the four named modes are upstream box-generating helpers (`_hvdc_static_box`), not distinct builder formulations; DOF is a property of the box (0 for a degenerate `p_min_t == p_max_t` box, pinned by coincident bounds -- not a separate equality; 1 for a proper box); sign-split affine loss branches selected purely from the box's zero-crossing (lossy iff the box is fixed-direction), with no per-mode branch logic downstream; `p_scheduled_mw` places a degenerate box (a pin via coincident bounds) only in `"scheduled"` mode and is a non-binding reference otherwise; the `cost_coeffs=(c0, c1, c2)` polynomial cost (`cp.square` for quadratic, `cp.abs` for linear); `hvdc_from_dcline` column map verified against `t_case9_dcline` with `loss0`/reactive/voltage columns dropped; `HVDCLink` field table; `hvdc=` on entry points and `df_hvdc_min=`/`df_hvdc_max=` on `build_opf_multistep` (two aligned `(T, n_hvdc)` box frames, `df_P`/`df_Q` precedent, positional columns); results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. Add a **`Milestone 16 -- unify grid component model patterns`** row as Future: refactor dispatchable generators into a first-class component module (`dispatchable_generator.py`) matching the storage/nondispatchable/HVDC pattern -- data struct, validation, incidence, constraint-set builder, and cost expression co-located, importing `cvxpy`+`numpy` only (no cvxopf-internal imports), consumed by every OPF formulation constructor (AC/DC/singlenode/future SOCP) via composition rather than re-synthesis; `cost.py`'s `poly_cost_expr` becomes that module's cost function. HVDC (Milestone 7) is the reference implementation of the "model a component once, plug into any network formulation" contract. **Do not** rewrite the existing `storage.py`/`nondispatchable.py` "numpy only" import-chain lines in the Module-responsibilities section -- they accurately describe current code; M16 is the aspirational forward pattern. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch for a zero-straddling box (`p_min_t < 0 < p_max_t`) -- the lossy branch is valid only when the box is fixed-direction (`p_min_t >= 0` or `p_max_t <= 0`); **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
+
+- `README.md`: add the **Milestone 16 -- unify grid component model patterns** entry to the milestone list (same framing as the CLAUDE.md row -- dispatchable generators become a first-class component module, all components consumed by every formulation via composition, HVDC as reference implementation). Keep it terse; the CLAUDE.md row carries the detail.
 
 **Gate 7 (full suite):** `uv run --extra dev pytest tests/` -- expect `702 + new` passed, 0 failed. `uv run ruff format .` and `uv run ruff check .` clean.
 
@@ -477,12 +589,21 @@ Options (a)/(b) are genuine oracle checks now that C5 is resolved (the operating
 
 **R2 -- Convention-B sign of the balance addend.** Both HVDC terminals are
 signed nodal injections and enter the balance with `+`:
-`(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)`. The tempting terminal-flow
+`inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)` (the single already-scaled
+addend the injection method returns; `inv_baseMVA` is the late-bound
+`cp.Parameter` from Section 1). The tempting terminal-flow
 form `(Ch_to @ p_to - Ch_from @ p_from)` is a different (line-like) convention
 and, combined with the loss branches written in Convention B (`p_out = -p_in`),
 produces a latent sign bug (withdrawal at *both* ends). Mitigation: uniform
 Convention B throughout; Gate 2 sign check asserts `+p_in` at from_bus and
 `-p_in` at to_bus for a lossless link; CLAUDE.md `what not to do` bullet.
+
+Note: because the component now hands both constructors *one* already-scaled
+`inv_baseMVA`-carrying addend, the old AC-vs-DC scaling-idiom split this risk
+was partly about (`(1.0/baseMVA) * (...)` in AC vs `cp.multiply(1.0/baseMVA,
+...)` in DC -- two hand-written forms that could drift in sign or shape) is
+**dissolved**: there is exactly one expression, built once, so there is no
+second site to get wrong.
 
 Note: there is no numpy-vs-CVXPY dual for any box shape -- `p_in`/`p_out` are
 `cp.Variable`s for every box, including a degenerate `p_min_t == p_max_t` box
@@ -495,12 +616,13 @@ the former type-branching risk entirely.
 **R4 -- single positional call site (silent-ignore mechanism).** All three
 builders, including `_build_singlenode_dc_single`/`multistep`, share the
 identical positional signature, and `problem.py` dispatches through one unified
-call site per entry point. There is no way to forward `hvdc`/`df_hvdc` to
+call site per entry point. There is no way to forward
+`hvdc`/`df_hvdc_min`/`df_hvdc_max` to
 ac/lossy_dc but not to singlenode without either (a) branching the dispatch on
 `formulation` or (b) giving every builder the new params. We choose **(b)**: it
 matches how `storage`/`delta`/`nondispatchable`/`df_nd` are already threaded
 through every builder including singlenode. The singlenode builders accept
-`hvdc`/`df_hvdc` and **drop them silently** -- no warning, and `"n_hvdc"` is
+`hvdc`/`df_hvdc_min`/`df_hvdc_max` and **drop them silently** -- no warning, and `"n_hvdc"` is
 never added to `build.data` for singlenode builds. Consequently "silent ignore"
 means **accepted and dropped**, not "signatures unchanged / omitted from the
 call path" (the earlier wording, which was mechanically impossible). Mitigation:
@@ -518,9 +640,11 @@ will be silently wrong (convex) or rejected. Mitigation: CLAUDE.md invariant --
 the lossy branch may only be selected when the box is fixed-direction
 (`p_min_t >= 0` or `p_max_t <= 0`); a zero-straddling box is **always** lossless
 (`p_out == -p_in`). This is a pure property of the box, with no mode taxonomy to
-get wrong -- the same single gate the Loss model and `_make_hvdc_step_injections`
-use. The full sign-switching lossy model (charge/discharge split) is a separate
-future milestone.
+get wrong -- the same single gate the Loss model and
+`dc_operating_constraints` (where `coeff_vec` is selected from the box's
+zero-crossing; `hvdc_injections` only creates the variables) use. The full
+sign-switching lossy model (charge/discharge split) is a separate future
+milestone.
 
 **R6 -- non-determinism.** All gates use deterministic convex solves (CLARABEL) or a deterministic IPOPT solve on a fixed small case. No model-prompting verification. AC IPOPT ~2e-9 artifacts handled with existing tolerances.
 

@@ -509,6 +509,7 @@ is present.
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps |
+| 16 — Unify grid component model patterns | 🔲 Future | Refactor all grid components (dispatchable generators, storage, nondispatchable) into first-class component modules matching the HVDC pattern; components consumed by every formulation via composition. HVDC (M7) is the reference implementation. |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -580,6 +581,46 @@ the deferred lossy battery model), which keeps the loss equality affine while
 letting the direction vary. Deferred because the MVP (Milestone 7) covers the
 dominant proportional loss on fixed-direction links, and the fixed-loss sign
 and `dcline` `LOSS0` units are cleaner to settle alongside this split.
+
+### Milestone 16 — Unify grid component model patterns
+Bring **every** grid component into alignment with the component pattern that
+HVDC (Milestone 7) establishes: data struct, validation, incidence,
+constraint-set builder(s), and cost expression co-located in one module,
+importing `cvxpy` and `numpy` only (no other cvxopf module — the
+circular-import safeguard is about cvxopf-internal imports, not `cvxpy`). Every
+OPF formulation constructor (AC, lossy DC, singlenode, future SOCP) consumes
+each component by **composition** — calling its constraint-set and cost methods
+and wiring them into that formulation's own network model — rather than
+re-synthesizing the equations per formulation.
+
+This is a cross-cutting refactor touching several existing components, each of
+which predates the pattern:
+
+- **Dispatchable generators.** `cost.py` today is effectively the
+  dispatchable-generator component that never got first-class treatment,
+  because the generator model was ported wholesale from Pypower. Its
+  `poly_cost_expr` becomes that module's cost function.
+- **Storage.** The AC apparent-power circle vs. DC real-power box operating
+  regions currently live embedded in the AC and DC constructors; they move into
+  storage's module as formulation-specific constraint methods
+  (`ac_operating_constraints` / `dc_operating_constraints`), so each
+  constructor grabs the one matching its formulation instead of re-synthesizing
+  it.
+- **Nondispatchable.** Same treatment — its operating region and injection
+  wiring move into the component module and are consumed by composition.
+
+Components that need formulation-specific feasible regions expose them as
+distinct methods (e.g. storage's AC circle vs. DC box), and each constructor
+grabs the one matching its formulation. HVDC (Milestone 7) is the reference
+implementation of this "model a component once, plug into any network
+formulation" contract — including the `ac_*`/`dc_*` method fork (with
+pass-through delegation where the two forms coincide) and the late-bound
+`cp.Parameter` scaling seam between component and constructor.
+
+Note: the `storage.py → numpy only` / `nondispatchable.py → numpy only` lines
+in the Module-responsibilities import chain above accurately describe the
+**current** code and are left as-is until this refactor lands; M16 is the
+aspirational forward pattern, not a description of today's modules.
 
 ### Milestone 8 — Nondispatchable generators
 
