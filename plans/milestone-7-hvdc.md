@@ -72,7 +72,7 @@ cannot be used as a constraint in **either** formulation:
 The nonconvexity is entirely in **choosing the flow direction**. Once the
 sign of `p_in` is fixed *before problem construction*, the loss equation
 collapses to one of two **affine** branches, each valid in both CLARABEL and
-IPOPT. `p_in` is the single degree of freedom in every mode; `p_out` is
+IPOPT. `p_in` is the single degree of freedom bounded by the box; `p_out` is
 always derived from it by the selected branch (though it is still declared as
 its own `cp.Variable` and tied by the branch equality -- see Representation).
 
@@ -90,26 +90,35 @@ sender supplies more to cover loss. Lossless (`loss_frac = 0`)
 collapses both branches to `p_out = -p_in` (what is
 injected at one node is withdrawn at the other).
 
-**When each branch is used:**
-- `"scheduled"` -- `p_in` pinned at `p_scheduled_mw` (sending-terminal
-  setpoint) via an equality constraint. Its sign is known, so the matching
-  branch is selected. `p_in`/`p_out` are still `cp.Variable`s (pinned by
-  equality), so the injection addend is a CVXPY expression -- **not** numpy.
-- `"downward"` -- one-directional by construction, so the sign is fixed and
-  the matching branch is selected.
-- `"band"` -- per step, compute the intersected `p_in` interval
-  `[p_sched_t - bw, p_sched_t + bw] ∩ [p_min, p_max]`. If it does not
-  straddle zero (`lo >= 0` or `hi <= 0`), the direction is fixed and the
-  matching branch is used. If it straddles zero, fall back to the lossless
-  branch for that step and emit a `UserWarning` naming the link and the time
-  step. Clamping to `[p_min, p_max]` can only shrink the interval, so it never
-  turns a fixed-direction band into a straddling one -- the gate is computed on
-  the **intersected** interval.
-- `"free"` -- lossless when the box `[p_min, p_max]` straddles zero (the
-  default symmetric `[-p_max, p_max]` case); if an explicit one-sided
-  `[p_min, p_max]` fixes the direction, the matching lossy branch is used. The
-  zero-crossing gate (not the mode name) is the single source of truth -- see
-  the Operational modes note.
+**Branch selection reads the box, not the mode.** The single gate is: does the
+per-step box `[p_min_t, p_max_t]` straddle zero?
+- **Fixed-direction box** (`p_min_t >= 0`, so `p_in >= 0`; or `p_max_t <= 0`, so
+  `p_in <= 0`): the sign of `p_in` is fixed by the box, so the matching lossy
+  branch is selected for that step.
+- **Zero-straddling box** (`p_min_t < 0 < p_max_t`): the flow direction is a
+  decision the MVP cannot make affinely, so it falls back to the lossless branch
+  (`p_out == -p_in`) for that step and emits a `UserWarning` naming the link and
+  the time step.
+
+Because the gate is purely a property of the box, it is **uniform across every
+helper** -- there is no per-mode branch-selection logic. The four modes differ
+only in *how they fill the box* upstream (see Operational modes); once the box
+exists, selection is identical:
+- a `scheduled` helper emits a degenerate box `[p_sched_t, p_sched_t]`, whose
+  sign is that of `p_sched_t` → fixed-direction → matching branch (unless
+  `p_sched_t == 0`, a lossless zero-width box).
+- a `downward` helper emits `[0, p_sched_t]` or `[p_sched_t, 0]` → fixed by
+  construction → matching branch.
+- a `band` helper emits `[p_sched_t - bw, p_sched_t + bw] ∩ [p_min, p_max]`;
+  fixed-direction → matching branch, zero-straddling → lossless + warning.
+  (Clamping to `[p_min, p_max]` can only shrink the interval, so it never turns
+  a fixed-direction band into a straddling one.)
+- a `free` helper emits `[p_min, p_max]` (default symmetric `[-p_max, p_max]` →
+  straddling → lossless; explicit one-sided box → fixed-direction → matching
+  branch).
+
+The zero-crossing gate on the box -- **not** the helper that produced it -- is
+the single source of truth.
 
 `loss_percent` defaults to 0.0 (lossless everywhere).
 
