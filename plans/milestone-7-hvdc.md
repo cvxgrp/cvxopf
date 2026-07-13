@@ -294,6 +294,19 @@ Mirror `storage.py` structure/docstrings:
 - `HVDCLink` dataclass: `from_bus, to_bus, p_max_mw, p_min_mw=None, p_scheduled_mw=0.0, bandwidth_mw=0.0, mode="band", loss_percent=0.0, cost_coeffs=(0.0, 0.0, 0.0)`. **These fields are inputs to the upstream box-generating helper (Step 2), not distinct internal formulations** -- `mode` + `p_min_mw`/`p_max_mw`/`p_scheduled_mw`/`bandwidth_mw` are consumed once to produce the per-step box `[p_min_t, p_max_t]`, which is the sole thing the builder sees (see Representation / Operational modes). Docstring: `p_scheduled_mw` is the **sending-terminal setpoint** for `p_in` (the from-bus nodal injection); it places a **degenerate (zero-width) box `[p_sched, p_sched]` only in `"scheduled"` mode** (a pin via coincident bounds, **not** a separate equality) -- in `band`/`free`/`downward` it is a non-binding reference (band centre / reporting / optional warm-start), and `hvdc_from_dcline` imports use it that way (`mode="free"`, optimized over `[Pmin, Pmax]`). `p_out` is always derived, so delivered power is below `|p_in|` by the loss. `cost_coeffs` is `(c0, c1, c2)`. `p_min_mw` is the lower `p_in` bound; when `None`, the helper defaults it per mode (`band`/`free`: `-p_max_mw`; `downward`: `0`) so the named modes are unchanged.
 - `_validate_hvdc(links, ext_bus_ids)`: `from_bus != to_bus`; both buses in `ext_bus_ids`; `p_max_mw > 0`; `p_min_mw <= p_max_mw` when given; `bandwidth_mw >= 0`; `loss_percent >= 0`; `c2 >= 0` (convex quadratic) and `c1 >= 0` (nonneg magnitude cost); `mode` in the allowed values. Indexed `ValueError` messages like `_validate_storage`.
 - `_make_hvdc_incidence_matrices(links, nb, ext_to_int)` -> `(Ch_from, Ch_to)`, each `(nb, n_hvdc)`; `np.empty((nb,0))` pair for empty input.
+- `_hvdc_static_box(links)` -> `(p_min, p_max)`, each `(n_hvdc,)` numpy arrays in
+  MW. **This is the sole home of the mode->box mapping** -- the upstream
+  box-generating helper (see Operational modes) that turns each link's `mode` +
+  `p_min_mw`/`p_max_mw`/`p_scheduled_mw`/`bandwidth_mw` into the static per-link
+  box the builder consumes. Per link: `scheduled` -> `[p_sched, p_sched]`
+  (degenerate); `downward` -> `[0, p_sched]` if `p_sched >= 0` else `[p_sched,
+  0]`; `band` -> `[p_sched - bw, p_sched + bw] ∩ [p_min, p_max]`; `free` ->
+  `[p_min, p_max]`. Applies the `p_min_mw=None` per-mode defaults (`band`/`free`:
+  `-p_max_mw`; `downward`: `0`) here, so those defaults live in exactly one
+  place. The result is what the multistep builder tiles across `T` when
+  `df_hvdc_min`/`df_hvdc_max` are not supplied (Step 3), and what the
+  single-step builder uses directly; `_make_hvdc_step_injections` (Step 2) takes
+  these two arrays as its box inputs.
 - `hvdc_from_dcline(dcline_table, dclinecost=None)` -> `list[HVDCLink]`. Column map is now **verified** against the `t_case9_dcline` fixture (see R1) -- header order `fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT loss0 loss1`. Skip `status==0` rows. Mapping:
   - `from_bus=fbus`, `to_bus=tbus`.
   - `loss_percent = loss1 * 100` (verified: `loss1` is a per-unit fraction; `Pt = Pf - loss0 - loss1*Pf`).
@@ -303,7 +316,7 @@ Mirror `storage.py` structure/docstrings:
   - `dclinecost` (optional, same polynomial layout as `gencost`) maps to `cost_coeffs=(c0, c1, c2)`; only model-2 polynomial rows up to quadratic are read (higher-order terms rejected with a clear error). When the `case9_dcline` case file (Step 0a) is the source, `dclinecost` is present and passed through; when absent, `cost_coeffs` defaults to `(0.0, 0.0, 0.0)`.
   - **Test artifact source:** `hvdc_from_dcline(case9_dcline()["dcline"], case9_dcline()["dclinecost"])` is the intended entry point for downstream gates -- 4 rows, one inactive (`status==0`) skipped -> 3 links; `loss0!=0` on row 0 emits the documented `UserWarning`.
 
-**Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `hvdc_from_dcline` incl. inactive-line skip. No solve.
+**Gate 1 (offline unit):** `tests/test_hvdc.py::TestHVDCUnit` -- validation happy/sad, incidence shapes/entries, `_hvdc_static_box` mode->box mappings (`scheduled` -> degenerate `p_min == p_max`; `downward` -> `[0, p_sched]`/`[p_sched, 0]` by sign; `band` -> intersected interval, incl. the `bandwidth_mw=0` degenerate case; `free` -> `[p_min, p_max]`; and the `p_min_mw=None` per-mode defaults), `hvdc_from_dcline` incl. inactive-line skip. No solve.
 
 ### Step 2 -- injection + bounds helper in `hvdc.py`
 `_make_hvdc_step_injections(links, p_min_t, p_max_t, ext_to_int, baseMVA)` -> `(injection_expr, p_in, p_out, cost_expr, constraints)`:
@@ -409,9 +422,9 @@ tested separately in Gate 1):
 ### Step 4 -- `dc_problem.py` integration (simpler network formulation first)
 - module-level import from `hvdc.py` (matches existing storage/nd imports).
 - `_parse_dc_case` gains `hvdc`; validate, build `Ch_from/Ch_to`, store `n_hvdc` + arrays.
-- `_make_dc_step_constraints` gains hvdc params; add injection to the single balance line; append per-mode bounds.
+- `_make_dc_step_constraints` gains hvdc params (the per-step box arrays `p_min_t`/`p_max_t`); add injection to the single balance line; append the box bound `p_min_t <= p_in <= p_max_t` (pinning a degenerate box by coincident bounds) and the `p_out` loss-branch equality. No per-mode branching -- the box is already resolved upstream by `_hvdc_static_box`/`df_hvdc_min`/`df_hvdc_max`.
 - cost: add hvdc `cost_expr` (in builder, like storage aging cost).
-- both single/multistep builders thread `hvdc`/`df_hvdc`; per-step `p_in`/`p_out` vars; populate `variables["p_hvdc_in"]`, `variables["p_hvdc_out"]`, `data["n_hvdc"]`, etc. Multistep reads `df_hvdc` row `t`.
+- both single/multistep builders thread `hvdc`/`df_hvdc_min`/`df_hvdc_max`; per-step `p_in`/`p_out` vars; populate `variables["p_hvdc_in"]`, `variables["p_hvdc_out"]`, `data["n_hvdc"]`, etc. Single-step uses `_hvdc_static_box(links)` directly for the box; multistep reads the per-step box `(p_min_t, p_max_t)` from `df_hvdc_min`/`df_hvdc_max` row `t` (falling back to the tiled `_hvdc_static_box` result when either frame is `None`, per Step 3). `_make_hvdc_step_injections` (Step 2) receives those two `(n_hvdc,)` box arrays -- there is no per-mode branching in the builder.
 
 **Gate 4 (live, deterministic, own commit):** `tests/test_hvdc.py::TestHVDCLossyDC` on case9 synthetic `bus 4 -> bus 9`:
 - lossless free-mode solves; balance holds; `p_hvdc_out == -p_hvdc_in`.
@@ -424,7 +437,7 @@ tested separately in Gate 1):
 
 ### Step 5 -- `ac_problem.py` integration
 - `_parse_case` gains `hvdc`; same data population.
-- `_make_step_constraints` Section 3: add `hvdc_injection_p` to the `p ==` line only; **leave `q ==` untouched**. Add per-mode bounds as a new labelled `Section 3b: HVDC bounds`; preserve the single-`p==` rule.
+- `_make_step_constraints` Section 3: add the HVDC injection addend `(1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)` (Convention B, both terms `+` -- see Section 1) to the `p ==` line only; **leave `q ==` untouched**. Add the per-step box bound `p_min_t <= p_in <= p_max_t` (which also pins a degenerate box by coincident bounds) plus the `p_out` loss-branch equality as a new labelled **`Section 4c: HVDC operating constraints`** -- placed after the storage (§4) and nondispatchable (§4b) operating-constraint sections, matching the established convention that all operating constraints follow the §3 balance (not a `3b` between balance and storage). Preserve the single-`p==` rule.
 - cost: add hvdc cost to `total_cost` alongside storage aging cost.
 - thread through single/multistep builders.
 
@@ -452,7 +465,7 @@ Options (a)/(b) are genuine oracle checks now that C5 is resolved (the operating
 ### Step 7 -- public API, examples, docs
 - `__init__.py`: re-export `HVDCLink`, `hvdc_from_dcline`; add to `__all__`.
 - `examples/case9_hvdc_ac.py`, `examples/case9_hvdc_dc.py` (small, runnable).
-- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s, DOF is 0 scheduled / 1 otherwise; sign-split affine loss branches + the rule that lossy branches are only used when the flow direction is fixed pre-construction; `p_scheduled_mw` = sending setpoint pinning `p_in`; the `[Pmin, Pmax]`/`p_min_mw` box as the fundamental bound with band/downward/free as presets; the `cost_coeffs=(c0, c1, c2)` polynomial cost (`cp.square` for quadratic, `cp.abs` for linear); `hvdc_from_dcline` column map verified against `t_case9_dcline` with `loss0`/reactive/voltage columns dropped; `HVDCLink` field table; `hvdc=`/`df_hvdc=` on entry points; results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch in `free` mode or in a zero-straddling `band` step; **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
+- `CLAUDE.md`: flip Milestone 7 to complete; add HVDC formulation subsections (Convention-B nodal balance mods with **both** `Ch_from @ p_in` and `Ch_to @ p_out` entering with `+`; `p_in`/`p_out` are signed nodal injections, HVDC terminals modelled as generator-like objects; both are always `cp.Variable`s; the **per-step box `[p_min_t, p_max_t]` is the sole internal representation** and the four named modes are upstream box-generating helpers (`_hvdc_static_box`), not distinct builder formulations; DOF is a property of the box (0 for a degenerate `p_min_t == p_max_t` box, pinned by coincident bounds -- not a separate equality; 1 for a proper box); sign-split affine loss branches selected purely from the box's zero-crossing (lossy iff the box is fixed-direction), with no per-mode branch logic downstream; `p_scheduled_mw` places a degenerate box (a pin via coincident bounds) only in `"scheduled"` mode and is a non-binding reference otherwise; the `cost_coeffs=(c0, c1, c2)` polynomial cost (`cp.square` for quadratic, `cp.abs` for linear); `hvdc_from_dcline` column map verified against `t_case9_dcline` with `loss0`/reactive/voltage columns dropped; `HVDCLink` field table; `hvdc=` on entry points and `df_hvdc_min=`/`df_hvdc_max=` on `build_opf_multistep` (two aligned `(T, n_hvdc)` box frames, `df_P`/`df_Q` precedent, positional columns); results keys `p_hvdc_in`/`p_hvdc_out`/`hvdc_loss`; singlenode silent-ignore contract). Add a `Milestone 15 -- full sign-switching lossy HVDC` (charge/discharge split) row as Future. `what not to do` bullets: no `n_hvdc=0` default; no `q` term; no second `p==`; no hvdc import in singlenode; `cp.multiply` for cost/loss; **never put `cp.abs` (or any non-affine atom) in the `p_out` loss equality -- select an affine branch by pre-construction sign instead**; do not select a lossy branch for a zero-straddling box (`p_min_t < 0 < p_max_t`) -- the lossy branch is valid only when the box is fixed-direction (`p_min_t >= 0` or `p_max_t <= 0`); **both HVDC balance terms enter with `+` (signed injections), not `Ch_to − Ch_from`**; do not multiply `p_in`/`p_out` by `baseMVA` in `extract_results` (engineering units, like storage).
 
 **Gate 7 (full suite):** `uv run --extra dev pytest tests/` -- expect `702 + new` passed, 0 failed. `uv run ruff format .` and `uv run ruff check .` clean.
 
@@ -471,10 +484,11 @@ produces a latent sign bug (withdrawal at *both* ends). Mitigation: uniform
 Convention B throughout; Gate 2 sign check asserts `+p_in` at from_bus and
 `-p_in` at to_bus for a lossless link; CLAUDE.md `what not to do` bullet.
 
-Note: scheduled mode is **no longer** numpy-vs-CVXPY dual -- `p_in`/`p_out` are
-`cp.Variable`s in every mode (scheduled adds a pinning equality). The injection
-addend and cost term are always CVXPY expressions, which removes the former
-type-branching risk entirely.
+Note: there is no numpy-vs-CVXPY dual for any box shape -- `p_in`/`p_out` are
+`cp.Variable`s for every box, including a degenerate `p_min_t == p_max_t` box
+(pinned by coincident bounds, **not** a separate equality and **not** numpy).
+The injection addend and cost term are always CVXPY expressions, which removes
+the former type-branching risk entirely.
 
 **R3 -- single-`p==` invariant (AC).** Section 3 owns the only `p ==` constraint. hvdc term must be added inside that expression, bounds in a separate sub-section. Mitigation: CLAUDE.md invariant + targeted test.
 
@@ -495,14 +509,18 @@ the drop is documented in the singlenode builder, the entry-point docstrings,
 and CLAUDE.md.
 
 **R5 -- affine loss branch depends on pre-construction direction choice.**
-The loss equality is only affine because the flow direction (sign of
-`p_in`) is fixed before the problem is built. If a future edit lets the
-direction be a decision variable in a lossy mode, the equality becomes
-nonconvex/non-DCP and will be silently wrong (convex) or rejected. Mitigation:
-CLAUDE.md invariant -- lossy branches may only be selected in `scheduled`,
-`downward`, or fixed-direction `band` steps; `free` and zero-straddling `band`
-steps are always lossless. The full sign-switching lossy model (charge/
-discharge split) is a separate future milestone.
+The loss equality is only affine because the flow direction (sign of `p_in`) is
+fixed before the problem is built -- i.e. because the per-step box
+`[p_min_t, p_max_t]` does not straddle zero. If a future edit lets the direction
+be a decision variable while still carrying a lossy branch (a zero-straddling
+box with a nonzero loss coefficient), the equality becomes nonconvex/non-DCP and
+will be silently wrong (convex) or rejected. Mitigation: CLAUDE.md invariant --
+the lossy branch may only be selected when the box is fixed-direction
+(`p_min_t >= 0` or `p_max_t <= 0`); a zero-straddling box is **always** lossless
+(`p_out == -p_in`). This is a pure property of the box, with no mode taxonomy to
+get wrong -- the same single gate the Loss model and `_make_hvdc_step_injections`
+use. The full sign-switching lossy model (charge/discharge split) is a separate
+future milestone.
 
 **R6 -- non-determinism.** All gates use deterministic convex solves (CLARABEL) or a deterministic IPOPT solve on a fixed small case. No model-prompting verification. AC IPOPT ~2e-9 artifacts handled with existing tolerances.
 
@@ -557,13 +575,18 @@ at the patch site.
   (`p_in`). Full sign-switching lossy model (charge/discharge split) deferred
   to a future milestone. Package-wide warning suppression deferred (future QoL).
 - Item 7 (representation & signs): resolved -- HVDC terminals are
-  generator-like objects with **nodal injections `p_in`/`p_out` as the
-  fundamental variables** (Convention B: positive = injection, both balance
-  terms `+`). Both are always `cp.Variable`s (DOF 0 scheduled / 1 otherwise);
-  scheduled is not pure numpy. Result keys renamed `p_hvdc_from/to` ->
-  `p_hvdc_in/out`. Fixed a latent sign bug (terminal-flow addend mixed with
-  Convention-B loss branches). Terminal flow is derived on demand for a future
-  branch-limit milestone.
+  generator-like objects with signed **nodal injections `p_in`/`p_out`**
+  (Convention B: positive = injection, both balance terms `+`). The **sole
+  internal representation is a per-step box `p_in ∈ [p_min_t, p_max_t]`**; the
+  four named modes (`scheduled`/`band`/`downward`/`free`) are upstream
+  box-generating helpers (`_hvdc_static_box`), **not** distinct builder
+  formulations. `p_in` is the single DOF, bounded by the box; `p_out` is tied by
+  the loss equality. Both are always `cp.Variable`s: DOF is a property of the box
+  (0 for a degenerate `p_min_t == p_max_t` box, pinned by **coincident bounds** --
+  **not** a separate equality and **not** numpy; 1 for a proper box). Result keys
+  renamed `p_hvdc_from/to` -> `p_hvdc_in/out`. Fixed a latent sign bug
+  (terminal-flow addend mixed with Convention-B loss branches). Terminal flow is
+  derived on demand for a future branch-limit milestone.
 - Item 8 (fixed converter loss): resolved -- deliberately **not modelled in the
   first implementation**. The `t_case9_dcline` fixture now verifies its sign
   (`+sign(p_in)*loss0`, from `Pt = Pf - loss0 - loss1*Pf`), so it *could* be
@@ -577,11 +600,17 @@ at the patch site.
   `cp.square(p_in)` (since `(|x|)^2 = x^2`), linear uses `cp.abs(p_in)`; both
   convex in the objective. `dclinecost` maps model-2 polynomial rows up to
   quadratic.
-- Item 10 (`[Pmin, Pmax]` bounds): resolved -- the fundamental `p_in` bound is a
-  general affine box; `band`/`downward`/`free` are presets over it and MATPOWER
-  `[Pmin, Pmax]` maps straight on. `HVDCLink` gains `p_min_mw` (defaults keep the
-  named modes unchanged). The per-step zero-crossing gate on the box is the
-  single source of truth for lossy-vs-lossless, uniform across modes.
+- Item 10 (`[Pmin, Pmax]` bounds): resolved -- **the per-step box `[p_min_t,
+  p_max_t]` is the sole internal representation** (see Item 7), not a bound
+  layered over modes. The four named modes are upstream helpers
+  (`_hvdc_static_box`) that *fill* the box: `scheduled` -> degenerate
+  `[p_sched, p_sched]`, `band` -> `[p_sched-bw, p_sched+bw] ∩ [p_min, p_max]`,
+  `downward` -> `[0, p_sched]`/`[p_sched, 0]`, `free` -> `[p_min, p_max]`;
+  MATPOWER `[Pmin, Pmax]` maps straight onto a `free` box. `HVDCLink` gains
+  `p_min_mw` (the helper's `p_min_mw=None` per-mode defaults keep the named modes
+  unchanged, and live in exactly one place -- `_hvdc_static_box`). The per-step
+  zero-crossing gate on the box is the single source of truth for
+  lossy-vs-lossless, with no per-mode branch logic downstream.
 - Item 11 (test artifacts / Step 0): resolved -- `t_case9_dcline` becomes a
   committed static case file (`src/cvxopf/testcases/case9_dcline.py` via extended
   `generate_testcases.py`, static input only, no solve) **and** a committed
