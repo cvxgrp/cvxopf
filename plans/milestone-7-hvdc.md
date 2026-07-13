@@ -11,9 +11,9 @@ This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.p
 ### What HVDC adds
 An HVDC link is a controllable point-to-point real-power transfer between two buses, `from_bus` and `to_bus`, with a loss model and four operational modes. Unity power factor at both terminals: **no reactive power, no apparent-power circle.** This makes HVDC structurally simpler than storage or nondispatchable units (which both carry a reactive term in AC).
 
-### Representation: nodal injections are the fundamental variables
+### Representation: the per-step box is the sole internal model
 An HVDC link is modelled as a pair of **generator-like objects**, one at each
-terminal, not as a line-like object. The two fundamental variables are the
+terminal, not as a line-like object. The two CVXPY variables are the
 **signed nodal injections** `p_in` (at `from_bus`) and `p_out` (at `to_bus`),
 following the package-wide sign convention: **positive = generation/injection
 into the grid, negative = consumption/withdrawal** (consistent with the battery
@@ -22,21 +22,31 @@ into the grid, negative = consumption/withdrawal** (consistent with the battery
 branch-limit milestone needs the true crossing power -- see Section 1 forward
 note.
 
-**Both `p_in` and `p_out` are always `cp.Variable` objects**, for every mode and
-every step -- this is a representation choice for uniform post-analysis (pull
+**The one internal representation is a per-step box `p_in ∈ [p_min_t, p_max_t]`.**
+That box -- two numbers per link per step -- is the *only* thing the builder's
+constraint layer ever sees. There are **no modes inside the builder**: the four
+named modes (`scheduled`/`band`/`downward`/`free`) are **upstream helper
+functions** that compute the `(p_min_t, p_max_t)` arrays from friendlier inputs
+*before* the builder runs (see Operational modes). `p_in` is the single degree
+of freedom, bounded by the box; `p_out` is always tied to `p_in` by the affine
+loss equality, whose branch is selected per step from the box's zero-crossing
+(see Loss model).
+
+**Both `p_in` and `p_out` are always `cp.Variable` objects**, for every helper
+and every step -- a representation choice for uniform post-analysis (pull
 in/out straight from `build.variables`), *not* a statement about degrees of
-freedom. `p_out` is always tied to `p_in` by the affine loss equality (Section
-1). The mathematical free-variable count per link per step is:
+freedom. The free-variable count per link per step is a property of the box, not
+of any "mode":
 
-| Mode | free DOF | how pinned |
+| Box shape (per step) | free DOF | how pinned |
 |---|---|---|
-| scheduled | 0 | `p_in == p_scheduled_mw` (extra equality) + loss equality for `p_out` |
-| band / downward / free | 1 | `p_in` free within bounds; `p_out` derived by loss equality |
+| degenerate `p_min_t == p_max_t` (e.g. from the `scheduled` helper) | 0 | pinned by **coincident bounds** `p_min_t <= p_in <= p_max_t`; `p_out` by loss equality |
+| proper `p_min_t < p_max_t` (`band`/`downward`/`free` helpers) | 1 | `p_in` free within the box; `p_out` derived by loss equality |
 
-So scheduled mode still builds `cp.Variable`s (pinned by an equality), it is
-**not** pure numpy. The injection addend is therefore always a CVXPY
-expression. Under Convention B (signed injections) both terminals enter the
-balance with a **`+`**:
+So a degenerate box still builds `cp.Variable`s (pinned by coincident bounds,
+**not** a separate `p_in == ...` equality and **not** pure numpy). The injection
+addend is therefore always a CVXPY expression. Under Convention B (signed
+injections) both terminals enter the balance with a **`+`**:
 ```
 p == Cg @ Pg - Pd + ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)
 ```
