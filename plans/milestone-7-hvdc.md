@@ -5,8 +5,10 @@ Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
 702 tests pass). **Step 1+2 (T1+T2) complete (Gate 1+2 green, 758 tests pass)**. **Step 3
 (T3) complete (Gate 3 silent-ignore green, 762 tests pass)**. **Step 4
 (T4) complete as of 2026-07-13**: `dc_problem.py` full HVDC integration + Gate 3
-positive-wiring + Gate 4 live solve tests; **766 tests pass**. Steps 5-7
-(T5-T7) pending.
+positive-wiring + Gate 4 live solve tests; **766 tests pass**. **Step 5 (T5)
+complete as of 2026-07-13**: `ac_problem.py` full HVDC integration + Gate 5
+positive-wiring + Gate 5 live solve (IPOPT); **781 tests pass**. Steps 6-7
+(T6-T7) pending.
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
 
@@ -613,6 +615,20 @@ pass.
 - lossy fixed-direction band (interval doesn't straddle 0): matching branch
   applied, no warning. Zero-straddling band: lossless + `UserWarning`.
 - T=1 multistep equals single-step.
+
+**As-built note (T5, 2026-07-13):**
+
+T5 was implemented with zero divergences from the plan. `_parse_case` gains `hvdc=`
+and populates the same `n_hvdc`/`Ch_from`/`Ch_to` block as the DC parser.
+`_make_step_constraints` gets 8 new keyword params (`n_hvdc`, `hvdc_injection_expr`,
+`links`, `p_in_t`, `p_out_t`, `p_min_hvdc_t`, `p_max_hvdc_t`, `step`) and a new
+Section 4c. The p-balance line adds `hvdc_injection_p` (zero when `n_hvdc==0`); the
+q-balance line is structurally unchanged. `_build_ac_single` and `_build_ac_multistep`
+mirror the DC builders exactly (variables in builder scope, per-step `hvdc_injections`
+call with 2-tuple return, `inv_bMVA.value` binding, per-step box from
+`df_hvdc_min`/`df_hvdc_max`, cost inside loop). Gate 5 adds 8 wiring tests
+(`TestHVDCACWiring`) and 7 live-solve tests (`TestHVDCACSOlve`) using IPOPT on
+case9. All 15 pass; full suite: **781 tests**.
 
 ### Step 5 -- `ac_problem.py` integration
 - `_parse_case` gains `hvdc`; same data population.

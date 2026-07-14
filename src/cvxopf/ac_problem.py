@@ -34,6 +34,15 @@ from cvxopf.nondispatchable import (
     _make_nd_incidence_matrix,
     _parse_nd_timeseries,
 )
+from cvxopf.hvdc import (
+    HVDCLink,
+    _validate_hvdc,
+    _make_hvdc_incidence_matrices,
+    _hvdc_static_box,
+    hvdc_injections,
+    ac_operating_constraints as hvdc_ac_operating_constraints,
+    hvdc_cost_expr,
+)
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
@@ -89,7 +98,7 @@ def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndar
     return Rp
 
 
-def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> dict:
+def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, hvdc: list[HVDCLink] | None = None) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
     Returns a flat dict consumed by the AC single-step and multistep builders.
@@ -204,6 +213,17 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
             nd_p_available=nd_p_available,
         )
 
+    # Parse HVDC links if present
+    hvdc_data = {}
+    if hvdc is not None and len(hvdc) > 0:
+        _validate_hvdc(hvdc, ext_bus_ids)
+        Ch_from, Ch_to = _make_hvdc_incidence_matrices(hvdc, nb, ext_to_int)
+        hvdc_data = dict(
+            n_hvdc=len(hvdc),
+            Ch_from=Ch_from,
+            Ch_to=Ch_to,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         bus=bus, gen=gen, gencost=gencost,
@@ -220,6 +240,7 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
         Cg=Cg,
         **storage_data,
         **nd_data,
+        **hvdc_data,
     )
 
 
@@ -295,19 +316,31 @@ def _make_step_constraints(
     nd_p_available_t=None,
     p_nd_t=None,
     q_nd_t=None,
+    # HVDC — all None/0 when hvdc=None
+    n_hvdc: int = 0,
+    hvdc_injection_expr=None,
+    links=None,
+    p_in_t=None,
+    p_out_t=None,
+    p_min_hvdc_t=None,
+    p_max_hvdc_t=None,
+    step: int = 0,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
 
-    Internal structure (six sections — do not reorder or split):
+    Internal structure (seven sections — do not reorder or split):
       1. Reference bus angle fix
       2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
       3. Nodal power balance: exactly one p== and one q== constraint,
-         incorporating storage and nondispatchable injection if present
+         incorporating storage, nondispatchable, and HVDC injection if present.
+         HVDC enters p== only (unity power factor; q== is untouched).
       4. Storage operating constraints (apparent power circle, SoC bounds)
          — omitted when ns==0
       4b. Nondispatchable operating constraints (apparent power circle, real power bounds)
           — omitted when nnd==0
+      4c. HVDC operating constraints (box bounds, loss-branch equality)
+          — omitted when n_hvdc==0
       5. Voltage setpoint pinning — omitted when enforce_vset=False
 
     The caller must not append additional p== or q== constraints after
@@ -382,8 +415,9 @@ def _make_step_constraints(
     storage_injection_q = (1.0 / baseMVA) * (Cs @ b_q_t) if ns > 0 else 0
     nd_injection_p = (1.0 / baseMVA) * (Cnd @ p_nd_t) if nnd > 0 else 0
     nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
-    
-    constr.append(p == Cg @ Pg - Pd + storage_injection_p + nd_injection_p)
+    hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
+
+    constr.append(p == Cg @ Pg - Pd + storage_injection_p + nd_injection_p + hvdc_injection_p)
     constr.append(q == Cg @ Qg - Qd + storage_injection_q + nd_injection_q)
 
     # ------------------------------------------------------------------
@@ -415,6 +449,16 @@ def _make_step_constraints(
         # Lower bound already encoded via nonneg=True on p_nd_t variable declaration
 
     # ------------------------------------------------------------------
+    # Section 4c: HVDC operating constraints
+    # Box bounds (p_min_t <= p_in <= p_max_t) and loss-branch equality
+    # (p_out == coeff_vec * p_in). Omitted entirely when n_hvdc == 0.
+    # ------------------------------------------------------------------
+    if n_hvdc > 0:
+        constr += hvdc_ac_operating_constraints(
+            links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
+        )
+
+    # ------------------------------------------------------------------
     # Section 5: Voltage setpoint pinning
     # Omitted when enforce_vset=False.
     # ------------------------------------------------------------------
@@ -441,7 +485,7 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable)
+    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
 
     # Create step variables
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
@@ -472,6 +516,17 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
         q_nd_t = cp.Variable(nnd, name="q_nd")
 
+    # Create HVDC variables if present
+    p_in = p_out = None
+    hvdc_inj_expr = None
+    if "n_hvdc" in d:
+        n_hvdc = d["n_hvdc"]
+        p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
+        p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
+        hvdc_inj_expr, inv_bMVA = hvdc_injections(hvdc, p_in, p_out, d["ext_to_int"])
+        inv_bMVA.value = 1.0 / d["baseMVA"]
+        p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
+
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
@@ -495,9 +550,17 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
         q_nd_t=q_nd_t,
+        n_hvdc=d.get("n_hvdc", 0),
+        hvdc_injection_expr=hvdc_inj_expr,
+        links=hvdc,
+        p_in_t=p_in,
+        p_out_t=p_out,
+        p_min_hvdc_t=p_min_hvdc if "n_hvdc" in d else None,
+        p_max_hvdc_t=p_max_hvdc if "n_hvdc" in d else None,
+        step=0,
     )
 
-    # Build cost: generation cost plus storage aging cost
+    # Build cost: generation cost plus storage aging cost plus HVDC cost
     gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg)
     if "ns" in d and d["ns"] > 0:
         # L1 aging penalty on real power cycling
@@ -505,6 +568,9 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         total_cost = gen_cost + storage_cost
     else:
         total_cost = gen_cost
+    if "n_hvdc" in d:
+        for k in range(d["n_hvdc"]):
+            total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in[k])
     
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
@@ -535,6 +601,11 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         variables["p_nd"] = p_nd_t
         variables["q_nd"] = q_nd_t
 
+    # Add HVDC variables if present
+    if "n_hvdc" in d:
+        variables["p_hvdc_in"]  = p_in
+        variables["p_hvdc_out"] = p_out
+
     # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
@@ -546,7 +617,7 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
     )
-    
+
     # Add storage data if present
     if "ns" in d:
         data.update(
@@ -569,6 +640,15 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             nd_apparent_power_rating=d["nd_apparent_power_rating"],
             nd_p_available=d["nd_p_available"],
         )
+
+    # Add HVDC data if present
+    if "n_hvdc" in d:
+        data.update(
+            n_hvdc=d["n_hvdc"],
+            Ch_from=d["Ch_from"],
+            Ch_to=d["Ch_to"],
+        )
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
@@ -600,7 +680,7 @@ def _build_ac_multistep(
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable)
+    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
     
     # Parse nondispatchable timeseries if present
@@ -618,6 +698,7 @@ def _build_ac_multistep(
     p_list, q_list, Pg_list, Qg_list          = [], [], [], []
     b_list, b_q_list, soc_list               = [], [], []
     p_nd_list, q_nd_list                     = [], []
+    p_hvdc_in_list, p_hvdc_out_list          = [], []
     all_constr  = []
     total_cost  = 0
 
@@ -650,9 +731,22 @@ def _build_ac_multistep(
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
 
+        # Create HVDC variables if present
+        p_in_t = p_out_t = None
+        hvdc_inj_expr_t = None
+        p_min_hvdc_t = p_max_hvdc_t = None
+        if "n_hvdc" in d:
+            n_hvdc = d["n_hvdc"]
+            p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
+            p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
+            hvdc_inj_expr_t, inv_bMVA_t = hvdc_injections(hvdc, p_in_t, p_out_t, d["ext_to_int"])
+            inv_bMVA_t.value = 1.0 / d["baseMVA"]
+            p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
+            p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
+
         # Get available power for this time step
         nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
-        
+
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
@@ -676,13 +770,24 @@ def _build_ac_multistep(
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
             q_nd_t=q_nd_t,
+            n_hvdc=d.get("n_hvdc", 0),
+            hvdc_injection_expr=hvdc_inj_expr_t,
+            links=hvdc,
+            p_in_t=p_in_t,
+            p_out_t=p_out_t,
+            p_min_hvdc_t=p_min_hvdc_t,
+            p_max_hvdc_t=p_max_hvdc_t,
+            step=t,
         )
 
         all_constr.extend(step_constr)
-        
-        # Add generation cost
+
+        # Add generation cost and HVDC cost (inside loop, per-step)
         gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
         total_cost = total_cost + gen_cost
+        if "n_hvdc" in d:
+            for k in range(d["n_hvdc"]):
+                total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in_t[k])
 
         theta_list.append(theta_t)
         v_list.append(v_t)
@@ -703,6 +808,11 @@ def _build_ac_multistep(
         if "nnd" in d and d["nnd"] > 0:
             p_nd_list.append(p_nd_t)
             q_nd_list.append(q_nd_t)
+
+        # Add HVDC variables to lists
+        if "n_hvdc" in d:
+            p_hvdc_in_list.append(p_in_t)
+            p_hvdc_out_list.append(p_out_t)
 
     # Add storage aging cost if present
     if "ns" in d and d["ns"] > 0:
@@ -747,6 +857,11 @@ def _build_ac_multistep(
         variables["p_nd"] = p_nd_list
         variables["q_nd"] = q_nd_list
 
+    # Add HVDC variables if present
+    if "n_hvdc" in d:
+        variables["p_hvdc_in"] = p_hvdc_in_list
+        variables["p_hvdc_out"] = p_hvdc_out_list
+
     # Build data dict
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
@@ -784,6 +899,15 @@ def _build_ac_multistep(
             nd_apparent_power_rating=d["nd_apparent_power_rating"],
             nd_available=d.get("nd_available"),  # Only present in multistep
         )
+
+    # Add HVDC data if present
+    if "n_hvdc" in d:
+        data.update(
+            n_hvdc=d["n_hvdc"],
+            Ch_from=d["Ch_from"],
+            Ch_to=d["Ch_to"],
+        )
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
