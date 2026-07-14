@@ -11,6 +11,11 @@ DC (lossy_dc) results keys:
     status, objective, Pg, p_flows, p_net
     (Vm, Va_deg, Qg, q_net are absent — not modelled in DC formulation)
 
+HVDC results keys (AC and lossy_dc, present when "n_hvdc" in build.data):
+    p_hvdc_in, p_hvdc_out (signed nodal injections, MW), hvdc_loss (derived,
+    = p_hvdc_in + p_hvdc_out, >= 0). Shapes (n_hvdc,) single / (T, n_hvdc)
+    multi. Absent from singlenode_dc results (HVDC silently ignored there).
+
 Singlenode DC (singlenode_dc) results keys:
     status, objective, Pg, p_net
     (p_flows, Vm, Va_deg, Qg, q_net absent — not modelled)
@@ -196,6 +201,14 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             else:  # multistep - this shouldn't happen in single-step path
                 results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
         
+        # Add HVDC results if present
+        if "n_hvdc" in data:
+            results["p_hvdc_in"]  = var["p_hvdc_in"].value
+            results["p_hvdc_out"] = var["p_hvdc_out"].value
+            # Total loss = sending - receiving magnitude; under Convention B
+            # (pure proportional loss) this is exactly p_in + p_out, >= 0.
+            results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
+        
         return results
 
     T       = data["T"]
@@ -210,6 +223,8 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     soc_rows = []
     p_nd_rows = []
     q_nd_rows = []
+    p_hvdc_in_rows  = []
+    p_hvdc_out_rows = []
 
     for t in range(T):
         Pg_rows.append(var["Pg"][t].value)
@@ -229,6 +244,11 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         if "nnd" in data:
             p_nd_rows.append(var["p_nd"][t].value)
             q_nd_rows.append(var["q_nd"][t].value)
+        
+        # Extract HVDC results if present
+        if "n_hvdc" in data:
+            p_hvdc_in_rows.append(var["p_hvdc_in"][t].value)
+            p_hvdc_out_rows.append(var["p_hvdc_out"][t].value)
 
     results = dict(
         status    = prob.status,
@@ -259,6 +279,13 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             results["curtailment"] = data["nd_available"] - results["p_nd"]
         else:  # single-step - this shouldn't happen in multistep path
             results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
+    
+    # Add HVDC results if present
+    if "n_hvdc" in data:
+        results["p_hvdc_in"]  = np.array(p_hvdc_in_rows)
+        results["p_hvdc_out"] = np.array(p_hvdc_out_rows)
+        # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
+        results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
     
     return results
 
@@ -318,6 +345,13 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             else:  # multistep - this shouldn't happen in single-step path
                 results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
         
+        # Add HVDC results if present
+        if "n_hvdc" in data:
+            results["p_hvdc_in"]  = var["p_hvdc_in"].value
+            results["p_hvdc_out"] = var["p_hvdc_out"].value
+            # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
+            results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
+        
         return results
 
     T            = data["T"]
@@ -328,6 +362,8 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     b_rows       = []
     soc_rows     = []
     p_nd_rows    = []
+    p_hvdc_in_rows  = []
+    p_hvdc_out_rows = []
 
     for t in range(T):
         p_gen_t   = var["p_gen"][t].value
@@ -352,6 +388,11 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         # Extract nondispatchable results if present
         if "nnd" in data:
             p_nd_rows.append(var["p_nd"][t].value)
+        
+        # Extract HVDC results if present
+        if "n_hvdc" in data:
+            p_hvdc_in_rows.append(var["p_hvdc_in"][t].value)
+            p_hvdc_out_rows.append(var["p_hvdc_out"][t].value)
 
     results = dict(
         status    = prob.status,
@@ -377,6 +418,13 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             results["curtailment"] = data["nd_available"] - results["p_nd"]
         else:  # single-step - this shouldn't happen in multistep path
             results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
+    
+    # Add HVDC results if present
+    if "n_hvdc" in data:
+        results["p_hvdc_in"]  = np.array(p_hvdc_in_rows)
+        results["p_hvdc_out"] = np.array(p_hvdc_out_rows)
+        # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
+        results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
     
     return results
 
