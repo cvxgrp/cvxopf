@@ -2,7 +2,10 @@
 
 Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
 `case9_dcline` case file + Pypower reference fixture generated and verified;
-702 tests pass). Steps 1-7 (T1-T7) pending. Baseline confirmed **702 passed,
+702 tests pass). **Step 1+2 (T1+T2) in progress as of 2026-07-13**: writing
+`src/cvxopf/hvdc.py` (pure logic + CVXPY component methods) and
+`tests/test_hvdc.py` (Gate 1 + Gate 2 offline tests) as one combined unit;
+Steps 3-7 (T3-T7) pending. Baseline confirmed **702 passed,
 0 failed** (`uv run --extra dev pytest tests/`).
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
