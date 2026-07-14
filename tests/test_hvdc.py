@@ -5,11 +5,15 @@ Gate 1 (TestHVDCUnit): pure logic — validation, incidence, static box,
   hvdc_from_dcline, hvdc_cost_expr DCP check, ac_ delegates to dc_.
 Gate 2 (TestHVDCCVXPY): CVXPY component methods — box shapes, loss branches,
   mixed batches, Convention B sign check. No live solve in either gate.
+Gate 3 (TestHVDCWiring, silent-ignore half): singlenode builds with hvdc=
+  accepted and dropped silently; "n_hvdc" never appears in build.data.
+  Positive-wiring half (ac & lossy_dc) deferred to Gate 4 (T4).
 """
 
 import warnings
 
 import numpy as np
+import pandas as pd
 import pytest
 import cvxpy as cp
 
@@ -25,6 +29,8 @@ from cvxopf.hvdc import (
     hvdc_from_dcline,
 )
 from cvxopf.testcases.case9_dcline import case9_dcline
+from cvxopf.problem import build_opf, build_opf_multistep
+from cvxopf.testcases import make_singlenode_case
 
 
 # ---------------------------------------------------------------------------
@@ -559,3 +565,77 @@ class TestHVDCOperatingConstraints:
         assert p_out.value[0] == pytest.approx(-(1 - loss_frac) * 50.0, abs=1e-5)
         # link 1 straddling: coeff = -1 (lossless)
         assert p_out.value[1] == pytest.approx(-(-30.0), abs=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Gate 3 — wiring: singlenode_dc silently drops hvdc
+# ---------------------------------------------------------------------------
+
+class TestHVDCWiring:
+    """Gate 3 (silent-ignore half): singlenode_dc builds accept hvdc= and drop it.
+
+    "n_hvdc" must never appear in build.data for singlenode formulations.
+    Positive-wiring (lossy_dc / ac builds expose "n_hvdc") is deferred to T4.
+    """
+
+    _GENS = [
+        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
+        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    ]
+    _LINK = HVDCLink(from_bus=1, to_bus=2, p_max_mw=50.0)
+
+    def _case(self):
+        return make_singlenode_case(300.0, self._GENS)
+
+    def test_singlenode_single_step_hvdc_dropped(self):
+        case = self._case()
+        build = build_opf(case, formulation="singlenode_dc", hvdc=[self._LINK])
+        assert "n_hvdc" not in build.data
+
+    def test_singlenode_single_step_no_warning_from_hvdc(self):
+        case = self._case()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            build_opf(case, formulation="singlenode_dc", hvdc=[self._LINK])
+        hvdc_warns = [x for x in w if "hvdc" in str(x.message).lower()]
+        assert len(hvdc_warns) == 0
+
+    def test_singlenode_multistep_hvdc_dropped_with_frames(self):
+        case = self._case()
+        T = 3
+        df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
+        df_Q = pd.DataFrame(np.zeros((T, 1)))
+        df_min = pd.DataFrame(np.tile([-50.0], (T, 1)))
+        df_max = pd.DataFrame(np.tile([50.0], (T, 1)))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case, df_P, df_Q, T=T,
+                formulation="singlenode_dc",
+                hvdc=[self._LINK],
+                df_hvdc_min=df_min,
+                df_hvdc_max=df_max,
+            )
+        assert "n_hvdc" not in build.data
+
+    def test_singlenode_multistep_no_hvdc_frames_emits_tile_warning(self):
+        # problem.py tile-fallback fires when hvdc is not None and frames absent.
+        # The singlenode builder still drops hvdc, but the warning from
+        # problem.py is expected and correct.
+        case = self._case()
+        T = 2
+        df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
+        df_Q = pd.DataFrame(np.zeros((T, 1)))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            build = build_opf_multistep(
+                case, df_P, df_Q, T=T,
+                formulation="singlenode_dc",
+                hvdc=[self._LINK],
+            )
+        assert "n_hvdc" not in build.data
+        tile_warns = [x for x in w if issubclass(x.category, UserWarning)
+                      and "hvdc" in str(x.message).lower()]
+        assert len(tile_warns) == 1

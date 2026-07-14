@@ -431,7 +431,7 @@ def _make_step_constraints(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> "OPFBuild":
+def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, *, hvdc=None) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -586,6 +586,10 @@ def _build_ac_multistep(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     df_nd: pd.DataFrame | None = None,
+    *,
+    hvdc=None,
+    df_hvdc_min=None,
+    df_hvdc_max=None,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild

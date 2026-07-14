@@ -2,10 +2,10 @@
 
 Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
 `case9_dcline` case file + Pypower reference fixture generated and verified;
-702 tests pass). **Step 1+2 (T1+T2) in progress as of 2026-07-13**: writing
-`src/cvxopf/hvdc.py` (pure logic + CVXPY component methods) and
-`tests/test_hvdc.py` (Gate 1 + Gate 2 offline tests) as one combined unit;
-Steps 3-7 (T3-T7) pending. Baseline confirmed **702 passed,
+702 tests pass). **Step 1+2 (T1+T2) complete (Gate 1+2 green, 758 tests pass)**. **Step 3
+(T3) in progress as of 2026-07-13**: `problem.py` wiring + singlenode/AC/DC
+builder stub signatures + Gate 3 silent-ignore tests; Steps 4-7 (T4-T7)
+pending. Baseline confirmed **702 passed,
 0 failed** (`uv run --extra dev pytest tests/`).
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
@@ -555,6 +555,12 @@ tested separately in Gate 1):
 **Gate 3 (wiring):** `tests/test_hvdc.py::TestHVDCWiring` -- two complementary halves guarding the silent-drop convention from both sides:
 - *Silent-ignore (singlenode):* three tests (single identical, multistep identical + `df_hvdc_min`/`df_hvdc_max` ignored, no `UserWarning`); assert `"n_hvdc" not in build.data`. Uses fast deterministic singlenode solve.
 - *Positive wiring (ac & lossy_dc):* passing `hvdc=[...]` must yield `"n_hvdc" in build.data` with `n_hvdc > 0` and the `p_hvdc_in`/`p_hvdc_out` variables present. This catches a builder that *should* wire HVDC but silently drops it -- the accept-and-ignore convention (R4) makes that failure otherwise invisible. Without this half, Gate 3 only proves silent-ignore is *clean*, never that supported formulations actually *wire*.
+
+**As-built note (T3, 2026-07-13):** the positive-wiring half of Gate 3 (ac &
+lossy_dc) is deferred to T4. At T3 time the AC and DC builders accept `hvdc=`
+as a drop-silently stub (signature only, no logic) and the live solve required
+to assert `"n_hvdc" in build.data` cannot yet pass. The positive-wiring tests
+will be added as part of Gate 4 (Step 4 commit).
 
 ### Step 4 -- `dc_problem.py` integration (simpler network formulation first)
 - module-level import from `hvdc.py` (matches existing storage/nd imports).
