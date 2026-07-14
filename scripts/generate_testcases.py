@@ -56,6 +56,7 @@ CASES = [
     ("case39",  "pypower.case39",  "case39"),
     ("case57",  "pypower.case57",  "case57"),
     ("case118", "pypower.case118", "case118"),
+    ("case9_dcline", "pypower.t.t_case9_dcline", "t_case9_dcline"),
 ]
 
 # Cases with existing hand-written files to check consistency against
@@ -104,11 +105,15 @@ def _generate_source(name: str, ppc: dict) -> str:
     """Generate the Python source for a single case file."""
     has_areas = "areas" in ppc and ppc["areas"] is not None \
                 and np.asarray(ppc["areas"]).size > 0
+    has_dcline = "dcline" in ppc and ppc["dcline"] is not None \
+                 and np.asarray(ppc["dcline"]).size > 0
 
     bus_comment     = "# bus_i  type  Pd  Qd  Gs  Bs  area  Vm  Va  baseKV  zone  Vmax  Vmin"
     gen_comment     = "# bus  Pg  Qg  Qmax  Qmin  Vg  mBase  status  Pmax  Pmin  ..."
     branch_comment  = "# fbus  tbus  r  x  b  rateA  rateB  rateC  ratio  angle  status  angmin  angmax"
     gencost_comment = "# model  startup  shutdown  n  coefficients (highest power first) ... c0"
+    dcline_comment  = "# fbus  tbus  status  Pf  Pt  Qf  Qt  Vf  Vt  Pmin  Pmax  QminF  QmaxF  QminT  QmaxT  loss0  loss1"
+    dclinecost_comment = "# model  startup  shutdown  n  coefficients (highest power first) ... c0"
 
     bus     = np.asarray(ppc["bus"],     dtype=float)
     gen     = np.asarray(ppc["gen"],     dtype=float)
@@ -136,10 +141,13 @@ def _generate_source(name: str, ppc: dict) -> str:
     lines.append(f'    -------')
     lines.append(f'    ppc : dict')
     lines.append(f'        MATPOWER-format case dict with keys:')
+    key_list = "version, baseMVA, bus, gen, branch"
     if has_areas:
-        lines.append(f'        version, baseMVA, bus, gen, branch, areas, gencost.')
-    else:
-        lines.append(f'        version, baseMVA, bus, gen, branch, gencost.')
+        key_list += ", areas"
+    key_list += ", gencost"
+    if has_dcline:
+        key_list += ", dcline, dclinecost"
+    lines.append(f'        {key_list}.')
     lines.append(f'')
     lines.append(f'    Network summary')
     lines.append(f'    ---------------')
@@ -171,6 +179,17 @@ def _generate_source(name: str, ppc: dict) -> str:
     lines.append(f'    {gencost_comment}')
     lines.append(f'    ppc["gencost"] = np.array({_fmt_array(gencost)})')
     lines.append(f'')
+
+    if has_dcline:
+        dcline     = np.asarray(ppc["dcline"],     dtype=float)
+        dclinecost = np.asarray(ppc["dclinecost"], dtype=float)
+        lines.append(f'    {dcline_comment}')
+        lines.append(f'    ppc["dcline"] = np.array({_fmt_array(dcline)})')
+        lines.append(f'')
+        lines.append(f'    {dclinecost_comment}')
+        lines.append(f'    ppc["dclinecost"] = np.array({_fmt_array(dclinecost)})')
+        lines.append(f'')
+
     lines.append(f'    return ppc')
     lines.append(f'')
 
@@ -201,6 +220,9 @@ def _check_consistency(name: str, ppc_new: dict) -> bool:
     keys_to_check = ["baseMVA", "bus", "gen", "branch", "gencost"]
     if "areas" in ppc_new and ppc_new["areas"] is not None:
         keys_to_check.append("areas")
+    if "dcline" in ppc_new and ppc_new["dcline"] is not None \
+            and np.asarray(ppc_new["dcline"]).size > 0:
+        keys_to_check.extend(["dcline", "dclinecost"])
 
     all_match = True
     for key in keys_to_check:
