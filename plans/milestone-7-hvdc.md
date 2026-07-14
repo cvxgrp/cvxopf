@@ -1,6 +1,9 @@
 # Milestone 7 -- HVDC Transmission Links: Build Plan
 
-Status: proposed. Baseline confirmed **702 passed, 0 failed** (`uv run --extra dev pytest tests/`).
+Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
+`case9_dcline` case file + Pypower reference fixture generated and verified;
+702 tests pass). Steps 1-7 (T1-T7) pending. Baseline confirmed **702 passed,
+0 failed** (`uv run --extra dev pytest tests/`).
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
 
@@ -312,7 +315,17 @@ when nonzero.
 
 Follow the verification progression: offline unit tests for pure logic, then wiring tests, then the live solve as its own commit. Commit after each green gate.
 
-### Step 0 -- `t_case9_dcline` test artifacts (standalone scripts; do FIRST)
+### Step 0 -- `t_case9_dcline` test artifacts (standalone scripts; do FIRST) -- ✅ COMPLETE (2026-07-13)
+**As-built note:** the solved fixture (0b) does NOT use `toggle_dcline` -- it is
+broken under numpy 2.x across both its `ext2int` and `int2ext` userfcns. The
+oracle is instead a self-contained solve: a hand-built `_dcline_to_gens`
+(validated gen/bus-equivalent to real pypower in
+`scripts/_probe_dcline_transform.py`, Gate 0b-iii) + a custom P-coupling
+`formulation` userfcn, with `dclinecost` dropped (matching pypower's own
+`t_dcline.py`) and the result cross-checked against pypower's hardcoded expected
+array. Full rationale in `scripts/README.md`. The original R9 monkeypatch plan
+was abandoned; see R9 and the Step 0b note below.
+
 This step touches only the two self-contained `uv` inline-dependency scripts in
 `scripts/` (each pins its own deps) and their committed output artifacts. It
 depends on nothing else in the milestone and must be completed first, because
@@ -359,7 +372,7 @@ file it produces.
   `loss0=1`) which the MVP drops, so a cvxopf solve will not match exactly. This
   is expected and consumed accordingly by Gate 6b.
 
-**Gate 0 (offline, own commit):**
+**Gate 0 (offline, own commit) -- ✅ PASSED (2026-07-13):**
 - `uv run scripts/generate_testcases.py` produces `case9_dcline.py`;
   `case9_dcline()` imports and loads; `dcline`/`dclinecost` arrays match the
   Pypower source shapes (4 dcline rows, 4 dclinecost rows).
