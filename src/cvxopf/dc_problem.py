@@ -57,6 +57,15 @@ from cvxopf.nondispatchable import (
     _make_nd_incidence_matrix,
     _parse_nd_timeseries,
 )
+from cvxopf.hvdc import (
+    HVDCLink,
+    _validate_hvdc,
+    _make_hvdc_incidence_matrices,
+    _hvdc_static_box,
+    hvdc_injections,
+    dc_operating_constraints as hvdc_dc_operating_constraints,
+    hvdc_cost_expr,
+)
 from cvxopf.network import BUS_I
 
 # ---------------------------------------------------------------------------
@@ -77,7 +86,7 @@ RATE_A     = 5
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None) -> dict:
+def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, hvdc: list[HVDCLink] | None = None) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
     Returns a flat dict consumed by the DC single-step and multistep builders.
@@ -135,8 +144,9 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
     gen_bus_set  = set(gen_bus[status == 1].tolist())
     nogen_buses  = sorted(all_buses - gen_bus_set)
 
-    # Get external bus IDs for validation
-    ext_bus_ids = set(bus[:, BUS_I].astype(int).tolist())
+    # External bus IDs for validation — use ext_to_int keys (external MATPOWER
+    # numbering) not bus[:, BUS_I] which is already reindexed to 0-based.
+    ext_bus_ids = set(ext_to_int.keys())
     
     # Parse storage if present
     storage_data = {}
@@ -193,6 +203,17 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
             nd_p_available=nd_p_available,
         )
 
+    # Parse HVDC links if present
+    hvdc_data = {}
+    if hvdc is not None and len(hvdc) > 0:
+        _validate_hvdc(hvdc, ext_bus_ids)
+        Ch_from, Ch_to = _make_hvdc_incidence_matrices(hvdc, nb, ext_to_int)
+        hvdc_data = dict(
+            n_hvdc=len(hvdc),
+            Ch_from=Ch_from,
+            Ch_to=Ch_to,
+        )
+
     return dict(
         case=case, baseMVA=baseMVA,
         nb=nb, ng=ng, nl=nl,
@@ -208,6 +229,7 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
         loss_weight=options.loss_weight,
         **storage_data,
         **nd_data,
+        **hvdc_data,
     )
 
 
@@ -225,36 +247,51 @@ def _make_dc_step_constraints(
     Cnd=None,
     nd_p_available_t=None,
     p_nd_t=None,
+    n_hvdc: int = 0,
+    hvdc_injection_expr=None,
+    links=None,
+    p_in_t=None,
+    p_out_t=None,
+    p_min_hvdc_t=None,
+    p_max_hvdc_t=None,
+    step: int = 0,
 ) -> list:
     """Build the list of CVXPY constraints for one DC time step."""
     # Section 1: Nodal real power balance
     storage_term = cp.multiply((1.0 / baseMVA), Cs @ b_t) if ns > 0 else 0
     nd_term = cp.multiply((1.0 / baseMVA), Cnd @ p_nd_t) if nnd > 0 else 0
-    constr = [A @ p_flows + p_gen + storage_term + nd_term == Pd]
-    
+    hvdc_term = hvdc_injection_expr if n_hvdc > 0 else 0
+    constr = [A @ p_flows + p_gen + storage_term + nd_term + hvdc_term == Pd]
+
     # Section 2: Branch flow limits
     constr.append(cp.abs(p_flows) <= f_max)
-    
+
     # Section 3: Generator bounds
     constr += [p_gen[gen_bus] >= Pgmin, p_gen[gen_bus] <= Pgmax]
-    
+
     # Section 4: Non-generator bus zeroing
     if nogen_buses:
         constr.append(p_gen[nogen_buses] == 0.0)
-    
+
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
         constr += [b_t >= -S_max, b_t <= S_max]
-    
+
     # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
         constr += [p_nd_t <= nd_p_available_t]
         # p_nd_t >= 0 encoded via nonneg=True on variable declaration
-    
+
+    # Section 5c: HVDC operating constraints (omitted when n_hvdc == 0)
+    if n_hvdc > 0:
+        constr += hvdc_dc_operating_constraints(
+            links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
+        )
+
     # Section 6: Storage SoC bounds (omitted when ns == 0)
     if ns > 0:
         constr += [soc_t >= 0.0, soc_t <= storage_capacity]
-    
+
     return constr
 
 
@@ -288,7 +325,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
             stacklevel=3,
         )
 
-    d = _parse_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_dc_case(case, options, storage, delta, nondispatchable, hvdc)
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
     p_gen   = cp.Variable(d["nb"], name="p_gen", nonneg=True)
@@ -306,6 +343,17 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         nnd = d["nnd"]
         p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
 
+    # Create HVDC variables if present
+    p_in = p_out = None
+    hvdc_inj_expr = None
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        n_hvdc = d["n_hvdc"]
+        p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
+        p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
+        hvdc_inj_expr, inv_bMVA = hvdc_injections(hvdc, p_in, p_out, d["ext_to_int"])
+        inv_bMVA.value = 1.0 / d["baseMVA"]
+        p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
+
     constr = _make_dc_step_constraints(
         p_flows, p_gen,
         d["A"], d["Pd"], d["f_max"],
@@ -322,16 +370,29 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         Cnd=d.get("Cnd"),
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
+        n_hvdc=d.get("n_hvdc", 0),
+        hvdc_injection_expr=hvdc_inj_expr,
+        links=hvdc,
+        p_in_t=p_in,
+        p_out_t=p_out,
+        p_min_hvdc_t=p_min_hvdc if "n_hvdc" in d else None,
+        p_max_hvdc_t=p_max_hvdc if "n_hvdc" in d else None,
+        step=0,
     )
 
     cost = _make_dc_step_cost(
         p_gen, d["gen_bus"], d["gencost"], d["baseMVA"],
         d["r"], p_flows, d["loss_weight"],
     )
-    
+
     # Add storage aging cost if present
     if "ns" in d and d["ns"] > 0:
         cost = cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+
+    # Add HVDC cost if present
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        for k in range(d["n_hvdc"]):
+            cost = cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in[k])
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
@@ -343,7 +404,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
 
     prob      = cp.Problem(cp.Minimize(cost), constr)
     variables = dict(p_flows=p_flows, p_gen=p_gen)
-    
+
     # Add storage variables if present
     if "ns" in d and d["ns"] > 0:
         variables["b"] = b_t
@@ -352,6 +413,12 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
     # Add nondispatchable variables if present
     if "nnd" in d and d["nnd"] > 0:
         variables["p_nd"] = p_nd_t
+
+    # Add HVDC variables if present
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        variables["p_hvdc_in"]  = p_in
+        variables["p_hvdc_out"] = p_out
+
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
@@ -362,7 +429,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
     )
-    
+
     # Add storage data if present
     if "ns" in d and d["ns"] > 0:
         data.update(
@@ -385,6 +452,15 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
             nd_apparent_power_rating=d["nd_apparent_power_rating"],
             nd_p_available=d["nd_p_available"],
         )
+
+    # Add HVDC data if present
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        data.update(
+            n_hvdc=d["n_hvdc"],
+            Ch_from=d["Ch_from"],
+            Ch_to=d["Ch_to"],
+        )
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
@@ -434,7 +510,7 @@ def _build_lossy_dc_multistep(
         np.zeros_like(df_P.to_numpy()), columns=df_P.columns
     )
 
-    d = _parse_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_dc_case(case, options, storage, delta, nondispatchable, hvdc)
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
     
     # Parse nondispatchable timeseries if present
@@ -447,13 +523,15 @@ def _build_lossy_dc_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
-    p_flows_list = []
-    p_gen_list   = []
-    b_list       = []
-    soc_list     = []
-    p_nd_list    = []
-    all_constr   = []
-    total_cost   = 0
+    p_flows_list    = []
+    p_gen_list      = []
+    b_list          = []
+    soc_list        = []
+    p_nd_list       = []
+    p_hvdc_in_list  = []
+    p_hvdc_out_list = []
+    all_constr      = []
+    total_cost      = 0
 
     for t in range(T):
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
@@ -472,9 +550,22 @@ def _build_lossy_dc_multistep(
             nnd = d["nnd"]
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
 
+        # Create HVDC variables if present
+        p_in_t = p_out_t = None
+        hvdc_inj_expr_t = None
+        p_min_hvdc_t = p_max_hvdc_t = None
+        if "n_hvdc" in d and d["n_hvdc"] > 0:
+            n_hvdc = d["n_hvdc"]
+            p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
+            p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
+            hvdc_inj_expr_t, inv_bMVA_t = hvdc_injections(hvdc, p_in_t, p_out_t, d["ext_to_int"])
+            inv_bMVA_t.value = 1.0 / d["baseMVA"]
+            p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
+            p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
+
         # Get available power for this time step
         nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
-        
+
         step_constr = _make_dc_step_constraints(
             p_flows_t, p_gen_t,
             d["A"], Pd_series[t], d["f_max"],
@@ -491,21 +582,34 @@ def _build_lossy_dc_multistep(
             Cnd=d.get("Cnd"),
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
+            n_hvdc=d.get("n_hvdc", 0),
+            hvdc_injection_expr=hvdc_inj_expr_t,
+            links=hvdc,
+            p_in_t=p_in_t,
+            p_out_t=p_out_t,
+            p_min_hvdc_t=p_min_hvdc_t,
+            p_max_hvdc_t=p_max_hvdc_t,
+            step=t,
         )
         step_cost = _make_dc_step_cost(
             p_gen_t, d["gen_bus"], d["gencost"], d["baseMVA"],
             d["r"], p_flows_t, d["loss_weight"],
         )
-        
+
         # Add storage aging cost if present
         if "ns" in d and d["ns"] > 0:
             step_cost = step_cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+
+        # Add HVDC cost if present
+        if "n_hvdc" in d and d["n_hvdc"] > 0:
+            for k in range(d["n_hvdc"]):
+                step_cost = step_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in_t[k])
 
         all_constr.extend(step_constr)
         total_cost  = total_cost + step_cost
         p_flows_list.append(p_flows_t)
         p_gen_list.append(p_gen_t)
-        
+
         # Add storage variables to lists
         if "ns" in d and d["ns"] > 0:
             b_list.append(b_t)
@@ -514,6 +618,11 @@ def _build_lossy_dc_multistep(
         # Add nondispatchable variables to lists
         if "nnd" in d and d["nnd"] > 0:
             p_nd_list.append(p_nd_t)
+
+        # Add HVDC variables to lists
+        if "n_hvdc" in d and d["n_hvdc"] > 0:
+            p_hvdc_in_list.append(p_in_t)
+            p_hvdc_out_list.append(p_out_t)
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
@@ -527,7 +636,7 @@ def _build_lossy_dc_multistep(
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
     variables = dict(p_flows=p_flows_list, p_gen=p_gen_list)
-    
+
     # Add storage variables if present
     if "ns" in d and d["ns"] > 0:
         variables["b"] = b_list
@@ -536,8 +645,13 @@ def _build_lossy_dc_multistep(
     # Add nondispatchable variables if present
     if "nnd" in d and d["nnd"] > 0:
         variables["p_nd"] = p_nd_list
-    
-    data      = dict(
+
+    # Add HVDC variables if present
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        variables["p_hvdc_in"]  = p_hvdc_in_list
+        variables["p_hvdc_out"] = p_hvdc_out_list
+
+    data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
         A=d["A"], Cg=d["Cg"],
@@ -548,7 +662,7 @@ def _build_lossy_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
-    
+
     # Add storage data if present
     if "ns" in d and d["ns"] > 0:
         data.update(
@@ -571,6 +685,15 @@ def _build_lossy_dc_multistep(
             nd_apparent_power_rating=d["nd_apparent_power_rating"],
             nd_available=d.get("nd_available"),  # Only present in multistep
         )
+
+    # Add HVDC data if present
+    if "n_hvdc" in d and d["n_hvdc"] > 0:
+        data.update(
+            n_hvdc=d["n_hvdc"],
+            Ch_from=d["Ch_from"],
+            Ch_to=d["Ch_to"],
+        )
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,

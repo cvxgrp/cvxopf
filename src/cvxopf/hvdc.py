@@ -6,13 +6,20 @@ Models each HVDC link as a pair of generator-like signed nodal injections
 the grid. Both terminals enter the nodal balance with '+'.
 
 The sole internal representation is a per-step box p_in ∈ [p_min_t, p_max_t].
-The four named modes (scheduled/band/downward/free) are upstream helpers that
-compute this box; no mode branching occurs inside the CVXPY component methods.
+p_min_mw and p_max_mw are required fields on HVDCLink; they define the box
+directly. There are no named modes — any upstream box-generating helpers
+(e.g. scheduled/band/downward/free convenience functions) are out-of-scope
+for this module and would live in user code.
 
 Loss model: affine branch selected pre-construction from the box's zero-crossing:
   p_min_t[k] >= 0  (from->to):  p_out[k] = -(1 - loss_frac[k]) * p_in[k]
   p_max_t[k] <= 0  (to->from):  p_out[k] = -(1 + loss_frac[k]) * p_in[k]
   zero-straddling:               p_out[k] = -p_in[k]  (lossless, UserWarning)
+
+Component-method interface: hvdc.py exposes named builder methods that
+constructors call and compose. Variables (p_in, p_out) are created in the
+problem builder scope and passed into these methods — hvdc.py never
+instantiates cp.Variable itself.
 
 Import chain:
   hvdc.py  →  cvxpy, numpy, warnings, dataclasses (no cvxopf imports)
@@ -34,19 +41,15 @@ import cvxpy as cp
 # HVDCLink dataclass
 # ---------------------------------------------------------------------------
 
-_VALID_MODES = {"scheduled", "band", "downward", "free"}
-
-
 @dataclass
 class HVDCLink:
     """
     Parameters for a single HVDC transmission link.
 
     An HVDC link is modelled as a pair of signed nodal injections p_in
-    (at from_bus) and p_out (at to_bus). Both are cp.Variable objects for
-    every box shape, including degenerate (scheduled) boxes. The box
-    p_in ∈ [p_min_t, p_max_t] is the sole internal representation; the
-    four modes are upstream helpers that fill the box.
+    (at from_bus) and p_out (at to_bus). Convention B: positive = injection
+    into the grid. The box p_in ∈ [p_min_mw, p_max_mw] is the sole internal
+    representation.
 
     Attributes
     ----------
@@ -54,20 +57,12 @@ class HVDCLink:
         Sending-terminal bus ID (external MATPOWER numbering).
     to_bus : int
         Receiving-terminal bus ID (external MATPOWER numbering).
+    p_min_mw : float
+        Lower bound on the from-bus injection p_in (MW). Must be <= p_max_mw.
+        A degenerate box (p_min_mw == p_max_mw) pins p_in via coincident
+        bounds — not a separate equality constraint.
     p_max_mw : float
-        Upper bound on the from-bus injection p_in (MW). Must be > 0.
-    p_min_mw : float or None
-        Lower bound on p_in (MW). None applies a per-mode default:
-          band/free: -p_max_mw (symmetric); downward: 0; scheduled: p_scheduled_mw.
-    p_scheduled_mw : float
-        Sending-terminal setpoint (MW). In 'scheduled' mode this produces a
-        degenerate box [p_sched, p_sched] (pinned by coincident bounds, NOT a
-        separate equality). In other modes it is a non-binding reference.
-    bandwidth_mw : float
-        Half-width of the band around p_scheduled_mw for 'band' mode (MW >= 0).
-    mode : str
-        One of 'scheduled', 'band', 'downward', 'free'. Controls how
-        _hvdc_static_box maps link fields to (p_min, p_max). Default 'band'.
+        Upper bound on p_in (MW). Must be > 0.
     loss_percent : float
         Proportional loss as a percentage (0–100). loss_frac = loss_percent/100.
         Fixed converter loss (LOSS0) is not modelled; see Milestone 15.
@@ -75,15 +70,12 @@ class HVDCLink:
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
         transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. Default (0,0,0).
     """
-    from_bus:        int
-    to_bus:          int
-    p_max_mw:        float
-    p_min_mw:        float | None   = None
-    p_scheduled_mw:  float          = 0.0
-    bandwidth_mw:    float          = 0.0
-    mode:            str            = "band"
-    loss_percent:    float          = 0.0
-    cost_coeffs:     tuple          = field(default_factory=lambda: (0.0, 0.0, 0.0))
+    from_bus:     int
+    to_bus:       int
+    p_min_mw:     float
+    p_max_mw:     float
+    loss_percent: float = 0.0
+    cost_coeffs:  tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
 
 
 # ---------------------------------------------------------------------------
@@ -121,23 +113,14 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
             raise ValueError(
                 f"HVDC link {i}: p_max_mw must be > 0, got {lnk.p_max_mw}"
             )
-        if lnk.p_min_mw is not None and lnk.p_min_mw > lnk.p_max_mw:
+        if lnk.p_min_mw > lnk.p_max_mw:
             raise ValueError(
                 f"HVDC link {i}: p_min_mw ({lnk.p_min_mw}) must be <= "
                 f"p_max_mw ({lnk.p_max_mw})"
             )
-        if lnk.bandwidth_mw < 0:
-            raise ValueError(
-                f"HVDC link {i}: bandwidth_mw must be >= 0, got {lnk.bandwidth_mw}"
-            )
         if lnk.loss_percent < 0:
             raise ValueError(
                 f"HVDC link {i}: loss_percent must be >= 0, got {lnk.loss_percent}"
-            )
-        if lnk.mode not in _VALID_MODES:
-            raise ValueError(
-                f"HVDC link {i}: mode must be one of {sorted(_VALID_MODES)}, "
-                f"got '{lnk.mode}'"
             )
         c0, c1, c2 = lnk.cost_coeffs
         if c2 < 0:
@@ -180,55 +163,19 @@ def _make_hvdc_incidence_matrices(
 
 
 # ---------------------------------------------------------------------------
-# Static box computation (mode -> box, the upstream helper)
+# Static box (trivial vectorizer — reads p_min_mw/p_max_mw directly)
 # ---------------------------------------------------------------------------
 
 def _hvdc_static_box(links: list) -> tuple:
     """
-    Map each HVDCLink's mode + fields to a static per-link box (p_min, p_max).
+    Return (p_min, p_max) as (n_hvdc,) numpy arrays in MW.
 
-    This is the sole home of the mode->box mapping. Returns two (n_hvdc,)
-    numpy arrays in MW. The result is what the builder uses directly for a
-    single-step problem, and what multistep tiling is based on when
+    Reads p_min_mw and p_max_mw directly from each HVDCLink. Used by the
+    single-step builder and as the tile source for multistep when
     df_hvdc_min/df_hvdc_max are not provided.
-
-    p_min_mw=None defaults per mode:
-      band/free: -p_max_mw (symmetric)
-      downward:  0
-      scheduled: p_scheduled_mw (degenerate box)
     """
-    n = len(links)
-    p_min = np.empty(n)
-    p_max = np.empty(n)
-    for k, lnk in enumerate(links):
-        pmax = lnk.p_max_mw
-        psched = lnk.p_scheduled_mw
-        mode = lnk.mode
-
-        if mode == "scheduled":
-            p_min[k] = psched
-            p_max[k] = psched
-
-        elif mode == "downward":
-            if psched >= 0:
-                p_min[k] = 0.0
-                p_max[k] = psched
-            else:
-                p_min[k] = psched
-                p_max[k] = 0.0
-
-        elif mode == "band":
-            pmin_default = lnk.p_min_mw if lnk.p_min_mw is not None else -pmax
-            bw = lnk.bandwidth_mw
-            lo = max(psched - bw, pmin_default)
-            hi = min(psched + bw, pmax)
-            p_min[k] = lo
-            p_max[k] = hi
-
-        else:  # free
-            p_min[k] = lnk.p_min_mw if lnk.p_min_mw is not None else -pmax
-            p_max[k] = pmax
-
+    p_min = np.array([lnk.p_min_mw for lnk in links], dtype=float)
+    p_max = np.array([lnk.p_max_mw for lnk in links], dtype=float)
     return p_min, p_max
 
 
@@ -236,34 +183,33 @@ def _hvdc_static_box(links: list) -> tuple:
 # CVXPY component methods
 # ---------------------------------------------------------------------------
 
-def hvdc_injections(links: list, ext_to_int: dict) -> tuple:
+def hvdc_injections(
+    links: list,
+    p_in: cp.Variable,
+    p_out: cp.Variable,
+    ext_to_int: dict,
+) -> tuple:
     """
-    Create p_in/p_out variables and the scaled nodal-balance addend.
+    Build the scaled nodal-balance addend for HVDC links.
+
+    p_in and p_out are created by the calling problem builder and passed in;
+    this function does not instantiate any cp.Variable.
 
     Returns
     -------
     injection_expr : cp.Expression
         inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out). Both terminals
         enter with '+' (Convention B: positive = injection into grid).
-        inv_baseMVA is a cp.Parameter that the caller must set before solve:
-          inv_baseMVA.value = 1.0 / baseMVA
-    p_in : cp.Variable, shape (n_hvdc,)
-        From-bus signed nodal injection (MW, engineering units).
-    p_out : cp.Variable, shape (n_hvdc,)
-        To-bus signed nodal injection (MW, engineering units).
     inv_baseMVA : cp.Parameter
-        Scalar parameter, unset. Caller binds before solving.
+        Scalar parameter, unset. Caller must bind before solving:
+          inv_baseMVA.value = 1.0 / baseMVA
     """
     nb = len(ext_to_int)
     n_hvdc = len(links)
     Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
-
-    p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
-    p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
     inv_baseMVA = cp.Parameter(name="hvdc_inv_baseMVA")
-
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
-    return injection_expr, p_in, p_out, inv_baseMVA
+    return injection_expr, inv_baseMVA
 
 
 def dc_operating_constraints(
@@ -277,11 +223,12 @@ def dc_operating_constraints(
     """
     Build the HVDC operating constraint list for one time step.
 
-    Returns exactly two constraints:
-      1. Box bound: p_min_t <= p_in <= p_max_t
+    Returns exactly three constraints:
+      1. Lower box bound: p_min_t <= p_in
+      2. Upper box bound: p_in <= p_max_t
          A degenerate entry (p_min_t[k] == p_max_t[k]) pins p_in[k] via
          coincident bounds — NOT a separate equality constraint.
-      2. Loss-branch equality: p_out == coeff_vec * p_in
+      3. Loss-branch equality: p_out == coeff_vec * p_in
          coeff_vec[k] is selected per link from the box's zero-crossing:
            p_min_t[k] >= 0: -(1 - loss_frac[k])   (from->to, lossy)
            p_max_t[k] <= 0: -(1 + loss_frac[k])   (to->from, lossy)
@@ -366,7 +313,7 @@ def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
 _FBUS   = 0
 _TBUS   = 1
 _STATUS = 2
-_PF     = 3   # sending-terminal scheduled setpoint (MW)
+_PF     = 3   # sending-terminal scheduled setpoint (MW) — carried for reference only
 _PMIN   = 9
 _PMAX   = 10
 _LOSS0  = 15  # fixed converter loss (MW) — not modelled in MVP
@@ -391,8 +338,8 @@ def hvdc_from_dcline(
     loss0 (fixed converter loss) is dropped; a UserWarning is emitted if any
     active row has loss0 != 0. Full fixed-loss modelling is Milestone 15.
 
-    Each active row maps to mode="free" with p_in optimized over [Pmin, Pmax].
-    Pf is carried as a non-binding reference (p_scheduled_mw) only.
+    [Pmin, Pmax] map directly to p_min_mw/p_max_mw (the canonical box bounds).
+    Pf is dropped (non-binding reference only in the MVP optimizer context).
 
     dclinecost rows are model-2 polynomial, highest-power-first (same layout
     as gencost). HVDCLink.cost_coeffs is lowest-first (c0, c1, c2) — this
@@ -419,13 +366,12 @@ def hvdc_from_dcline(
         if int(row[_STATUS]) == 0:
             continue
 
-        fbus    = int(row[_FBUS])
-        tbus    = int(row[_TBUS])
-        p_sched = float(row[_PF])
-        p_min   = float(row[_PMIN])
-        p_max   = float(row[_PMAX])
-        loss0   = float(row[_LOSS0])
-        loss1   = float(row[_LOSS1])
+        fbus  = int(row[_FBUS])
+        tbus  = int(row[_TBUS])
+        p_min = float(row[_PMIN])
+        p_max = float(row[_PMAX])
+        loss0 = float(row[_LOSS0])
+        loss1 = float(row[_LOSS1])
 
         if loss0 != 0.0:
             loss0_nonzero = True
@@ -453,10 +399,8 @@ def hvdc_from_dcline(
         links.append(HVDCLink(
             from_bus=fbus,
             to_bus=tbus,
-            p_max_mw=p_max,
             p_min_mw=p_min,
-            p_scheduled_mw=p_sched,
-            mode="free",
+            p_max_mw=p_max,
             loss_percent=loss1 * 100.0,
             cost_coeffs=cost,
         ))

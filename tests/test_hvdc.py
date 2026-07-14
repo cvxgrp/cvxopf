@@ -5,9 +5,12 @@ Gate 1 (TestHVDCUnit): pure logic — validation, incidence, static box,
   hvdc_from_dcline, hvdc_cost_expr DCP check, ac_ delegates to dc_.
 Gate 2 (TestHVDCCVXPY): CVXPY component methods — box shapes, loss branches,
   mixed batches, Convention B sign check. No live solve in either gate.
-Gate 3 (TestHVDCWiring, silent-ignore half): singlenode builds with hvdc=
+Gate 3 (TestHVDCWiring): silent-ignore half — singlenode builds with hvdc=
   accepted and dropped silently; "n_hvdc" never appears in build.data.
-  Positive-wiring half (ac & lossy_dc) deferred to Gate 4 (T4).
+  Positive-wiring half (TestHVDCLossyDCWiring) — lossy_dc builds expose
+  "n_hvdc" in build.data and HVDC variables in build.variables.
+Gate 4 (TestHVDCLossyDCSolve): live solve — case9, bus 4 → bus 9, verifying
+  optimality, flow conservation, and loss relationship.
 """
 
 import warnings
@@ -29,6 +32,7 @@ from cvxopf.hvdc import (
     hvdc_from_dcline,
 )
 from cvxopf.testcases.case9_dcline import case9_dcline
+from cvxopf.testcases.case9 import case9
 from cvxopf.problem import build_opf, build_opf_multistep
 from cvxopf.testcases import make_singlenode_case
 
@@ -37,13 +41,11 @@ from cvxopf.testcases import make_singlenode_case
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _link(from_bus=1, to_bus=2, p_max_mw=100.0, p_min_mw=None,
-          p_scheduled_mw=50.0, bandwidth_mw=10.0, mode="band",
+def _link(from_bus=1, to_bus=2, p_min_mw=-100.0, p_max_mw=100.0,
           loss_percent=0.0, cost_coeffs=(0.0, 0.0, 0.0)):
     return HVDCLink(
-        from_bus=from_bus, to_bus=to_bus, p_max_mw=p_max_mw,
-        p_min_mw=p_min_mw, p_scheduled_mw=p_scheduled_mw,
-        bandwidth_mw=bandwidth_mw, mode=mode,
+        from_bus=from_bus, to_bus=to_bus,
+        p_min_mw=p_min_mw, p_max_mw=p_max_mw,
         loss_percent=loss_percent, cost_coeffs=cost_coeffs,
     )
 
@@ -91,20 +93,12 @@ class TestHVDCValidation:
             _validate_hvdc([_link(p_min_mw=200.0, p_max_mw=100.0)], _EXT_BUS_IDS)
 
     def test_p_min_eq_p_max_allowed(self):
-        # degenerate box is allowed at construction; coincident bounds handle it
+        # degenerate box is allowed; coincident bounds pin p_in
         _validate_hvdc([_link(p_min_mw=50.0, p_max_mw=50.0)], _EXT_BUS_IDS)
-
-    def test_bandwidth_negative_raises(self):
-        with pytest.raises(ValueError, match="bandwidth_mw must be >= 0"):
-            _validate_hvdc([_link(bandwidth_mw=-1.0)], _EXT_BUS_IDS)
 
     def test_loss_negative_raises(self):
         with pytest.raises(ValueError, match="loss_percent must be >= 0"):
             _validate_hvdc([_link(loss_percent=-1.0)], _EXT_BUS_IDS)
-
-    def test_invalid_mode_raises(self):
-        with pytest.raises(ValueError, match="mode must be one of"):
-            _validate_hvdc([_link(mode="turbo")], _EXT_BUS_IDS)
 
     def test_c2_negative_raises(self):
         with pytest.raises(ValueError, match="c2 must be >= 0"):
@@ -160,86 +154,35 @@ class TestHVDCIncidence:
 
 class TestHVDCStaticBox:
 
-    def test_scheduled_degenerate(self):
-        lnk = _link(mode="scheduled", p_scheduled_mw=30.0, p_max_mw=100.0)
+    def test_single_link_reads_fields(self):
+        lnk = HVDCLink(from_bus=1, to_bus=2, p_min_mw=-30.0, p_max_mw=100.0)
         p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(30.0)
-        assert p_max[0] == pytest.approx(30.0)
-
-    def test_scheduled_negative_sched(self):
-        lnk = _link(mode="scheduled", p_scheduled_mw=-20.0, p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(-20.0)
-        assert p_max[0] == pytest.approx(-20.0)
-
-    def test_downward_positive_sched(self):
-        lnk = _link(mode="downward", p_scheduled_mw=50.0, p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(0.0)
-        assert p_max[0] == pytest.approx(50.0)
-
-    def test_downward_negative_sched(self):
-        lnk = _link(mode="downward", p_scheduled_mw=-50.0, p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(-50.0)
-        assert p_max[0] == pytest.approx(0.0)
-
-    def test_band_intersected(self):
-        # sched=40, bw=20 -> [20, 60] intersected with [-100, 100] -> [20, 60]
-        lnk = _link(mode="band", p_scheduled_mw=40.0, bandwidth_mw=20.0,
-                    p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(20.0)
-        assert p_max[0] == pytest.approx(60.0)
-
-    def test_band_clamped_by_p_max(self):
-        # sched=90, bw=20 -> [70, 110] intersected with [-100, 100] -> [70, 100]
-        lnk = _link(mode="band", p_scheduled_mw=90.0, bandwidth_mw=20.0,
-                    p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(70.0)
+        assert p_min[0] == pytest.approx(-30.0)
         assert p_max[0] == pytest.approx(100.0)
 
-    def test_band_degenerate_zero_bandwidth(self):
-        lnk = _link(mode="band", p_scheduled_mw=40.0, bandwidth_mw=0.0,
-                    p_max_mw=100.0)
+    def test_degenerate_box_read_correctly(self):
+        lnk = HVDCLink(from_bus=1, to_bus=2, p_min_mw=40.0, p_max_mw=40.0)
         p_min, p_max = _hvdc_static_box([lnk])
         assert p_min[0] == pytest.approx(40.0)
         assert p_max[0] == pytest.approx(40.0)
 
-    def test_free_default_symmetric(self):
-        lnk = _link(mode="free", p_max_mw=100.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(-100.0)
-        assert p_max[0] == pytest.approx(100.0)
-
-    def test_free_explicit_p_min(self):
-        lnk = _link(mode="free", p_max_mw=100.0, p_min_mw=0.0)
-        p_min, p_max = _hvdc_static_box([lnk])
+    def test_two_links_vectorized(self):
+        links = [
+            HVDCLink(from_bus=1, to_bus=2, p_min_mw=0.0,    p_max_mw=50.0),
+            HVDCLink(from_bus=2, to_bus=3, p_min_mw=-100.0, p_max_mw=100.0),
+        ]
+        p_min, p_max = _hvdc_static_box(links)
+        assert p_min.shape == (2,)
+        assert p_max.shape == (2,)
         assert p_min[0] == pytest.approx(0.0)
-        assert p_max[0] == pytest.approx(100.0)
+        assert p_max[0] == pytest.approx(50.0)
+        assert p_min[1] == pytest.approx(-100.0)
+        assert p_max[1] == pytest.approx(100.0)
 
-    def test_p_min_none_defaults_band(self):
-        # p_min_mw=None in band mode -> default -p_max_mw
-        lnk = _link(mode="band", p_max_mw=50.0, p_min_mw=None,
-                    p_scheduled_mw=0.0, bandwidth_mw=10.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        # [-10, 10] intersected with [-50, 50] -> [-10, 10]
-        assert p_min[0] == pytest.approx(-10.0)
-        assert p_max[0] == pytest.approx(10.0)
-
-    def test_p_min_none_defaults_free(self):
-        lnk = _link(mode="free", p_max_mw=80.0, p_min_mw=None)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(-80.0)
-
-    def test_p_min_none_defaults_downward(self):
-        # downward with p_min_mw=None; p_sched>=0 -> [0, p_sched]
-        lnk = _link(mode="downward", p_max_mw=100.0, p_min_mw=None,
-                    p_scheduled_mw=60.0)
-        p_min, p_max = _hvdc_static_box([lnk])
-        assert p_min[0] == pytest.approx(0.0)
-        assert p_max[0] == pytest.approx(60.0)
+    def test_empty_list_returns_empty_arrays(self):
+        p_min, p_max = _hvdc_static_box([])
+        assert p_min.shape == (0,)
+        assert p_max.shape == (0,)
 
 
 class TestHVDCFromDcline:
@@ -254,14 +197,6 @@ class TestHVDCFromDcline:
         links = hvdc_from_dcline(dcline, dclinecost)
         # 4 rows minus 1 inactive = 3 links
         assert len(links) == 3
-
-    def test_all_links_mode_free(self):
-        dcline, dclinecost = self._case_tables()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            links = hvdc_from_dcline(dcline, dclinecost)
-        for lnk in links:
-            assert lnk.mode == "free"
 
     def test_loss0_warning_emitted(self):
         # row 0 of t_case9_dcline has loss0=1 (nonzero)
@@ -287,9 +222,8 @@ class TestHVDCFromDcline:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             links = hvdc_from_dcline(dcline, dclinecost)
-        # All links should have finite p_min_mw and p_max_mw
         for lnk in links:
-            assert lnk.p_min_mw is not None
+            assert lnk.p_min_mw <= lnk.p_max_mw
             assert lnk.p_max_mw > 0
 
     def test_loss_percent_from_loss1(self):
@@ -369,8 +303,7 @@ class TestHVDCCostExpr:
 class TestACDelegates:
 
     def test_ac_returns_same_as_dc(self):
-        links = [_link(from_bus=1, to_bus=2, p_max_mw=100.0,
-                       p_min_mw=0.0, mode="free")]
+        links = [_link(from_bus=1, to_bus=2, p_min_mw=0.0, p_max_mw=100.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([0.0])
@@ -391,26 +324,26 @@ class TestACDelegates:
 
 class TestHVDCInjections:
 
-    def test_returns_four_tuple(self):
-        links = [_link(from_bus=1, to_bus=2, mode="free",
-                       p_max_mw=100.0, p_min_mw=-100.0)]
-        inj, p_in, p_out, inv_bMVA = hvdc_injections(links, _EXT_TO_INT)
-        assert isinstance(p_in,  cp.Variable)
-        assert isinstance(p_out, cp.Variable)
+    def test_returns_two_tuple(self):
+        links = [_link(from_bus=1, to_bus=2)]
+        p_in  = cp.Variable((1,))
+        p_out = cp.Variable((1,))
+        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
         assert isinstance(inv_bMVA, cp.Parameter)
-        assert p_in.shape  == (1,)
-        assert p_out.shape == (1,)
+        assert hasattr(inj, 'is_affine')
 
     def test_injection_is_cvxpy_expression(self):
-        links = [_link(from_bus=1, to_bus=2, mode="free",
-                       p_max_mw=100.0, p_min_mw=-100.0)]
-        inj, _, _, _ = hvdc_injections(links, _EXT_TO_INT)
-        assert isinstance(inj, cp.atoms.atom.Atom) or hasattr(inj, 'is_affine')
+        links = [_link(from_bus=1, to_bus=2)]
+        p_in  = cp.Variable((1,))
+        p_out = cp.Variable((1,))
+        inj, _ = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        assert hasattr(inj, 'is_affine')
 
     def test_parameter_unset(self):
-        links = [_link(from_bus=1, to_bus=2, mode="free",
-                       p_max_mw=100.0, p_min_mw=-100.0)]
-        _, _, _, inv_bMVA = hvdc_injections(links, _EXT_TO_INT)
+        links = [_link(from_bus=1, to_bus=2)]
+        p_in  = cp.Variable((1,))
+        p_out = cp.Variable((1,))
+        _, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
         assert inv_bMVA.value is None
 
     def test_convention_b_sign_lossless(self):
@@ -418,20 +351,17 @@ class TestHVDCInjections:
         #   from_bus gets +p_in/baseMVA (injects into grid)
         #   to_bus gets -p_in/baseMVA (withdraws from grid)
         baseMVA = 100.0
-        links = [_link(from_bus=1, to_bus=2, mode="free",
-                       p_max_mw=100.0, p_min_mw=-100.0, loss_percent=0.0)]
-        inj, p_in, p_out, inv_bMVA = hvdc_injections(links, _EXT_TO_INT)
+        links = [_link(from_bus=1, to_bus=2, loss_percent=0.0)]
+        p_in  = cp.Variable((1,))
+        p_out = cp.Variable((1,))
+        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
         inv_bMVA.value = 1.0 / baseMVA
 
         p_min_t = np.array([-100.0])
         p_max_t = np.array([100.0])
         constrs = dc_operating_constraints(links, p_in, p_out, p_min_t, p_max_t)
 
-        # Set p_in = 50 MW
-        prob = cp.Problem(
-            cp.Minimize(0),
-            constrs + [p_in == 50.0],
-        )
+        prob = cp.Problem(cp.Minimize(0), constrs + [p_in == 50.0])
         prob.solve(solver=cp.CLARABEL)
         assert prob.status in ("optimal", "optimal_inaccurate")
 
@@ -448,8 +378,7 @@ class TestHVDCOperatingConstraints:
 
     def test_degenerate_box_no_extra_equality(self):
         # Degenerate box: p_min_t == p_max_t. Pin via coincident bounds only.
-        links = [_link(from_bus=1, to_bus=2, mode="scheduled",
-                       p_scheduled_mw=40.0, p_max_mw=100.0)]
+        links = [_link(from_bus=1, to_bus=2, p_min_mw=40.0, p_max_mw=40.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([40.0])
@@ -468,7 +397,7 @@ class TestHVDCOperatingConstraints:
         # p_min_t >= 0 -> from->to branch: coeff = -(1 - loss_frac)
         loss_pct = 5.0
         links = [_link(from_bus=1, to_bus=2, loss_percent=loss_pct,
-                       mode="free", p_max_mw=100.0, p_min_mw=0.0)]
+                       p_min_mw=0.0, p_max_mw=100.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([0.0])
@@ -484,9 +413,10 @@ class TestHVDCOperatingConstraints:
 
     def test_fixed_direction_negative_lossy_branch(self):
         # p_max_t <= 0 -> to->from branch: coeff = -(1 + loss_frac)
+        # Link has valid p_max_mw > 0; per-step box [p_min_t, p_max_t] is [-100, 0].
         loss_pct = 5.0
         links = [_link(from_bus=1, to_bus=2, loss_percent=loss_pct,
-                       mode="free", p_max_mw=100.0, p_min_mw=-100.0)]
+                       p_min_mw=-100.0, p_max_mw=100.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([-100.0])
@@ -503,7 +433,7 @@ class TestHVDCOperatingConstraints:
     def test_zero_straddling_lossless_and_warning(self):
         # Box straddles zero with nonzero loss -> lossless fallback + UserWarning
         links = [_link(from_bus=1, to_bus=2, loss_percent=2.0,
-                       mode="free", p_max_mw=100.0, p_min_mw=-100.0)]
+                       p_min_mw=-100.0, p_max_mw=100.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([-100.0])
@@ -523,7 +453,7 @@ class TestHVDCOperatingConstraints:
     def test_zero_straddling_lossless_no_warning(self):
         # Box straddles zero but loss=0 -> lossless, no UserWarning
         links = [_link(from_bus=1, to_bus=2, loss_percent=0.0,
-                       mode="free", p_max_mw=100.0, p_min_mw=-100.0)]
+                       p_min_mw=-100.0, p_max_mw=100.0)]
         p_in  = cp.Variable((1,))
         p_out = cp.Variable((1,))
         p_min_t = np.array([-100.0])
@@ -539,9 +469,9 @@ class TestHVDCOperatingConstraints:
         # Both must produce a single vector equality p_out == coeff_vec * p_in.
         links = [
             _link(from_bus=1, to_bus=2, loss_percent=4.0,
-                  mode="free", p_max_mw=100.0, p_min_mw=0.0),    # fixed
+                  p_min_mw=0.0,    p_max_mw=100.0),  # fixed-direction
             _link(from_bus=2, to_bus=3, loss_percent=4.0,
-                  mode="free", p_max_mw=100.0, p_min_mw=-100.0), # straddling
+                  p_min_mw=-100.0, p_max_mw=100.0),  # zero-straddling
         ]
         p_in  = cp.Variable((2,))
         p_out = cp.Variable((2,))
@@ -582,7 +512,7 @@ class TestHVDCWiring:
         {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
         {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
     ]
-    _LINK = HVDCLink(from_bus=1, to_bus=2, p_max_mw=50.0)
+    _LINK = HVDCLink(from_bus=1, to_bus=2, p_min_mw=-50.0, p_max_mw=50.0)
 
     def _case(self):
         return make_singlenode_case(300.0, self._GENS)
@@ -639,3 +569,233 @@ class TestHVDCWiring:
         tile_warns = [x for x in w if issubclass(x.category, UserWarning)
                       and "hvdc" in str(x.message).lower()]
         assert len(tile_warns) == 1
+
+
+# ---------------------------------------------------------------------------
+# Gate 3 (positive-wiring half) — lossy_dc builds expose HVDC in build
+# ---------------------------------------------------------------------------
+
+class TestHVDCLossyDCWiring:
+    """Gate 3 positive-wiring: lossy_dc build with hvdc= populates build.data
+    and build.variables with HVDC keys. Detection contract: "n_hvdc" in
+    build.data. Variables: p_hvdc_in / p_hvdc_out."""
+
+    _LINK = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-100.0, p_max_mw=100.0)
+
+    def test_single_step_data_key_present(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
+        assert "n_hvdc" in build.data
+
+    def test_single_step_n_hvdc_count(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
+        assert build.data["n_hvdc"] == 1
+
+    def test_single_step_incidence_shapes(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
+        nb = build.data["nb"]
+        assert build.data["Ch_from"].shape == (nb, 1)
+        assert build.data["Ch_to"].shape == (nb, 1)
+
+    def test_single_step_variables_present(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
+        assert "p_hvdc_in" in build.variables
+        assert "p_hvdc_out" in build.variables
+
+    def test_single_step_variable_shapes(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
+        assert build.variables["p_hvdc_in"].shape == (1,)
+        assert build.variables["p_hvdc_out"].shape == (1,)
+
+    def test_no_hvdc_key_absent_without_hvdc(self):
+        build = build_opf(case9(), formulation="lossy_dc")
+        assert "n_hvdc" not in build.data
+
+    def test_multistep_data_key_present(self):
+        case = case9()
+        T = 2
+        nb = case["bus"].shape[0]
+        df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+        df_Q = pd.DataFrame(np.zeros((T, nb)))
+        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)))
+        df_max = pd.DataFrame(np.tile([100.0], (T, 1)))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case, df_P, df_Q, T=T,
+                formulation="lossy_dc",
+                hvdc=[self._LINK],
+                df_hvdc_min=df_min,
+                df_hvdc_max=df_max,
+            )
+        assert "n_hvdc" in build.data
+
+    def test_multistep_variables_are_lists(self):
+        case = case9()
+        T = 3
+        nb = case["bus"].shape[0]
+        df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+        df_Q = pd.DataFrame(np.zeros((T, nb)))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case, df_P, df_Q, T=T,
+                formulation="lossy_dc",
+                hvdc=[self._LINK],
+            )
+        assert isinstance(build.variables["p_hvdc_in"], list)
+        assert isinstance(build.variables["p_hvdc_out"], list)
+        assert len(build.variables["p_hvdc_in"]) == T
+        assert len(build.variables["p_hvdc_out"]) == T
+
+
+# ---------------------------------------------------------------------------
+# Gate 4 — live solve: lossy_dc with HVDC on case9
+# ---------------------------------------------------------------------------
+
+class TestHVDCLossyDCSolve:
+    """Gate 4: live solve tests for lossy_dc formulation with HVDC.
+
+    Uses case9, bus 4 → bus 9 link. Verifies optimality, flow conservation,
+    and the loss relationship p_out = coeff * p_in.
+
+    Convention B sign convention (from hvdc.py):
+      p_in > 0 at from_bus: from_bus injects into grid (receives from DC link)
+      p_out < 0 at to_bus: to_bus withdraws from grid (sends into DC link)
+      For p_min_t >= 0 (from->to): p_out = -(1 - loss_frac) * p_in
+    """
+
+    _CASE = staticmethod(case9)
+
+    def _Pd_mw(self, case):
+        return case["bus"][:, 2]  # column PD, MW
+
+    def test_lossless_unconstrained_solves_optimal(self):
+        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-1000.0, p_max_mw=1000.0)
+        build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+        build.solve()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+    def test_lossless_unconstrained_flow_conservation(self):
+        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-1000.0, p_max_mw=1000.0)
+        build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+        build.solve()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+        A       = build.data["A"]
+        Ch_from = build.data["Ch_from"]
+        Ch_to   = build.data["Ch_to"]
+        Pd      = build.data["Pd"]
+        bMVA    = build.data["baseMVA"]
+
+        p_flows = build.variables["p_flows"].value
+        p_gen   = build.variables["p_gen"].value
+        p_in    = build.variables["p_hvdc_in"].value
+        p_out   = build.variables["p_hvdc_out"].value
+
+        balance = (
+            A @ p_flows
+            + p_gen
+            + (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
+        )
+        np.testing.assert_allclose(balance, Pd, atol=1e-4)
+
+    def test_pinned_lossless_p_in_and_p_out(self):
+        # Degenerate box pins p_in to 50 MW; lossless so p_out = -50 MW.
+        lnk = HVDCLink(from_bus=4, to_bus=9,
+                       p_min_mw=50.0, p_max_mw=50.0, loss_percent=0.0)
+        build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+        build.solve()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+        p_in  = build.variables["p_hvdc_in"].value[0]
+        p_out = build.variables["p_hvdc_out"].value[0]
+        assert p_in  == pytest.approx(50.0,  abs=1e-3)
+        assert p_out == pytest.approx(-50.0, abs=1e-3)
+
+    def test_pinned_lossy_fixed_positive_direction(self):
+        # p_min=p_max=60 MW, loss=5% -> p_out = -(1-0.05)*60 = -57
+        loss_pct = 5.0
+        lnk = HVDCLink(from_bus=4, to_bus=9,
+                       p_min_mw=60.0, p_max_mw=60.0, loss_percent=loss_pct)
+        build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+        build.solve()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+        p_in  = build.variables["p_hvdc_in"].value[0]
+        p_out = build.variables["p_hvdc_out"].value[0]
+        loss_frac = loss_pct / 100.0
+        assert p_in  == pytest.approx(60.0, abs=1e-3)
+        assert p_out == pytest.approx(-(1.0 - loss_frac) * 60.0, abs=1e-3)
+
+    def test_pinned_lossy_fixed_negative_direction_multistep(self):
+        # Multistep T=1, per-step box pins p_in at -60 MW (to->from direction).
+        # p_max_t=-60 <= 0 -> loss branch: p_out = -(1+loss_frac)*p_in = 63.
+        case = self._CASE()
+        nb = case["bus"].shape[0]
+        loss_pct = 5.0
+        lnk = HVDCLink(from_bus=4, to_bus=9,
+                       p_min_mw=-1000.0, p_max_mw=1000.0, loss_percent=loss_pct)
+        df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
+        df_Q = pd.DataFrame(np.zeros((1, nb)))
+        # Pin step 0 to -60 MW (degenerate box)
+        df_min = pd.DataFrame([[-60.0]])
+        df_max = pd.DataFrame([[-60.0]])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case, df_P, df_Q, T=1,
+                formulation="lossy_dc",
+                hvdc=[lnk],
+                df_hvdc_min=df_min,
+                df_hvdc_max=df_max,
+            )
+        build.solve()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+        p_in  = build.variables["p_hvdc_in"][0].value[0]
+        p_out = build.variables["p_hvdc_out"][0].value[0]
+        loss_frac = loss_pct / 100.0
+        assert p_in  == pytest.approx(-60.0, abs=1e-3)
+        assert p_out == pytest.approx(-(1.0 + loss_frac) * (-60.0), abs=1e-3)
+
+    def test_zero_straddling_emits_warning(self):
+        # Box straddles zero with loss > 0 -> UserWarning for lossless fallback.
+        lnk = HVDCLink(from_bus=4, to_bus=9,
+                       p_min_mw=-100.0, p_max_mw=100.0, loss_percent=5.0)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+        hvdc_warns = [x for x in w if issubclass(x.category, UserWarning)
+                      and "straddles zero" in str(x.message)]
+        assert len(hvdc_warns) == 1
+
+    def test_t1_multistep_matches_single_step_objective(self):
+        # T=1 multistep must give the same optimal objective as single-step.
+        case = self._CASE()
+        nb = case["bus"].shape[0]
+        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-50.0, p_max_mw=50.0)
+        df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
+        df_Q = pd.DataFrame(np.zeros((1, nb)))
+        df_min = pd.DataFrame([[-50.0]])
+        df_max = pd.DataFrame([[50.0]])
+
+        build_s = build_opf(case, formulation="lossy_dc", hvdc=[lnk])
+        build_s.solve()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build_m = build_opf_multistep(
+                case, df_P, df_Q, T=1,
+                formulation="lossy_dc",
+                hvdc=[lnk],
+                df_hvdc_min=df_min,
+                df_hvdc_max=df_max,
+            )
+        build_m.solve()
+
+        assert build_s.prob.status in ("optimal", "optimal_inaccurate")
+        assert build_m.prob.status in ("optimal", "optimal_inaccurate")
+        assert build_s.prob.value == pytest.approx(build_m.prob.value, rel=1e-4)

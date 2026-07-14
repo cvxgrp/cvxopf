@@ -3,10 +3,10 @@
 Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
 `case9_dcline` case file + Pypower reference fixture generated and verified;
 702 tests pass). **Step 1+2 (T1+T2) complete (Gate 1+2 green, 758 tests pass)**. **Step 3
-(T3) in progress as of 2026-07-13**: `problem.py` wiring + singlenode/AC/DC
-builder stub signatures + Gate 3 silent-ignore tests; Steps 4-7 (T4-T7)
-pending. Baseline confirmed **702 passed,
-0 failed** (`uv run --extra dev pytest tests/`).
+(T3) complete (Gate 3 silent-ignore green, 762 tests pass)**. **Step 4
+(T4) complete as of 2026-07-13**: `dc_problem.py` full HVDC integration + Gate 3
+positive-wiring + Gate 4 live solve tests; **766 tests pass**. Steps 5-7
+(T5-T7) pending.
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
 
@@ -569,6 +569,41 @@ will be added as part of Gate 4 (Step 4 commit).
 - cost: the builder calls `hvdc_cost_expr(cost_coeffs, p_in)` per link and adds the summed term to its objective (like storage aging cost).
 - **`inv_baseMVA` binding:** the builder sets `inv_baseMVA.value = 1.0/baseMVA` on the parameter returned by `hvdc_injections` before solving (the late-binding seam, Section 1).
 - both single/multistep builders thread `hvdc`/`df_hvdc_min`/`df_hvdc_max`; per-step `p_in`/`p_out` vars; populate `variables["p_hvdc_in"]`, `variables["p_hvdc_out"]`, `data["n_hvdc"]`, etc. Single-step uses `_hvdc_static_box(links)` directly for the box; multistep reads the per-step box `(p_min_t, p_max_t)` from `df_hvdc_min`/`df_hvdc_max` row `t` (falling back to the tiled `_hvdc_static_box` result when either frame is `None`, per Step 3). The Step 2 methods (`hvdc_injections` / `dc_operating_constraints`) receive those two `(n_hvdc,)` box arrays -- there is no per-mode branching in the builder.
+
+**As-built note (T4, 2026-07-13):**
+
+**I1 — `hvdc_injections` 2-tuple; variables created in builder scope.** The
+plan's Step 4 draft said `_make_dc_step_constraints` should call
+`hvdc_injections` -- but `hvdc_injections` creates `cp.Variable`s that the
+builder needs to expose in `build.variables`. Resolution: variables (`p_in`,
+`p_out`) are created in the builder scope, not inside `hvdc_injections`.
+`hvdc_injections` now takes `p_in`/`p_out` as inputs and returns a 2-tuple
+`(injection_expr, inv_baseMVA)` only. The builder creates the per-step
+variables, calls `hvdc_injections`, binds `inv_baseMVA.value`, then passes
+`injection_expr` and the variable references into `_make_dc_step_constraints`.
+
+**I2 — `p_min_mw` required; `mode`/`p_scheduled_mw`/`bandwidth_mw` removed.**
+Plan had `p_min_mw` as optional with per-mode defaults and retained
+`mode`/`p_scheduled_mw`/`bandwidth_mw` as reference fields. Resolution: make
+`p_min_mw` a required field on `HVDCLink`; remove `mode`, `p_scheduled_mw`,
+and `bandwidth_mw` entirely. The per-step box `[p_min_t, p_max_t]` is the sole
+internal representation; any mode helpers are upstream user code, not part of
+the dataclass. `hvdc_from_dcline` maps `Pmin→p_min_mw`, `Pmax→p_max_mw`
+directly.
+
+**Ext-bus-ID fix in `_parse_dc_case`.** After `reindex_case_to_consecutive`,
+`bus[:, BUS_I]` contains internal (0-based) IDs, not the original external
+MATPOWER IDs. The validation set used by `_validate_hvdc`, `_validate_storage`,
+and `_validate_nondispatchable` must contain external IDs so that e.g. bus 9
+(external) passes validation. Fixed: `ext_bus_ids = set(ext_to_int.keys())`
+instead of `set(bus[:, BUS_I])`. This is a latent bug that previously went
+undetected because all test cases happened to use bus IDs ≤ 8 for
+storage/nondispatchable units (so the internal and external sets had enough
+overlap). HVDC tests using bus 9 exposed it.
+
+**Gate counts:** 8 Gate-3-positive-wiring tests (`TestHVDCLossyDCWiring`) + 7
+Gate-4-live-solve tests (`TestHVDCLossyDCSolve`) added. Total: **766 tests**
+pass.
 
 **Gate 4 (live, deterministic, own commit):** `tests/test_hvdc.py::TestHVDCLossyDC` on case9 synthetic `bus 4 -> bus 9`:
 - lossless free-mode solves; balance holds; `p_hvdc_out == -p_hvdc_in`.
