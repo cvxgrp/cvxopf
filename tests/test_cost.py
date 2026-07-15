@@ -23,6 +23,7 @@ from cvxopf.cost import _lower_convex_hull, _pwl_cost_expr, poly_cost_expr
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _eval_pwl(x, f, at, warn="ignore"):
     """Solve min cost s.t. P == at, return the PWL cost value at that point."""
     P = cp.Variable()
@@ -41,6 +42,7 @@ def _true_pwl(x, f, at):
 # ---------------------------------------------------------------------------
 # _lower_convex_hull
 # ---------------------------------------------------------------------------
+
 
 class TestLowerConvexHull:
     def test_already_convex_returns_all_points(self):
@@ -78,6 +80,7 @@ class TestLowerConvexHull:
 # ---------------------------------------------------------------------------
 # _pwl_cost_expr -- convex inputs (exact)
 # ---------------------------------------------------------------------------
+
 
 class TestPWLConvex:
     # case9_dcline gen 0 cost curve.
@@ -119,6 +122,7 @@ class TestPWLConvex:
 # _pwl_cost_expr -- nonconvex inputs (hull + warning)
 # ---------------------------------------------------------------------------
 
+
 class TestPWLNonconvex:
     # Slopes 30 then 10 -> nonconvex; lower hull is the line slope 20.
     X = [0.0, 100.0, 200.0]
@@ -137,16 +141,12 @@ class TestPWLNonconvex:
     def test_uses_lower_convex_hull_values(self):
         # Hull line: f = 20 * P. Below the original interior point (3000 @ 100).
         for at in [50.0, 100.0, 150.0]:
-            assert _eval_pwl(self.X, self.F, at) == pytest.approx(
-                20.0 * at, abs=1e-4
-            )
+            assert _eval_pwl(self.X, self.F, at) == pytest.approx(20.0 * at, abs=1e-4)
 
     def test_hull_at_or_below_original_curve(self):
         # The convex hull never exceeds the original PWL cost.
         for at in [25.0, 75.0, 125.0, 175.0]:
-            assert _eval_pwl(self.X, self.F, at) <= _true_pwl(
-                self.X, self.F, at
-            ) + 1e-6
+            assert _eval_pwl(self.X, self.F, at) <= _true_pwl(self.X, self.F, at) + 1e-6
 
     def test_hulled_expression_is_dcp_convex(self):
         P = cp.Variable()
@@ -159,6 +159,7 @@ class TestPWLNonconvex:
 # ---------------------------------------------------------------------------
 # poly_cost_expr integration (MODEL=1, MODEL=2, mixed)
 # ---------------------------------------------------------------------------
+
 
 class TestPolyCostExprModels:
     def test_model1_single_gen(self):
@@ -180,10 +181,12 @@ class TestPolyCostExprModels:
 
     def test_mixed_model1_and_model2(self):
         # Two gens: one PWL, one polynomial. Cost is the sum.
-        gencost = np.array([
-            [1, 0, 0, 3, 0, 0, 100, 2500, 200, 5500],   # PWL: 4000 @ 150
-            [2, 0, 0, 2, 10.0, 0.0, 0, 0, 0, 0],         # linear 10*P: 500 @ 50
-        ])
+        gencost = np.array(
+            [
+                [1, 0, 0, 3, 0, 0, 100, 2500, 200, 5500],  # PWL: 4000 @ 150
+                [2, 0, 0, 2, 10.0, 0.0, 0, 0, 0, 0],  # linear 10*P: 500 @ 50
+            ]
+        )
         Pg = cp.Variable(2)
         cost = poly_cost_expr(gencost, Pg)
         cp.Problem(cp.Minimize(cost), [Pg[0] == 150, Pg[1] == 50]).solve()

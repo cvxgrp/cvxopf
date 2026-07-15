@@ -95,7 +95,16 @@ from scipy.sparse import csr_matrix
 from pypower.api import case9, case14, case57, runopf
 from pypower.idx_bus import VM, VA, BUS_I, BUS_TYPE, PV, REF
 from pypower.idx_gen import (
-    PG, QG, GEN_BUS, MBASE, GEN_STATUS, PMAX, PMIN, QMAX, QMIN, VG,
+    PG,
+    QG,
+    GEN_BUS,
+    MBASE,
+    GEN_STATUS,
+    PMAX,
+    PMIN,
+    QMAX,
+    QMIN,
+    VG,
 )
 from pypower.idx_dcline import c
 from pypower.isload import isload
@@ -109,12 +118,13 @@ from pypower.t.t_case9_dcline import t_case9_dcline
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-FIXTURES  = REPO_ROOT / "tests" / "fixtures"
+FIXTURES = REPO_ROOT / "tests" / "fixtures"
 
 
 # ---------------------------------------------------------------------------
 # Pypower OPF options: suppress printed output
 # ---------------------------------------------------------------------------
+
 
 def _make_ppopt():
     ppopt = ppoption.ppoption()
@@ -127,52 +137,78 @@ def _make_ppopt():
 # Run OPF and extract results
 # ---------------------------------------------------------------------------
 
+
 def _extract_result(result, case_name: str) -> dict:
     """Build the fixture dict from a solved Pypower OPF result."""
     converged = bool(result["success"])
-    status    = "optimal" if converged else "failed"
+    status = "optimal" if converged else "failed"
 
     if not converged:
         print(f"FAILED (Pypower did not converge for {case_name})")
         return dict(
-            case      = case_name,
-            solver    = "pypower-5.1.19",
-            status    = status,
-            objective = None,
-            Pg        = None,
-            Qg        = None,
-            Vm        = None,
-            Va_deg    = None,
+            case=case_name,
+            solver="pypower-5.1.19",
+            status=status,
+            objective=None,
+            Pg=None,
+            Qg=None,
+            Vm=None,
+            Va_deg=None,
         )
 
     objective = float(result["f"])
-    Pg        = result["gen"][:, PG].tolist()    # MW
-    Qg        = result["gen"][:, QG].tolist()    # MVAr
-    Vm        = result["bus"][:, VM].tolist()    # p.u.
-    Va_deg    = result["bus"][:, VA].tolist()    # degrees
+    Pg = result["gen"][:, PG].tolist()  # MW
+    Qg = result["gen"][:, QG].tolist()  # MVAr
+    Vm = result["bus"][:, VM].tolist()  # p.u.
+    Va_deg = result["bus"][:, VA].tolist()  # degrees
 
     print(f"OK  (f = {objective:.4f} $/hr)")
 
     return dict(
-        case      = case_name,
-        solver    = "pypower-5.1.19",
-        status    = status,
-        objective = objective,
-        Pg        = Pg,
-        Qg        = Qg,
-        Vm        = Vm,
-        Va_deg    = Va_deg,
+        case=case_name,
+        solver="pypower-5.1.19",
+        status=status,
+        objective=objective,
+        Pg=Pg,
+        Qg=Qg,
+        Vm=Vm,
+        Va_deg=Va_deg,
     )
 
 
 def _run_case(case_fn, case_name: str) -> dict:
     """Run Pypower AC-OPF on a single case and return a results dict."""
-    ppc   = case_fn()
+    ppc = case_fn()
     ppopt = _make_ppopt()
 
     print(f"  Running Pypower AC-OPF for {case_name} ...", end=" ", flush=True)
     result = runopf(ppc, ppopt)
     return _extract_result(result, case_name)
+
+
+def _case9_pwl():
+    """Standard case9 with a mixed piecewise-linear / polynomial gencost.
+
+    Built independently from Pypower's own ``case9`` (NOT from cvxopf's
+    generated ``case9_pwl`` case file) so the fixture is an independent oracle
+    -- mirrors the deliberate case-file / fixture path separation used for
+    ``case9_dcline`` (see scripts/README.md). The gencost is the same mixed
+    MODEL=1/MODEL=2 array ``generate_testcases.py::_fabricate_case9_pwl``
+    writes: gens 0 and 2 piecewise-linear, gen 1 polynomial. At least one
+    polynomial gen is required or Pypower's ``opf_costfcn`` raises on the
+    empty polynomial-gen set (numpy 2.x); this is why an all-PWL case is not
+    fixture-backed. Both PWL curves are convex.
+    """
+    ppc = case9()
+    ppc["gencost"] = np.array(
+        [
+            [1, 0, 0, 4, 0, 0, 100, 2500, 200, 5500, 250, 7250],
+            [2, 0, 0, 2, 24.035, -403.5, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 3, 0, 0, 200, 3000, 300, 5000, 0, 0],
+        ],
+        dtype=float,
+    )
+    return ppc
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +218,7 @@ def _run_case(case_fn, case_name: str) -> dict:
 # See the "DC line handling" section of the module docstring for why this
 # exists (numpy-2.x breakage in toggle_dcline). Validated gen/bus-equivalent
 # to a real toggle_dcline run in scripts/_probe_dcline_transform.py (0b-iii).
+
 
 def _dcline_to_gens(ppc):
     """Hand-built equivalent of Pypower's ``userfcn_dcline_ext2int`` gen build.
@@ -206,8 +243,7 @@ def _dcline_to_gens(ppc):
     therefore uses the correct flip by design; treat it as an approximate
     oracle (also dropping loss0) when consuming it.
     """
-    ppc = {k: (v.copy() if isinstance(v, np.ndarray) else v)
-           for k, v in ppc.items()}
+    ppc = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in ppc.items()}
 
     dcline = ppc["dcline"]
     on = dcline[:, c["BR_STATUS"]] > 0
@@ -227,8 +263,8 @@ def _dcline_to_gens(ppc):
     fg[:, PMAX] = np.inf
     tg = fg.copy()
 
-    fg[:, GEN_BUS] = dc[:, c["F_BUS"]]      # external from-bus id
-    tg[:, GEN_BUS] = dc[:, c["T_BUS"]]      # external to-bus id
+    fg[:, GEN_BUS] = dc[:, c["F_BUS"]]  # external from-bus id
+    tg[:, GEN_BUS] = dc[:, c["T_BUS"]]  # external to-bus id
     fg[:, PG] = -dc[:, c["PF"]]
     tg[:, PG] = dc[:, c["PT"]]
     fg[:, QG] = dc[:, c["QF"]]
@@ -340,8 +376,8 @@ def _make_coupling_userfcn(orig_ppc):
         ng_int = ppc["gen"].shape[0]
         rows, cols, data = [], [], []
         for kk in range(ndc):
-            from_col = i2e[ng_orig + kk]           # from-gen (external row ng_orig+kk)
-            to_col   = i2e[ng_orig + ndc + kk]     # to-gen
+            from_col = i2e[ng_orig + kk]  # from-gen (external row ng_orig+kk)
+            to_col = i2e[ng_orig + ndc + kk]  # to-gen
             rows += [kk, kk]
             cols += [from_col, to_col]
             data += [1.0 - L1[kk], 1.0]
@@ -357,17 +393,19 @@ def _make_coupling_userfcn(orig_ppc):
 # pypower/t/t_dcline.py (the "AC OPF (with DC lines)" expected block, in-service
 # rows only), columns [PF, PT, QF, QT, VF, VT]. Used as a self-check that our
 # self-contained Option-A solve reproduces pypower's published answer.
-_CASE9_DCLINE_EXPECTED = np.array([
-    [10.0,    8.9,   -10.0,     10.0, 1.0674, 1.0935],
-    [2.2776,  2.2776,  0.0,      0.0, 1.0818, 1.0665],
-    [10.0,    9.5,     0.0563, -10.0, 1.0778, 1.0665],
-])
+_CASE9_DCLINE_EXPECTED = np.array(
+    [
+        [10.0, 8.9, -10.0, 10.0, 1.0674, 1.0935],
+        [2.2776, 2.2776, 0.0, 0.0, 1.0818, 1.0665],
+        [10.0, 9.5, 0.0563, -10.0, 1.0778, 1.0665],
+    ]
+)
 
 
 def _check_dcline_against_pypower(result, orig_ppc):
     """Assert the solved dummy-gen terminal quantities reproduce pypower's
     hardcoded expected array (atol=1e-3, absorbing solver tolerance)."""
-    g   = result["gen"]
+    g = result["gen"]
     bus = result["bus"]
     ng_orig = orig_ppc["gen"].shape[0]
     on_rows = np.flatnonzero(orig_ppc["dcline"][:, c["BR_STATUS"]] > 0)
@@ -378,9 +416,17 @@ def _check_dcline_against_pypower(result, orig_ppc):
         fb = int(orig_ppc["dcline"][dcrow, c["F_BUS"]])
         tb = int(orig_ppc["dcline"][dcrow, c["T_BUS"]])
         fromg = g[ng_orig + kk]
-        tog   = g[ng_orig + ndc + kk]
-        got.append([-fromg[PG], tog[PG], fromg[QG], tog[QG],
-                    bus[id_to_row[fb], VM], bus[id_to_row[tb], VM]])
+        tog = g[ng_orig + ndc + kk]
+        got.append(
+            [
+                -fromg[PG],
+                tog[PG],
+                fromg[QG],
+                tog[QG],
+                bus[id_to_row[fb], VM],
+                bus[id_to_row[tb], VM],
+            ]
+        )
     got = np.array(got)
     maxdiff = float(np.abs(got - _CASE9_DCLINE_EXPECTED).max())
     if not np.allclose(got, _CASE9_DCLINE_EXPECTED, atol=1e-3):
@@ -388,8 +434,10 @@ def _check_dcline_against_pypower(result, orig_ppc):
             f"case9_dcline solve does not match pypower's expected array "
             f"(max abs diff {maxdiff:.2e}). Terminal [PF,PT,QF,QT,VF,VT]:\n{got}"
         )
-    print(f"  [self-check] terminal flows match pypower t_dcline.py "
-          f"(max abs diff {maxdiff:.2e})")
+    print(
+        f"  [self-check] terminal flows match pypower t_dcline.py "
+        f"(max abs diff {maxdiff:.2e})"
+    )
 
 
 def _run_dcline_case(case_fn, case_name: str) -> dict:
@@ -411,10 +459,13 @@ def _run_dcline_case(case_fn, case_name: str) -> dict:
 
     orig = case_fn()
     if "dclinecost" in orig:
-        del orig["dclinecost"]   # zero-cost dcline, matching pypower t_dcline.py
+        del orig["dclinecost"]  # zero-cost dcline, matching pypower t_dcline.py
 
-    print(f"  Running Pypower AC-OPF for {case_name} (dcline->gens) ...",
-          end=" ", flush=True)
+    print(
+        f"  Running Pypower AC-OPF for {case_name} (dcline->gens) ...",
+        end=" ",
+        flush=True,
+    )
     ppc = _dcline_to_gens(orig)
     add_userfcn(ppc, "formulation", _make_coupling_userfcn(orig))
     result = runopf(ppc, ppopt)
@@ -429,6 +480,7 @@ def _run_dcline_case(case_fn, case_name: str) -> dict:
 # Write fixture
 # ---------------------------------------------------------------------------
 
+
 def _write_fixture(data: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
@@ -440,15 +492,17 @@ def _write_fixture(data: dict, path: Path) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     print(f"numpy version : {np.__version__}")
     print(f"Fixture output: {FIXTURES.relative_to(REPO_ROOT)}")
     print()
 
     cases = [
-        (case9,  "case9",  "case9_pypower_reference.json"),
+        (case9, "case9", "case9_pypower_reference.json"),
         (case14, "case14", "case14_pypower_reference.json"),
         (case57, "case57", "case57_pypower_reference.json"),
+        (_case9_pwl, "case9_pwl", "case9_pwl_pypower_reference.json"),
     ]
 
     failed = False
@@ -469,8 +523,11 @@ def main() -> int:
     print()
 
     if failed:
-        print("ERROR: one or more cases did not converge. "
-              "Fixture files may be incomplete.", file=sys.stderr)
+        print(
+            "ERROR: one or more cases did not converge. "
+            "Fixture files may be incomplete.",
+            file=sys.stderr,
+        )
         return 1
 
     print("All fixtures generated successfully.")

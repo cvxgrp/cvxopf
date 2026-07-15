@@ -170,25 +170,24 @@ def poly_cost_expr(gencost: np.ndarray, Pg_MW) -> cp.Expression:
     for k in range(gencost.shape[0]):
         model = int(gencost[k, MODEL])
         if model == 1:
-            n    = int(gencost[k, NCOST])
-            pts  = gencost[k, 4 : 4 + 2 * n]
-            x    = pts[0::2]
-            f    = pts[1::2]
+            n = int(gencost[k, NCOST])
+            pts = gencost[k, 4 : 4 + 2 * n]
+            x = pts[0::2]
+            f = pts[1::2]
             cost = cost + _pwl_cost_expr(x, f, Pg_MW[k])
             continue
         if model != 2:
             raise ValueError(
-                f"Generator {k}: unrecognised gencost MODEL={model}. "
-                "Expected 1 or 2."
+                f"Generator {k}: unrecognised gencost MODEL={model}. Expected 1 or 2."
             )
-        n      = int(gencost[k, NCOST])
+        n = int(gencost[k, NCOST])
         coeffs = gencost[k, 4 : 4 + n]
-        x      = Pg_MW[k]
-        expr   = 0
+        x = Pg_MW[k]
+        expr = 0
         degree = n - 1
         for i, c in enumerate(coeffs):
             cf = float(c)
-            p  = degree - i          # power for this coefficient
+            p = degree - i  # power for this coefficient
             if cf == 0.0:
                 continue
             if p == 0:

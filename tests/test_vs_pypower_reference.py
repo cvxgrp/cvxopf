@@ -34,9 +34,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import cvxpy as cp
 
 from cvxopf.testcases import case9, case14, case57
+from cvxopf.testcases.case9_pwl import case9_pwl
 from cvxopf.problem import build_opf
 from cvxopf.results import extract_results, compare_to_reference
 
@@ -45,11 +45,11 @@ from cvxopf.results import extract_results, compare_to_reference
 # Tolerances (documented in PLAN.md)
 # ---------------------------------------------------------------------------
 
-OBJ_RTOL  = 1e-4    # 0.01% relative tolerance on objective value
-PG_ATOL   = 0.1     # MW
-QG_ATOL   = 0.1     # MVAr  (see known discrepancies note above)
-VM_ATOL   = 1e-3    # p.u.
-VA_ATOL   = 1e-2    # degrees
+OBJ_RTOL = 1e-4  # 0.01% relative tolerance on objective value
+PG_ATOL = 0.1  # MW
+QG_ATOL = 0.1  # MVAr  (see known discrepancies note above)
+VM_ATOL = 1e-3  # p.u.
+VA_ATOL = 1e-2  # degrees
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _skip_if_fixture_empty(path: Path):
     """Skip the test if the fixture file is empty (not yet generated)."""
@@ -77,10 +78,7 @@ def _load_fixture(name: str) -> dict:
     _skip_if_fixture_empty(path)
     with open(path) as f:
         data = json.load(f)
-    return {
-        k: np.asarray(v) if isinstance(v, list) else v
-        for k, v in data.items()
-    }
+    return {k: np.asarray(v) if isinstance(v, list) else v for k, v in data.items()}
 
 
 def _solve(case_fn) -> dict:
@@ -93,13 +91,13 @@ def _solve(case_fn) -> dict:
 # case9 validation
 # ---------------------------------------------------------------------------
 
-class TestCase9VsPypower:
 
+class TestCase9VsPypower:
     @pytest.fixture(autouse=True)
     def load_ref(self):
-        self.ref     = _load_fixture("case9_pypower_reference.json")
+        self.ref = _load_fixture("case9_pypower_reference.json")
         self.results = _solve(case9)
-        self.comp    = compare_to_reference(self.results, self.ref)
+        self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
         assert self.results["status"] == "optimal"
@@ -158,7 +156,65 @@ class TestCase9VsPypower:
         cvx_total = self.results["Pg"].sum()
         ref_total = np.asarray(self.ref["Pg"]).sum()
         assert abs(cvx_total - ref_total) < 0.2, (
-            f"case9 total Pg: cvxopf={cvx_total:.3f} MW, "
+            f"case9 total Pg: cvxopf={cvx_total:.3f} MW, reference={ref_total:.3f} MW"
+        )
+
+
+# ---------------------------------------------------------------------------
+# case9_pwl validation (piecewise-linear generator costs)
+# ---------------------------------------------------------------------------
+#
+# case9_pwl is standard case9 with a mixed MODEL=1 (piecewise-linear) /
+# MODEL=2 (polynomial) gencost -- gens 0 and 2 PWL, gen 1 polynomial. It is
+# the Pypower oracle for cvxopf's PWL cost support. Both PWL curves are
+# convex, so cvxopf reproduces them exactly (no convex-hull approximation)
+# and matches Pypower. An all-PWL case (e.g. case30pwl) cannot be an oracle:
+# pypower==5.1.19's opf_costfcn raises on an empty polynomial-gen set under
+# numpy 2.x, so it ships as an example (examples/case30pwl_ac.py) instead.
+
+
+class TestCase9PwlVsPypower:
+    @pytest.fixture(autouse=True)
+    def load_ref(self):
+        self.ref = _load_fixture("case9_pwl_pypower_reference.json")
+        self.results = _solve(case9_pwl)
+        self.comp = compare_to_reference(self.results, self.ref)
+
+    def test_solve_status_optimal(self):
+        assert self.results["status"] == "optimal"
+
+    def test_objective(self):
+        rel_diff = float(self.comp["objective"]["rel_diff"])
+        assert rel_diff < OBJ_RTOL, (
+            f"case9_pwl objective relative difference {rel_diff:.2e} "
+            f"exceeds tolerance {OBJ_RTOL:.2e}.\n"
+            f"  cvxopf:    {float(self.comp['objective']['cvxopf']):.6f}\n"
+            f"  reference: {float(self.comp['objective']['reference']):.6f}"
+        )
+
+    def test_Pg_all_generators(self):
+        abs_diff = self.comp["Pg"]["abs_diff"]
+        for k, diff in enumerate(abs_diff):
+            assert diff < PG_ATOL, (
+                f"case9_pwl gen {k} Pg abs_diff={diff:.4f} MW "
+                f"exceeds tolerance {PG_ATOL} MW.\n"
+                f"  cvxopf:    {self.comp['Pg']['cvxopf'][k]:.4f} MW\n"
+                f"  reference: {self.comp['Pg']['reference'][k]:.4f} MW"
+            )
+
+    def test_Vm_all_buses(self):
+        abs_diff = self.comp["Vm"]["abs_diff"]
+        for i, diff in enumerate(abs_diff):
+            assert diff < VM_ATOL, (
+                f"case9_pwl bus {i} Vm abs_diff={diff:.6f} p.u. "
+                f"exceeds tolerance {VM_ATOL} p.u."
+            )
+
+    def test_total_generation_MW(self):
+        cvx_total = self.results["Pg"].sum()
+        ref_total = np.asarray(self.ref["Pg"]).sum()
+        assert abs(cvx_total - ref_total) < 0.2, (
+            f"case9_pwl total Pg: cvxopf={cvx_total:.3f} MW, "
             f"reference={ref_total:.3f} MW"
         )
 
@@ -167,13 +223,13 @@ class TestCase9VsPypower:
 # case14 validation
 # ---------------------------------------------------------------------------
 
-class TestCase14VsPypower:
 
+class TestCase14VsPypower:
     @pytest.fixture(autouse=True)
     def load_ref(self):
-        self.ref     = _load_fixture("case14_pypower_reference.json")
+        self.ref = _load_fixture("case14_pypower_reference.json")
         self.results = _solve(case14)
-        self.comp    = compare_to_reference(self.results, self.ref)
+        self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
         assert self.results["status"] == "optimal"
@@ -235,8 +291,7 @@ class TestCase14VsPypower:
         cvx_total = self.results["Pg"].sum()
         ref_total = np.asarray(self.ref["Pg"]).sum()
         assert abs(cvx_total - ref_total) < 0.2, (
-            f"case14 total Pg: cvxopf={cvx_total:.3f} MW, "
-            f"reference={ref_total:.3f} MW"
+            f"case14 total Pg: cvxopf={cvx_total:.3f} MW, reference={ref_total:.3f} MW"
         )
 
     def test_Vm_at_slack_bus(self):
@@ -246,19 +301,20 @@ class TestCase14VsPypower:
             f"case14 slack bus Vm={vm_slack:.6f}; expected ~1.06 p.u."
         )
 
+
 # ---------------------------------------------------------------------------
 # case57 validation
 # ---------------------------------------------------------------------------
 
-class TestCase57VsPypower:
 
-    PG_ATOL = 0.2   # case57 needs wider tolerance than case9/case14
+class TestCase57VsPypower:
+    PG_ATOL = 0.2  # case57 needs wider tolerance than case9/case14
 
     @pytest.fixture(autouse=True)
     def load_ref(self):
-        self.ref     = _load_fixture("case57_pypower_reference.json")
+        self.ref = _load_fixture("case57_pypower_reference.json")
         self.results = _solve(case57)
-        self.comp    = compare_to_reference(self.results, self.ref)
+        self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
         assert self.results["status"] == "optimal"
@@ -317,16 +373,16 @@ class TestCase57VsPypower:
         cvx_total = self.results["Pg"].sum()
         ref_total = np.asarray(self.ref["Pg"]).sum()
         assert abs(cvx_total - ref_total) < 0.2, (
-            f"case57 total Pg: cvxopf={cvx_total:.3f} MW, "
-            f"reference={ref_total:.3f} MW"
+            f"case57 total Pg: cvxopf={cvx_total:.3f} MW, reference={ref_total:.3f} MW"
         )
 
     def test_Vm_at_slack_bus(self):
         """case57 slack bus (index 0) Vm should be within declared bus bounds."""
         from cvxopf.network import reindex_case_to_consecutive
+
         ppc, _ = reindex_case_to_consecutive(case57())
-        vmin     = float(ppc["bus"][0, 12])
-        vmax     = float(ppc["bus"][0, 11])
+        vmin = float(ppc["bus"][0, 12])
+        vmax = float(ppc["bus"][0, 11])
         vm_slack = self.results["Vm"][0]
         assert vmin - 1e-3 <= vm_slack <= vmax + 1e-3, (
             f"case57 slack bus Vm={vm_slack:.6f} outside bounds "
