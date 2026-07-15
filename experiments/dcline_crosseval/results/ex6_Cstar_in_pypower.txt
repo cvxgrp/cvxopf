@@ -1,0 +1,19 @@
+# EX6: C* feasibility in neutralized Pypower constraint set
+# P_res = Ybus-implied P minus scheduled P (MW); Q_res likewise (MVAr)
+# (real-gen Q left free -> Q_res is informational, not a violation)
+bus_ext   P_res(MW)   Q_res(MVAr)
+    1         0.0000      17.7576
+    2         0.0000       5.8744
+   30         2.0000      -4.6776
+    4        -1.9800      -0.0000
+    5        20.0000      -0.0000
+    6         0.0000      -0.0000
+    7         4.0000       0.0000
+    8        -0.0000       0.0000
+    9       -23.0000      -0.0000
+max |P_res| = 23.0000 MW
+max |Q_res| = 17.7576 MVAr
+
+INTERPRETATION: if max|P_res| ~0, C*'s real-power balance is
+feasible in Pypower -> divergence is local optima. If P_res spikes
+at specific buses, that locates the constraint-set difference.

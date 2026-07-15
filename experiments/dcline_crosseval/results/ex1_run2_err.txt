@@ -1,0 +1,4 @@
+/Users/bmeyers/.cache/uv/environments-v2/-ex-crosseval-cb98921719a4d2b9/lib/python3.13/site-packages/pypower/qps_cplex.py:180: SyntaxWarning: invalid escape sequence '\d'
+  s, e, tE, m, t = re.compile(vstr, '(\d+\.\d+)\.')
+/Users/bmeyers/.cache/uv/environments-v2/-ex-crosseval-cb98921719a4d2b9/lib/python3.13/site-packages/pypower/qps_mosek.py:201: SyntaxWarning: invalid escape sequence '\.'
+  pat = 'Version (\.*\d)+.*Build date: (\d+-\d+-\d+)'

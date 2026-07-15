@@ -1,0 +1,21 @@
+# EX6-(B): C* feasibility via Pypower power flow
+# runpf success = True
+bus_ext   Vm_C*     Vm_pf     dVm       Va_C*     Va_pf     dVa
+    1    1.10000   1.10000   0.00000   -0.0000   -0.0000    0.0000
+    2    1.10000   1.10000  -0.00000   -2.5789   -2.6419   -0.0631
+   30    1.09106   1.10188   0.01083   11.1254   10.2547   -0.8707
+    4    1.09172   1.09464   0.00292   -2.4741   -2.4824   -0.0083
+    5    1.08151   1.08410   0.00259   -2.1981   -3.0028   -0.8048
+    6    1.10000   1.10803   0.00803    4.9262    4.2166   -0.7096
+    7    1.08508   1.09051   0.00542   -1.5710   -1.9567   -0.3857
+    8    1.09668   1.09975   0.00307   -2.8757   -2.9379   -0.0622
+    9    1.06932   1.07503   0.00570   -6.2469   -5.6218    0.6252
+slack gen Pg after PF = 90.5431 MW (C* slack Pg = 90.0000)
+max |dVm| = 0.010826 p.u.
+max |dVa| = 0.870700 deg
+
+INTERPRETATION: runpf success + dVm/dVa ~0 + slack Pg ~ C* slack
+ => C* is a consistent operating point in Pypower's network
+ => C* FEASIBLE in Pypower => divergence is LOCAL OPTIMA.
+Large dVm/dVa or slack Pg shift => network/constraint models differ
+ => C* INFEASIBLE in Pypower => genuinely different problem.

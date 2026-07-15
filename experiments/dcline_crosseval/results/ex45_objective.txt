@@ -1,0 +1,15 @@
+# EX4/EX5 objective cross-evaluation
+C_Pg = [90.00000000006119, 10.000000000073406, 220.16268920025982]
+P_Pg = [90.0, 101.9744, 127.7269]
+
+EX4  C* direct-curve cost   = 5490.1038
+EX4  cvxopf reported at C*  = 5490.1038
+EX4  abs diff = 0.000000  rel = 0.00e+00
+
+EX5  P* direct-curve cost   = 6213.3582
+EX5  pypower reported at P* = 6213.3937
+EX5  abs diff = -0.035496  rel = 5.71e-06
+
+VERDICT (rtol=1e-04): objectives AGREE
+cross: C* costs 5490.10 vs P* costs 6213.36 under SAME objective
+       -> cvxopf point cheaper by 723.25
