@@ -34,6 +34,7 @@ from cvxopf.hvdc import (
 from cvxopf.testcases.case9_dcline import case9_dcline
 from cvxopf.testcases.case9 import case9
 from cvxopf.problem import build_opf, build_opf_multistep
+from cvxopf.results import extract_results
 from cvxopf.testcases import make_singlenode_case
 
 
@@ -1023,3 +1024,140 @@ class TestHVDCACSOlve:
         assert build_s.prob.status in ("optimal", "optimal_inaccurate")
         assert build_m.prob.status in ("optimal", "optimal_inaccurate")
         assert build_s.prob.value == pytest.approx(build_m.prob.value, rel=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Gate 6 - result extraction through extract_results()
+# ---------------------------------------------------------------------------
+
+class TestHVDCResultExtraction:
+    """Gate 6: extract_results() surfaces HVDC keys with correct shapes and
+    the derived hvdc_loss, for both ac and lossy_dc, single-step."""
+
+    def _pinned_link(self, loss_pct=0.0):
+        # degenerate box pins p_in = 60 MW (positive/from->to direction)
+        return HVDCLink(from_bus=4, to_bus=9,
+                        p_min_mw=60.0, p_max_mw=60.0, loss_percent=loss_pct)
+
+    def test_ac_keys_present_and_shapes(self):
+        build = build_opf(case9(), formulation="ac", hvdc=[self._pinned_link()])
+        build.solve()
+        r = extract_results(build)
+        assert "p_hvdc_in" in r and "p_hvdc_out" in r and "hvdc_loss" in r
+        assert r["p_hvdc_in"].shape == (1,)
+        assert r["p_hvdc_out"].shape == (1,)
+        assert r["hvdc_loss"].shape == (1,)
+
+    def test_dc_keys_present_and_shapes(self):
+        build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._pinned_link()])
+        build.solve()
+        r = extract_results(build)
+        assert "p_hvdc_in" in r and "p_hvdc_out" in r and "hvdc_loss" in r
+        assert r["p_hvdc_in"].shape == (1,)
+
+    def test_hvdc_loss_nonneg(self):
+        build = build_opf(case9(), formulation="ac", hvdc=[self._pinned_link(loss_pct=5.0)])
+        build.solve()
+        r = extract_results(build)
+        assert np.all(r["hvdc_loss"] >= -1e-6)
+
+    def test_hvdc_loss_equals_in_plus_out(self):
+        build = build_opf(case9(), formulation="ac", hvdc=[self._pinned_link(loss_pct=5.0)])
+        build.solve()
+        r = extract_results(build)
+        np.testing.assert_allclose(
+            r["hvdc_loss"], r["p_hvdc_in"] + r["p_hvdc_out"], atol=1e-6
+        )
+
+    def test_loss_law_through_extracted_values(self):
+        # p_in pinned 60, loss 5% -> p_out = -(1-0.05)*60 = -57, loss = 3
+        build = build_opf(case9(), formulation="ac", hvdc=[self._pinned_link(loss_pct=5.0)])
+        build.solve()
+        r = extract_results(build)
+        assert r["p_hvdc_in"][0] == pytest.approx(60.0, abs=1e-3)
+        assert r["p_hvdc_out"][0] == pytest.approx(-57.0, abs=1e-3)
+        assert r["hvdc_loss"][0] == pytest.approx(3.0, abs=1e-3)
+
+    def test_keys_absent_without_hvdc(self):
+        build = build_opf(case9(), formulation="ac")
+        build.solve()
+        r = extract_results(build)
+        assert "p_hvdc_in" not in r
+        assert "hvdc_loss" not in r
+
+
+# ---------------------------------------------------------------------------
+# Gate 6b - case9_dcline internal consistency (NOT a Pypower value-match)
+# ---------------------------------------------------------------------------
+
+class TestHVDCCase9DclineConsistency:
+    """Gate 6b: solve the real case9_dcline case with HVDC imported from its
+    dcline table and assert INTERNAL CONSISTENCY, not a value-match against
+    the Pypower fixture.
+
+    Why not a value-match: cvxopf's HVDC MVP models a DC line as a unity-PF
+    real-power injection, whereas Pypower models it as two dummy generators at
+    PV buses with reactive bounds (voltage-regulating reactive sources). That
+    device-model difference reshapes the AC solution. AC-OPF is also nonconvex
+    (sin/cos power flow), so the two solvers may land on different local
+    optima. Either way objective/dispatch do not match (cvxopf ~5490 vs
+    fixture ~6446); see memories/case9-dcline-branch-limit-gap.md. Branch
+    limits and PWL cost were ruled out as causes.
+
+    Links import via hvdc_from_dcline(dcline) with NO cost table (Option A:
+    matches the fixture script's del dclinecost; links are zero-cost).
+    """
+
+    def _build(self):
+        case = case9_dcline()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            links = hvdc_from_dcline(case["dcline"])
+            build = build_opf(case, formulation="ac", hvdc=links)
+        build.solve()
+        return build, links
+
+    def test_solves_optimal(self):
+        build, _ = self._build()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+
+    def test_loss0_warning_fires_on_import(self):
+        # row 0 (30->4) has loss0=1 -> hvdc_from_dcline warns
+        case = case9_dcline()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            hvdc_from_dcline(case["dcline"])
+        loss0_warns = [x for x in w if issubclass(x.category, UserWarning)
+                       and "loss0" in str(x.message).lower()]
+        assert len(loss0_warns) >= 1
+
+    def test_ac_nodal_balance_includes_hvdc(self):
+        build, _ = self._build()
+        assert build.prob.status in ("optimal", "optimal_inaccurate")
+        d = build.data
+        bMVA = d["baseMVA"]
+        p     = build.variables["p"].value
+        Cg    = d["Cg"]
+        Pg    = build.variables["Pg"].value
+        Pd    = d["Pd"]
+        Ch_from = d["Ch_from"]
+        Ch_to   = d["Ch_to"]
+        p_in  = build.variables["p_hvdc_in"].value
+        p_out = build.variables["p_hvdc_out"].value
+        hvdc_inj = (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
+        np.testing.assert_allclose(p, Cg @ Pg - Pd + hvdc_inj, atol=1e-4)
+
+    def test_loss_law_fixed_direction_links(self):
+        # all three imported links are fixed-direction (Pmin>=0): from->to.
+        build, links = self._build()
+        r = extract_results(build)
+        for k, lk in enumerate(links):
+            frac = lk.loss_percent / 100.0
+            assert r["p_hvdc_out"][k] == pytest.approx(
+                -(1.0 - frac) * r["p_hvdc_in"][k], abs=1e-3
+            )
+
+    def test_hvdc_loss_nonneg(self):
+        build, _ = self._build()
+        r = extract_results(build)
+        assert np.all(r["hvdc_loss"] >= -1e-6)
