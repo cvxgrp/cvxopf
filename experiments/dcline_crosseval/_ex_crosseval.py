@@ -35,8 +35,20 @@ gf = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gf)
 
 
-def solve_neutralized():
-    """EX1: branches off + dummy-gen Q pinned 0 + terminals PQ."""
+def solve_neutralized(seed=None):
+    """EX1: branches off + dummy-gen Q pinned 0 + terminals PQ.
+
+    Parameters
+    ----------
+    seed : dict or None
+        Optional warm-start initial guess applied to the ppc case tables AFTER
+        neutralization and right before runopf (the standard pypower warm-start
+        pattern). Keys (all in ppc-INTERNAL row order, all optional):
+          "bus_vm", "bus_va"   -> ppc["bus"][:, VM], [:, VA]
+          "gen_pg", "gen_qg"   -> ppc["gen"][:, PG], [:, QG]  (real + dummy rows)
+        VG is intentionally left at the case default (EX8 decision). None
+        reproduces the original cold-start behavior exactly.
+    """
     orig = t_case9_dcline()
     if "dclinecost" in orig:
         del orig["dclinecost"]
@@ -53,6 +65,15 @@ def solve_neutralized():
         row = idr[bid]
         if ppc["bus"][row, BUS_TYPE] != 3:              # not the ref bus
             ppc["bus"][row, BUS_TYPE] = PQ              # terminals PQ
+    if seed is not None:                                # warm-start guess
+        if "bus_vm" in seed:
+            ppc["bus"][:, VM] = np.asarray(seed["bus_vm"], dtype=float)
+        if "bus_va" in seed:
+            ppc["bus"][:, VA] = np.asarray(seed["bus_va"], dtype=float)
+        if "gen_pg" in seed:
+            ppc["gen"][:, PG] = np.asarray(seed["gen_pg"], dtype=float)
+        if "gen_qg" in seed:
+            ppc["gen"][:, QG] = np.asarray(seed["gen_qg"], dtype=float)
     add_userfcn(ppc, "formulation", gf._make_coupling_userfcn(orig))
     return gf.runopf(ppc, gf._make_ppopt()), orig
 
