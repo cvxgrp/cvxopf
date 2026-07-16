@@ -1,6 +1,6 @@
 ---
 name: case9-dcline-optima-gap
-description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. EX6 (2026-07-14) shows cvxopf's optimum C* is feasible in the neutralized Pypower problem except a 1 MW loss0 term -> the gap is DIFFERENT LOCAL OPTIMA, not a constraint-set difference. (Filename is now a misnomer: branch limits were ruled out.)
+description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. CONFIRMED (EX6+EX7b, 2026-07) different local optima, not a constraint-set difference: C* feasible in Pypower and P* feasible in cvxopf, each except one 1 MW loss0 term on link0 (symmetric residuals). (Filename is a misnomer: branch limits were ruled out.)
 metadata:
   type: project
 ---
@@ -53,20 +53,27 @@ basins are legitimate.
   different variable sets, so the harness manufactures drift. See
   `EX6B_CONTROL_REPORT.md`. Do not resurrect it.
 
-## Still open
-- **EX7a DONE (2026-07-15), UNCOMMITTED:** regenerated P\* as structured JSON
+## BOTH-SIDES CONFIRMED (EX7b, 2026-07-15)
+- **EX7a DONE, committed `4a18b82`:** regenerated P\* as structured JSON
   (`results/pstar_full.json`, mirror of cstar_full.json), obj-gated to 6249.8659.
   Records real Pg/Qg, from/to dummy Pg, dummy Qg (all 0), Vm/Va, gen_bus, and
   Pypower's own Ybus+i2e. P\* decodes to `p_in=[1,10,10]`, `p_out=[+0.01,-10,-9.5]`.
-  Corrects a stale prose sign typo: link0 `to_dummy_Pg=-0.01` so `p_out[0]=+0.01`
-  (older notes wrongly wrote `PT=[0.01,...]`). Script `_ex7a_pstar_full.py`.
-- **EX7b NEXT:** constraint-by-constraint residual of P\* in cvxopf's set, main
-  env, mirroring `_ex6_proper_constraint_residual.py`; guardrail gen-side recon
-  vs Ybus-side V*conj(YV) + double-check vs recorded Pypower Ybus. Expect P\*
-  feasible EXCEPT symmetric ~1 MW loss0 residual on link0 (cvxopf -(1-loss1)*p_in
-  =-0.99 vs P* +0.01). Then EX8 verdict, EX9 warm-start.
-- Until EX7/EX8, "different local optima" is strongly evidenced from the C\* side
-  but not yet confirmed from both.
+  Corrects a stale prose sign typo: link0 `to_dummy_Pg=-0.01` so `p_out[0]=+0.01`.
+  Script `_ex7a_pstar_full.py`.
+- **EX7b DONE (2026-07-15), UNCOMMITTED:** constraint-by-constraint residual of
+  P\* in cvxopf's set (`_ex7b_pstar_in_cvxopf.py`, `results/ex7b_residual.txt`,
+  `EX7b_REPORT.md`). RESULT: P\* is feasible in cvxopf to machine precision
+  (C1/C2 nodal balance 3e-9; C3-C6 satisfied; YBUS agree 4.4e-16) EXCEPT C7 DC
+  coupling on link0 = +1.0 MW = loss0 -- the EXACT SYMMETRIC MIRROR of EX6's
+  -1.0 (EX6 = C* vs Pypower's WITH-loss0 law; EX7b = P* vs cvxopf's DROPPED-loss0
+  law). => "different local optima" now confirmed FROM BOTH SIDES.
+- **Sign gotcha (EX7b, recorded so it isn't re-hit):** in P\* the DC terminals
+  are DUMMY GENERATORS injecting RAW Pg = -p_in (from-bus), -p_out (to-bus) --
+  the OPPOSITE of cvxopf's Convention-B grid injection (+p_in,+p_out). Nodal
+  balance for P\* must use the raw dummy Pg; using +p_in/+p_out manufactures a
+  spurious 2x residual (up to 39 MW). Caught by the guardrail, as designed.
+- **Still open:** EX8 consolidated verdict; EX9 optional warm-start basin test
+  (start cvxopf at P\*, see if it stays or falls to C\*).
 
 ## Consequence for Gate 6b (unaffected by the cause)
 Gate 6b uses internal-consistency assertions (nodal balance ~0, the
