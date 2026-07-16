@@ -151,3 +151,28 @@ The symmetric test (warm-start cvxopf at P*) is also informative.
 - Memory: memories/case9-dcline-optima-gap.md
 - Milestone plan: plans/milestone-7-hvdc.md (Ybus-agreement test added to T7).
 - Ybus check: _ybus_dump_cvxopf.py, _ybus_compare.py, results/ybus_compare.txt.
+
+---
+
+## STATUS TABLE (2026-07-15) canonical
+
+Supersedes the EX8/EX9 numbering in the Steps and status section above (stale:
+EX7 done; old EX8 verdict doc never written and moot; old EX9 warm-start split
+into cvxopf-side and Pypower-side tests). Source of truth: memory
+case9-dcline-optima-gap.md.
+
+| Step | What | Status |
+|------|------|--------|
+| EX1   | record P* neutralized Pypower optimum | DONE |
+| EX2   | record C* cvxopf optimum | DONE |
+| EX3   | point mapping / round-trip | DONE |
+| EX4/5 | objectives agree at each point | DONE (cost not the cause) |
+| EX6   | is C* feasible in Pypower set | DONE (yes except 1 MW loss0 on link0) |
+| EX7b  | is P* feasible in cvxopf set | DONE (yes, symmetric loss0 mirror) |
+| EX8   | Pypower warm-start via runopf case tables | VOID (runopf ignores seed; kept as negative result) |
+| EX9   | cvxopf warm-start variable.value to IPOPT | DONE (cvxopf holds C*, descends P*->C*) |
+| EX10  | Pypower warm-start via pips x0 hook | PROVISIONAL (converges to P*, seed feasibility not cleanly confirmed) |
+| EX11  | QED by static construction of C+ | NOT SOLID (static nudge cannot close nodal balance) |
+| EX12  | QED by re-solve with loss0 imposed | NEXT (planned) |
+
+Solid: EX1-EX9. Provisional: EX10. Not solid: EX11. Planned: EX12.

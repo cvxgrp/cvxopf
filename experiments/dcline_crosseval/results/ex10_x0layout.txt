@@ -1,0 +1,19 @@
+# EX10 probe: pips x0 layout for the neutralized case
+solve success = True  obj = 6249.8659
+
+len(x0) = 38
+nb = 9   ng (Pg vars) = 9   ny (PWL y) = 2
+
+## vv block boundaries [i1:iN)
+  Va   [  0:  9)  size 9
+  Vm   [  9: 18)  size 9
+  Pg   [ 18: 27)  size 9
+  Qg   [ 27: 36)  size 9
+  y    [ 36: 38)  size 2
+
+## layout check: 2*nb + 2*ng + ny = 2*9 + 2*9 + 2 = 38
+   len(x0) = 38  ->  MATCH
+
+## default (cold) x0 sample -- what EX8 actually fed IPOPT
+  x0[:3] (Va block, expect flat ref angle) = [0.0, 0.0, 0.0]
+  x0[:10] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]

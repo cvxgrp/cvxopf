@@ -1,0 +1,22 @@
+# EX10: real Pypower warm-start via pips x0 hook
+# cold start always takes 24 iters; P*_obj=6249.8659 C*_obj=5490.1038
+
+## P-arm CONTROL (seed P*, expect ~0-1 iters if hook took)
+success=True  obj=6249.8661  pips_iters=19
+iter-0 obj=18097.64  (near P*=6249.8659? => seed primal landed)
+obj trajectory=[18097.64, 18106.45, 19573.01, 23758.17, 57526.13, 73491.55, 88339.84, 49695.25, 22501.7, 8941.96, 6952.78, 6559.21, 6352.14, 6266.58, 6258.5, 6251.35, 6250.26, 6249.92, 6249.87, 6249.87]
+real Pg=[90.0, 106.1427, 123.4818]  dummy Pg=[-1.0, -10.0, -10.0, -0.01, 10.0, 9.5]
+|obj-P*|=1.803e-04
+HOOK TOOK: True (iters 19 < 24 cold)
+
+## C-arm DECISIVE (seed C*: does Pypower HOLD it?)
+success=True  obj=6249.8660  pips_iters=21
+iter-0 obj=15786.85  (near C*=5490.1038? => seed primal landed)
+obj trajectory=[15786.85, 15853.51, 16512.32, 21245.9, 52770.09, 77412.18, 106770.31, 137595.53, 93858.19, 19544.52, 9305.13, 7326.36, 6490.26, 6364.69, 6268.94, 6260.01, 6253.32, 6250.85, 6250.13, 6249.91, 6249.88, 6249.87]
+real Pg=[90.0, 106.1427, 123.4818]  dummy Pg=[-1.0, -10.0, -10.0, -0.01, 10.0, 9.5]
+|obj-C*|=7.598e+02  |obj-P*|=1.189e-04
+
+## VERDICT
+Pypower LEAVES C* (converged to 6249.87 ~ P*=6249.8659).
+C* is not a Pypower optimum -> may be a cvxopf-formulation artifact;
+canonicalization thesis complicated.

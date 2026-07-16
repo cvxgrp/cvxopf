@@ -1,6 +1,6 @@
 ---
 name: case9-dcline-optima-gap
-description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. CONFIRMED (EX6+EX7b, 2026-07) different local optima, not a constraint-set difference: C* feasible in Pypower and P* feasible in cvxopf, each except one 1 MW loss0 term on link0 (symmetric residuals). (Filename is a misnomer: branch limits were ruled out.)
+description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. NOT a constraint-set difference (EX6+EX7b: C* and P* mutually feasible except one 1 MW loss0 term on link0). Each solver holds its own cold-start basin (cvxopf->C* 5490, Pypower->P* 6249); open question whether cvxopf's DNLP canonicalization finds a systematically better basin or it's genuine bistability. (Filename is a misnomer: branch limits were ruled out.)
 metadata:
   type: project
 ---
@@ -93,9 +93,31 @@ basins are legitimate.
   See [[dnlp-canonicalization-tractability-thesis]] — DNLP canonicalization may
   present IPOPT a more tractable landscape than Pypower's raw NLP, so cvxopf
   reaching the cheaper C\* could be a formulation-tractability effect.
-- **DECISIVE NEXT:** real Pypower warm-start (find pips/opf x0 hook, not the
-  runopf case-table pattern). Does Pypower HOLD C\*? stays => thesis supported;
-  leaves => C\* may be a cvxopf-formulation artifact.
+- **EX10 PROVISIONAL (2026-07-15) — real Pypower warm-start, pips x0 hook:**
+  found the hook (intercept `pips`, overwrite Va/Vm/Pg/Qg in x0; layout len 38 =
+  Va[0:9] Vm[9:18] Pg[18:27] Qg[27:36] y[36:38]). Gotchas: ext2int REORDERS gens
+  (i2e=[0,1,2,3,6,5,4,7,8]) so seed Pg/Qg must be permuted to internal order;
+  the y (PWL) block left at default. RESULT: seed reaches pips (cold iter-0 obj
+  19271 vs seeded 15786, so NOT void) and pips converges to P*, NOT C*. BUT
+  provisional: never cleanly confirmed the seed lands FEASIBLY (first-principles
+  nodal mismatch ~1.5 vs gh_fcn |g|=1e6 disagreed; trajectory balloons to ~1e5).
+  Warm start is primal-only (duals/barrier cold), so departure may be
+  restoration, not basin rejection. Not settled. `_ex10_warmstart_pips.py`.
+- **EX11 NOT SOLID (2026-07-15) — QED-by-construction:** build C+ = C* nudged
+  fully Pypower-feasible (link0 p_out -0.99->+0.01, C7 exception gone); if fully
+  feasible AND cheaper than P*, P* is suboptimal. FAILED as a static construction:
+  the nudge injects +1 MW at the converter bus and a static rebalance on a gen
+  at a different bus cannot close nodal balance (C1=1 MW at bus 3) -- loss0
+  couples through the AC flow. Cost readout also buggy. `_ex11_cplus_qed.py`
+  (bannered partial).
+- **EX12 NEXT (the real QED):** don't CONSTRUCT C+, SOLVE for it -- re-solve with
+  link0 loss0 IMPOSED, get a genuinely Pypower-feasible point in the C* basin,
+  evaluate its objective in Pypower's cost model. Fully feasible AND < 6249.87
+  => P* suboptimal, QED. Subsumes the provisional EX10 question.
+- **NAMING:** session labels EX8(void)/EX9(cvxopf warmstart)/EX10(pypower
+  warmstart)/EX11(QED) are canonical; they supersede TEST_PLAN.md's original
+  EX8(verdict doc)/EX9(warm-start) scheme. TEST_PLAN's EX8 verdict doc was never
+  written and is moot given the warm-start results.
 
 ## Consequence for Gate 6b (unaffected by the cause)
 Gate 6b uses internal-consistency assertions (nodal balance ~0, the
