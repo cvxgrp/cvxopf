@@ -60,8 +60,7 @@ not the iteration count.
 
 ## Interpretation — the canonicalization-tractability thesis
 
-(Full framing: memory `dnlp-canonicalization-tractability-thesis`. Per the user
-2026-07-15, this is the basis of a paper.)
+(Full framing: memory `dnlp-canonicalization-tractability-thesis`.)
 
 CVXPY DNLP does DCP-style structural analysis + automatic transformation of the
 nonlinear problem before the solver sees it (e.g. rewriting sum(abs(x)) to its

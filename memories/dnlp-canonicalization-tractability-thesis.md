@@ -1,14 +1,14 @@
 ---
 name: dnlp-canonicalization-tractability-thesis
-description: The thesis behind the case9_dcline cvxopf-vs-Pypower gap — CVXPY DNLP canonicalization reshapes nonconvex NLPs into more tractable forms that make good local optima more likely (not guaranteed like DCP), so cvxopf systematically finding cheaper basins than raw-NLP tools (Pypower) may be a formulation-tractability effect, not seed luck.
+description: Working hypothesis behind the case9_dcline cvxopf-vs-Pypower gap — CVXPY DNLP canonicalization reshapes nonconvex NLPs into more tractable forms that make good local optima more likely (not guaranteed like DCP), so cvxopf finding cheaper basins than raw-NLP tools (Pypower) may be a formulation-tractability effect, not seed luck.
 metadata:
   type: project
 ---
 
-**This is the basis of a paper, per the user (2026-07-15).** Not just an
-explanation of one experiment's numerics — a general thesis about why a
-CVXPY/DNLP-based OPF tool may systematically outperform hand-rolled nonlinear
-formulations at finding good local optima.
+Working hypothesis (2026-07-15), not just an explanation of one experiment's
+numerics — a general point about why a CVXPY/DNLP-based OPF tool may tend to
+find better local optima than hand-rolled nonlinear formulations. Worth
+developing further.
 
 ## The thesis
 

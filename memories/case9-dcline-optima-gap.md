@@ -89,7 +89,7 @@ basins are legitimate.
   CVXPY's CANONICALIZATION auxiliaries, which .value does NOT seed (62 user
   constraints -> 111 canonical). The 21 control iters are IPOPT reconciling
   hidden auxiliaries; user vars barely move. Trust drift, not iter count.
-- **REFRAMING (paper):** the gap is likely NOT neutral "symmetric local optima."
+- **REFRAMING (DNLP thesis):** the gap is likely NOT neutral "symmetric local optima."
   See [[dnlp-canonicalization-tractability-thesis]] — DNLP canonicalization may
   present IPOPT a more tractable landscape than Pypower's raw NLP, so cvxopf
   reaching the cheaper C\* could be a formulation-tractability effect.
