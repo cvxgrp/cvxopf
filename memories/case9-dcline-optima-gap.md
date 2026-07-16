@@ -72,8 +72,30 @@ basins are legitimate.
   the OPPOSITE of cvxopf's Convention-B grid injection (+p_in,+p_out). Nodal
   balance for P\* must use the raw dummy Pg; using +p_in/+p_out manufactures a
   spurious 2x residual (up to 39 MW). Caught by the guardrail, as designed.
-- **Still open:** EX8 consolidated verdict; EX9 optional warm-start basin test
-  (start cvxopf at P\*, see if it stays or falls to C\*).
+- **EX8 VOID (2026-07-15):** Pypower-side warm-start did nothing at the solver
+  level. runopf discards the case-table VM/VA/PG/QG seed (that pattern is a
+  `runpf` idiom; `runopf` cold-inits x0). PROOF: cold vs seed-at-optimum give a
+  BYTE-IDENTICAL 24-iteration history, both starting obj 19271.925
+  (`_ex8_probe_iters.py`). Do not interpret the void two-arm EX8 output.
+- **EX9 DONE (2026-07-15), UNCOMMITTED — real warm-start, cvxopf side:** CVXPY
+  passes variable.value to IPOPT as x0. Seeded fully (theta/v/Pg/Qg/p_in/p_out +
+  closed-form P_vec/Q_vec + p=Rp@P_vec). RESULT: **cvxopf HOLDS C\* and DESCENDS
+  P\*->C\*** (both arms settle to C\*, obj 5490, p_in=[1,2,10]). P-arm iter-0
+  obj=6250 (seed reached IPOPT) then monotonically down to 5490. C-arm user-var
+  drift 1.3e-10. => within cvxopf's solver P\* is NOT a stable optimum.
+  `_ex9_warmstart_cvxopf.py`, `EX9_REPORT.md`.
+- **iter-0 inf_pr=25 red herring:** the C\* seed is fully feasible in cvxopf
+  (all 62 b.prob constraints <=7.1e-15, `_ex9_probe_seedfeas.py`). The 25 is
+  CVXPY's CANONICALIZATION auxiliaries, which .value does NOT seed (62 user
+  constraints -> 111 canonical). The 21 control iters are IPOPT reconciling
+  hidden auxiliaries; user vars barely move. Trust drift, not iter count.
+- **REFRAMING (paper):** the gap is likely NOT neutral "symmetric local optima."
+  See [[dnlp-canonicalization-tractability-thesis]] — DNLP canonicalization may
+  present IPOPT a more tractable landscape than Pypower's raw NLP, so cvxopf
+  reaching the cheaper C\* could be a formulation-tractability effect.
+- **DECISIVE NEXT:** real Pypower warm-start (find pips/opf x0 hook, not the
+  runopf case-table pattern). Does Pypower HOLD C\*? stays => thesis supported;
+  leaves => C\* may be a cvxopf-formulation artifact.
 
 ## Consequence for Gate 6b (unaffected by the cause)
 Gate 6b uses internal-consistency assertions (nodal balance ~0, the

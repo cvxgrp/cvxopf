@@ -1,0 +1,30 @@
+# EX9: two-arm warm-start control on the cvxopf/cvxpy/IPOPT side
+# C*_obj=5490.1038 (cvxopf's own optimum)  P*_obj=6249.8659
+
+## C-arm CONTROL (seed C*)
+status=optimal  obj=5490.1038  (seed target 5490.1038)
+drift Vm=2.117e-13 Va=1.070e-12 Pg=2.842e-14 Qg=1.276e-10 p_in=0.000e+00 p_out=0.000e+00
+stacked drift = 1.276e-10
+solved p_in  = [1.0, 2.0, 10.0]
+solved p_out = [-0.99, -2.0, -9.5]
+solved Pg    = [90.0, 10.0, 220.1627]
+|obj - C*|=1.599e-05  |obj - P*|=7.598e+02
+
+## P-arm INFORMATIVE (seed P*)
+status=optimal  obj=5490.1038  (seed target 6249.8659)
+drift Vm=9.798e-03 Va=1.027e+01 Pg=1.363e+02 Qg=1.890e+01 p_in=8.000e+00 p_out=8.062e+00
+stacked drift = 1.385e+02
+solved p_in  = [1.0, 2.0, 10.0]
+solved p_out = [-0.99, -2.0, -9.5]
+solved Pg    = [90.0, 10.0, 220.1627]
+|obj - C*|=1.599e-05  |obj - P*|=7.598e+02
+
+## READ
+C-arm is the control: seeded at cvxopf's own optimum, it must stay (obj
+~5490, tiny drift). The P-arm is the question: if cvxopf STAYS at P*
+(obj ~6250), then P* is a genuine second local optimum cvxopf can hold ->
+different-local-optima confirmed from the warm-start side. If cvxopf FALLS
+from P* to C* (obj ~5490), then from cvxopf's solver P* is not a stable
+optimum -- cvxopf's basin dominates. Compare against the EX8 finding that
+Pypower's solver would not hold C*. Watch the IPOPT iteration counts in the
+verbose logs above: few iters = seed held; many = seed left.

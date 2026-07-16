@@ -1,0 +1,35 @@
+# EX8: two-arm warm-start control (neutralized Pypower)
+# P*_obj=6249.8659  C*_obj=5490.1038
+
+## DC dispatch at the two seeds (the link1 swing this hinges on)
+P* p_in = [1.0, 10.0, 10.0]  p_out = [0.01, -10.0, -9.5]
+C* p_in = [1.0, 2.0, 10.0]  p_out = [-0.99, -2.0, -9.5]
+
+## ARM 1 -- P+ (control: seed at P*, expect ~0)
+success=True  obj=6249.8659  ids_match=True
+drift ||Vm||=0.000e+00 ||Va||=0.000e+00 ||Pg||=0.000e+00 ||Qg||=0.000e+00
+stacked drift = 0.000e+00
+|obj+ - P*_obj| = 3.475e-05
+
+## ARM 2 -- C+ (informative: seed at C*)
+success=True  obj=6249.8659  ids_match=True
+drift ||Vm||=9.798e-03 ||Va||=1.027e+01 ||Pg||=1.368e+02 ||Qg||=1.890e+01
+stacked drift = 1.385e+02
+|obj+ - C*_obj| = 7.598e+02
+C+ obj vs P*_obj = 6249.8659 vs 6249.8659 (did C+ climb toward P*?)
+
+## C+ solved DC dispatch
+C+ p_in = [1.0, 10.0, 10.0]  p_out = [0.01, -10.0, -9.5]
+(C* seed was p_in=[1.0, 2.0, 10.0])
+
+## SYMMETRY: is ||P*-P+|| ~ ||C*-C+||  and  |p*-p+| ~ |c*-c+| ?
+variable (stacked): P-arm 0.000e+00  vs  C-arm 1.385e+02
+objective          : P-arm 3.475e-05  vs  C-arm 7.598e+02
+
+## READ (known loss0 floor applies to the C-arm)
+If C-arm drift ~ P-arm drift (both tiny): C* is a genuine local optimum of
+the near-same problem -> different-local-optima verdict holds from the
+warm-start side too. If C-arm drift is LARGE and C+ obj climbs toward
+~6250: C* is NOT a Pypower optimum (sits in P*'s basin) -- would complicate
+the verdict. The loss0 nudge follow-up separates restoration- from
+basin-drift.

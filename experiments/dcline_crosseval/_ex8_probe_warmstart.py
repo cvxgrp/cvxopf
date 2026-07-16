@@ -8,6 +8,18 @@
 # ///
 """EX8 PROBE: does warm-starting the neutralized-Pypower solve actually take?
 
+============================================================================
+!!! SUPERSEDED / MISLEADING -- this probe's "PASS" was CIRCULAR. It seeded P*
+!!! and got P* back and concluded the warm-start works -- but the seed was
+!!! actually IGNORED by runopf; a cold solve also lands on P*, so "P+ ~ P*"
+!!! proves nothing. The committing message (ac6e827 "...warm-start seeding
+!!! validated") is WRONG. Disproof: `_ex8_probe_iters.py` shows cold and
+!!! seed-at-optimum give a BYTE-IDENTICAL 24-iter IPOPT history. Kept as a
+!!! documented negative result. See EX9_REPORT.md + memory
+!!! case9-dcline-optima-gap (EX8 VOID note).
+============================================================================
+
+
 Gating diagnostic before the real two-arm EX8. Seeds P* (the neutralized-Pypower
 optimum) back into ITS OWN problem via the standard pypower warm-start pattern
 (bus VM/VA + gen PG/QG written into the case tables before runopf; VG left at

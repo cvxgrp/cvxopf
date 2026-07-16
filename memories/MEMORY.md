@@ -7,4 +7,5 @@
 - [HVDC silent-ignore dispatch constraint](hvdc-silent-ignore-dispatch-constraint.md) — problem.py's single positional dispatch site makes "singlenode signatures unchanged" impossible; Step 3/R4 must be rewritten
 - [HVDC plan session handoff](hvdc-plan-session-handoff.md) — state for a fresh session to finish milestone-7-hvdc.md (remaining W6/W7/W8 + F1/F2; decisions locked)
 - [Milestone 7 HVDC status](milestone-7-hvdc-status.md) — T0/Step-0 done 2026-07-13; T-vs-Step naming; self-contained dcline oracle; T1 next
+- [DNLP canonicalization tractability thesis](dnlp-canonicalization-tractability-thesis.md) — PAPER BASIS: CVXPY DNLP reshapes nonconvex NLPs into more-tractable forms (epigraph etc.) -> good local optima MORE LIKELY (not guaranteed like DCP); cvxopf finding cheaper basins than raw-NLP Pypower may be a formulation-tractability effect. Decisive test: does Pypower HOLD C*?
 - [cvxopf session working style](cvxopf-session-working-style.md) — checkpointed increments, verify-don't-trust, approach sign-off, rabbit-hole caution
