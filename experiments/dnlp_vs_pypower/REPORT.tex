@@ -7,6 +7,7 @@
 \usepackage{textcomp}
 \usepackage{hyperref}
 \usepackage[symbol]{footmisc}
+\usepackage{tabularx}
 
 % Convenience macros for the two methods, so wording stays consistent.
 \newcommand{\dnlp}{the DNLP method}
@@ -263,16 +264,18 @@ closely.
 \subsection{The pattern}
 
 \begin{center}
-\begin{tabular}{lll}
-\toprule
-\emph{variant} & \emph{added structure} & \emph{result} \\
-\midrule
-plain 9-bus, smooth & none & exact agreement \\
-PWL costs only & cost kinks & exact agreement \\
-DC lines only & routing freedom & dispatch agrees; ${\sim}1\%$ routing gap, DNLP cheaper \\
-PWL costs \textbf{and} DC lines & kinks + routing freedom & ${\sim}14\%$ gap, DNLP cheaper \\
-\bottomrule
-\end{tabular}
+	\begin{tabularx}{\textwidth}{l l X}
+		\toprule
+		\emph{variant} & \emph{added structure} & \emph{result} \\
+		\midrule
+		plain 9-bus, smooth & none & exact agreement \\
+		PWL costs only & cost kinks & exact agreement \\
+		DC lines only & routing freedom & dispatch agrees; ${\sim}1\%$ routing gap, \newline DNLP 
+		cheaper \\
+		PWL costs \textbf{and} DC lines & kinks + routing freedom & dispatch disagrees; ${\sim}14\%$ 
+		gap, \newline DNLP cheaper \\
+		\bottomrule
+	\end{tabularx}
 \end{center}
 
 Neither added feature causes (much) trouble on its own. Together they do, and
