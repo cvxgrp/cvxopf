@@ -1,6 +1,6 @@
 ---
 name: case9-dcline-optima-gap
-description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. NOT a constraint-set difference (EX6+EX7b: C* and P* mutually feasible except one 1 MW loss0 term on link0). Each solver holds its own cold-start basin (cvxopf->C* 5490, Pypower->P* 6249); open question whether cvxopf's DNLP canonicalization finds a systematically better basin or it's genuine bistability. (Filename is a misnomer: branch limits were ruled out.)
+description: Why cvxopf's case9_dcline AC solve does not value-match the Pypower oracle. RESOLVED (EX12, 2026-07-20): P* is a SUBOPTIMAL local point for Pypower's OWN problem -- not an alternate optimum. NOT a constraint-set difference (EX6+EX7b: C* and P* mutually feasible except one 1 MW loss0 term on link0). cvxopf finds the cheaper basin (C* 5490 vs P* 6249); DNLP-tractability reading is the live explanation. (Filename is a misnomer: branch limits were ruled out.)
 metadata:
   type: project
 ---
@@ -110,10 +110,40 @@ basins are legitimate.
   at a different bus cannot close nodal balance (C1=1 MW at bus 3) -- loss0
   couples through the AC flow. Cost readout also buggy. `_ex11_cplus_qed.py`
   (bannered partial).
-- **EX12 NEXT (the real QED):** don't CONSTRUCT C+, SOLVE for it -- re-solve with
-  link0 loss0 IMPOSED, get a genuinely Pypower-feasible point in the C* basin,
-  evaluate its objective in Pypower's cost model. Fully feasible AND < 6249.87
-  => P* suboptimal, QED. Subsumes the provisional EX10 question.
+- **EX12 DONE (2026-07-20) — THE QED FIRES, P* IS SUBOPTIMAL:** re-solved
+  cvxopf's neutralized AC-OPF with link0's loss coupling REPLACED by Pypower's
+  with-loss0 law (`p_out[0]=-(1-L1[0])*p_in[0]+L0[0]`, links 1/2 unchanged);
+  let IPOPT redistribute loss0 through the flow. Result C+ is FULLY feasible in
+  neutralized Pypower (C1 nodal 1.3e-13 -- EX11's stuck 1 MW residual GONE;
+  C7 with-loss0=[0,0,0] on every link) AND cheaper: C+ obj 5469.04 vs P* 6249.87,
+  **margin 780**. => P* is a SUBOPTIMAL local point for Pypower's own problem,
+  QED. Hypothesis CONFIRMED (user, pre-registered): C+ stayed in the C* basin
+  (||dPg||=1.05 MW, link1 held at box-min 2), did NOT slide to P* (135.6 MW away,
+  link1 box-max 10). No src/ changes: graft reassigns `build.prob`, solves via
+  `build.solve()`. DCP: each grafted equality verified affine/is_dcp in isolation
+  before grafting (whole problem is nonconvex-by-design, nlp=True). Subsumes the
+  provisional EX10 question. `_ex12_cplus_solve.py`, `EX12_REPORT.md`,
+  `results/ex12_cplus.txt`.
+- **TRAP 1 (bit EX11 AND EX12 first pass) — mixed cost model:** case9_dcline
+  gencost MIXES MODEL=1 (piecewise-linear, cols 4:4+2*NCOST are (x,f) breakpoint
+  PAIRS) and MODEL=2 (polynomial) rows: row0 M1 (4 pts), row1 M2 (linear), row2
+  M1 (3 pts). Reading M1 breakpoints as poly coeffs gives the spurious 11536.85
+  (the EX11 bug, reproduced). FIX: dispatch on MODEL col, np.interp the PWL,
+  np.polyval the poly. GUARD: re-evaluate C*'s own dispatch through the readout
+  and assert it reproduces C* obj 5490.10 -- that in-band check is what makes the
+  C+ objective trustworthy. `_ex12_probe_cost.py`.
+- **TRAP 2 (EX12) — constraint locator:** the HVDC loss coupling is ONE
+  vectorized (3,) equality `p_out==multiply(coeff_vec,p_in)` (hvdc.py:268). The
+  NODAL BALANCE `p == ... Ch_from@p_in + Ch_to@p_out ...` ALSO contains both HVDC
+  vars, so matching "involves both p_in and p_out" hits nodal balance FIRST
+  (constraints[57] shape (9,)) not the coupling (constraints[61] shape (3,));
+  deleting nodal balance => IPOPT local infeasibility. FIX: match the equality
+  whose ONLY vars are p_in/p_out (`ids == {p_in.id, p_out.id}`).
+  `_ex12_probe_locate.py`.
+- **C4=-282 is BENIGN (EX12):** case9_dcline reactive bounds are +/-300 MVAr
+  (d["Qgmin/max"]=+/-3.0 pu * 100); C+ Qg=[17.6,5.8,-4.9] sits far inside, worst
+  one-sided slack 17.6-300=-282.4 (negative=interior=no violation). Bound length
+  matches extracted Qg (3,3): NOT a dummy-gen misalignment. `_ex12_probe_c4.py`.
 - **NAMING:** session labels EX8(void)/EX9(cvxopf warmstart)/EX10(pypower
   warmstart)/EX11(QED) are canonical; they supersede TEST_PLAN.md's original
   EX8(verdict doc)/EX9(warm-start) scheme. TEST_PLAN's EX8 verdict doc was never

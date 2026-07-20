@@ -1,0 +1,48 @@
+# EX12: SOLVE for C+ (C* basin with link0 loss0 imposed) and fire the QED
+# n_hvdc=3  L0=[1.0, 0.0, 0.0]  L1=[0.01, 0.0, 0.05]  coeff=[-0.99, -1.0, -0.95]
+# regime: NEUTRALIZED (no branch limits)   P* = 6249.8659
+
+located loss-coupling constraint at build.prob.constraints[61]
+  original: p_hvdc_out == [-0.99 -1.   -0.95] * p_hvdc_in
+
+## DCP verification of the grafted equalities (in isolation)
+  link0: p_out[0] == -0.9900*p_in[0] + 1  | is_dcp=True lhs=AFFINE rhs=AFFINE -> OK
+  link1: p_out[1] == -1.0000*p_in[1]  | is_dcp=True lhs=AFFINE rhs=AFFINE -> OK
+  link2: p_out[2] == -0.9500*p_in[2]  | is_dcp=True lhs=AFFINE rhs=AFFINE -> OK
+
+## solve status: optimal   objective(cvxopf): 5469.0371
+
+## feasibility of C+ in neutralized Pypower (NO branch limits)
+C1 nodal real     = 1.330e-13 MW   (worst at bus 7)
+C2 nodal reactive = 6.942e-13 MVAr
+C3 gen P bounds worst viol   = -7.080e-10  (<=0 ok)
+C4 gen Q bounds worst viol   = -2.824e+02  (<=0 ok)
+C5 voltage bounds worst viol = -1.248e-11  (<=0 ok)
+C6 DC box worst viol         = -3.280e-09  (<=0 ok)
+C7 WITH-loss0 coupling resid = [-0.0, 0.0, 0.0]  (all ~0 => no exception)
+
+FULLY FEASIBLE in neutralized Pypower: True
+
+## objective of C+ in Pypower's cost model
+C+ objective (Pypower cost) = 5469.0371
+P* objective                = 6249.8659
+C+ < P* : True   (margin 780.8288)
+
+## cost-readout self-check (must reproduce C* obj 5490.10)
+_gencost at C* dispatch = 5490.1038  (C* known = 5490.10)
+cost readout valid: True
+
+## dispatch: C+ vs C* vs P*  (the hypothesis test)
+                  Pg0        Pg1        Pg2 |    pin0    pin1    pin2
+C*         90.000     10.000    220.163 |   1.000   2.000  10.000
+C+         90.000     10.000    219.109 |   1.000   2.000  10.000
+P*         90.000    106.140    123.480 |   1.000  10.000  10.000
+||Pg(C+) - Pg(C*)|| = 1.0533 MW
+||Pg(C+) - Pg(P*)|| = 135.6019 MW
+link1 p_in: C*=2.000 (box min 2)  C+=2.000  P*=10.000 (box max 10)
+
+## VERDICT
+C+ is FULLY feasible in neutralized Pypower's own problem AND cheaper than P*.
+=> P* is NOT optimal for Pypower's problem; Pypower returned a suboptimal
+   local point. The gap is a genuine local-optimum / DNLP-tractability
+   effect, not a model difference.  Q.E.D.
