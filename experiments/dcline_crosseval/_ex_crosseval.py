@@ -35,7 +35,7 @@ gf = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gf)
 
 
-def solve_neutralized(seed=None):
+def solve_neutralized(seed=None, gencost=None):
     """EX1: branches off + dummy-gen Q pinned 0 + terminals PQ.
 
     Parameters
@@ -48,8 +48,22 @@ def solve_neutralized(seed=None):
           "gen_pg", "gen_qg"   -> ppc["gen"][:, PG], [:, QG]  (real + dummy rows)
         VG is intentionally left at the case default (EX8 decision). None
         reproduces the original cold-start behavior exactly.
+    gencost : ndarray or None
+        Optional replacement for the 3 REAL-generator gencost rows, applied to
+        `orig` right after load and BEFORE `_dcline_to_gens` (so the dcline
+        dummy-gen zero-cost rows are appended on top unchanged). Shape must be
+        (3, ncol). Used by EX13 to swap case9_dcline's mixed PWL/poly cost for
+        case9's smooth quadratic cost, isolating the cost representation as the
+        only variable vs the PWL baseline. None keeps t_case9_dcline's costs.
     """
     orig = t_case9_dcline()
+    if gencost is not None:
+        gc = np.asarray(gencost, dtype=float)
+        assert gc.shape[0] == 3, (
+            f"gencost override must have 3 real-gen rows, got {gc.shape[0]}"
+        )
+        # widen/narrow orig gencost to the override's column count, then replace
+        orig["gencost"] = gc.copy()
     if "dclinecost" in orig:
         del orig["dclinecost"]
     orig["branch"][:, RATE_A] = 1e5                     # branches off

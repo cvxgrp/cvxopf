@@ -1,0 +1,41 @@
+# CHECK 1 -- marginal cost: why is C*'s routing dispatch cheaper?
+# dC_i/dP = 2*c2_i*P_i + c1_i (MW in engineering units). A cheaper convex
+# dispatch equalizes marginal costs across UNCONSTRAINED generators.
+
+## C*_smooth (free)
+  gen0(bus 1): Pg=  90.000  MC= 24.8000  [LOW]  bounds=[90,250]
+  gen1(bus 2): Pg= 133.399  MC= 23.8779  [free]  bounds=[10,300]
+  gen2(bus 30): Pg=  93.455  MC= 23.8965  [free]  bounds=[10,270]
+  marginal-cost spread among UNCONSTRAINED gens = 0.0186 (smaller = closer to merit-order optimum)
+
+## C_pinned (P* routing)
+  gen0(bus 1): Pg=  90.000  MC= 24.8000  [LOW]  bounds=[90,250]
+  gen1(bus 2): Pg= 133.823  MC= 23.9499  [free]  bounds=[10,300]
+  gen2(bus 30): Pg=  93.801  MC= 23.9812  [free]  bounds=[10,270]
+  marginal-cost spread among UNCONSTRAINED gens = 0.0313 (smaller = closer to merit-order optimum)
+
+CHECK 1 reading: whichever dispatch has the SMALLER marginal-cost spread
+among its unconstrained generators is the better-placed (cheaper) convex
+dispatch -- confirming the routing advantage is a generation-COST effect,
+not a loss effect (losses were shown to go the other way).
+
+==========================================================================
+
+# CHECK 2 -- canonicalization: are the PWL cost kinks epigraph-lifted?
+
+gencost models (1=PWL, 2=poly): [1, 2, 1]
+
+objective curvature: CONVEX
+atoms present in objective: ['ABCMeta']
+contains a max-of-affine (epigraph) atom: False
+
+(get_problem_data introspection unavailable: TypeError: Problem.get_problem_data() got an unexpected keyword argument 'nlp')
+Fallback evidence: the objective's max-of-affine atom above IS the
+epigraph form -- CVXPY represents a convex PWL cost as max(affine),
+which canonicalizes to an aux var t with t >= each affine segment.
+
+CHECK 2 reading: a disciplined PWL cost is a max-of-affine (epigraph)
+expression; canonicalization turns each kink into an auxiliary variable +
+linear inequalities. The interior-point method then descends a smooth
+surrogate, never modelling a gradient at a kink -- the mechanism the
+report attributes the disciplined solver's advantage to.

@@ -7,8 +7,21 @@ Status: in progress -- **Step 0 (T0) complete as of 2026-07-13** (Gate 0 green:
 (T4) complete as of 2026-07-13**: `dc_problem.py` full HVDC integration + Gate 3
 positive-wiring + Gate 4 live solve tests; **766 tests pass**. **Step 5 (T5)
 complete as of 2026-07-13**: `ac_problem.py` full HVDC integration + Gate 5
-positive-wiring + Gate 5 live solve (IPOPT); **781 tests pass**. Steps 6-7
-(T6-T7) pending.
+positive-wiring + Gate 5 live solve (IPOPT); **781 tests pass**. **Step 6 (T6)
+complete**: `results.py` HVDC extraction + Gate 6 (`TestHVDCResultExtraction`) +
+Gate 6b (`TestHVDCCase9DclineConsistency`, consistency-based -- NOT a Pypower
+value-match; see [[case9-dcline-optima-gap]]); **815 tests pass**. **Only Step 7
+(T7 -- public API, examples, docs) remains.**
+
+**Finding relevant to M15 (2026-07-20):** the case9_dcline cross-eval
+demonstrated that imposing MATPOWER `LOSS0` (fixed converter loss) on a
+**known-direction** link is a TRIVIAL affine graft in cvxopf: replace the
+lossless coupling with `p_out = -(1-loss_frac)*p_in + L0`, which stays
+AFFINE/DCP-valid and IPOPT handles cleanly (dispatch barely moves). This is a
+de-facto proof-of-concept for the fixed-loss piece of M15 *when flow direction
+is fixed a priori*; the hard part M15 genuinely defers is only the
+sign-switching (direction-as-decision) case. See
+`experiments/dcline_crosseval/` (EX12) + [[case9-dcline-optima-gap]].
 
 This plan was written after reading `problem.py`, `ac_problem.py`, `dc_problem.py`, `singlenode_dc_problem.py`, `results.py`, `storage.py`, and `__init__.py`. All design decisions from the Milestone 7 handoff are treated as resolved; this plan records how they map onto the existing code and flags the one item that could not be verified from the codebase.
 

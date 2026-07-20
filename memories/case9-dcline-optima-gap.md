@@ -149,6 +149,35 @@ basins are legitimate.
   EX8(verdict doc)/EX9(warm-start) scheme. TEST_PLAN's EX8 verdict doc was never
   written and is moot given the warm-start results.
 
+## 2x2 STUDY (2026-07-20) — generalizes the gap to a nondifferentiability thesis
+Follow-on to EX12. Controlled 2x2 on 9-bus: factors = PWL cost (mixed
+MODEL=1/2) x HVDC DC lines. Full prose:
+`experiments/dcline_crosseval/DNLP_ROUTING_AND_PWL_REPORT.md`; drives
+[[dnlp-canonicalization-tractability-thesis]].
+- Neither nondiff feature ALONE trips Pypower: plain 9-bus (smooth) and
+  case9_pwl (PWL, NO dc lines) BOTH match Pypower to 1e-4 as COMMITTED oracle
+  tests (`TestCase9`, `TestCase9Pwl`; verified passing, `case9_pwl` has no
+  dcline). DC+smooth: Pg agrees <2 MW but routing flips; PWL+DC: ~12% gap. =>
+  nondiff-feature INTERACTION; driver is nondifferentiability (kinks+corners),
+  not the shared AC nonconvexity.
+- **Smooth+DC routing flip is REAL, not a bug** (`_ex13_probe_endpoints.py`):
+  no from/to endpoint swap on either side. links B(7->9 lossless) + C(5->9 5%)
+  both deliver to bus 9, withdraw at 7 vs 5. cvxopf floors B=2/maxes C=10;
+  Pypower maxes B=10/idles C~0.
+- **Why cvxopf's routing is cheaper (EX13c decomp + EX13d CHECK1, VERIFIED):**
+  NOT loss relief (cvxopf carries slightly HIGHER loss). Generation-COST effect:
+  cvxopf equalizes marginal cost (2c2*P+c1) more tightly across unconstrained
+  gens (spread 0.0186 vs 0.0313). ~18-unit genuine optimum + ~34-unit
+  stuck-solver residual (Pypower worse at its OWN routing, EX13b).
+- **CHECK2 (epigraph canonicalization) PUNTED:** one-shot introspection failed
+  (`Expression.atoms()` no type filter this CVXPY; `get_problem_data(nlp=True)`
+  invalid kwarg). Asserted as source-grounded likely explanation
+  (`cost.py::_pwl_cost_expr` returns `cp.maximum(*affine_pieces)`).
+- Scripts UNCOMMITTED: `_ex13_smoothcost_{pypower,cvxopf}.py`,
+  `_ex13b_routing_cvxopf.py`, `_ex13c_routing_decomp.py`,
+  `_ex13d_mechanism_checks.py`, `_ex13_probe_endpoints.py`; `_ex_crosseval.py`
+  gained optional `gencost=`. Report draft + memories pending commit.
+
 ## Consequence for Gate 6b (unaffected by the cause)
 Gate 6b uses internal-consistency assertions (nodal balance ~0, the
 `p_out = -(1-loss_frac)*p_in` law on fixed-direction links, `hvdc_loss >= 0`,

@@ -1,0 +1,25 @@
+# EX13 (cvxopf): SMOOTH-cost neutralized case9_dcline + link0 loss0 imposed
+# L0=[1.0, 0.0, 0.0]  L1=[0.01, 0.0, 0.05]  coeff=[-0.99, -1.0, -0.95]
+# gencost: case9 smooth quadratic (MODEL=2), swapped in for the mixed PWL/poly
+
+## solve status: optimal   objective(cvxopf): 5262.0439
+
+## cost-readout guard (must match cvxopf solve objective)
+_polycost at C*_smooth dispatch = 5262.0439  (cvxopf obj 5262.0439)
+readout valid: True
+
+## head-to-head: C*_smooth (cvxopf) vs P*_smooth (neutralized Pypower)
+P*_smooth obj (Pypower) = 5314.2765   cvxopf obj = 5262.0439
+
+                 Pg0       Pg1       Pg2 |    pin0    pin1    pin2
+ C*_smooth    90.000   133.399    93.455 |   1.000   2.000  10.000
+ P*_smooth    90.000   135.228    93.801 |   1.014  10.000   0.000
+||dPg|| = 1.8609 MW    ||dp_in|| = 12.8060 MW
+
+## reference: PWL baseline divergence (EX12) for contrast
+  PWL C* Pg [90, 10, 220.16] p_in [1, 2, 10]  vs  P* Pg [90, 106.14, 123.48] p_in [1, 10, 10]
+  PWL ||dPg|| was 135.6 MW (link1 2 vs 10) -- sharp divergence.
+
+## VERDICT
+DIVERGE: paths still differ under smooth costs (||dPg||=1.861).
+The gap is NOT purely the PWL cost representation; inspect the dispatch.

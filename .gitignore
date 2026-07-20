@@ -267,3 +267,12 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,windows,linux,visualstudiocode
+
+# LaTeX build byproducts (DNLP-vs-Pypower report)
+experiments/dnlp_vs_pypower/*.aux
+experiments/dnlp_vs_pypower/*.pdf
+experiments/dnlp_vs_pypower/*.out
+experiments/dnlp_vs_pypower/*.toc
+experiments/dnlp_vs_pypower/*.fls
+experiments/dnlp_vs_pypower/*.fdb_latexmk
+experiments/dnlp_vs_pypower/*.synctex.gz

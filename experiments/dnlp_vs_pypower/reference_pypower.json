@@ -1,0 +1,99 @@
+{
+  "_note": "Pypower reference solutions for the four DNLP-vs-Pypower cells. Regenerate with `uv run generate_pypower_reference.py`. The two no-DC cells are copied from the committed, test-validated fixtures; the two DC cells are computed here with the neutralized dcline model (branches off, terminal Q=0, PQ terminals, real-power coupling userfcn) so only the solution method differs.",
+  "smooth_no_dc": {
+    "objective": 5296.686523629812,
+    "Pg": [
+      89.79861381248716,
+      134.3206524728349,
+      94.1874386277746
+    ],
+    "Qg": [
+      12.938735922306787,
+      0.04772950546739663,
+      -22.6197301773679
+    ],
+    "_source": "tests/fixtures/case9_pypower_reference.json (committed, test-validated)"
+  },
+  "pwl_no_dc": {
+    "objective": 5322.941913169991,
+    "Pg": [
+      26.883530589859163,
+      27.225048562872185,
+      269.99997183575294
+    ],
+    "Qg": [
+      23.433166361852,
+      8.108872047617165,
+      12.415214182687704
+    ],
+    "_source": "tests/fixtures/case9_pwl_pypower_reference.json (committed, test-validated)"
+  },
+  "smooth_dc": {
+    "objective": 5314.276529001563,
+    "Pg": [
+      90.00028937782861,
+      135.22787821413465,
+      93.80115839479713
+    ],
+    "Qg": [
+      11.364323692288293,
+      -0.08494907607914194,
+      -22.23170371368569
+    ],
+    "p_hvdc_in": [
+      1.0137533430045451,
+      9.999874592404492,
+      0.00020659218816644772
+    ],
+    "p_hvdc_out": [
+      0.003615809574499475,
+      9.999874592404492,
+      0.00019626257875812533
+    ],
+    "gen_bus": [
+      1,
+      2,
+      30,
+      30,
+      7,
+      5,
+      4,
+      9,
+      9
+    ]
+  },
+  "pwl_dc": {
+    "objective": 6249.865934753487,
+    "Pg": [
+      90.00000186990302,
+      106.14266936886642,
+      123.48178281381621
+    ],
+    "Qg": [
+      11.583990796679034,
+      -1.9441618387805484,
+      -20.738759234853145
+    ],
+    "p_hvdc_in": [
+      1.0000032608537885,
+      9.999996606850626,
+      9.999998258407881
+    ],
+    "p_hvdc_out": [
+      -0.009996771754749308,
+      9.999996606850626,
+      9.499998345487489
+    ],
+    "gen_bus": [
+      1,
+      2,
+      30,
+      30,
+      7,
+      5,
+      4,
+      9,
+      9
+    ]
+  }
+}
