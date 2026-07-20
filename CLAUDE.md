@@ -500,7 +500,7 @@ is present.
 | 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep` |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
-| 7 — HVDC transmission links | 🚧 In progress | Step 0 (T0) complete — `case9_dcline` case file + Pypower fixture; see `plans/milestone-7-hvdc.md` |
+| 7 — HVDC transmission links | 🚧 In progress | Steps 0–6 (T0–T6) complete — data struct, DC + AC integration, results extraction, Gate 6b consistency test (815 tests pass); only T7 (public API, examples, docs) remains. See `plans/milestone-7-hvdc.md` |
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
@@ -532,11 +532,12 @@ loop. Aging cost `lambda * sum_t |b_t|` follows Nnorom et al. (2026).
 `StorageUnitLossy` (asymmetric charge/discharge efficiency) is deferred.
 
 ### Milestone 7 — HVDC transmission links
-**Status: in progress.** Step 0 (T0 — test artifacts) complete as of 2026-07-13:
-`src/cvxopf/testcases/case9_dcline.py` and
-`tests/fixtures/case9_dcline_pypower_reference.json` are generated and verified
-(Gate 0 green). The build plan uses "Step 0–7"; the working label is "T0–T7"
-(T0 == Step 0). See `plans/milestone-7-hvdc.md` and, for how the dcline fixture
+**Status: in progress — only T7 remains.** Steps 0–6 (T0–T6) are complete
+(815 tests pass): test artifacts, HVDC data struct + validation + incidence,
+DC and AC formulation integration, and results extraction with the Gate 6b
+consistency test. The build plan uses "Step 0–7"; the working label is
+"T0–T7" (T0 == Step 0). Only T7 (public API, examples, docs) is left.
+See `plans/milestone-7-hvdc.md` and, for how the dcline fixture
 oracle is built (pypower's `toggle_dcline` is unusable under numpy 2.x),
 `scripts/README.md`.
 
