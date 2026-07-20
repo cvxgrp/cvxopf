@@ -149,17 +149,21 @@ basins are legitimate.
   EX8(verdict doc)/EX9(warm-start) scheme. TEST_PLAN's EX8 verdict doc was never
   written and is moot given the warm-start results.
 
-## 2x2 STUDY (2026-07-20) — generalizes the gap to a nondifferentiability thesis
+## 2x2 STUDY (2026-07-20) — PWL nondifferentiability x DC routing-freedom
 Follow-on to EX12. Controlled 2x2 on 9-bus: factors = PWL cost (mixed
 MODEL=1/2) x HVDC DC lines. Full prose:
-`experiments/dcline_crosseval/DNLP_ROUTING_AND_PWL_REPORT.md`; drives
+`experiments/dnlp_vs_pypower/REPORT.tex` (+demo.py proof-by-code); drives
 [[dnlp-canonicalization-tractability-thesis]].
 - Neither nondiff feature ALONE trips Pypower: plain 9-bus (smooth) and
   case9_pwl (PWL, NO dc lines) BOTH match Pypower to 1e-4 as COMMITTED oracle
   tests (`TestCase9`, `TestCase9Pwl`; verified passing, `case9_pwl` has no
-  dcline). DC+smooth: Pg agrees <2 MW but routing flips; PWL+DC: ~12% gap. =>
-  nondiff-feature INTERACTION; driver is nondifferentiability (kinks+corners),
-  not the shared AC nonconvexity.
+  dcline). DC+smooth: Pg agrees <2 MW but routing flips; PWL+DC: ~14% gap. =>
+  the two features act DIFFERENTLY (corrected 2026-07-20, user caught the
+  earlier "corners" overclaim): PWL costs add genuine nondifferentiability
+  (objective kinks); DC lines add routing FREEDOM that flattens the landscape
+  (a box+affine-loss link is smooth -- bounds are in the solver's wheelhouse).
+  Combined = flat ridge studded with kink-separated basins. NOT the shared AC
+  nonconvexity. Mechanism (reformulation vs solver) not yet isolated.
 - **Smooth+DC routing flip is REAL, not a bug** (`_ex13_probe_endpoints.py`):
   no from/to endpoint swap on either side. links B(7->9 lossless) + C(5->9 5%)
   both deliver to bus 9, withdraw at 7 vs 5. cvxopf floors B=2/maxes C=10;

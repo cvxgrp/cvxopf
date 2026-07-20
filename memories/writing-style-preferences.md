@@ -6,7 +6,7 @@ metadata:
 ---
 
 Distilled from the user's edits to
-`experiments/dcline_crosseval/DNLP_ROUTING_AND_PWL_REPORT.md` — their version vs
+`experiments/dnlp_vs_pypower/REPORT.tex` (then named DNLP_ROUTING_AND_PWL_REPORT.md) — their version vs
 my original draft. These are DURABLE prose preferences, apply to future reports/
 writeups.
 

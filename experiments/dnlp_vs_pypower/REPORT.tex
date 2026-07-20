@@ -51,16 +51,20 @@ We varied two features of the problem, each on or off:
     loss.
 \end{itemize}
 
-The headline result: \textbf{each feature alone is harmless --- both methods
+The headline result: each feature alone is harmless --- both methods
 agree to four decimal places --- but when both features are present together,
-the standard method settles for a solution roughly 14\% more expensive than the
-DNLP method.} The common thread is not nonconvexity (both added features are
-convex); it is \textbf{nondifferentiability}. Piecewise-linear costs have kinks, and the optimal DC-line 
-dispatch sits at capacity corners. An interior-point method
-models the objective and constraints with local gradients and curvature, which
-are ill-defined at a kink or corner. The DNLP method instead rewrites each
-nondifferentiable convex piece into a smooth (indeed linear) epigraph form that
-the interior-point method can descend exactly.
+\textbf{the standard method settles for a solution roughly 14\% more expensive than the
+DNLP method}.
+
+The common thread is not nonconvexity (both added features are
+convex). The two features act differently. Piecewise-linear costs introduce
+\textbf{nondifferentiability} --- kinks in the objective, where the local
+gradients and curvature an interior-point method relies on are ill-defined. The
+DC links introduce \textbf{routing freedom} that flattens the landscape into a
+ridge of nearly cost-equivalent operating points. Neither is fatal alone. Their
+combination --- a flat ridge studded with kink-separated basins --- is where the
+standard method lands in a worse local solution than the DNLP method, which
+solves a smooth epigraph reformulation of the kinked costs.
 
 \section{Methods}
 
@@ -261,47 +265,63 @@ closely.
 \begin{center}
 \begin{tabular}{lll}
 \toprule
-variant & added nondifferentiable structure & result \\
+\emph{variant} & \emph{added structure} & \emph{result} \\
 \midrule
 plain 9-bus, smooth & none & exact agreement \\
 PWL costs only & cost kinks & exact agreement \\
-DC lines only & capacity-corner routing & dispatch agrees; ${\sim}1\%$ routing gap, DNLP cheaper \\
-PWL costs \textbf{and} DC lines & kinks \textbf{and} corners & ${\sim}14\%$ gap, DNLP cheaper \\
+DC lines only & routing freedom & dispatch agrees; ${\sim}1\%$ routing gap, DNLP cheaper \\
+PWL costs \textbf{and} DC lines & kinks + routing freedom & ${\sim}14\%$ gap, DNLP cheaper \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Neither added feature causes (much) trouble on its own. Together they do. The
-gap grows with the amount of nondifferentiable convex structure in the problem,
-and every time the two methods disagree, the DNLP method is the one that finds
-the cheaper solution. We have verified in each case that the standard method's
+Neither added feature causes (much) trouble on its own. Together they do, and
+every time the two methods disagree the DNLP method is the one that finds the
+cheaper solution. We have verified in each case that the standard method's
 answer is genuinely suboptimal --- a feasible, cheaper point exists in its own
 feasible set.
 
-\subsection{Nondifferentiability is the core issue}
+\subsection{What the two features contribute}
 
-Both added features are \textbf{convex}; what they introduce is
-\textbf{nondifferentiability}. Piecewise-linear costs have kinks at their
-breakpoints, and the optimal DC-line dispatch sits at a capacity corner. The
-underlying AC power flow is nonconvex, but that nonconvexity is common to both
-methods and is not where they diverge --- they agree perfectly on the smooth
-variants, which share the same AC nonconvexity.
+The two features are different in kind, and it is worth being precise about
+each, because only one of them introduces nondifferentiability.
 
-An interior-point method builds a local model from first and second derivatives.
-At a kink or an active-set corner those derivatives are not well-defined, so the
-local model is wrong precisely where the optimum lives and the method can stall
-short, which is what we appear to see. The DNLP method avoids this by rewriting
-each nondifferentiable convex atom into its \textbf{epigraph form} before the
-solver sees it: a piecewise-linear cost becomes the maximum of its affine
-segments (one auxiliary variable plus linear inequalities), giving the solver a
-smooth landscape where its gradient-and-curvature model is valid everywhere.
+Piecewise-linear costs add genuine \textbf{nondifferentiability}: each convex
+PWL cost is a pointwise maximum of affine segments, with a kink at every
+breakpoint. An interior-point method models the objective from first and second
+derivatives, which are ill-defined at a kink, so the kink is exactly where a
+raw formulation can mislead the local model. The DNLP method rewrites each such
+cost into its \textbf{epigraph form} (one auxiliary variable plus linear
+inequalities), giving the solver a smooth surrogate whose derivatives are valid
+everywhere. This is the classic reason disciplined reformulation helps, and it
+is why the DNLP method is unbothered by the PWL costs.
 
-We present this as the \emph{likely} mechanism rather than a measured one. It is
-grounded in the construction (the piecewise-linear cost is built directly as a
-pointwise maximum of affine segments), but we did not instrument the canonical
-program at runtime to confirm it. The empirical claims (exact agreement on the
-single-feature variants, ${\sim}14\%$ divergence combined, verified
-suboptimality) do not depend on this account.
+The DC lines are different. A controllable injection with a capacity box and an
+affine loss law is smooth and convex --- bound constraints and their active-set
+corners are squarely in an interior-point solver's wheelhouse, and are not a
+source of nondifferentiability by themselves. What the DC lines add is
+\textbf{routing freedom that flattens the landscape}: links B and C both feed
+bus~9 from different source buses, creating a family of nearly cost-equivalent
+routings --- a shallow, nearly flat ridge. On such a ridge a local solver can
+settle at different points, which is exactly what we observe in the DC-only case
+(the dispatch agrees; only the routing differs, worth ${\sim}1\%$, and part of
+even that is the standard method not fully descending its own problem).
+
+The large gap appears only when the two are \textbf{combined}. The routing
+freedom multiplies the number of near-optimal operating points, and the kinked
+costs mean the routing choice also changes which cost segment each generator
+sits on --- so the flat ridge is now studded with shallow, kink-separated
+basins. A local method working on the raw formulation can land in a worse one;
+the DNLP method, solving the smooth epigraph reformulation of the costs, lands
+in a better one.
+
+We present this as the \emph{likely} mechanism, not a measured one. We did not
+instrument the canonical program at runtime, nor isolate reformulation quality
+from solver-implementation differences between IPOPT and pips. A natural next
+test is to hand pips the DNLP-canonicalized problem directly and see whether the
+gap closes. The empirical claims --- exact agreement on the single-feature
+variants, ${\sim}14\%$ divergence combined, and verified suboptimality of the
+standard method's answer --- do not depend on this account.
 
 \section{Conclusion}
 
@@ -322,7 +342,7 @@ What these results do not establish is a general guarantee: both problems are
 nonconvex, we did not certify global optimality of any DNLP solution, and the
 comparison covers one network at four operating points. What they do establish
 is narrow and firm --- on these problems the two methods diverge only when
-convex nondifferentiable structure is present, and where they diverge the
-standard method returns a verifiably suboptimal solution.
+piecewise-linear costs and routing freedom are present together, and where they
+diverge the standard method returns a verifiably suboptimal solution.
 
 \end{document}
