@@ -355,34 +355,19 @@ def _make_step_constraints(
     # Section 2: Flow definitions — p and q from P/Q matrix
     # ------------------------------------------------------------------
     if sparse_pq:
-        # TODO: vectorize once https://github.com/cvxpy/cvxpy/issues/3442 is
-        # resolved. The natural vectorised form:
-        #
-        #   C_vec  = cp.nlp.cos(theta[rows, 0] - theta[cols, 0])
-        #   S_vec  = cp.nlp.sin(theta[rows, 0] - theta[cols, 0])
-        #   vv_vec = cp.multiply(v[rows, 0], v[cols, 0])
-        #   constr += [PQ_P == cp.multiply(vv_vec, ...),
-        #              PQ_Q == cp.multiply(vv_vec, ...)]
-        #
-        # crashes inside init_hessian_coo_lower_tri because numpy array
-        # indexing of a CVXPY variable produces a compound gather expression
-        # that the DNLP Hessian sparsity analyser cannot handle. Scalar
-        # integer indexing in a loop works correctly.
-        nnz = len(rows)
-        for k in range(nnz):
-            i   = int(rows[k])
-            j   = int(cols[k])
-            C_k = cp.nlp.cos(theta[i, 0] - theta[j, 0])
-            S_k = cp.nlp.sin(theta[i, 0] - theta[j, 0])
-            vv_k = v[i, 0] * v[j, 0]
-            constr.append(
-                PQ_P[k] == vv_k * (float(G_vec[k]) * C_k + float(B_vec[k]) * S_k)
-            )
-            constr.append(
-                PQ_Q[k] == vv_k * (float(G_vec[k]) * S_k - float(B_vec[k]) * C_k)
-            )
+        # Vectorised gather over the Ybus sparsity pattern. This replaces the
+        # earlier scalar loop, which was a workaround for cvxpy issue #3442
+        # (numpy array indexing of a CVXPY variable produced a compound gather
+        # expression that crashed the DNLP Hessian sparsity analyser inside
+        # init_hessian_coo_lower_tri). Fixed in sparsediffpy >= 0.6.0 (cvxpy
+        # >= 1.10), so the natural form below is now valid.
+        C_vec  = cp.nlp.cos(theta[rows, 0] - theta[cols, 0])
+        S_vec  = cp.nlp.sin(theta[rows, 0] - theta[cols, 0])
+        vv_vec = cp.multiply(v[rows, 0], v[cols, 0])
 
         constr += [
+            PQ_P == cp.multiply(vv_vec, cp.multiply(G_vec, C_vec) + cp.multiply(B_vec, S_vec)),
+            PQ_Q == cp.multiply(vv_vec, cp.multiply(G_vec, S_vec) - cp.multiply(B_vec, C_vec)),
             p == Rp @ PQ_P,
             q == Rp @ PQ_Q,
         ]

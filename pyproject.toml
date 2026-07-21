@@ -60,3 +60,6 @@ packages = ["src/cvxopf"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+cvxpy = { git = "https://github.com/cvxpy/cvxpy.git" }
