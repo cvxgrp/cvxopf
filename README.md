@@ -432,7 +432,7 @@ package environment.
 - [ ] Branch flow limits (AC)
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
-- [x] HVDC transmission links (lossless + fixed-direction proportional loss)
+- [x] HVDC transmission links (lossless + fixed-direction proportional loss) with reactive power suppport
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split)
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
@@ -442,5 +442,3 @@ package environment.
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
-- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power suppport
-- [ ] Unify grid component model patterns matching HVDC pattern
