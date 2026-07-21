@@ -93,6 +93,8 @@ from pathlib import Path
 import numpy as np
 from scipy.sparse import csr_matrix
 from pypower.api import case9, case14, case57, runopf
+from pypower.ext2int import ext2int
+from pypower.makeYbus import makeYbus
 from pypower.idx_bus import VM, VA, BUS_I, BUS_TYPE, PV, REF
 from pypower.idx_gen import (
     PG,
@@ -477,6 +479,59 @@ def _run_dcline_case(case_fn, case_name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Ybus agreement fixture (case9_dcline)
+# ---------------------------------------------------------------------------
+#
+# Pins the load-bearing HVDC assumption that DC lines contribute NOTHING to
+# Ybus (they are modelled as nodal injections, not admittance branches).
+# makeYbus reads only the bus/branch tables, so the dcline/dclinecost tables
+# are dropped first -- their presence must not change Ybus, which is exactly
+# what the consuming test asserts against cvxopf's own build.data["Ybus"].
+#
+# makeYbus requires INTERNAL indexing, so ext2int is run first (plain ext2int
+# is unaffected by the numpy-2.x toggle_dcline breakage -- that bug lives in
+# the dcline userfcns, which are absent once the dcline table is removed).
+# The fixture records the external bus IDs in Pypower's internal order so the
+# consumer can align cvxopf's internal-indexed Ybus by external ID.
+
+
+def _run_dcline_ybus(case_fn, case_name: str) -> dict:
+    """Compute Pypower's Ybus for a dcline case and return a fixture dict.
+
+    Drops the ``dcline``/``dclinecost`` tables (irrelevant to ``makeYbus``),
+    runs ``ext2int``, and calls ``makeYbus``. The dense complex Ybus is split
+    into real/imag nested lists; ``bus_ids`` holds the external bus IDs in the
+    internal row/column order, so the consuming test can reindex.
+    """
+    ppc = case_fn()
+    for key in ("dcline", "dclinecost"):
+        if key in ppc:
+            del ppc[key]
+
+    print(f"  Building Pypower Ybus for {case_name} ...", end=" ", flush=True)
+    ppc_int = ext2int(ppc)
+    Ybus, _Yf, _Yt = makeYbus(
+        ppc_int["baseMVA"], ppc_int["bus"], ppc_int["branch"]
+    )
+    Ybus = np.asarray(Ybus.todense())
+
+    # external bus IDs in internal order: ext2int stores the original external
+    # bus id vector on order["bus"]["e2i"]/["i2e"]; i2e maps internal row -> ext.
+    i2e = ppc_int["order"]["bus"]["i2e"].astype(int)
+    bus_ids = i2e.tolist()
+
+    print(f"OK  (nb = {Ybus.shape[0]})")
+    return dict(
+        case=case_name,
+        solver="pypower-5.1.19",
+        quantity="Ybus",
+        bus_ids=bus_ids,
+        Ybus_real=np.real(Ybus).tolist(),
+        Ybus_imag=np.imag(Ybus).tolist(),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Write fixture
 # ---------------------------------------------------------------------------
 
@@ -520,6 +575,12 @@ def main() -> int:
     if data["status"] != "optimal":
         failed = True
     _write_fixture(data, FIXTURES / "case9_dcline_pypower_reference.json")
+    print()
+
+    # case9_dcline Ybus: pins that DC lines contribute nothing to Ybus. Not a
+    # solve, so it cannot "fail to converge"; written unconditionally.
+    ybus_data = _run_dcline_ybus(t_case9_dcline, "case9_dcline")
+    _write_fixture(ybus_data, FIXTURES / "case9_dcline_ybus_pypower_reference.json")
     print()
 
     if failed:

@@ -13,7 +13,9 @@ Gate 4 (TestHVDCLossyDCSolve): live solve — case9, bus 4 → bus 9, verifying
   optimality, flow conservation, and loss relationship.
 """
 
+import json
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -768,7 +770,7 @@ class TestHVDCLossyDCSolve:
                        p_min_mw=-100.0, p_max_mw=100.0, loss_percent=5.0)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            build = build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
+            build_opf(self._CASE(), formulation="lossy_dc", hvdc=[lnk])
         hvdc_warns = [x for x in w if issubclass(x.category, UserWarning)
                       and "straddles zero" in str(x.message)]
         assert len(hvdc_warns) == 1
@@ -922,12 +924,9 @@ class TestHVDCACSOlve:
         Ch_from = build.data["Ch_from"]
         Ch_to   = build.data["Ch_to"]
         Pd_pu   = build.data["Pd"]
-        Qd_pu   = build.data["Qd"]
 
         p     = build.variables["p"].value
-        q     = build.variables["q"].value
         Pg    = build.variables["Pg"].value
-        Qg    = build.variables["Qg"].value
         p_in  = build.variables["p_hvdc_in"].value
         p_out = build.variables["p_hvdc_out"].value
 
@@ -948,7 +947,6 @@ class TestHVDCACSOlve:
         build.solve()
         assert build.prob.status in ("optimal", "optimal_inaccurate")
 
-        bMVA  = build.data["baseMVA"]
         Cg    = build.data["Cg"]
         Qd_pu = build.data["Qd"]
 
@@ -992,7 +990,7 @@ class TestHVDCACSOlve:
                        p_min_mw=-100.0, p_max_mw=100.0, loss_percent=5.0)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            build = build_opf(self._CASE(), formulation="ac", hvdc=[lnk])
+            build_opf(self._CASE(), formulation="ac", hvdc=[lnk])
         hvdc_warns = [x for x in w if issubclass(x.category, UserWarning)
                       and "straddles zero" in str(x.message)]
         assert len(hvdc_warns) == 1
@@ -1161,3 +1159,55 @@ class TestHVDCCase9DclineConsistency:
         build, _ = self._build()
         r = extract_results(build)
         assert np.all(r["hvdc_loss"] >= -1e-6)
+
+
+# ===========================================================================
+# Gate 7 (TestHVDCYbusAgreement): cvxopf's Ybus for case9_dcline must equal
+# Pypower's makeYbus output. This pins the load-bearing HVDC assumption that
+# DC lines contribute NOTHING to Ybus (they are modelled as nodal injections,
+# not admittance branches). Compared against a committed static fixture
+# (generated in the isolated numpy-2.2.6 sandbox by
+# scripts/generate_pypower_fixtures.py) rather than a live makeYbus call, per
+# the no-pypower-dependency rule.
+# ===========================================================================
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class TestHVDCYbusAgreement:
+    def _load_ybus_fixture(self):
+        path = _FIXTURES / "case9_dcline_ybus_pypower_reference.json"
+        if not path.exists() or path.stat().st_size == 0:
+            pytest.skip(
+                f"Fixture {path.name} missing/empty. "
+                "Run: uv run scripts/generate_pypower_fixtures.py"
+            )
+        with open(path) as f:
+            return json.load(f)
+
+    def test_ybus_matches_pypower(self):
+        """cvxopf's build.data["Ybus"] equals Pypower's makeYbus, aligned by
+        external bus ID -- proving the dcline table does not enter Ybus."""
+        fix = self._load_ybus_fixture()
+        fix_Y = np.asarray(fix["Ybus_real"]) + 1j * np.asarray(fix["Ybus_imag"])
+        fix_bus_ids = list(fix["bus_ids"])  # external ids in fixture row order
+
+        build = build_opf(case9_dcline(), formulation="ac")
+        cvx_Y = build.data["Ybus"]
+        ext_to_int = build.data["ext_to_int"]
+        assert ext_to_int is not None, "case9_dcline must be reindexed"
+
+        # Permute the fixture Ybus into cvxopf's internal order: fixture row i
+        # is external bus fix_bus_ids[i] -> cvxopf internal ext_to_int[...].
+        nb = cvx_Y.shape[0]
+        perm = np.empty(nb, dtype=int)
+        for i, ext_id in enumerate(fix_bus_ids):
+            perm[ext_to_int[ext_id]] = i
+        fix_Y_internal = fix_Y[np.ix_(perm, perm)]
+
+        assert cvx_Y.shape == fix_Y_internal.shape
+        max_abs_diff = np.abs(cvx_Y - fix_Y_internal).max()
+        assert max_abs_diff < 1e-9, (
+            f"cvxopf Ybus disagrees with Pypower (max abs diff {max_abs_diff:.2e}); "
+            "DC lines must contribute nothing to Ybus."
+        )
