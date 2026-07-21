@@ -328,11 +328,10 @@ standard method's answer --- do not depend on this account.
 
 \section{Conclusion}
 
-Across the four variants, the two methods returned identical solutions on the
-plain 9-bus case and on each single-feature variant (piecewise-linear costs
-alone, and DC lines alone with matching generator dispatch), and returned
-different solutions only when piecewise-linear costs and DC lines were present
-together, where the standard method's objective was about 14\% higher. In every
+The two methods returned identical results on the base case (smooth costs, no DC line) and
+the piecewise linear cost cast. On the DC line case, Pypower returned a marginally suboptimal 
+solution. But on the combined case, both PWL costs and DC lines, the standard method's objective 
+was about 14\% higher. In every
 case where the two disagreed, the DNLP solution was the cheaper one, and we
 verified that it was fully feasible in the standard method's own problem --- so
 the standard method's more expensive answer is a suboptimal point of its own
@@ -344,7 +343,7 @@ method is suboptimal even at its own routing.
 What these results do not establish is a general guarantee: both problems are
 nonconvex, we did not certify global optimality of any DNLP solution, and the
 comparison covers one network at four operating points. What they do establish
-is narrow and firm --- on these problems the two methods diverge only when
+is narrow and firm---on these problems the two methods diverge significantly when
 piecewise-linear costs and routing freedom are present together, and where they
 diverge the standard method returns a verifiably suboptimal solution.
 
