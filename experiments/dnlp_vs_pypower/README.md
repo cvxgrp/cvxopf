@@ -13,11 +13,9 @@ On the 9-bus AC-OPF, two methods for solving the *same* problem are compared:
   Pypower's interior-point solver.
 
 Two features are toggled on and off (piecewise-linear generator costs; HVDC
-lines), giving four variants. Each feature alone: the two methods agree exactly.
+lines), giving four variants. Each feature alone: the two methods (mostly) agree.
 Both together: the standard method returns a solution ~14% more expensive, and
-the DNLP solution is verifiably feasible in the standard method's own problem —
-so the standard method's answer is suboptimal for its own problem.
-
+the DNLP solution is verifiably feasible in the standard method's own problem.
 ## Run it
 
 From the repository root, in the main cvxopf environment:
