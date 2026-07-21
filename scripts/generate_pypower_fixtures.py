@@ -510,9 +510,7 @@ def _run_dcline_ybus(case_fn, case_name: str) -> dict:
 
     print(f"  Building Pypower Ybus for {case_name} ...", end=" ", flush=True)
     ppc_int = ext2int(ppc)
-    Ybus, _Yf, _Yt = makeYbus(
-        ppc_int["baseMVA"], ppc_int["bus"], ppc_int["branch"]
-    )
+    Ybus, _Yf, _Yt = makeYbus(ppc_int["baseMVA"], ppc_int["bus"], ppc_int["branch"])
     Ybus = np.asarray(Ybus.todense())
 
     # external bus IDs in internal order: ext2int stores the original external

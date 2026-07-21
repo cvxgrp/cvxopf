@@ -41,6 +41,7 @@ import cvxpy as cp
 # HVDCLink dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HVDCLink:
     """
@@ -70,17 +71,19 @@ class HVDCLink:
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
         transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. Default (0,0,0).
     """
-    from_bus:     int
-    to_bus:       int
-    p_min_mw:     float
-    p_max_mw:     float
+
+    from_bus: int
+    to_bus: int
+    p_min_mw: float
+    p_max_mw: float
     loss_percent: float = 0.0
-    cost_coeffs:  tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
+    cost_coeffs: tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
 
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
     """
@@ -96,8 +99,7 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
     for i, lnk in enumerate(links):
         if lnk.from_bus == lnk.to_bus:
             raise ValueError(
-                f"HVDC link {i}: from_bus and to_bus must differ, "
-                f"got {lnk.from_bus}"
+                f"HVDC link {i}: from_bus and to_bus must differ, got {lnk.from_bus}"
             )
         if lnk.from_bus not in ext_bus_ids:
             raise ValueError(
@@ -110,9 +112,7 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
                 f"Valid IDs: {sorted(ext_bus_ids)}"
             )
         if lnk.p_max_mw <= 0:
-            raise ValueError(
-                f"HVDC link {i}: p_max_mw must be > 0, got {lnk.p_max_mw}"
-            )
+            raise ValueError(f"HVDC link {i}: p_max_mw must be > 0, got {lnk.p_max_mw}")
         if lnk.p_min_mw > lnk.p_max_mw:
             raise ValueError(
                 f"HVDC link {i}: p_min_mw ({lnk.p_min_mw}) must be <= "
@@ -139,6 +139,7 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
 # Incidence matrices
 # ---------------------------------------------------------------------------
 
+
 def _make_hvdc_incidence_matrices(
     links: list,
     nb: int,
@@ -155,16 +156,17 @@ def _make_hvdc_incidence_matrices(
     if n_hvdc == 0:
         return np.empty((nb, 0)), np.empty((nb, 0))
     Ch_from = np.zeros((nb, n_hvdc))
-    Ch_to   = np.zeros((nb, n_hvdc))
+    Ch_to = np.zeros((nb, n_hvdc))
     for k, lnk in enumerate(links):
         Ch_from[ext_to_int[lnk.from_bus], k] = 1.0
-        Ch_to[ext_to_int[lnk.to_bus],   k] = 1.0
+        Ch_to[ext_to_int[lnk.to_bus], k] = 1.0
     return Ch_from, Ch_to
 
 
 # ---------------------------------------------------------------------------
 # Static box (trivial vectorizer — reads p_min_mw/p_max_mw directly)
 # ---------------------------------------------------------------------------
+
 
 def _hvdc_static_box(links: list) -> tuple:
     """
@@ -182,6 +184,7 @@ def _hvdc_static_box(links: list) -> tuple:
 # ---------------------------------------------------------------------------
 # CVXPY component methods
 # ---------------------------------------------------------------------------
+
 
 def hvdc_injections(
     links: list,
@@ -205,7 +208,6 @@ def hvdc_injections(
           inv_baseMVA.value = 1.0 / baseMVA
     """
     nb = len(ext_to_int)
-    n_hvdc = len(links)
     Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
     inv_baseMVA = cp.Parameter(name="hvdc_inv_baseMVA")
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
@@ -298,11 +300,7 @@ def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
     Written as an explicit monomial sum (not Horner) for DCP checker compatibility.
     """
     c0, c1, c2 = cost_coeffs
-    return (
-        c2 * cp.square(p_in)
-        + cp.multiply(c1, cp.abs(p_in))
-        + c0
-    )
+    return c2 * cp.square(p_in) + cp.multiply(c1, cp.abs(p_in)) + c0
 
 
 # ---------------------------------------------------------------------------
@@ -310,14 +308,14 @@ def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
 # ---------------------------------------------------------------------------
 
 # MATPOWER dcline column indices (0-based)
-_FBUS   = 0
-_TBUS   = 1
+_FBUS = 0
+_TBUS = 1
 _STATUS = 2
-_PF     = 3   # sending-terminal scheduled setpoint (MW) — carried for reference only
-_PMIN   = 9
-_PMAX   = 10
-_LOSS0  = 15  # fixed converter loss (MW) — not modelled in MVP
-_LOSS1  = 16  # proportional loss fraction (per-unit)
+_PF = 3  # sending-terminal scheduled setpoint (MW) — carried for reference only
+_PMIN = 9
+_PMAX = 10
+_LOSS0 = 15  # fixed converter loss (MW) — not modelled in MVP
+_LOSS1 = 16  # proportional loss fraction (per-unit)
 
 
 def hvdc_from_dcline(
@@ -366,8 +364,8 @@ def hvdc_from_dcline(
         if int(row[_STATUS]) == 0:
             continue
 
-        fbus  = int(row[_FBUS])
-        tbus  = int(row[_TBUS])
+        fbus = int(row[_FBUS])
+        tbus = int(row[_TBUS])
         p_min = float(row[_PMIN])
         p_max = float(row[_PMAX])
         loss0 = float(row[_LOSS0])
@@ -396,14 +394,16 @@ def hvdc_from_dcline(
                 coeffs_lo_first.append(0.0)
             cost = tuple(coeffs_lo_first[:3])
 
-        links.append(HVDCLink(
-            from_bus=fbus,
-            to_bus=tbus,
-            p_min_mw=p_min,
-            p_max_mw=p_max,
-            loss_percent=loss1 * 100.0,
-            cost_coeffs=cost,
-        ))
+        links.append(
+            HVDCLink(
+                from_bus=fbus,
+                to_bus=tbus,
+                p_min_mw=p_min,
+                p_max_mw=p_max,
+                loss_percent=loss1 * 100.0,
+                cost_coeffs=cost,
+            )
+        )
 
     if loss0_nonzero:
         warnings.warn(

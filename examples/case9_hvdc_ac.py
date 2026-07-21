@@ -37,8 +37,7 @@ def main():
     ppc = case9_dcline()
 
     print("Importing HVDC links from the dcline table...")
-    print("(UserWarning expected: link 0 has a nonzero loss0, dropped by "
-          "the MVP)")
+    print("(UserWarning expected: link 0 has a nonzero loss0, dropped by the MVP)")
     print()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -58,34 +57,43 @@ def main():
     print(f"Objective:  {r['objective']:.4f} $/hr")
     print()
 
-    print(f"{'Link':>4}  {'from->to':>10}  {'p_in (MW)':>10}  "
-          f"{'p_out (MW)':>11}  {'loss (MW)':>10}  {'loss %':>7}")
+    print(
+        f"{'Link':>4}  {'from->to':>10}  {'p_in (MW)':>10}  "
+        f"{'p_out (MW)':>11}  {'loss (MW)':>10}  {'loss %':>7}"
+    )
     print("-" * 62)
     for k, link in enumerate(links):
-        print(f"{k:>4}  {f'{link.from_bus}->{link.to_bus}':>10}  "
-              f"{r['p_hvdc_in'][k]:>10.4f}  {r['p_hvdc_out'][k]:>11.4f}  "
-              f"{r['hvdc_loss'][k]:>10.4f}  {link.loss_percent:>7.2f}")
+        print(
+            f"{k:>4}  {f'{link.from_bus}->{link.to_bus}':>10}  "
+            f"{r['p_hvdc_in'][k]:>10.4f}  {r['p_hvdc_out'][k]:>11.4f}  "
+            f"{r['hvdc_loss'][k]:>10.4f}  {link.loss_percent:>7.2f}"
+        )
     print()
 
-    print(f"Generator dispatch Pg (MW): "
-          f"{np.array2string(np.round(r['Pg'], 3), separator=', ')}")
+    print(
+        f"Generator dispatch Pg (MW): "
+        f"{np.array2string(np.round(r['Pg'], 3), separator=', ')}"
+    )
     print()
 
     # ------------------------------------------------------------------
     # Verify the proportional-loss law on fixed-direction links
     # ------------------------------------------------------------------
-    print("Loss-law verification (p_out == -(1 - loss_frac) * p_in on "
-          "fixed-direction links):")
+    print(
+        "Loss-law verification (p_out == -(1 - loss_frac) * p_in on "
+        "fixed-direction links):"
+    )
     for k, link in enumerate(links):
         loss_frac = link.loss_percent / 100.0
         expected_out = -(1.0 - loss_frac) * r["p_hvdc_in"][k]
         residual = abs(r["p_hvdc_out"][k] - expected_out)
-        print(f"  link {k}: p_out={r['p_hvdc_out'][k]:.4f}  "
-              f"expected={expected_out:.4f}  residual={residual:.2e}")
+        print(
+            f"  link {k}: p_out={r['p_hvdc_out'][k]:.4f}  "
+            f"expected={expected_out:.4f}  residual={residual:.2e}"
+        )
     print()
 
-    print("HVDC loss non-negative (all links):",
-          bool(np.all(r["hvdc_loss"] >= -1e-6)))
+    print("HVDC loss non-negative (all links):", bool(np.all(r["hvdc_loss"] >= -1e-6)))
 
 
 if __name__ == "__main__":
