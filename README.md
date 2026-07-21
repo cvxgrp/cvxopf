@@ -325,6 +325,35 @@ print(f"ND reactive (MVAr):   {results['q_nd']}")
 print(f"Curtailment (MW):     {results['curtailment']}")
 ```
 
+## HVDC transmission link example
+
+HVDC links are controllable point-to-point power transfers between two buses,
+modelled as signed nodal injections (Convention B: positive = injection into
+the grid) subject to capacity limits. On fixed-direction links the converter
+loss is proportional (`p_out = -(1 - loss_frac) * p_in`). Links can be built
+directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
+`hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
+loss (`loss0`, emitting a `UserWarning`); it applies to both the AC and lossy
+DC formulations.
+
+```python
+from cvxopf.testcases.case9_dcline import case9_dcline
+from cvxopf.problem import build_opf
+from cvxopf.hvdc import hvdc_from_dcline
+from cvxopf.results import extract_results
+
+ppc   = case9_dcline()
+links = hvdc_from_dcline(ppc["dcline"])  # three in-service DC links
+
+build = build_opf(ppc, formulation="ac", hvdc=links)
+build.solve()
+results = extract_results(build)
+print(f"Objective:          {results['objective']:.2f} $/hr")
+print(f"HVDC in  (MW):      {results['p_hvdc_in']}")
+print(f"HVDC out (MW):      {results['p_hvdc_out']}")
+print(f"HVDC loss (MW):     {results['hvdc_loss']}")
+```
+
 ## Project structure
 
 ```
@@ -403,7 +432,8 @@ package environment.
 - [ ] Branch flow limits (AC)
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
-- [ ] HVDC transmission links
+- [x] HVDC transmission links (lossless + fixed-direction proportional loss)
+- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split)
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
@@ -411,3 +441,4 @@ package environment.
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
+- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)

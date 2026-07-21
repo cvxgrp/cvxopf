@@ -1,0 +1,21 @@
+# EX13b (Direction B): cvxopf PINNED to P*_smooth's DC routing
+# pinned p_in[1]=9.9999 (link1 7->9 lossless), p_in[2]=0.0002 (link2 5->9 5%)
+## solve status: optimal
+
+## objectives
+cvxopf FREE optimum (C*_smooth)      = 5262.0439
+cvxopf PINNED to P*_smooth routing   = 5280.4402
+Pypower P*_smooth (its own solve)     = 5314.2765
+
+C*_smooth Pg = [90, 133.40, 93.46]  (free, link1=2 link2=10)
+pinned    Pg = [90.0, 133.8227, 93.8008]  (link1=10.000 link2=0.000)
+
+pinned - cvxopf_free = +18.3963  (how much P*'s routing costs cvxopf)
+pinned - Pypower_P*  = -33.8363  (cvxopf vs Pypower at the SAME routing)
+
+## VERDICT
+NOT degenerate: P*'s routing costs cvxopf +18.40 MORE than its
+free optimum. cvxopf's C*_smooth (5262.04) is genuinely cheaper.
+AND at that SAME routing cvxopf (5280.44) beats Pypower's P*
+(5314.28) by 33.84 -- so P*_smooth is mildly
+SUBOPTIMAL on the routing axis too (the EX12 pattern, repeated).

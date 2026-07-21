@@ -1,0 +1,7 @@
+EX3 RT1 (cvx->dummy->cvx) OK: p_in [1.0, 2.0, 10.0] -> from_dummy [-1.0, -2.0, -10.0] to_dummy [0.99, 2.0, 9.5]
+EX3 RT2 (dummy->cvx->dummy) OK: P* p_in [10.0, 2.2776, 10.0] p_out [-8.9, -2.2776, -9.5]
+EX3 link0 30->4: PF=10.0000 PT=8.9000 loss=1.1000
+EX3 link1 7->9: PF=2.2776 PT=2.2776 loss=0.0000
+EX3 link2 5->9: PF=10.0000 PT=9.5000 loss=0.5000
+EX3 bus map (internal->ext): {0: 1, 1: 2, 2: 30, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9}
+EX3 ROUND-TRIP VERIFIED both directions

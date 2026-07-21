@@ -28,6 +28,7 @@ import cvxpy as cp
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
+from cvxopf.hvdc import HVDCLink, _hvdc_static_box
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +191,16 @@ class OPFBuild:
         else:
             kwargs.setdefault("solver", cp.IPOPT)
             kwargs.setdefault("nlp", True)
+            # IPOPT prints its banner and iteration log at the C level,
+            # unaffected by CVXPY's `verbose` flag. Translate our own verbose
+            # setting into IPOPT's own suppression options so `verbose=False`
+            # actually silences IPOPT (banner via `sb`, log via `print_level`).
+            # setdefault keeps these user-overridable (e.g. an explicit
+            # print_level wins). When verbose=True, inject nothing so IPOPT's
+            # output prints alongside CVXPY's.
+            if not kwargs.get("verbose", False):
+                kwargs.setdefault("print_level", 0)
+                kwargs.setdefault("sb", "yes")
         kwargs.setdefault("verbose", False)
         self.prob.solve(**kwargs)
 
@@ -232,6 +243,7 @@ def build_opf(
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
+    hvdc: list[HVDCLink] | None = None,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -285,7 +297,8 @@ def build_opf(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
-    return builders[formulation](case, options, storage, delta, nondispatchable)
+    return builders[formulation](case, options, storage, delta, nondispatchable,
+                                  hvdc=hvdc)
 
 
 def build_opf_multistep(
@@ -301,6 +314,9 @@ def build_opf_multistep(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     df_nd: pd.DataFrame | None = None,
+    hvdc: list[HVDCLink] | None = None,
+    df_hvdc_min: pd.DataFrame | None = None,
+    df_hvdc_max: pd.DataFrame | None = None,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -378,6 +394,30 @@ def build_opf_multistep(
             stacklevel=2,
         )
 
+    # HVDC frame handling: tile static box or validate provided frames.
+    if hvdc is not None:
+        if df_hvdc_min is None or df_hvdc_max is None:
+            warnings.warn(
+                "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
+                "HVDCLink.mode fields across all T steps.",
+                UserWarning,
+                stacklevel=2,
+            )
+            p_min_static, p_max_static = _hvdc_static_box(hvdc)
+            df_hvdc_min = pd.DataFrame(np.tile(p_min_static, (T, 1)))
+            df_hvdc_max = pd.DataFrame(np.tile(p_max_static, (T, 1)))
+        else:
+            mins = df_hvdc_min.values
+            maxs = df_hvdc_max.values
+            if np.any(mins > maxs):
+                bad = np.argwhere(mins > maxs)
+                t_bad, k_bad = bad[0]
+                raise ValueError(
+                    f"df_hvdc_min[{t_bad},{k_bad}] = {mins[t_bad, k_bad]:.4g} > "
+                    f"df_hvdc_max[{t_bad},{k_bad}] = {maxs[t_bad, k_bad]:.4g}; "
+                    f"box invariant p_min <= p_max violated."
+                )
+
     builders = _get_multistep_builders()
     if formulation not in builders:
         raise ValueError(
@@ -385,7 +425,9 @@ def build_opf_multistep(
             f"Supported: {sorted(builders.keys())}"
         )
     return builders[formulation](
-        case, df_P, df_Q, T, options, coupling_constraints, storage, delta, nondispatchable, df_nd
+        case, df_P, df_Q, T, options, coupling_constraints,
+        storage, delta, nondispatchable, df_nd,
+        hvdc=hvdc, df_hvdc_min=df_hvdc_min, df_hvdc_max=df_hvdc_max,
     )
 
 

@@ -1,0 +1,29 @@
+# EX13c: routing decomposition -- why does cvxopf source at bus 5 (5% loss)?
+# endpoint swap ruled out; both links deliver to bus 9, withdraw at 7 vs 5.
+# baseMVA=100.0  total load=315.000 MW
+
+point                                       sum Pg   AC loss  DC loss       cost
+C*_smooth (free: link1=2, link2=10)        316.855     3.365    1.510  5262.0439
+C_pinned (P* routing: link1=10, link2~0)   317.624     3.634    1.010  5280.4402
+
+## per-generator Pg (MW)
+point                                     gen0(b1)  gen1(b2) gen2(b30)
+C*_smooth (free: link1=2, link2=10)         90.000   133.399    93.455
+C_pinned (P* routing: link1=10, link2~0)    90.000   133.823    93.801
+
+## routing decomposition (pinned - free; same solver/model)
+d(cost)     = +18.3963   (P*'s routing costs cvxopf this much more)
+d(total gen)= +0.7689 MW
+d(AC loss)  = +0.2689 MW  (does sourcing at bus 5 cut AC losses?)
+d(DC loss)  = -0.5000 MW  (free pays MORE DC loss via the 5% link)
+
+## interpretation
+C*'s routing does NOT cut AC loss -- the advantage is elsewhere
+(generation mix / cost curvature). Inspect per-gen Pg above.
+
+## Pypower residual (mechanism 3, stuck solver)
+cvxopf at P*'s routing = 5280.4402;  Pypower at P*'s routing = 5314.2765
+Pypower leaves +33.8363 on the table AT ITS OWN ROUTING --
+the nondifferentiable-corner pathology, same as EX12. So the DC-alone cell
+combines: (1) a real network-optimal inverted routing cvxopf finds, and
+(3) Pypower additionally stuck short even at the routing it did pick.

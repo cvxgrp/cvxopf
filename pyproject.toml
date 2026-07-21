@@ -35,6 +35,7 @@ dependencies = [
     "numpy",
     "pandas",
     "cyipopt",
+    "ipython>=9.15.0",
 ]
 
 [project.optional-dependencies]

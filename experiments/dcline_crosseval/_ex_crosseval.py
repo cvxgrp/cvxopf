@@ -1,0 +1,108 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "pypower==5.1.19",
+#   "numpy==2.2.6",
+#   "scipy==1.18.0",
+# ]
+# ///
+"""Four-way cross-evaluation: is cvxopf's and (neutralized) Pypower's
+case9_dcline the SAME optimization problem, or different basins?
+
+EX1 neutralized Pypower model (branches off, dummy-gen Q=0, terminals PQ).
+EX-later steps consume P* recorded here. Pypower-side only; cvxopf point is
+fed in as a literal (recorded separately) to keep this script pypower-pure.
+
+Run: uv run _ex_crosseval.py
+"""
+import importlib.util
+from pathlib import Path
+
+import numpy as np
+from pypower.idx_dcline import c
+from pypower.idx_brch import RATE_A
+from pypower.idx_bus import BUS_TYPE, BUS_I, PQ, VM, VA
+from pypower.idx_gen import PG, QG, QMIN, QMAX
+from pypower.t.t_case9_dcline import t_case9_dcline
+from pypower.add_userfcn import add_userfcn
+
+_here = Path(__file__).resolve().parent
+_repo = _here.parent.parent  # experiments/dcline_crosseval/ -> repo root
+_spec = importlib.util.spec_from_file_location(
+    "genfix", _repo / "scripts" / "generate_pypower_fixtures.py"
+)
+gf = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(gf)
+
+
+def solve_neutralized(seed=None, gencost=None):
+    """EX1: branches off + dummy-gen Q pinned 0 + terminals PQ.
+
+    Parameters
+    ----------
+    seed : dict or None
+        Optional warm-start initial guess applied to the ppc case tables AFTER
+        neutralization and right before runopf (the standard pypower warm-start
+        pattern). Keys (all in ppc-INTERNAL row order, all optional):
+          "bus_vm", "bus_va"   -> ppc["bus"][:, VM], [:, VA]
+          "gen_pg", "gen_qg"   -> ppc["gen"][:, PG], [:, QG]  (real + dummy rows)
+        VG is intentionally left at the case default (EX8 decision). None
+        reproduces the original cold-start behavior exactly.
+    gencost : ndarray or None
+        Optional replacement for the 3 REAL-generator gencost rows, applied to
+        `orig` right after load and BEFORE `_dcline_to_gens` (so the dcline
+        dummy-gen zero-cost rows are appended on top unchanged). Shape must be
+        (3, ncol). Used by EX13 to swap case9_dcline's mixed PWL/poly cost for
+        case9's smooth quadratic cost, isolating the cost representation as the
+        only variable vs the PWL baseline. None keeps t_case9_dcline's costs.
+    """
+    orig = t_case9_dcline()
+    if gencost is not None:
+        gc = np.asarray(gencost, dtype=float)
+        assert gc.shape[0] == 3, (
+            f"gencost override must have 3 real-gen rows, got {gc.shape[0]}"
+        )
+        # widen/narrow orig gencost to the override's column count, then replace
+        orig["gencost"] = gc.copy()
+    if "dclinecost" in orig:
+        del orig["dclinecost"]
+    orig["branch"][:, RATE_A] = 1e5                     # branches off
+    ppc = gf._dcline_to_gens(orig)
+    on = orig["dcline"][:, c["BR_STATUS"]] > 0
+    ndc = int(on.sum())
+    ppc["gen"][-2 * ndc:, QMIN] = 0.0                   # dummy Q = 0
+    ppc["gen"][-2 * ndc:, QMAX] = 0.0
+    term = set(orig["dcline"][on, c["F_BUS"]].astype(int)) | \
+           set(orig["dcline"][on, c["T_BUS"]].astype(int))
+    idr = {int(b): i for i, b in enumerate(ppc["bus"][:, BUS_I])}
+    for bid in term:
+        row = idr[bid]
+        if ppc["bus"][row, BUS_TYPE] != 3:              # not the ref bus
+            ppc["bus"][row, BUS_TYPE] = PQ              # terminals PQ
+    if seed is not None:                                # warm-start guess
+        if "bus_vm" in seed:
+            ppc["bus"][:, VM] = np.asarray(seed["bus_vm"], dtype=float)
+        if "bus_va" in seed:
+            ppc["bus"][:, VA] = np.asarray(seed["bus_va"], dtype=float)
+        if "gen_pg" in seed:
+            ppc["gen"][:, PG] = np.asarray(seed["gen_pg"], dtype=float)
+        if "gen_qg" in seed:
+            ppc["gen"][:, QG] = np.asarray(seed["gen_qg"], dtype=float)
+    add_userfcn(ppc, "formulation", gf._make_coupling_userfcn(orig))
+    return gf.runopf(ppc, gf._make_ppopt()), orig
+
+
+if __name__ == "__main__":
+    res, orig = solve_neutralized()
+    ok = bool(res["success"])
+    print("EX1 neutralized Pypower solve: success =", ok)
+    if ok:
+        print("EX1 objective:", round(float(res["f"]), 4))
+        print("EX1 real Pg  :", np.round(res["gen"][:3, PG], 4).tolist())
+        print("EX1 dummy Pg :", np.round(res["gen"][3:, PG], 4).tolist())
+        print("EX1 dummy Qg :", np.round(res["gen"][3:, QG], 4).tolist())
+        # bus Vm/Va in external-id order
+        ids = res["bus"][:, BUS_I].astype(int)
+        print("EX1 bus ids  :", ids.tolist())
+        print("EX1 Vm       :", np.round(res["bus"][:, VM], 5).tolist())
+        print("EX1 Va(deg)  :", np.round(res["bus"][:, VA], 4).tolist())

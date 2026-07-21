@@ -127,8 +127,8 @@ Install with: `uv sync --extra dev --extra notebook`
 
 ```python
 build = build_opf(case9(), formulation="ac")
-build.solve()                  # correct — IPOPT, nlp=True
-build.solve(verbose=True)      # correct — shows solver output
+build.solve()                  # correct — IPOPT, nlp=True (quiet)
+build.solve(verbose=True)      # correct — shows CVXPY + IPOPT output
 
 build = build_opf(case9(), formulation="lossy_dc")
 build.solve()                  # correct — CLARABEL, nlp=False
@@ -141,6 +141,14 @@ without `nlp=True` will raise a `DCPError`.
 
 **Why `nlp=False` matters for DC:** Lossy DC OPF is a convex QP. Setting
 `nlp=True` on a convex problem is incorrect and may produce wrong results.
+
+**Verbose and IPOPT output:** IPOPT prints its banner and iteration log at
+the C level, unaffected by CVXPY's `verbose` flag. `build.solve()` bridges
+this: on the AC path, `verbose=False` (the default) injects IPOPT's own
+`print_level=0` and `sb="yes"` to silence it, and `verbose=True` injects
+neither so IPOPT's output prints alongside CVXPY's. Both are `setdefault`, so
+an explicit `print_level=` still wins. (CLARABEL on the DC path is quiet by
+default and needs no such bridge.)
 
 ---
 
@@ -180,8 +188,27 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 - Reactive balance modified: `q = Cg @ Qg - Qd + (1/baseMVA) * Cs @ b_q_t + (1/baseMVA) * Cnd @ q_nd_t`
 - Storage terms absent when `storage=None`; ND terms absent when `nondispatchable=None`
 
+**HVDC variables** (present only when `hvdc` is not None):
+- `p_hvdc_in` — from-terminal signed nodal injection (n_hvdc,) MW,
+  Convention B (positive = injection into the grid)
+- `p_hvdc_out` — to-terminal signed nodal injection (n_hvdc,) MW, Convention B
+- Both are always `cp.Variable`s (even for a degenerate `p_min == p_max` box,
+  which is pinned by coincident bounds, not a separate equality)
+- Operating set (per link): box bound `p_min_t <= p_in <= p_max_t`, plus the
+  proportional-loss coupling `p_out == -(1 - loss_frac) * p_in` on
+  fixed-direction links (affine branch selected pre-construction from the
+  box's zero-crossing; lossless coupling `p_out == -p_in` on zero-straddling
+  or lossless links). `loss_frac = loss_percent / 100`.
+- Real balance modified: `p = ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out)`
+  — **both terminals enter with `+`** (signed injections, Convention B), never
+  `Ch_to - Ch_from`. No reactive term (unity-PF MVP).
+- Optional polynomial cost `c2 * p_in^2 + c1 * |p_in| + c0` per link
+  (`cost_coeffs`, `cp.square`/`cp.abs`); zero-cost when `cost_coeffs` is zero.
+- HVDC terms absent when `hvdc=None`
+
 Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
-`p_net`, `q_net`
+`p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived,
+`= p_hvdc_in + p_hvdc_out`, always >= 0) when `hvdc` is not None.
 
 Do not change this formulation without understanding the DNLP paper.
 
@@ -217,7 +244,18 @@ Variables: `p_flows`, `p_gen`
 - Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t + (1/baseMVA) * Cnd @ p_nd_t = Pd`
 - Storage term absent when `storage=None`; ND term absent when `nondispatchable=None`
 
-Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`
+**HVDC variables** (present only when `hvdc` is not None):
+- `p_hvdc_in`, `p_hvdc_out` — from/to signed nodal injections (n_hvdc,) MW,
+  Convention B (positive = injection into the grid). Identical model to AC:
+  box bound + proportional-loss coupling `p_out == -(1 - loss_frac) * p_in`
+  on fixed-direction links.
+- Flow conservation modified: `A @ p_flows + p_gen + ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out) = Pd`
+  — both terminals enter with `+`.
+- Optional polynomial cost per link (same as AC).
+- HVDC term absent when `hvdc=None`
+
+Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus
+`p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None.
 
 Note: `Vm`, `Va_deg`, `Qg`, `q_net` are **absent** from DC results.
 Code consuming results from either formulation should use
@@ -500,7 +538,7 @@ is present.
 | 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep` |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
-| 7 — HVDC transmission links | 🔲 Future | |
+| 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match (see below + `plans/milestone-7-hvdc.md`). `LOSS0`/reactive/voltage-control deferred to M15. |
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
@@ -508,6 +546,8 @@ is present.
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | 🔲 Future | |
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
+| 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps |
+| 16 — Unify grid component model patterns | 🔲 Future | Refactor all grid components (dispatchable generators, storage, nondispatchable) into first-class component modules matching the HVDC pattern; components consumed by every formulation via composition. HVDC (M7) is the reference implementation. |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -530,15 +570,116 @@ loop. Aging cost `lambda * sum_t |b_t|` follows Nnorom et al. (2026).
 `StorageUnitLossy` (asymmetric charge/discharge efficiency) is deferred.
 
 ### Milestone 7 — HVDC transmission links
+**Status: complete.** All steps (T0–T7) done: test artifacts, HVDC data
+struct + validation + incidence, DC and AC formulation integration, results
+extraction with the Gate 6b consistency test, public API re-exports
+(`HVDCLink`, `hvdc_from_dcline`), runnable examples (`examples/case9_hvdc_ac.py`,
+`examples/case9_hvdc_dc.py`), the Ybus-agreement test
+(`TestHVDCYbusAgreement` — DC lines contribute nothing to Ybus), and docs.
+See `plans/milestone-7-hvdc.md` and, for how the dcline fixture
+oracle is built (pypower's `toggle_dcline` is unusable under numpy 2.x),
+`scripts/README.md`.
+
+**Gate 6b is consistency-based, not a Pypower value-match.** A solved cvxopf
+`formulation="ac"` run on `case9_dcline()` does not reproduce the committed
+Pypower fixture: the two land in different local optima of the (near-)same
+nonconvex AC-OPF, and the fixture point is a *suboptimal* point of Pypower's
+own feasible set (proven by the `case9_dcline` cross-eval, EX12). 6b therefore
+asserts internal consistency (nodal balance ≈ 0, the proportional-loss law on
+fixed-direction links, `hvdc_loss >= 0`, the `loss0` `UserWarning`). The
+investigation is distilled and committed as the final report
+`experiments/dnlp_vs_pypower/` (a 2×2 PWL-cost × DC-line study with a
+reproducible proof-by-code demo).
+
 Model HVDC links as controllable point-to-point power injections between
 two buses, subject to capacity limits. Follows the MATPOWER `dcline`
-table format (data format to be confirmed by researcher). Applies to both
-AC and lossy DC formulations. Supports multi-step scheduling (the power
-transfer on each DC link can vary per time step). Converter loss modeling
-is deferred to implementation time.
+table format. Applies to both AC and lossy DC formulations. Supports
+multi-step scheduling (the power transfer on each DC link can vary per time
+step).
 
-Do not implement until the researcher provides the MATPOWER `dcline` data
-format details.
+The build plan lives in `plans/milestone-7-hvdc.md`. Key modeling decisions
+recorded there: HVDC terminals are modelled as **generator-like objects**
+with signed nodal injections `p_in`/`p_out` as the fundamental variables
+(Convention B — positive = injection into the grid, both balance terms enter
+with `+`). The loss model is **proportional only** (`loss_percent`), applied
+via sign-split affine branches selected pre-construction: lossy in
+`scheduled`/`downward`/fixed-direction `band` steps, lossless in `free` and
+zero-straddling `band` steps. A non-affine `abs`-in-equality loss constraint
+is **not** DCP-valid and must never be used — select an affine branch by the
+known flow direction instead. Fixed converter loss (`LOSS0`) and full
+sign-switching lossy behavior are deferred to Milestone 15.
+
+**Standard test case (`pypower.t.t_case9_dcline`) — MVP vs M15 handling.**
+The `dcline` table format is now verified against this Pypower fixture; the
+loss law is `Pt = Pf - loss0 - loss1*Pf`, confirming `loss1` is a per-unit
+fraction (`loss_percent = loss1 * 100`). What the MVP (Milestone 7) models
+from this case, and what it does not:
+
+| `dcline` column(s) | MVP (M7) | Full lossy (M15) |
+|---|---|---|
+| `Pf` | sending-terminal setpoint (`p_scheduled_mw`, pins `p_in`) | same |
+| `Pmin`/`Pmax` | `p_in` box bounds (`band`/`downward` presets) | same |
+| `loss1` (proportional) | modelled on fixed-direction steps | modelled everywhere |
+| `loss0` (fixed/no-load) | **dropped**; `UserWarning` when nonzero | modelled via charge/discharge split |
+| `Qf,Qt,Qmin*,Qmax*` (reactive) | **dropped** (unity-PF MVP) | out of scope (unity-PF) |
+| `Vf,Vt` (terminal voltage setpoints) | **dropped** (no HVDC voltage control) | out of scope |
+| `dclinecost` | `cost_coeffs=(c0,c1,c2)` polynomial | same |
+
+**Consequence:** importing `t_case9_dcline` will **not** reproduce Pypower's
+solution exactly — row 0 has `loss0=1`, which the MVP ignores. This is a
+documented, intended approximation (see the plan doc + Milestone 15), not a
+bug. Fixtures for this case are generated with the existing
+`scripts/generate_pypower_fixtures.py` script (see "Fixture generation").
+
+### Milestone 15 — Full lossy HVDC (sign-switching converter losses)
+Extends Milestone 7 to carry losses when the flow direction is itself a
+decision (i.e. `free` mode and zero-straddling `band` steps), plus fixed
+converter loss (MATPOWER `LOSS0`). The mechanism is a charge/discharge-style
+split of `p_in` into non-negative positive/negative parts (same machinery as
+the deferred lossy battery model), which keeps the loss equality affine while
+letting the direction vary. Deferred because the MVP (Milestone 7) covers the
+dominant proportional loss on fixed-direction links, and the fixed-loss sign
+and `dcline` `LOSS0` units are cleaner to settle alongside this split.
+
+### Milestone 16 — Unify grid component model patterns
+Bring **every** grid component into alignment with the component pattern that
+HVDC (Milestone 7) establishes: data struct, validation, incidence,
+constraint-set builder(s), and cost expression co-located in one module,
+importing `cvxpy` and `numpy` only (no other cvxopf module — the
+circular-import safeguard is about cvxopf-internal imports, not `cvxpy`). Every
+OPF formulation constructor (AC, lossy DC, singlenode, future SOCP) consumes
+each component by **composition** — calling its constraint-set and cost methods
+and wiring them into that formulation's own network model — rather than
+re-synthesizing the equations per formulation.
+
+This is a cross-cutting refactor touching several existing components, each of
+which predates the pattern:
+
+- **Dispatchable generators.** `cost.py` today is effectively the
+  dispatchable-generator component that never got first-class treatment,
+  because the generator model was ported wholesale from Pypower. Its
+  `poly_cost_expr` becomes that module's cost function.
+- **Storage.** The AC apparent-power circle vs. DC real-power box operating
+  regions currently live embedded in the AC and DC constructors; they move into
+  storage's module as formulation-specific constraint methods
+  (`ac_operating_constraints` / `dc_operating_constraints`), so each
+  constructor grabs the one matching its formulation instead of re-synthesizing
+  it.
+- **Nondispatchable.** Same treatment — its operating region and injection
+  wiring move into the component module and are consumed by composition.
+
+Components that need formulation-specific feasible regions expose them as
+distinct methods (e.g. storage's AC circle vs. DC box), and each constructor
+grabs the one matching its formulation. HVDC (Milestone 7) is the reference
+implementation of this "model a component once, plug into any network
+formulation" contract — including the `ac_*`/`dc_*` method fork (with
+pass-through delegation where the two forms coincide) and the late-bound
+`cp.Parameter` scaling seam between component and constructor.
+
+Note: the `storage.py → numpy only` / `nondispatchable.py → numpy only` lines
+in the Module-responsibilities import chain above accurately describe the
+**current** code and are left as-is until this refactor lands; M16 is the
+aspirational forward pattern, not a description of today's modules.
 
 ### Milestone 8 — Nondispatchable generators
 
@@ -704,3 +845,22 @@ docstring.
   produces a dict with an empty branch table that `validate_case` rejects
 - Do not store `Pd_series` as shape `(T, nb)` for `singlenode_dc` — it is
   shape `(T,)` because the formulation has no per-bus structure
+- Do not add `n_hvdc=0` to `build.data` when `hvdc=None` — breaks detection
+  (`"n_hvdc" in build.data`)
+- Do not add a `q`/reactive term for HVDC — the MVP is unity power factor
+- Do not enter the HVDC balance terms as `Ch_to - Ch_from` — both terminals
+  are signed injections (Convention B) and enter with `+`
+- Do not put `cp.abs` (or any non-affine atom) in the `p_out` loss equality —
+  select an affine branch by the box's pre-construction sign instead
+- Do not select a lossy loss branch for a zero-straddling box
+  (`p_min_t < 0 < p_max_t`) — the lossy branch is valid only when the box is
+  fixed-direction (`p_min_t >= 0` or `p_max_t <= 0`)
+- Do not multiply `p_hvdc_in`/`p_hvdc_out` by `baseMVA` in `extract_results` —
+  they are in engineering units (MW), like storage
+- Do not import `HVDCLink` from `problem.py` inside `ac_problem.py` or
+  `dc_problem.py` — import from `hvdc.py` directly
+- Do not forward `hvdc`/`df_hvdc_min`/`df_hvdc_max` to `singlenode_dc` as a
+  live component — the singlenode builders accept and silently drop them
+  (`"n_hvdc"` never added to `build.data`, no `UserWarning`)
+- Do not model MATPOWER `LOSS0` (fixed converter loss) in the MVP — it is
+  dropped with a `UserWarning`; full fixed-loss modelling is Milestone 15

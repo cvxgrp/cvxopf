@@ -1,0 +1,21 @@
+# EX10 diagnostic: cold vs C*-seeded pips start
+
+## COLD start (no seeding -- pips's own default x0)
+cold x0[:12] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+cold f(x0)   = 19271.92
+cold iter-0 obj (hist[0]) = 19271.92
+cold trajectory = [19271.9, 16565.2, 16627.9, 19657.1, 46240.7, 80907.4, 133001.5, 147521.2, 182317.6, 258218.6, 308891.1, 348091.6, 219610.1, 40411.5, 8811.5, 6987.5, 6449.8, 6302.9, 6263.6, 6254.7, 6250.6, 6250.1, 6249.9, 6249.9, 6249.9]
+
+## C*-SEEDED start
+seed f(x0)   = 15786.85   (C* obj = 5490.10)
+seed iter-0 obj (hist[0]) = 15786.85
+seed trajectory = [15786.9, 15853.5, 16512.3, 21245.9, 52770.1, 77412.2, 106770.3, 137595.5, 93858.2, 19544.5, 9305.1, 7326.4, 6490.3, 6364.7, 6268.9, 6260.0, 6253.3, 6250.8, 6250.1, 6249.9, 6249.9, 6249.9]
+
+## feasibility of the C* seed (two measures)
+first-principles |V conj(YV) - Sbus| max = 1.5311e+00
+gh_fcn |g| max                            = 1.0000e+06
+
+## READ
+If cold iter-0 ~ seed iter-0: iter-0-obj is NOT a 'seed landed' signal.
+If first-principles mismatch is small but gh_fcn |g| is 1e6: the 1e6 was
+a gh_fcn call artifact, and the seed is actually feasible.

@@ -1,0 +1,23 @@
+# EX10 probe: feasibility of the seeded x0 at the pips boundary (C* seed)
+
+true (unscaled) objective f(x0_seed) = 15786.8500
+  (C* obj = 5490.10; near it => seed's objective landed)
+
+## constraint violation AT the seeded x0 (before pips iterates)
+n_eq=18  n_ineq=18
+equality |g| max   = 1.0000e+06  (at eq idx 1)
+inequality h max    = 2.0000e-01  (>0 = violated)
+g_real (per-bus real mismatch) = [-999999.1585, -999999.9974, -999999.2906, -999995.1065, -999998.1773, -999999.7868, -999999.9866, -999999.7919, -999999.0928]
+g_imag (per-bus reactive mism) = [-999999.1711, -999999.9504, -999999.1984, -999995.026, -999998.2251, -999999.8599, -999999.9865, -999999.7371, -999999.1277]
+Sbus.real (injections, pu)     = [0.9, 0.1, 2.1916, 0.0099, -1.0, 0.0, -1.02, 0.0, -1.135]
+(Ybus*V).real                  = [0.9, 0.1, 2.2116, -0.0099, -0.8, 0.0, -0.98, -0.0, -1.365]
+  equality |g| ~0 => seed is feasible in pips's system (landed).
+  equality |g| large => inconsistent seed; pips restores away -> EX10 void.
+
+## seeded x0 blocks (confirm our values actually hold)
+Va (rad) = [-0.0, -0.045, 0.1942, -0.0432, -0.0384, 0.086, -0.0274, -0.0502, -0.109]
+Vm       = [1.1, 1.1, 1.0911, 1.0917, 1.0815, 1.1, 1.0851, 1.0967, 1.0693]
+Pg (pu)  = [0.9, 0.1, 2.2016, -0.01, 0.0099, -0.1, -0.02, 0.02, 0.095]
+Qg (pu)  = [0.1776, 0.0587, -0.0468, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+y (default, NOT seeded) = [7975.0, 7975.0]
+  pypower default y before seeding = [7975.0, 7975.0]

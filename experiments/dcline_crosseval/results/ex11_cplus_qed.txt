@@ -1,0 +1,28 @@
+# EX11: C+ (C* made fully Pypower-feasible) and the QED test
+# baseMVA=100.0  P*_obj=6249.87
+
+## construction
+link0 p_out: -0.990 -> 0.010  (Pypower with-loss0 law)
+surplus at to-bus delta = 1.0000 MW  -> gen2 Pg 220.163 -> 219.163
+Pg+  = [90.0, 10.0, 219.1627]   Pmin=[90.0, 10.0, 10.0]  Pmax=[250.0, 300.0, 270.0]
+p_out+ = [0.01, -2.0, -9.5]
+
+## feasibility (residuals, MW / MVAr)
+C1 nodal real     = 1.000e+00  (at bus 3)
+C2 nodal reactive = 6.226e-13
+C3 gen P bounds worst viol   = -6.119e-11  (<=0 ok)
+C4 gen Q bounds worst viol   = -2.822e+02  (<=0 ok)
+C5 voltage bounds worst viol = -1.065e-12  (<=0 ok)
+C6 DC box worst viol         = -2.789e-10  (<=0 ok)
+C7 with-loss0 coupling resid = [0.0, 0.0, 0.0]  (all ~0 => no exception)
+
+FULLY FEASIBLE in Pypower's problem: False
+
+## objective in Pypower's cost model
+C+ objective = 11536.8500
+P* objective = 6249.8659
+C+ < P* : False  (margin -5286.98)
+
+## VERDICT
+C+ is NOT fully feasible -- the single DC-offset nudge was insufficient;
+the C*/P* difference exceeds loss0. QED does not fire; investigate.

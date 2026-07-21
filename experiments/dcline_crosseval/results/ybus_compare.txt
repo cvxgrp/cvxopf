@@ -1,0 +1,5 @@
+# Ybus agreement: cvxopf vs Pypower (case9_dcline), matched by ext id
+common ext order: [1, 2, 4, 5, 6, 7, 8, 9, 30]
+max abs diff = 4.441e-16
+argmax at ext (8,8): cvxopf=2.804727-35.445613j pypower=2.804727-35.445613j
+VERDICT: AGREE (< 1e-9)

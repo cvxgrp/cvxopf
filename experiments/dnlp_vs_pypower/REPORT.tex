@@ -1,0 +1,350 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{textcomp}
+\usepackage{hyperref}
+\usepackage[symbol]{footmisc}
+\usepackage{tabularx}
+
+% Convenience macros for the two methods, so wording stays consistent.
+\newcommand{\dnlp}{the DNLP method}
+\newcommand{\std}{the standard (Pypower/pips) method}
+
+\title{A comparison of disciplined nonlinear programming and\\
+Pypower on AC optimal power flow}
+\author{Bennet Meyers}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+We compared two methods for solving the same AC optimal power flow (AC-OPF)
+problems on the standard 9-bus network:
+
+\begin{enumerate}
+  \item \textbf{The DNLP method} --- the problem is expressed in CVXPY and
+    canonicalized through its disciplined nonlinear programming (DNLP)
+    framework before being handed to the interior-point solver IPOPT.
+  \item \textbf{The standard (Pypower/pips) method} --- the same physical
+    problem is handed directly to Pypower's native primal-dual interior-point
+    solver (pips).
+\end{enumerate}
+
+Both methods target the identical nonconvex AC-OPF (the same sinusoidal power
+flow physics, the same generator and voltage limits). The only difference under
+test is \emph{how the problem is presented to the interior-point method}: the
+DNLP method canonicalizes it first, the standard method does not.
+
+We varied two features of the problem, each on or off:
+
+\begin{itemize}
+  \item \textbf{PWL Generator costs}. The base case prices generators with smooth,
+    quadratic cost curves. The test case swapped the 2 of 3 generator curves for
+    piecewise-linear functions.
+  \item \textbf{HVDC transmission lines}. The base case had no HVDC line links.
+    The test case added three controllable DC links, each moving real power
+    between two buses subject to capacity limits and a proportional transport
+    loss.
+\end{itemize}
+
+The headline result: each feature alone is harmless --- both methods
+agree to four decimal places --- but when both features are present together,
+\textbf{the standard method settles for a solution roughly 14\% more expensive than the
+DNLP method}.
+
+The common thread is not nonconvexity (both added features are
+convex). The two features act differently. Piecewise-linear costs introduce
+\textbf{nondifferentiability} --- kinks in the objective, where the local
+gradients and curvature an interior-point method relies on are ill-defined. The
+DC links introduce \textbf{routing freedom} that flattens the landscape into a
+ridge of nearly cost-equivalent operating points. Neither is fatal alone. Their
+combination --- a flat ridge studded with kink-separated basins --- is where the
+standard method lands in a worse local solution than the DNLP method, which
+solves a smooth epigraph reformulation of the kinked costs.
+
+\section{Methods}
+
+\subsection{Network models}
+
+The base network is the textbook 9-bus, 3-generator case. On top of it we toggle
+two independent features, giving four problem variants:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+ & \textbf{No DC lines} & \textbf{With DC lines} \\
+\midrule
+\textbf{Smooth (quadratic) costs} & plain 9-bus & 9-bus + 3 HVDC links \\
+\textbf{Piecewise-linear costs} & 9-bus, PWL costs & 9-bus + PWL costs + 3 HVDC links \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Smooth vs.\ piecewise-linear costs.} In the smooth variant every
+generator has a quadratic cost $c_2 P^2 + c_1 P + c_0$. In the piecewise-linear
+variant two of the three generators are instead priced with a convex
+piecewise-linear curve --- a sequence of straight-line segments of increasing
+slope. A piecewise-linear convex cost is still convex, but it is
+not differentiable at the breakpoints where two segments meet.
+
+\paragraph{The three HVDC links.} When present, the three DC links (with their
+from-bus $\to$ to-bus, capacity range, and proportional loss) are:
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+link & from $\to$ to & capacity (MW) & transport loss \\
+\midrule
+A & bus 30\footnotemark $\to$ bus 4 & $[1, 10]$ & 1\% (plus a 
+	small fixed loss) \\
+B & bus 7 $\to$ bus 9 & $[2, 10]$ & 0\% (lossless) \\
+C & bus 5 $\to$ bus 9 & $[0, 10]$ & 5\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+\footnotetext{Note that this test case has a ``random'' bus ID
+	number (bus 30), which is either a transcription error from back in the day or
+	an explicit test to make sure people track bus IDs correctly.}
+
+A DC link is modelled as a controllable real-power injection: it withdraws power
+at its from-bus and delivers it (minus the transport loss) at its to-bus. Two of
+the three links (B and C) deliver into the \textbf{same} bus (bus 9) but
+withdraw from \textbf{different} buses (7 and 5), which becomes important below.
+
+
+
+\subsection{Model agreement between languages}
+
+To compare the two approaches on genuinely the same problem, we neutralize a few
+incidental modelling differences so that only the solution method differs:
+
+\begin{itemize}
+  \item \textbf{Branch flow limits are removed} on both sides (set to a very
+    large value). cvxopf does not yet enforce branch limits, so we relax
+    Pypower's as well.
+  \item \textbf{DC-line reactive power is pinned to zero} on both sides (the DC
+    links are modelled at unity power factor), and their terminal buses are
+    treated identically.
+  \item \textbf{The fixed (no-load) converter loss on link A is applied
+    identically on both sides.} cvxopf normally omits this small fixed loss;
+    here we add it back with a single linear constraint (valid because the flow
+    direction on link A is known in advance), so neither approach is given an
+    artificial advantage.
+\end{itemize}
+
+With these in place, the two solve paths address the identical optimization
+problem, and any difference in the answer is attributable to the solution method
+alone. We verified separately that the two sides build \textbf{the same
+electrical network} (their bus admittance matrices agree to machine precision)
+and that no DC-line endpoint was transposed between the two model
+specifications.
+
+\subsection{Analysis}
+
+For each variant we compare the two methods on:
+
+\begin{itemize}
+  \item \textbf{Objective value} (total generation cost).
+  \item \textbf{Generator dispatch} (how much each generator produces).
+  \item \textbf{DC-line flows} (how power is routed through the links).
+\end{itemize}
+
+When the two disagree, we test \emph{why} by evaluating one method's solution
+inside the other method's problem, without re-solving. If a solution is fully
+feasible in the other's problem yet cheaper than what that method found, the
+more expensive answer is demonstrably suboptimal.
+
+\subsection{Reproducing the results}
+
+The \texttt{demo.py} script alongside this report reproduces every number in it.
+It builds the four problem variants, solves each with the DNLP method live,
+compares against the committed Pypower reference, and prints the $2\times2$
+table, the suboptimality proof, the routing decomposition, and the marginal-cost
+exhibit.
+
+From the repository root, in the main cvxopf environment:
+
+\begin{verbatim}
+uv run --active python experiments/dnlp_vs_pypower/demo.py
+\end{verbatim}
+
+The Pypower reference solutions are precomputed and committed
+(\texttt{reference\_pypower.json}) because cvxopf and Pypower require separate
+Python environments and cannot share a process; the two no-DC cells are copied
+from the repository's test-validated fixtures and the two DC cells are computed
+with the neutralized dcline model. To regenerate the reference in its isolated
+Pypower sandbox (not needed to run the demo):
+
+\begin{verbatim}
+uv run experiments/dnlp_vs_pypower/generate_pypower_reference.py
+\end{verbatim}
+
+\section{Observations}
+
+\paragraph{Plain 9-bus, smooth costs.} The two methods agree to within 0.01\% on
+objective and to a fraction of a MW on every generator. This is the expected
+baseline --- a smooth, well-behaved AC-OPF that a standard interior-point method
+handles well. This is an official test case in the cvxopf repository, one of the
+first tests written in fact.
+
+\paragraph{9-bus with piecewise-linear costs, no DC lines.} The two methods
+again agree to within 0.01\% on objective and on every generator's output.
+Piecewise-linear costs alone do not force a divergence on this network. This is
+also a test case in the cvxopf repository and was written when PWL costs were
+added.
+
+\paragraph{9-bus with DC lines, smooth costs.} Here the generator dispatch of
+the two methods agrees closely --- total generator output differs by under 2 MW,
+against a 315 MW load --- but the \textbf{DC-line routing differs sharply}.
+cvxopf runs the lossless link B at its floor (2 MW) and the lossy link C at its
+ceiling (10 MW); Pypower does the reverse, maxing the lossless link B (10 MW)
+and idling the lossy link C ($\approx 0$ MW). cvxopf's objective is about 1\%
+lower. This difference is investigated in more detail below, but the two methods
+achieve a very similar objective cost and generator dispatch.
+
+\paragraph{9-bus with both piecewise-linear costs and DC lines.} Now the two
+methods diverge dramatically. cvxopf finds a solution costing about 5469;
+Pypower settles at about 6250, \textbf{roughly 14\% more expensive}. The
+generator dispatch differs by over 130 MW, and the DC-line routing is again
+inverted between the two.
+
+The standard method's answer is a genuine suboptimality, not a modelling
+artifact. The DNLP method's cheaper solution is \textbf{fully feasible in the
+standard formulation}, every power balance and operating limit is satisfied to
+machine precision. In other words, cvxpy and IPOPT returned a feasible solution
+to the Pypower problem that has a lower objective value. We can't prove the
+cvxopf solution is the globally optimal point, but we've proved that the Pypower
+solution is not.
+
+\subsection{Discrepancies on the ``DC line, smooth cost'' case}
+
+The routing flip looks backwards at first. Why would the DNLP method pay a 5\%
+transport loss on link C instead of using the free link B? The ${\sim}1\%$ cost
+gap is the sum of two separable effects, and pinning both methods to the
+\emph{same} routing lets us isolate each.
+
+\paragraph{A small, genuine cost optimum ($\approx 18$ units).} Links B and C
+deliver to the same bus but withdraw from different buses, so the routing choice
+changes \emph{where} on the network power is drawn, and therefore which
+generators cover it. This is a generation-cost effect, not a loss effect, which
+we establish in two steps. First, we rule out losses directly. The DNLP routing
+runs the 5\% lossy link on purpose, so its DC transport loss is higher; this
+outweighs its slightly lower AC network loss, leaving its \textbf{total} loss
+\emph{higher} than the standard routing's (4.87 vs 4.64 MW). If the DNLP routing
+had won by saving losses it would be the more expensive solution, not the
+cheaper one. Second, we confirm the advantage is in the generation mix by
+comparing marginal costs --- the slope of each generator's cost curve at its
+operating point, i.e.\ the cost of its next MW. At the DNLP dispatch these
+slopes sit closer together across the generators not pinned at a limit; at the
+standard routing they are more spread out. A tighter spread means output has
+shifted toward the cheaper margin, which is why the DNLP routing costs about 18
+units less (on about 0.77 MW less total generation). This is a real but small
+optimum on a nearly flat part of the landscape. (The marginal-cost comparison is
+corroborating evidence, not a proof of optimality: the full AC-OPF is nonconvex,
+so there is no clean theorem that equal marginal costs mark the optimum. The
+loss decomposition is what rules out the competing loss-based explanation.)
+
+\paragraph{The standard method is stuck ($\approx 34$ units).} Independently of
+which routing is better, at the standard method's \emph{own} routing cvxopf
+reaches a solution about 34 units cheaper than Pypower. The standard method is
+suboptimal even at the operating point it itself selected --- it has not fully
+descended its own problem.
+
+Both effects favour the DNLP method, and together they account for the
+${\sim}1\%$ gap in this cell even though the generator dispatch otherwise matches
+closely.
+
+\section{Analysis}
+
+\subsection{The pattern}
+
+\begin{center}
+	\begin{tabularx}{\textwidth}{l l X}
+		\toprule
+		\emph{variant} & \emph{added structure} & \emph{result} \\
+		\midrule
+		plain 9-bus, smooth & none & exact agreement \\
+		PWL costs only & cost kinks & exact agreement \\
+		DC lines only & routing freedom & dispatch agrees; ${\sim}1\%$ routing gap, \newline DNLP 
+		cheaper \\
+		PWL costs \textbf{and} DC lines & kinks + routing freedom & dispatch disagrees; ${\sim}14\%$ 
+		gap, \newline DNLP cheaper \\
+		\bottomrule
+	\end{tabularx}
+\end{center}
+
+Neither added feature causes (much) trouble on its own. Together they do, and
+every time the two methods disagree the DNLP method is the one that finds the
+cheaper solution. We have verified in each case that the standard method's
+answer is genuinely suboptimal --- a feasible, cheaper point exists in its own
+feasible set.
+
+\subsection{What the two features contribute}
+
+The two features are different in kind, and it is worth being precise about
+each, because only one of them introduces nondifferentiability.
+
+Piecewise-linear costs add genuine \textbf{nondifferentiability}: each convex
+PWL cost is a pointwise maximum of affine segments, with a kink at every
+breakpoint. An interior-point method models the objective from first and second
+derivatives, which are ill-defined at a kink, so the kink is exactly where a
+raw formulation can mislead the local model. The DNLP method rewrites each such
+cost into its \textbf{epigraph form} (one auxiliary variable plus linear
+inequalities), giving the solver a smooth surrogate whose derivatives are valid
+everywhere. This is the classic reason disciplined reformulation helps, and it
+is why the DNLP method is unbothered by the PWL costs.
+
+The DC lines are different. A controllable injection with a capacity box and an
+affine loss law is smooth and convex --- bound constraints and their active-set
+corners are squarely in an interior-point solver's wheelhouse, and are not a
+source of nondifferentiability by themselves. What the DC lines add is
+\textbf{routing freedom that flattens the landscape}: links B and C both feed
+bus~9 from different source buses, creating a family of nearly cost-equivalent
+routings --- a shallow, nearly flat ridge. On such a ridge a local solver can
+settle at different points, which is exactly what we observe in the DC-only case
+(the dispatch agrees; only the routing differs, worth ${\sim}1\%$, and part of
+even that is the standard method not fully descending its own problem).
+
+The large gap appears only when the two are \textbf{combined}. The routing
+freedom multiplies the number of near-optimal operating points, and the kinked
+costs mean the routing choice also changes which cost segment each generator
+sits on --- so the flat ridge is now studded with shallow, kink-separated
+basins. A local method working on the raw formulation can land in a worse one;
+the DNLP method, solving the smooth epigraph reformulation of the costs, lands
+in a better one.
+
+We present this as the \emph{likely} mechanism, not a measured one. We did not
+instrument the canonical program at runtime, nor isolate reformulation quality
+from solver-implementation differences between IPOPT and pips. A natural next
+test is to hand pips the DNLP-canonicalized problem directly and see whether the
+gap closes. The empirical claims --- exact agreement on the single-feature
+variants, ${\sim}14\%$ divergence combined, and verified suboptimality of the
+standard method's answer --- do not depend on this account.
+
+\section{Conclusion}
+
+The two methods returned identical results on the base case (smooth costs, no DC line) and
+the piecewise linear cost cast. On the DC line case, Pypower returned a marginally suboptimal 
+solution. But on the combined case, both PWL costs and DC lines, the standard method's objective 
+was about 14\% higher. In every
+case where the two disagreed, the DNLP solution was the cheaper one, and we
+verified that it was fully feasible in the standard method's own problem --- so
+the standard method's more expensive answer is a suboptimal point of its own
+feasible set, not the result of a different model. For the smooth-cost DC-line
+case we further decomposed the ${\sim}1\%$ gap into a ${\sim}18$-unit
+generation-cost difference and a ${\sim}34$-unit residual by which the standard
+method is suboptimal even at its own routing.
+
+What these results do not establish is a general guarantee: both problems are
+nonconvex, we did not certify global optimality of any DNLP solution, and the
+comparison covers one network at four operating points. What they do establish
+is narrow and firm---on these problems the two methods diverge significantly when
+piecewise-linear costs and routing freedom are present together, and where they
+diverge the standard method returns a verifiably suboptimal solution.
+
+\end{document}

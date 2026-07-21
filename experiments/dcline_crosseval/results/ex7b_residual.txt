@@ -1,0 +1,61 @@
+# EX7b: constraint-by-constraint feasibility of P* in cvxopf's set
+# baseMVA=100.0  nb=9  n_hvdc=3  P*_obj=6249.8659
+
+## bus reindex P*(external) -> cvxopf(internal)
+P* bus_ids       = [1, 2, 30, 4, 5, 6, 7, 8, 9]
+cvxopf ext_to_int= {1: 0, 2: 1, 30: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8}
+identity permutation? True
+
+## dummy-gen decode (VERIFIED via gen_bus)
+from_gen_bus=[30, 7, 5] == dcline from [30, 7, 5]
+to_gen_bus  =[4, 9, 9] == dcline to   [4, 9, 9]
+p_in  = -from_dummy_Pg = [1.0, 10.0, 10.0]
+p_out = -to_dummy_Pg   = [0.01, -10.0, -9.5]
+
+## YBUS double-check: cvxopf Ybus vs P*'s recorded Pypower Ybus
+max|Ypp(reindexed) - Ybus_cvxopf| = 4.441e-16
+YBUS: AGREE
+
+## GUARDRAIL: gen-side injection vs Ybus-side Re/Im(V conj(Ybus V))
+max|p_gen_side - Ybus_p| = 3.076e-09 MW  (at internal idx 1)
+max|q_gen_side - Ybus_q| = 2.574e-09 MVAr
+GUARDRAIL: PASS
+
+## C1 nodal real balance (cvxopf): gen-side p vs Re(V conj(Ybus V))
+max|resid| = 3.076e-09 MW  (at internal idx 1)
+per-bus resid = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+## C2 nodal reactive balance (cvxopf): gen-side q vs Im(V conj(Ybus V))
+max|resid| = 2.574e-09 MVAr  (at internal idx 1)
+
+## C3 gen P bounds  Pgmin <= Pg <= Pgmax  (MW)
+max lower viol = -1.870e-06  max upper viol = -1.465e+02
+Pg = [90.0, 106.1427, 123.4818]
+
+## C4 gen Q bounds  Qgmin <= Qg <= Qgmax  (MVAr)
+max lower viol = -2.793e+02  max upper viol = -2.884e+02
+Qg = [11.584, -1.9442, -20.7388]
+
+## C5 voltage bounds  vmin <= Vm <= vmax
+max lower viol = -1.750e-01  max upper viol = -1.423e-08
+
+## C6 DC box  Pmin <= p_in <= Pmax  (MW)
+p_in = [1.0, 10.0, 10.0]
+Pmin = [1.0, 2.0, 0.0]  Pmax = [10.0, 10.0, 10.0]
+max lower viol = -3.261e-06  max upper viol = -1.742e-06
+
+## C7 cvxopf DC coupling law (loss0 DROPPED):  p_out = -(1-L1)*p_in [MW]
+p_out (P*)      = [0.01, -10.0, -9.5]
+p_out required  = [-0.99, -10.0, -9.5]
+residual (P* - required) per link = [1.0, 0.0, -0.0]
+loss0 per link  = [1.0, 0.0, 0.0]  (dropped by cvxopf)
+max|resid| = 1.0000 MW
+
+## VERDICT
+Expected (symmetric to EX6): C1/C2 ~0 to machine precision (P*'s dummy
+gens satisfy their own coupling law WITH loss0, so nodal balance closes);
+C3-C6 satisfied; C7 nonzero ONLY on link0 by ~loss0=1 MW, sign OPPOSITE
+to EX6 (P* runs p_out=+0.01 where cvxopf's loss0-dropped law wants -0.99).
+If that holds: P* is feasible in cvxopf's set EXCEPT the loss0 term on
+link0 -- confirming from BOTH sides that C* and P* are mutually near-
+feasible, i.e. different local optima of the (near-)same nonconvex AC-OPF.

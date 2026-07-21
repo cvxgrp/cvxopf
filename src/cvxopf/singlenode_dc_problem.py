@@ -299,6 +299,8 @@ def _build_singlenode_dc_single(
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
+    *,
+    hvdc=None,
 ) -> "OPFBuild":
     """
     Build a single time-step single-node DC dispatch problem.
@@ -439,6 +441,10 @@ def _build_singlenode_dc_multistep(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     df_nd: pd.DataFrame | None = None,
+    *,
+    hvdc=None,
+    df_hvdc_min=None,
+    df_hvdc_max=None,
 ) -> "OPFBuild":
     """
     Build a multi-step single-node DC dispatch problem.

@@ -1,0 +1,43 @@
+# EX6-proper: constraint-by-constraint feasibility of C* in neutralized Pypower
+# baseMVA=100.0  nb=9  n_hvdc=3
+
+## GUARDRAIL (LOG B.4): component reconstruction vs cvxopf p_net/q_net
+max|p_recon - p_net| = 1.110e-16 MW
+max|q_recon - q_net| = 0.000e+00 MVAr
+GUARDRAIL: PASS
+
+## C1 nodal real balance: Re(V conj(Ybus V))*baseMVA vs p_net
+max|resid| = 1.705e-13 MW  (at bus internal idx 2)
+
+## C2 nodal reactive balance: Im(V conj(Ybus V))*baseMVA vs q_net
+max|resid| = 6.226e-13 MVAr  (at bus internal idx 1)
+
+## C3 gen P bounds  Pgmin <= Pg <= Pgmax  (MW)
+max lower viol = -6.119e-11  max upper viol = -4.984e+01
+Pg = [90.0, 10.0, 220.1627]
+
+## C4 gen Q bounds  Qgmin <= Qg <= Qgmax  (MVAr)
+max lower viol = -2.953e+02  max upper viol = -2.822e+02
+Qg = [17.7576, 5.8744, -4.6776]
+
+## C5 voltage bounds  vmin <= Vm <= vmax
+max lower viol = -1.693e-01  max upper viol = -1.065e-12
+
+## C6 DC box  Pmin <= p_in <= Pmax  (MW)
+p_in = [1.0, 2.0, 10.0]
+Pmin = [1.0, 2.0, 0.0]  Pmax = [10.0, 10.0, 10.0]
+max lower viol = -2.789e-10  max upper viol = -3.038e-10
+
+## C7 DC coupling law (Pypower, WITH loss0):  p_out = -(1-L1)*p_in + L0 [MW]
+p_out (C*)      = [-0.99, -2.0, -9.5]
+p_out required  = [0.01, -2.0, -9.5]
+residual (C* - required) per link = [-1.0, 0.0, 0.0]
+max|resid| = 1.0000 MW
+
+## VERDICT
+Expected: C1/C2 ~0 (Ybus agrees + cvxopf self-consistent); C3-C6 satisfied;
+C7 nonzero ONLY on link0 by ~loss0=1 MW (the documented dropped term).
+If that holds: C* is feasible in neutralized Pypower EXCEPT the loss0 term
+on link0 -- a ~1 MW injection difference, NOT a 760-unit-objective driver.
+=> the loss0 drop does NOT explain the dispatch/objective gap; the gap must
+   be different local optima of the (near-)same problem. Proceed to EX7.

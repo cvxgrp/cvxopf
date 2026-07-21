@@ -1,0 +1,20 @@
+# EX8 PROBE: warm-start neutralized Pypower at P*, expect P+ ~ P*
+# P*_obj target = 6249.8659
+
+cold-start success = True  obj = 6249.8659
+warm-start success = True  obj = 6249.8659
+
+bus id order (warm) = [1, 2, 30, 4, 5, 6, 7, 8, 9]
+bus id order (P*)   = [1, 2, 30, 4, 5, 6, 7, 8, 9]
+bus order matches P*: True
+
+## drift P+ vs P* (per block, L2)
+||Vm+  - Vm* ||  = 0.000e+00
+||Va+  - Va* ||  = 0.000e+00  (deg)
+||Pg+  - Pg* ||  = 0.000e+00  (MW)
+||Qg+  - Qg* ||  = 0.000e+00  (MVAr)
+|obj+ - obj*|    = 3.475e-05
+
+## PROBE VERDICT
+PASS: warm-start propagates -- P+ ~ P* (near-zero drift, same obj).
+The two-arm EX8 (P* and C* seeds) is licensed.
