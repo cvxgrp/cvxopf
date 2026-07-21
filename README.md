@@ -442,3 +442,5 @@ package environment.
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
+- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power suppport
+- [ ] Unify grid component model patterns matching HVDC pattern
