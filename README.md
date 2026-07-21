@@ -441,6 +441,6 @@ package environment.
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
-- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
-- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power suppport
-- [ ] Unify grid component model patterns matching HVDC pattern
+- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power support
+- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components matching the HVDC pattern)
+- [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)

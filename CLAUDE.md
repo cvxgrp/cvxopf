@@ -418,6 +418,97 @@ nondispatchable.py → numpy only         (no other cvxopf imports)
 
 ---
 
+## Working with DCP in CVXPY
+
+Disciplined Convex Programming (DCP) is the ruleset CVXPY uses to certify a
+problem is convex. The convex formulations here (`lossy_dc`, `singlenode_dc`,
+future `socp`) are DCP-valid end to end. The `ac` formulation bypasses the
+whole-problem DCP check with `nlp=True` and uses DNLP via IPOPT — but this
+bypass exists for **one reason only** (see the boundary invariant below).
+
+### The device/network DCP boundary (load-bearing invariant)
+
+**Every device model must be DCP-valid in every formulation, including AC.**
+DNLP is invoked *only* for the network physics — the nonconvex power-flow
+equations in the full AC-OPF (the `cp.nlp.cos`/`cp.nlp.sin` trig relations in
+Section 2 of `_make_step_constraints` that link `P`/`Q` to `theta`/`v`). That
+is the sole place DNLP rules apply.
+
+Every device contribution — operating constraints, cross-step coupling
+constraints, injection terms, and cost expressions for generators, storage,
+nondispatchable units, and HVDC — must pass the ordinary DCP rules on its own.
+No device model may rely on DNLP.
+
+Why this invariant matters:
+
+- **Devices compose into any formulation unchanged.** Because a device model is
+  DCP, the same operating-constraint / injection / cost methods plug into AC,
+  lossy DC, singlenode, and future SOCP without a DNLP variant. This is exactly
+  what makes the Milestone 16 "model a component once, plug into any network"
+  contract possible.
+- **Agents never need to understand DNLP.** DNLP knowledge is confined to
+  `ac_problem.py` Section 2. Anyone writing or reviewing a device model only
+  needs the DCP rules below. (Do not change Section 2's DNLP flow definitions
+  without understanding the paper — already a hard rule in "What not to do".)
+- **SOCP (Milestone 11) integrates for free.** SOCP is a convex relaxation
+  whose *network* physics are themselves DCP (second-order cone constraints on
+  lifted variables — no DNLP bypass anywhere), making it the first fully-DCP
+  network formulation. Because every device is already DCP, the SOCP
+  constructor composes the existing device methods unchanged; the only new work
+  is the cone network model plus a `socp_operating_constraints` fork for the
+  (few, if any) components whose feasible region differs in the lifted space.
+  Getting the M16 component contract right pre-pays SOCP's integration cost.
+
+When you add or edit a device model, assert `is_dcp()` on its constraints and
+cost **directly** (per-object checks below) — a device term that only passes
+inside the AC problem because IPOPT ignores DCP is a latent bug: it will fail
+the moment the same device is used in a convex formulation.
+
+**The key fact for writing and debugging code: DCP attributes can be inspected
+on any expression, constraint, or objective individually — not just on the
+whole problem.** When a convex build fails its DCP check, do not only call
+`prob.is_dcp()`; localise the violation by checking the offending piece
+directly.
+
+Per-object checks:
+
+```python
+expr.is_dcp()          # is this expression DCP?
+expr.curvature         # 'CONSTANT' | 'AFFINE' | 'CONVEX' | 'CONCAVE' | 'UNKNOWN'
+expr.sign              # 'NONNEGATIVE' | 'NONPOSITIVE' | 'ZERO' | 'UNKNOWN'
+expr.is_convex()       # curvature-specific predicates
+expr.is_concave()
+expr.is_affine()
+constraint.is_dcp()    # is this single constraint DCP?
+objective.is_dcp()     # is Minimize(...)/Maximize(...) DCP?
+prob.is_dcp()          # whole-problem check
+```
+
+DCP rules in brief:
+
+- **Objective** must be `Minimize(convex)` or `Maximize(concave)`.
+- **Constraints** may only be `affine == affine`, `convex <= concave`, or
+  `concave >= convex`. An equality between non-affine expressions is never DCP
+  (this is why the HVDC loss coupling must use an affine branch, never
+  `abs`-in-equality — see the HVDC notes).
+- Curvature and sign are computed compositionally and are **always correct but
+  conservative**: an expression that is mathematically convex may still be
+  flagged `UNKNOWN` if the DCP rules cannot verify it. The fix is to rewrite it
+  in a DCP-verifiable form (e.g. `norm(hstack([1, x]), 2)` instead of
+  `sqrt(1 + square(x))`; explicit monomial sums instead of Horner's method —
+  see the `poly_cost_expr` note under Units).
+- `expr1 * expr2`, `expr1 / expr2`, `expr1 @ expr2` are DCP only when one side
+  is constant.
+
+**In tests and troubleshooting:** assert `expr.is_convex()` /
+`constraint.is_dcp()` on the specific term you built, not just the assembled
+problem. This pinpoints which component's constraint or cost broke DCP and
+keeps a passing convex formulation from silently regressing. A whole-problem
+`prob.is_dcp()` assertion is a good coarse gate, but the per-object checks are
+what make a DCP regression debuggable.
+
+---
+
 ## Key design decisions
 
 ### Bus indexing
@@ -548,6 +639,7 @@ is present.
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps |
 | 16 — Unify grid component model patterns | 🔲 Future | Refactor all grid components (dispatchable generators, storage, nondispatchable) into first-class component modules matching the HVDC pattern; components consumed by every formulation via composition. HVDC (M7) is the reference implementation. |
+| 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components) and M12 (terminal-SoC hard/soft machinery). |
 
 ### Milestone 4 — Branch flow limits (AC)
 When implementing, add apparent power flow expressions derived from the
@@ -683,6 +775,52 @@ Note: the `storage.py → numpy only` / `nondispatchable.py → numpy only` line
 in the Module-responsibilities import chain above accurately describe the
 **current** code and are left as-is until this refactor lands; M16 is the
 aspirational forward pattern, not a description of today's modules.
+
+### Milestone 17 — Hierarchical DC→AC receding-horizon dispatch
+The capstone milestone: the concrete implementation of the project vision
+stated in the README ("solve the convex `lossy_dc` formulation over the full
+planning horizon ... then use the AC formulation over a short receding horizon
+to verify and correct for true network physics, with SoC targets inherited
+from the convex layer as boundary constraints").
+
+Two-layer structure:
+
+- **Upper layer — long-horizon plan.** Solve `lossy_dc` (convex, globally
+  optimal) over the full multi-day horizon. Extract the SoC trajectory
+  `soc*(t)`.
+- **Signposts, not setpoints.** Only the **SoC waypoints** are passed down to
+  the AC layer — *not* generator dispatch, voltages, or branch flows. The AC
+  layer re-optimizes everything else against true network physics; it is only
+  told what stored energy to arrive at, at each checkpoint. Passing full
+  setpoints down would over-constrain the AC problem and defeat the purpose.
+  This discipline is the core design decision of the milestone.
+- **Lower layer — short AC window.** A 3–5 step AC-OPF over a receding horizon.
+  The inherited SoC signpost enters as a **terminal constraint**
+  (`soc[end] == soc*`) or a **terminal cost** (`ρ · ‖soc[end] − soc*‖`) — the
+  hard/soft choice is a design axis to expose, and reuses the terminal-SoC
+  machinery from Milestone 12.
+- **Receding horizon.** The AC window advances, re-inheriting the next signpost
+  from the DC plan at each step.
+
+Dependencies and rationale:
+
+- **Depends on M16.** A two-layer solver that shares device models across the
+  DC and AC formulations should be built *after* the components compose
+  uniformly (M16). Building it earlier would re-entrench per-formulation
+  duplication.
+- **Depends on M12** for the terminal-SoC hard-constraint-vs-soft-penalty
+  machinery the AC window consumes.
+- **Subsumes the convex-tracks-AC validation study.** The open-loop special
+  case (single AC window, no recession; replay the DC SoC plan through AC and
+  measure the feasibility/correction gap) is the natural validation artifact of
+  this milestone — it is the currently-unfilled "temporal × cross-formulation"
+  cell. The `case9_storage_{ac,dc}_24h.py` examples already supply ~80% of its
+  inputs (identical 24h scenario in both formulations, each self-verifying its
+  own SoC dynamics and operating region).
+
+This milestone is why the formulation ladder, storage SoC coupling, M16
+composability, and cheap multi-formulation runs exist — it is where that
+infrastructure is cashed in.
 
 ### Milestone 8 — Nondispatchable generators
 
