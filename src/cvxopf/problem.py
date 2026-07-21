@@ -28,7 +28,7 @@ import cvxpy as cp
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.hvdc import HVDCLink, hvdc_from_dcline, _hvdc_static_box
+from cvxopf.hvdc import HVDCLink, _hvdc_static_box
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +191,16 @@ class OPFBuild:
         else:
             kwargs.setdefault("solver", cp.IPOPT)
             kwargs.setdefault("nlp", True)
+            # IPOPT prints its banner and iteration log at the C level,
+            # unaffected by CVXPY's `verbose` flag. Translate our own verbose
+            # setting into IPOPT's own suppression options so `verbose=False`
+            # actually silences IPOPT (banner via `sb`, log via `print_level`).
+            # setdefault keeps these user-overridable (e.g. an explicit
+            # print_level wins). When verbose=True, inject nothing so IPOPT's
+            # output prints alongside CVXPY's.
+            if not kwargs.get("verbose", False):
+                kwargs.setdefault("print_level", 0)
+                kwargs.setdefault("sb", "yes")
         kwargs.setdefault("verbose", False)
         self.prob.solve(**kwargs)
 
