@@ -21,57 +21,50 @@ The package is developed by the CVX Group at Stanford.
 
 ---
 
+## Design aesthetic (read this first)
+
+This project follows a specific engineering aesthetic, articulated by Stephen
+Boyd (creator of CVXPY and disciplined convex programming) in recorded remarks
+on the *inControl* podcast (Ep. 10, from 9:55). The load-bearing lines:
+
+> "The real value of math in applied settings ... is what it gives you is
+> **Clarity of Thought**."
+
+> "When people just hack something together to knock off 87 requirements, it's
+> going to be horrible code ... you cannot extend it. Whereas ... people who
+> ... took the time to work out ... the [right] abstractions [get] beautiful,
+> lean code that has very high probability of being correct. It's extensible.
+> It's maintainable. ... the cost of ownership ... is a lot less."
+
+The move that matters: before implementing, find the case where "the 87 things
+we've been asked to implement are actually all instances of only three
+different things," and implement *those three* correctly. (He offers Linux as
+the model.)
+
+**This is the operative standard for this codebase**, and existing decisions
+are instances of it: the **device/network DCP boundary** (one abstraction lets
+every device compose into every formulation), **Milestone 16** (three
+near-duplicated device implementations reduced to one component pattern), and
+**correctness honesty** (Pypower-validation and HVDC Gate-6b surfaced and
+explained discrepancies rather than loosening a tolerance).
+
+Practical implications:
+- Prefer finding the underlying abstraction over adding a special case. A
+  special case is a signal you may not have found the right abstraction yet.
+- Lean, correct, extensible beats fast-and-working-looking. Cost of ownership
+  is a first-class concern.
+- If a change makes the code harder to debug, extend, or reason about, that is
+  a real cost even if it "works."
+
+Source: inControl podcast, Ep. 10, Stephen Boyd (from 9:55).
+https://www.incontrolpodcast.com/1632769/episodes/12444508-ep10-stephen-boyd-linear-matrix-inequalities-convex-optimization-disciplined-convex-programming-rock-roll
+
+
+---
+
 ## Repository layout
 
-```
-src/cvxopf/
-  __init__.py             Import-time cyipopt check with helpful error message
-  network.py              Ybus, incidence matrices, reindexing
-  cost.py                 Polynomial generator cost expressions (CVXPY)
-  data.py                 Input validation, time-series DataFrame ingestion
-  problem.py              Public API: OPFBuild, OPFOptions, build_opf,
-                          build_opf_multistep, deprecated aliases
-  ac_problem.py           AC-OPF internal helpers (DNLP formulation)
-  dc_problem.py           Lossy DC OPF internal helpers (convex QP)
-  results.py              extract_results, compare_to_reference
-  storage.py              StorageUnitIdeal dataclass, validation, incidence
-                          matrix, SoC coupling constraint helper
-  nondispatchable.py      NondispatchableUnit dataclass, validation, incidence
-                          matrix, timeseries parsing
-  testcases/
-    case9.py              9-bus, 3-generator MATPOWER test case
-    case14.py             IEEE 14-bus MATPOWER test case
-tests/
-  conftest.py
-  fixtures/               Committed Pypower reference JSON files (static)
-  test_network.py
-  test_problem_single.py
-  test_problem_multistep.py
-  test_problem_dc.py
-  test_problem_dc_multistep.py
-  test_results.py
-  test_sparse_pq.py
-  test_vs_pypower_reference.py
-  test_storage.py
-  test_nondispatchable.py
-scripts/
-  generate_pypower_fixtures.py   uv inline-dependency script (isolated env)
-examples/
-  case9_single_step.py
-  case14_single_step.py
-  case9_multistep_flat_load.py
-  case14_lossy_dc.py
-  case118_sparse_vs_dense_ac.py
-  case9_storage_ac.py
-  case9_storage_dc.py
-  case9_storage_ac_24h.py
-  case9_storage_dc_24h.py
-  case9_multistep_nondispatchable_ac.py
-  case9_nondispatchable_dc.py
-notebooks/
-  benchmark_opf.py
-  cvxopf_demo.py
-```
+`src/cvxopf/`: `problem.py` (public API), `ac_problem.py` / `dc_problem.py` / `singlenode_dc_problem.py` (per-formulation builders), `network.py`, `cost.py`, `data.py`, `results.py`, and one module per grid component (`storage.py`, `nondispatchable.py`, `hvdc.py`, `generator.py`). `testcases/` holds MATPOWER cases (case9–case118, PWL and dcline variants). `tests/`, `examples/`, `notebooks/`, and `scripts/` are top-level. Run `find src tests examples -name '*.py'` for the current file list.
 
 ---
 
@@ -83,7 +76,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: **512 passed, 0 failed, 0 skipped.**
+Expected result: all tests pass (baseline currently 816; run to confirm)
 
 To run a single test file:
 
