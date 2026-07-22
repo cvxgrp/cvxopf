@@ -495,12 +495,15 @@ Variable units are **not** uniform across all CVXPY variable types:
 - **Conventional generator and power flow variables** (`Pg`, `Qg`, `p_flows`,
   `p`, `q`) are in **per-unit** internally (divided by `baseMVA`) and scaled
   to engineering units (MW, MVAr) in `extract_results`.
-- **Storage variables** (`b`, `b_q`, `soc`) and **nondispatchable variables**
-  (`p_nd`, `q_nd`) are in **engineering units** internally (MW, MVAr, MWh).
+- **Storage variables** (`b`, `b_q`, `soc`), **nondispatchable variables**
+  (`p_nd`, `q_nd`), and **HVDC variables** (`p_hvdc_in`, `p_hvdc_out`) are in
+  **engineering units** internally (MW, MVAr, MWh).
   They are **not** divided by `baseMVA` at declaration and are **not**
   multiplied by `baseMVA` in `extract_results`. They enter the nodal balance
   divided by `baseMVA` at the point of constraint construction — that division
-  is the only place `baseMVA` appears for these variables.
+  is the only place `baseMVA` appears for these variables. **Do not** divide
+  them by `baseMVA` at declaration or inside constraint loops, and **do not**
+  multiply them by `baseMVA` in `extract_results` — both are latent unit bugs.
 - Generator cost expressions receive `Pg` in **MW** — the `baseMVA` scaling
   is applied before building cost expressions in both AC and DC.
 - `poly_cost_expr` in `cost.py` uses an explicit monomial sum (not Horner's
@@ -679,76 +682,41 @@ docstring.
 
 - Do not add `pypower` to `pyproject.toml` or any runtime dependency
 - Do not call `build.prob.solve()` directly — use `build.solve()`
-- Do not use `build_acopf` or `build_acopf_multistep` — they are
-  deprecated; use `build_opf(..., formulation="ac")` instead
+- Do not use `build_acopf` / `build_acopf_multistep` — deprecated; use
+  `build_opf(..., formulation="ac")`
 - Do not change the DNLP variable formulation without understanding the paper
 - Do not regenerate fixture files in CI
-- Do not pin `numpy` in `pyproject.toml` — the numpy pin exists only in
-  the fixture generation script
-- Do not remove the `validate_case` call from `_parse_case` in
-  `ac_problem.py` or `_parse_dc_case` in `dc_problem.py`
-- Do not treat all CVXPY variables as per-unit — `b`, `b_q`, `soc`,
-  `p_nd`, and `q_nd` are in engineering units (MW, MVAr, MWh); only
-  generator and power flow variables are in per-unit
-- Do not divide `b`, `b_q`, `p_nd`, or `q_nd` by `baseMVA` at variable
-  declaration or inside constraint loops — the only `baseMVA` division for
-  these variables is in the nodal balance term
-- Do not multiply `b`, `b_q`, `soc`, `p_nd`, or `q_nd` result values by
-  `baseMVA` in `extract_results` — they are already in engineering units
+- Do not pin `numpy` in `pyproject.toml` — the pin exists only in the fixture
+  generation script
+- Do not remove the `validate_case` call from `_parse_case` (`ac_problem.py`)
+  or `_parse_dc_case` (`dc_problem.py`)
 - Do not import `ac_problem` from `dc_problem` or vice versa
-- Do not set `nlp=True` for convex formulations (DC, SOCP, fast-decoupled)
-- Do not set `nlp=False` for the AC formulation
-- Do not access `build.variables["P"]` or `build.variables["Q"]` for AC builds
-  without checking `sparse_pq` — with the default `sparse_pq=True` these keys
-  do not exist; use `build.variables.get("P_vec")` instead
-- Do not implement Milestone 4 branch flow limits using `P_vec`/`Q_vec`
-  until Milestone 9 is complete — Milestone 4 notes currently reference `P`, `Q`
-  matrices and must be updated as part of Milestone 9
-- Do not import `StorageUnitIdeal` from `problem.py` inside `ac_problem.py`
-  or `dc_problem.py` — import from `storage.py` directly
-- Do not import `NondispatchableUnit` from `problem.py` inside `ac_problem.py`
-  or `dc_problem.py` — import from `nondispatchable.py` directly
-- Do not add `delta` to `StorageUnitIdeal` — it is a global problem parameter
-- Do not add `ns=0` to `build.data` when `storage=None` — breaks detection
-- Do not add `nnd=0` to `build.data` when `nondispatchable=None` — breaks detection
-- Do not use `numpy_array * cp.abs(cp_var)` for the aging cost — use
-  `cp.multiply(numpy_array, cp.abs(cp_var))` to avoid CvxpyDeprecationWarning
-- Do not add a second `p ==` or `q ==` constraint after `_make_step_constraints`
-  returns — it owns all balance constraints including storage and nondispatchable
-  injection terms
+- Do not import a component data class (`StorageUnitIdeal`,
+  `NondispatchableUnit`, `HVDCLink`) from `problem.py` inside `ac_problem.py`
+  or `dc_problem.py` — import from its own module (`storage.py`,
+  `nondispatchable.py`, `hvdc.py`) directly
+- Do not set `nlp=True` for convex formulations (DC, singlenode, SOCP), nor
+  `nlp=False` for the AC formulation
+- Do not break the detection-by-presence contract: never add `ns=0`, `nnd=0`,
+  or `n_hvdc=0` to `build.data` when the corresponding component is absent —
+  detection is `"ns"`/`"nnd"`/`"n_hvdc" in build.data`
+- Do not add a second `p ==` or `q ==` constraint after
+  `_make_step_constraints` returns — it owns all balance constraints, including
+  storage, nondispatchable, and HVDC injection terms
 - Do not implement `StorageUnitLossy` without a separate plan — separate
-  charge/discharge variables require structural changes to `_make_step_constraints`
-- Do not add a cost term or curtailment penalty for nondispatchable generators
-- Do not add `q_nd` to DC variables or results — nondispatchable reactive power
-  is AC only
-- Do not use `nd_available` in single-step `build.data` or `nd_p_available`
-  in multistep `build.data` — these keys are mutually exclusive; check which
-  is present before reading
-- Do not pass `df_nd` to `_parse_case` or `_parse_dc_case` — it is processed
-  separately in the multistep builder after the parse function returns
-- Do not emit a `UserWarning` when `apparent_power_rating` is not used as a
-  constraint in the DC nondispatchable path — no warning is needed here
-- Do not call `validate_case` inside `_parse_singlenode_dc_case` — it does
-  not call `validate_case` by design, because `make_singlenode_case`
-  produces a dict with an empty branch table that `validate_case` rejects
-- Do not store `Pd_series` as shape `(T, nb)` for `singlenode_dc` — it is
-  shape `(T,)` because the formulation has no per-bus structure
-- Do not add `n_hvdc=0` to `build.data` when `hvdc=None` — breaks detection
-  (`"n_hvdc" in build.data`)
-- Do not add a `q`/reactive term for HVDC — the MVP is unity power factor
+  charge/discharge variables require structural changes to
+  `_make_step_constraints`
 - Do not enter the HVDC balance terms as `Ch_to - Ch_from` — both terminals
   are signed injections (Convention B) and enter with `+`
-- Do not put `cp.abs` (or any non-affine atom) in the `p_out` loss equality —
-  select an affine branch by the box's pre-construction sign instead
+- Do not put `cp.abs` (or any non-affine atom) in the HVDC `p_out` loss
+  equality — select an affine branch by the box's pre-construction sign instead
 - Do not select a lossy loss branch for a zero-straddling box
-  (`p_min_t < 0 < p_max_t`) — the lossy branch is valid only when the box is
-  fixed-direction (`p_min_t >= 0` or `p_max_t <= 0`)
-- Do not multiply `p_hvdc_in`/`p_hvdc_out` by `baseMVA` in `extract_results` —
-  they are in engineering units (MW), like storage
-- Do not import `HVDCLink` from `problem.py` inside `ac_problem.py` or
-  `dc_problem.py` — import from `hvdc.py` directly
+  (`p_min_t < 0 < p_max_t`) — the lossy branch is valid only for a
+  fixed-direction box (`p_min_t >= 0` or `p_max_t <= 0`)
 - Do not forward `hvdc`/`df_hvdc_min`/`df_hvdc_max` to `singlenode_dc` as a
   live component — the singlenode builders accept and silently drop them
-  (`"n_hvdc"` never added to `build.data`, no `UserWarning`)
-- Do not model MATPOWER `LOSS0` (fixed converter loss) in the MVP — it is
-  dropped with a `UserWarning`; full fixed-loss modelling is Milestone 15
+  (no `"n_hvdc"` key, no `UserWarning`)
+- Do not skip the singlenode structural exceptions: `_parse_singlenode_dc_case`
+  does not call `validate_case` (empty branch table by design), and
+  `Pd_series` is shape `(T,)`, not `(T, nb)` — the formulation has no per-bus
+  structure
