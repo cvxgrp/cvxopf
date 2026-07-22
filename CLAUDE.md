@@ -466,9 +466,9 @@ DCP rules in brief:
 - Curvature and sign are computed compositionally and are **always correct but
   conservative**: an expression that is mathematically convex may still be
   flagged `UNKNOWN` if the DCP rules cannot verify it. The fix is to rewrite it
-  in a DCP-verifiable form (e.g. `norm(hstack([1, x]), 2)` instead of
-  `sqrt(1 + square(x))`; explicit monomial sums instead of Horner's method —
-  see the `poly_cost_expr` note under Units).
+  in a DCP-verifiable form (see the CVXPY DCP docs for the standard rewrites;
+  the project-specific instance is the explicit-monomial-sum vs. Horner's-method
+  `poly_cost_expr` note under Units).
 - `expr1 * expr2`, `expr1 / expr2`, `expr1 @ expr2` are DCP only when one side
   is constant.
 
