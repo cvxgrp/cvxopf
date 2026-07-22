@@ -533,16 +533,11 @@ to buses. It is constructed by `_make_nd_incidence_matrix` in
 `nondispatchable.py` and stored in `build.data["Cnd"]`. A fourth, `Cs`, shape
 `(nb, ns)`, maps storage units to buses. Both follow the same structure as `Cg`.
 
-### Pypower is not a dependency
-Never add pypower to `pyproject.toml`. See fixture generation below.
-
 ### Storage units
 
-`StorageUnitIdeal` lives in `storage.py`, which has zero imports from other
-cvxopf modules. This avoids circular imports since both `ac_problem.py` and
-`dc_problem.py` import from it, and both are imported (deferred) by
-`problem.py`. `StorageUnitIdeal` is re-exported from `problem.py` for the
-public API.
+`StorageUnitIdeal` lives in `storage.py` with zero cvxopf imports (both
+`ac_problem.py` and `dc_problem.py` import from it, so a cvxopf import here
+would risk a cycle) and is re-exported from `problem.py` for the public API.
 
 `delta` (time step duration, hours) is a global problem parameter on
 `build_opf` / `build_opf_multistep`, not a field on `StorageUnitIdeal`.
@@ -563,10 +558,11 @@ fixed order, with Section 4b added for nondispatchable constraints:
   4b. Nondispatchable operating constraints
   5. Voltage setpoint pinning
 
-Never add a second `p ==` or `q ==` constraint from outside this function.
+This function owns all balance constraints (Section 3 emits exactly one
+`p ==` and one `q ==`).
 
-Storage keys are absent from `build.data` when `storage=None`. The
-detection contract is `"ns" in build.data`. Never add `ns=0` as a default.
+Storage keys are absent from `build.data` when `storage=None`; the detection
+contract is `"ns" in build.data`.
 
 ### Nondispatchable units
 
@@ -583,8 +579,8 @@ an intentional asymmetry with `df_P`/`df_Q` (which use positional indices) —
 nondispatchable units are sparse across buses, so bus-ID-as-column is more
 natural. This convention may be revisited in a future API release.
 
-Nondispatchable keys are absent from `build.data` when `nondispatchable=None`.
-The detection contract is `"nnd" in build.data`. Never add `nnd=0` as a default.
+Nondispatchable keys are absent from `build.data` when `nondispatchable=None`;
+the detection contract is `"nnd" in build.data`.
 
 `"nd_p_available"` (shape `(nnd,)`) and `"nd_available"` (shape `(T, nnd)`)
 are mutually exclusive in `build.data`: single-step builds populate the former,
