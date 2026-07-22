@@ -199,9 +199,15 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
   (`cost_coeffs`, `cp.square`/`cp.abs`); zero-cost when `cost_coeffs` is zero.
 - HVDC terms absent when `hvdc=None`
 
-Results keys: `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`,
-`p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived,
-`= p_hvdc_in + p_hvdc_out`, always >= 0) when `hvdc` is not None.
+| Formulation | Result keys |
+|---|---|
+| AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= p_hvdc_in + p_hvdc_out`, always >= 0) when `hvdc` is not None |
+| Lossy DC | `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None. `Vm`, `Va_deg`, `Qg`, `q_net` absent |
+| Single‑node DC | `status`, `objective`, `Pg`, `p_net`. `p_flows`, `Vm`, `Va_deg`, `Qg`, `q_net` absent |
+
+Code consuming results from more than one formulation should use
+`results.get('Vm')` rather than `results['Vm']` — DC and single‑node omit
+the AC‑only keys.
 
 Do not change this formulation without understanding the DNLP paper.
 
@@ -222,37 +228,7 @@ Constraints:
 
 Variables: `p_flows`, `p_gen`
 
-**Storage variables** (present only when `storage` is not None):
-- `b` — real power (ns,) MW, positive = discharging
-- `b_q` absent — DC has no reactive power
-- `soc` — state of charge (ns,) MWh
-- Operating set: `|b_t[s]| <= S_max[s]` (real power bound; UserWarning emitted)
-- Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t = Pd`
-
-**Nondispatchable variables** (present only when `nondispatchable` is not None):
-- `p_nd` — real power (nnd,) MW, non-negative, bounded above by available power
-- `q_nd` absent — DC has no reactive power
-- Operating set: `0 <= p_nd_t[n] <= R_t[n]` (available power upper bound only;
-  apparent power rating is stored but not used as a constraint in DC)
-- Nodal balance modified: `A @ p_flows + p_gen + (1/baseMVA) * Cs @ b_t + (1/baseMVA) * Cnd @ p_nd_t = Pd`
-- Storage term absent when `storage=None`; ND term absent when `nondispatchable=None`
-
-**HVDC variables** (present only when `hvdc` is not None):
-- `p_hvdc_in`, `p_hvdc_out` — from/to signed nodal injections (n_hvdc,) MW,
-  Convention B (positive = injection into the grid). Identical model to AC:
-  box bound + proportional-loss coupling `p_out == -(1 - loss_frac) * p_in`
-  on fixed-direction links.
-- Flow conservation modified: `A @ p_flows + p_gen + ... + (1/baseMVA) * (Ch_from @ p_in + Ch_to @ p_out) = Pd`
-  — both terminals enter with `+`.
-- Optional polynomial cost per link (same as AC).
-- HVDC term absent when `hvdc=None`
-
-Results keys: `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus
-`p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None.
-
-Note: `Vm`, `Va_deg`, `Qg`, `q_net` are **absent** from DC results.
-Code consuming results from either formulation should use
-`results.get('Vm')` rather than `results['Vm']`.
+**Device models in DC** – No reactive term (`b_q`, `q_nd` absent). Storage uses a real‑power bound `|b_t| ≤ S_max` (emits a `UserWarning`). Nondispatchable units have only the real‑power bound `0 ≤ p_nd_t ≤ R_t` (apparent rating stored but not enforced). HVDC model is identical to AC (box bounds plus proportional‑loss coupling). Results omit `Vm`, `Va_deg`, `Qg`, `q_net` (see the results-key table under `"ac"`).
 
 There is no Pypower oracle for DC validation. Correctness is verified via
 internal consistency checks: flow conservation, bound feasibility, T=1
@@ -272,10 +248,7 @@ Objective: minimize generation cost G (same polynomial cost as AC and
 lossy DC) plus storage aging cost when storage is present.
 
 Variables: Pg (ng,) per-unit, b/soc when storage present,
-p_nd when nondispatchable present.
-
-Results keys: status, objective, Pg, p_net
-(p_flows, Vm, Va_deg, Qg, q_net absent)
+p_nd when nondispatchable present. (Results keys: see the table under `"ac"`.)
 
 Accepts make_singlenode_case() to build a minimal case dict without
 requiring a full MATPOWER case. Also accepts any standard MATPOWER case
