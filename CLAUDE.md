@@ -382,6 +382,12 @@ nondispatchable.py → numpy only         (no other cvxopf imports)
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
 
+The `storage.py → numpy only` / `nondispatchable.py → numpy only` lines above
+describe the **current** code and are left as-is until the Milestone 16
+component refactor lands (which will give those modules a `cvxpy` import); M16
+is the aspirational forward pattern, not a description of today's modules. See
+`plans/milestone-16-unify-components.md`.
+
 ---
 
 ## Working with DCP in CVXPY
@@ -592,245 +598,20 @@ is present.
 | 1 — Port and modularize working code | ✅ Complete | |
 | 2 — Pypower fixture generation and validation | ✅ Complete | |
 | 3 — Multi-step problem builder | ✅ Complete | |
-| 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC |
-| 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep` |
+| 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC. See `plans/milestone-4-branch-limits.md` (placeholder). |
+| 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep`. AC apparent-power circle, DC real-power box; SoC cross-step coupling; L1 aging cost. See `plans/milestone-5-storage.md`. |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
-| 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match (see below + `plans/milestone-7-hvdc.md`). `LOSS0`/reactive/voltage-control deferred to M15. |
-| 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep` |
-| 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq`; default `True` |
+| 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match. `LOSS0`/reactive/voltage-control deferred to M15. See `plans/milestone-7-hvdc.md` (incl. the `dcline` column map and MVP-vs-M15 subtable) and `experiments/dnlp_vs_pypower/`. |
+| 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC real-power bound only; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
+| 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
 | 11 — SOCP (convex) network model | 🔲 Future | |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | 🔲 Future | |
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
-| 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps |
-| 16 — Unify grid component model patterns | 🔲 Future | Refactor all grid components (dispatchable generators, storage, nondispatchable) into first-class component modules matching the HVDC pattern; components consumed by every formulation via composition. HVDC (M7) is the reference implementation. |
-| 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components) and M12 (terminal-SoC hard/soft machinery). |
-
-### Milestone 4 — Branch flow limits (AC)
-When implementing, add apparent power flow expressions derived from the
-`P`, `Q` matrices and enforce per-branch `rateA` constraints. The stub
-and `NotImplementedError` in `ac_problem.py` must be replaced. Add tests
-that verify the constraint is binding when load is pushed high enough.
-
-### Milestone 5 — Battery/storage model
-
-`StorageUnitIdeal` in `src/cvxopf/storage.py`. Passed as `storage=` to
-`build_opf` and `build_opf_multistep`. Time step duration `delta` (hours,
-default 1.0) is a separate global parameter.
-
-AC formulation uses an apparent power circle constraint
-`b_t^2 + b_q_t^2 <= S_max^2`. DC formulation uses a real power bound
-`|b_t| <= S_max` with a `UserWarning`. SoC dynamics are cross-step equality
-constraints generated by `_make_storage_soc_constraints` after the time step
-loop. Aging cost `lambda * sum_t |b_t|` follows Nnorom et al. (2026).
-
-`StorageUnitLossy` (asymmetric charge/discharge efficiency) is deferred.
-
-### Milestone 7 — HVDC transmission links
-**Status: complete.** All steps (T0–T7) done: test artifacts, HVDC data
-struct + validation + incidence, DC and AC formulation integration, results
-extraction with the Gate 6b consistency test, public API re-exports
-(`HVDCLink`, `hvdc_from_dcline`), runnable examples (`examples/case9_hvdc_ac.py`,
-`examples/case9_hvdc_dc.py`), the Ybus-agreement test
-(`TestHVDCYbusAgreement` — DC lines contribute nothing to Ybus), and docs.
-See `plans/milestone-7-hvdc.md` and, for how the dcline fixture
-oracle is built (pypower's `toggle_dcline` is unusable under numpy 2.x),
-`scripts/README.md`.
-
-**Gate 6b is consistency-based, not a Pypower value-match.** A solved cvxopf
-`formulation="ac"` run on `case9_dcline()` does not reproduce the committed
-Pypower fixture: the two land in different local optima of the (near-)same
-nonconvex AC-OPF, and the fixture point is a *suboptimal* point of Pypower's
-own feasible set (proven by the `case9_dcline` cross-eval, EX12). 6b therefore
-asserts internal consistency (nodal balance ≈ 0, the proportional-loss law on
-fixed-direction links, `hvdc_loss >= 0`, the `loss0` `UserWarning`). The
-investigation is distilled and committed as the final report
-`experiments/dnlp_vs_pypower/` (a 2×2 PWL-cost × DC-line study with a
-reproducible proof-by-code demo).
-
-Model HVDC links as controllable point-to-point power injections between
-two buses, subject to capacity limits. Follows the MATPOWER `dcline`
-table format. Applies to both AC and lossy DC formulations. Supports
-multi-step scheduling (the power transfer on each DC link can vary per time
-step).
-
-The build plan lives in `plans/milestone-7-hvdc.md`. Key modeling decisions
-recorded there: HVDC terminals are modelled as **generator-like objects**
-with signed nodal injections `p_in`/`p_out` as the fundamental variables
-(Convention B — positive = injection into the grid, both balance terms enter
-with `+`). The loss model is **proportional only** (`loss_percent`), applied
-via sign-split affine branches selected pre-construction: lossy in
-`scheduled`/`downward`/fixed-direction `band` steps, lossless in `free` and
-zero-straddling `band` steps. A non-affine `abs`-in-equality loss constraint
-is **not** DCP-valid and must never be used — select an affine branch by the
-known flow direction instead. Fixed converter loss (`LOSS0`) and full
-sign-switching lossy behavior are deferred to Milestone 15.
-
-**Standard test case (`pypower.t.t_case9_dcline`) — MVP vs M15 handling.**
-The `dcline` table format is now verified against this Pypower fixture; the
-loss law is `Pt = Pf - loss0 - loss1*Pf`, confirming `loss1` is a per-unit
-fraction (`loss_percent = loss1 * 100`). What the MVP (Milestone 7) models
-from this case, and what it does not:
-
-| `dcline` column(s) | MVP (M7) | Full lossy (M15) |
-|---|---|---|
-| `Pf` | sending-terminal setpoint (`p_scheduled_mw`, pins `p_in`) | same |
-| `Pmin`/`Pmax` | `p_in` box bounds (`band`/`downward` presets) | same |
-| `loss1` (proportional) | modelled on fixed-direction steps | modelled everywhere |
-| `loss0` (fixed/no-load) | **dropped**; `UserWarning` when nonzero | modelled via charge/discharge split |
-| `Qf,Qt,Qmin*,Qmax*` (reactive) | **dropped** (unity-PF MVP) | out of scope (unity-PF) |
-| `Vf,Vt` (terminal voltage setpoints) | **dropped** (no HVDC voltage control) | out of scope |
-| `dclinecost` | `cost_coeffs=(c0,c1,c2)` polynomial | same |
-
-**Consequence:** importing `t_case9_dcline` will **not** reproduce Pypower's
-solution exactly — row 0 has `loss0=1`, which the MVP ignores. This is a
-documented, intended approximation (see the plan doc + Milestone 15), not a
-bug. Fixtures for this case are generated with the existing
-`scripts/generate_pypower_fixtures.py` script (see "Fixture generation").
-
-### Milestone 15 — Full lossy HVDC (sign-switching converter losses)
-Extends Milestone 7 to carry losses when the flow direction is itself a
-decision (i.e. `free` mode and zero-straddling `band` steps). Research 
-direction: a charge/discharge-stylesplit of `p_in` into non-negative 
-positive/negative parts (same machinery as the deferred lossy battery 
-model), which keeps the loss equality affine while
-letting the direction vary. Deferred because the MVP (Milestone 7) covers the
-dominant proportional loss on fixed-direction links, and the fixed-loss sign
-and `dcline` `LOSS0` units are cleaner to settle alongside this split. Also, fixed
-converter loss (MATPOWER `LOSS0`), which was already prototyped in the 
-`dnlp_vs_pypower` experiment. Finally, add reactive power support, propose apparent
-power circle to match energy storage.
-
-### Milestone 16 — Unify grid component model patterns
-Bring **every** grid component into alignment with the component pattern that
-HVDC (Milestone 7) establishes: data struct, validation, incidence,
-constraint-set builder(s), and cost expression co-located in one module,
-importing `cvxpy` and `numpy` only (no other cvxopf module — the
-circular-import safeguard is about cvxopf-internal imports, not `cvxpy`). Every
-OPF formulation constructor (AC, lossy DC, singlenode, future SOCP) consumes
-each component by **composition** — calling its constraint-set and cost methods
-and wiring them into that formulation's own network model — rather than
-re-synthesizing the equations per formulation.
-
-This is a cross-cutting refactor touching several existing components, each of
-which predates the pattern:
-
-- **Dispatchable generators.** `cost.py` today is effectively the
-  dispatchable-generator component that never got first-class treatment,
-  because the generator model was ported wholesale from Pypower. Its
-  `poly_cost_expr` becomes that module's cost function.
-- **Storage.** The AC apparent-power circle vs. DC real-power box operating
-  regions currently live embedded in the AC and DC constructors; they move into
-  storage's module as formulation-specific constraint methods
-  (`ac_operating_constraints` / `dc_operating_constraints`), so each
-  constructor grabs the one matching its formulation instead of re-synthesizing
-  it.
-- **Nondispatchable.** Same treatment — its operating region and injection
-  wiring move into the component module and are consumed by composition.
-
-Components that need formulation-specific feasible regions expose them as
-distinct methods (e.g. storage's AC circle vs. DC box), and each constructor
-grabs the one matching its formulation. HVDC (Milestone 7) is the reference
-implementation of this "model a component once, plug into any network
-formulation" contract — including the `ac_*`/`dc_*` method fork (with
-pass-through delegation where the two forms coincide) and the late-bound
-`cp.Parameter` scaling seam between component and constructor.
-
-Note: the `storage.py → numpy only` / `nondispatchable.py → numpy only` lines
-in the Module-responsibilities import chain above accurately describe the
-**current** code and are left as-is until this refactor lands; M16 is the
-aspirational forward pattern, not a description of today's modules.
-
-### Milestone 17 — Hierarchical DC→AC receding-horizon dispatch
-The capstone milestone: the concrete implementation of the project vision
-stated in the README ("solve the convex `lossy_dc` formulation over the full
-planning horizon ... then use the AC formulation over a short receding horizon
-to verify and correct for true network physics, with SoC targets inherited
-from the convex layer as boundary constraints").
-
-Two-layer structure:
-
-- **Upper layer — long-horizon plan.** Solve `lossy_dc` (convex, globally
-  optimal) over the full multi-day horizon. Extract the SoC trajectory
-  `soc*(t)`.
-- **Signposts, not setpoints.** Only the **SoC waypoints** are passed down to
-  the AC layer — *not* generator dispatch, voltages, or branch flows. The AC
-  layer re-optimizes everything else against true network physics; it is only
-  told what stored energy to arrive at, at each checkpoint. Passing full
-  setpoints down would over-constrain the AC problem and defeat the purpose.
-  This discipline is the core design decision of the milestone.
-- **Lower layer — short AC window.** A 3–5 step AC-OPF over a receding horizon.
-  The inherited SoC signpost enters as a **terminal constraint**
-  (`soc[end] == soc*`) or a **terminal cost** (`ρ · ‖soc[end] − soc*‖`) — the
-  hard/soft choice is a design axis to expose, and reuses the terminal-SoC
-  machinery from Milestone 12.
-- **Receding horizon.** The AC window advances, re-inheriting the next signpost
-  from the DC plan at each step.
-
-Dependencies and rationale:
-
-- **Depends on M16.** A two-layer solver that shares device models across the
-  DC and AC formulations should be built *after* the components compose
-  uniformly (M16). Building it earlier would re-entrench per-formulation
-  duplication.
-- **Depends on M12** for the terminal-SoC hard-constraint-vs-soft-penalty
-  machinery the AC window consumes.
-- **Subsumes the convex-tracks-AC validation study.** The open-loop special
-  case (single AC window, no recession; replay the DC SoC plan through AC and
-  measure the feasibility/correction gap) is the natural validation artifact of
-  this milestone — it is the currently-unfilled "temporal × cross-formulation"
-  cell. The `case9_storage_{ac,dc}_24h.py` examples already supply ~80% of its
-  inputs (identical 24h scenario in both formulations, each self-verifying its
-  own SoC dynamics and operating region).
-
-This milestone is why the formulation ladder, storage SoC coupling, M16
-composability, and cheap multi-formulation runs exist — it is where that
-infrastructure is cashed in.
-
-### Milestone 8 — Nondispatchable generators
-
-`NondispatchableUnit` in `src/cvxopf/nondispatchable.py`. Passed as
-`nondispatchable=` to `build_opf` and `build_opf_multistep`. Available
-power time series supplied via `df_nd` (multistep only).
-
-AC formulation uses an apparent power circle constraint
-`p_nd_t^2 + q_nd_t^2 <= P_max^2` intersected with `0 <= p_nd_t <= R_t`.
-DC formulation uses only the real power bound `0 <= p_nd_t <= R_t`;
-apparent power rating is stored but not enforced as a constraint.
-No cost term. No curtailment penalty. No SoC dynamics.
-
-Variables `p_nd` and `q_nd` are in engineering units (MW, MVAr) internally,
-matching the storage convention. They enter the nodal balance divided by
-`baseMVA` and are not rescaled in `extract_results`.
-
-Results include `p_nd`, `q_nd` (AC only), and `curtailment = R_t - p_nd`.
-
-### Milestone 9 — Sparse P/Q variables for AC-OPF
-Controlled by `OPFOptions.sparse_pq` (default `True`).
-
-When `sparse_pq=True`, `P` and `Q` are declared as flat `(nnz,)` CVXPY
-variables `P_vec` and `Q_vec` over the Ybus sparsity pattern rather than
-dense `(nb, nb)` matrices. This eliminates `2*(nb²-nnz)` trivially-zero
-variables and the `P[Z]==0` / `Q[Z]==0` equality constraints that exist
-only to compensate for the dense declaration. For case118, this reduces
-P+Q variable count from ~27,848 to ~594.
-
-Nodal injections use a precomputed `(nb, nnz)` scatter matrix `Rp` (stored
-in `OPFBuild.data`) such that `p = Rp @ P_vec` and `q = Rp @ Q_vec`.
-
-When `sparse_pq=False`, the legacy dense formulation is used unchanged.
-This path is preserved for research comparison and timing benchmarks;
-`notebooks/benchmark_opf.py` times both paths across all test cases.
-
-Files changed: `ac_problem.py`, `problem.py` (`OPFOptions`),
-`tests/test_problem_single.py`, `tests/test_problem_multistep.py`,
-new `tests/test_sparse_pq.py`, new `examples/case9_sparse_vs_dense_ac.py`,
-updated `notebooks/benchmark_opf.py`.
-
-Do not set `sparse_pq=True` and then access `build.variables["P"]` —
-the key will not exist. Use `build.variables.get("P_vec")` or check
-`build.variables` keys when writing formulation-agnostic code.
+| 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
+| 16 — Unify grid component model patterns | 🔲 Future | Refactor all grid components (dispatchable generators, storage, nondispatchable) into first-class component modules matching the HVDC pattern; components consumed by every formulation via composition. HVDC (M7) is the reference implementation. See `plans/milestone-16-unify-components.md`. |
+| 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components) and M12 (terminal-SoC hard/soft machinery). See `plans/milestone-17-hierarchical-dc-ac.md`. |
 
 ---
 
