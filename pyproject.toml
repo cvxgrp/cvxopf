@@ -42,6 +42,7 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "ruff>=0.16,<0.17",
 ]
 notebook = [
     "marimo>=0.23.13",
@@ -60,3 +61,20 @@ packages = ["src/cvxopf"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+required-version = ">=0.16,<0.17"
+target-version = "py311"
+extend-exclude = [
+    "experiments",
+    "notebooks",
+]
+
+[tool.ruff.lint]
+# Begin with correctness and basic Python errors. Formatting, import sorting,
+# and opinionated refactors are separate policy decisions.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# The package initializes IPOPT environment settings before public imports.
+"src/cvxopf/__init__.py" = ["E402"]

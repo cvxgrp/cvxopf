@@ -22,7 +22,7 @@ problem builder scope and passed into these methods — hvdc.py never
 instantiates cp.Variable itself.
 
 Import chain:
-  hvdc.py  →  cvxpy, numpy, warnings, dataclasses (no cvxopf imports)
+  hvdc.py  →  data.py, cvxpy, numpy, warnings, dataclasses
   ac_problem.py → hvdc.py
   dc_problem.py → hvdc.py
   problem.py    → hvdc.py  (re-exports HVDCLink, hvdc_from_dcline)
@@ -35,6 +35,8 @@ import warnings
 
 import numpy as np
 import cvxpy as cp
+
+from cvxopf.data import align_device_dataframe
 
 
 # ---------------------------------------------------------------------------
@@ -63,13 +65,17 @@ class HVDCLink:
         A degenerate box (p_min_mw == p_max_mw) pins p_in via coincident
         bounds — not a separate equality constraint.
     p_max_mw : float
-        Upper bound on p_in (MW). Must be > 0.
+        Upper bound on p_in (MW). Together with p_min_mw, may describe
+        forward-only, reverse-only, bidirectional, or zero-pinned operation.
     loss_percent : float
         Proportional loss as a percentage (0–100). loss_frac = loss_percent/100.
         Fixed converter loss (LOSS0) is not modelled; see Milestone 15.
     cost_coeffs : tuple of float
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
         transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. Default (0,0,0).
+    device_id : str or None
+        Stable external identity used to align time-series columns. Required
+        only when ``df_hvdc_min`` and ``df_hvdc_max`` are supplied.
     """
 
     from_bus: int
@@ -78,6 +84,7 @@ class HVDCLink:
     p_max_mw: float
     loss_percent: float = 0.0
     cost_coeffs: tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
+    device_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +104,16 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
     if not links:
         return
     for i, lnk in enumerate(links):
+        numeric_fields = {
+            "p_min_mw": lnk.p_min_mw,
+            "p_max_mw": lnk.p_max_mw,
+            "loss_percent": lnk.loss_percent,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"HVDC link {i}: {name} must be finite, got {value}"
+                )
         if lnk.from_bus == lnk.to_bus:
             raise ValueError(
                 f"HVDC link {i}: from_bus and to_bus must differ, got {lnk.from_bus}"
@@ -111,18 +128,40 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
                 f"HVDC link {i}: to_bus {lnk.to_bus} not in case bus table. "
                 f"Valid IDs: {sorted(ext_bus_ids)}"
             )
-        if lnk.p_max_mw <= 0:
-            raise ValueError(f"HVDC link {i}: p_max_mw must be > 0, got {lnk.p_max_mw}")
         if lnk.p_min_mw > lnk.p_max_mw:
             raise ValueError(
                 f"HVDC link {i}: p_min_mw ({lnk.p_min_mw}) must be <= "
                 f"p_max_mw ({lnk.p_max_mw})"
             )
-        if lnk.loss_percent < 0:
+        if not 0 <= lnk.loss_percent <= 100:
             raise ValueError(
-                f"HVDC link {i}: loss_percent must be >= 0, got {lnk.loss_percent}"
+                f"HVDC link {i}: loss_percent must be between 0 and 100, "
+                f"got {lnk.loss_percent}"
             )
-        c0, c1, c2 = lnk.cost_coeffs
+        try:
+            coeffs = tuple(lnk.cost_coeffs)
+        except TypeError as exc:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain exactly "
+                f"(c0, c1, c2), got {lnk.cost_coeffs!r}"
+            ) from exc
+        if len(coeffs) != 3:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain exactly "
+                f"(c0, c1, c2), got {lnk.cost_coeffs!r}"
+            )
+        try:
+            numeric_coeffs = np.asarray(coeffs, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain only finite "
+                "numeric values"
+            ) from exc
+        c0, c1, c2 = numeric_coeffs
+        if not np.all(np.isfinite(numeric_coeffs)):
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain only finite values"
+            )
         if c2 < 0:
             raise ValueError(
                 f"HVDC link {i}: cost_coeffs c2 must be >= 0 (convex quadratic), "
@@ -163,6 +202,35 @@ def _make_hvdc_incidence_matrices(
     return Ch_from, Ch_to
 
 
+def _prepare_data(
+    links: list,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent HVDC data."""
+    _validate_hvdc(links, ext_bus_ids)
+    Ch_from, Ch_to = _make_hvdc_incidence_matrices(
+        links, nb, ext_to_int
+    )
+    return {
+        "n_hvdc": len(links),
+        "Ch_from": Ch_from,
+        "Ch_to": Ch_to,
+    }
+
+
+def _build_metadata(prepared: dict) -> dict:
+    """Select HVDC-owned fields published through ``OPFBuild.data``."""
+    keys = ("n_hvdc", "Ch_from", "Ch_to")
+    return {key: prepared[key] for key in keys}
+
+
+def _loss_values(p_in, p_out):
+    """Return total terminal loss under the signed-injection convention."""
+    return np.asarray(p_in) + np.asarray(p_out)
+
+
 # ---------------------------------------------------------------------------
 # Static box (trivial vectorizer — reads p_min_mw/p_max_mw directly)
 # ---------------------------------------------------------------------------
@@ -181,37 +249,70 @@ def _hvdc_static_box(links: list) -> tuple:
     return p_min, p_max
 
 
+def _parse_hvdc_timeseries(frame, links: list, T: int, frame_name: str) -> np.ndarray:
+    """Align an externally keyed HVDC frame to link-list order."""
+    return align_device_dataframe(frame, links, T, frame_name)
+
+
 # ---------------------------------------------------------------------------
 # CVXPY component methods
 # ---------------------------------------------------------------------------
 
 
-def hvdc_injections(
+def dc_injections(
     links: list,
     p_in: cp.Variable,
     p_out: cp.Variable,
     ext_to_int: dict,
+    *,
+    incidence: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple:
     """
-    Build the scaled nodal-balance addend for HVDC links.
+    Build the real nodal-balance addend for HVDC links in a DC network.
 
     p_in and p_out are created by the calling problem builder and passed in;
     this function does not instantiate any cp.Variable.
 
     Returns
     -------
-    injection_expr : cp.Expression
+    p_injection_expr : cp.Expression
         inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out). Both terminals
         enter with '+' (Convention B: positive = injection into grid).
+    q_injection_expr : None
+        HVDC has no reactive channel in the current model.
     inv_baseMVA : cp.Parameter
         Scalar parameter, unset. Caller must bind before solving:
           inv_baseMVA.value = 1.0 / baseMVA
     """
     nb = len(ext_to_int)
-    Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
-    inv_baseMVA = cp.Parameter(name="hvdc_inv_baseMVA")
+    Ch_from, Ch_to = (
+        _make_hvdc_incidence_matrices(links, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
+    inv_baseMVA = cp.Parameter(nonneg=True, name="hvdc_inv_baseMVA")
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
-    return injection_expr, inv_baseMVA
+    return injection_expr, None, inv_baseMVA
+
+
+def ac_injections(
+    links: list,
+    p_in: cp.Variable,
+    p_out: cp.Variable,
+    ext_to_int: dict,
+    *,
+    incidence: tuple[np.ndarray, np.ndarray] | None = None,
+) -> tuple:
+    """
+    Build HVDC network injections for an AC network.
+
+    The current unity-power-factor model has no reactive terminal channel.
+    This separate AC entry point is retained for future reactive-control
+    models and for symmetry with the other device components.
+    """
+    return dc_injections(
+        links, p_in, p_out, ext_to_int, incidence=incidence
+    )
 
 
 def dc_operating_constraints(
@@ -290,17 +391,35 @@ def ac_operating_constraints(
     return dc_operating_constraints(links, p_in, p_out, p_min_t, p_max_t, step)
 
 
-def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
+def coupling_constraints(
+    links: list,
+    p_in_list: list,
+    p_out_list: list,
+    delta: float = 1.0,
+) -> list:
+    """HVDC links are memoryless under the current model."""
+    return []
+
+
+def hvdc_cost_expr(links: list, p_in: cp.Variable) -> cp.Expression:
     """
-    Per-link HVDC cost expression: c2*|p_in|^2 + c1*|p_in| + c0.
+    Total HVDC cost over all links.
 
     Cost acts on the transfer magnitude so it is symmetric in flow direction.
     (c0, c1, c2) is lowest-first — the package-wide user-facing convention.
     Use cp.multiply for the linear term to avoid CvxpyDeprecationWarning.
     Written as an explicit monomial sum (not Horner) for DCP checker compatibility.
     """
-    c0, c1, c2 = cost_coeffs
-    return c2 * cp.square(p_in) + cp.multiply(c1, cp.abs(p_in)) + c0
+    total = 0
+    for k, link in enumerate(links):
+        c0, c1, c2 = link.cost_coeffs
+        total = (
+            total
+            + c2 * cp.square(p_in[k])
+            + cp.multiply(c1, cp.abs(p_in[k]))
+            + c0
+        )
+    return total
 
 
 # ---------------------------------------------------------------------------

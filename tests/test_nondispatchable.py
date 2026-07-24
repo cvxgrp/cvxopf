@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import warnings
+import cvxpy as cp
 
 from cvxopf import (
     build_opf,
@@ -31,14 +32,20 @@ BAL_ATOL  = 1e-4    # nodal balance residual (p.u.)
 APR_ATOL  = 1e-4    # apparent power constraint residual
 
 # Helper functions
-def _default_nd_unit(bus=5, p_available=80.0, apparent_power_rating=100.0):
+def _default_nd_unit(
+    bus=5,
+    p_available=80.0,
+    apparent_power_rating=100.0,
+    device_id="nd",
+):
     return NondispatchableUnit(bus=bus, p_available=p_available,
-                               apparent_power_rating=apparent_power_rating)
+                               apparent_power_rating=apparent_power_rating,
+                               device_id=device_id)
 
 def _flat_nd_df(unit, T, p_available=None):
-    """DataFrame with T identical rows; column name = unit.bus."""
+    """DataFrame with T identical rows keyed by stable device identity."""
     val = p_available if p_available is not None else unit.p_available
-    return pd.DataFrame({unit.bus: [val] * T})
+    return pd.DataFrame({unit.device_id: [val] * T})
 
 def _flat_load_dfs(case_fn, T):
     """Return (df_P, df_Q) with T identical rows matching base case load."""
@@ -49,19 +56,39 @@ def _flat_load_dfs(case_fn, T):
     df_Q    = pd.DataFrame(np.tile(Qd_base, (T, 1)))
     return df_P, df_Q
 
-def _solve_ac_single_nd(nondispatchable=None):
-    build = build_opf(case9(), formulation="ac", nondispatchable=nondispatchable)
+def _solve_ac_single_nd(nondispatchable=None, storage=None):
+    build = build_opf(
+        case9(),
+        formulation="ac",
+        nondispatchable=nondispatchable,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
-def _solve_dc_single_nd(nondispatchable=None):
-    build = build_opf(case9(), formulation="lossy_dc", nondispatchable=nondispatchable)
+def _solve_dc_single_nd(nondispatchable=None, storage=None):
+    build = build_opf(
+        case9(),
+        formulation="lossy_dc",
+        nondispatchable=nondispatchable,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
-def _solve_ac_multistep_nd(T, df_P, df_Q, df_nd=None, nondispatchable=None):
-    build = build_opf_multistep(case9(), df_P, df_Q, T=T, formulation="ac",
-                                 nondispatchable=nondispatchable, df_nd=df_nd)
+def _solve_ac_multistep_nd(
+    T, df_P, df_Q, df_nd=None, nondispatchable=None, storage=None
+):
+    build = build_opf_multistep(
+        case9(),
+        df_P,
+        df_Q,
+        T=T,
+        formulation="ac",
+        nondispatchable=nondispatchable,
+        df_nd=df_nd,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
@@ -81,6 +108,7 @@ class TestNondispatchableUnit:
         assert hasattr(unit, "bus")
         assert hasattr(unit, "p_available")
         assert hasattr(unit, "apparent_power_rating")
+        assert hasattr(unit, "device_id")
 
     def test_no_aging_weight_field(self):
         unit = _default_nd_unit()
@@ -93,6 +121,27 @@ class TestNondispatchableUnit:
     def test_no_delta_field(self):
         unit = _default_nd_unit()
         assert not hasattr(unit, "delta")
+
+    def test_component_api_has_fixed_injection_arity_and_dcp_constraints(self):
+        from cvxopf.nondispatchable import (
+            ac_injections,
+            ac_operating_constraints,
+            coupling_constraints,
+        )
+        unit = _default_nd_unit()
+        p_nd = cp.Variable(1, nonneg=True)
+        q_nd = cp.Variable(1)
+        p_inj, q_inj, scaling = ac_injections(
+            [unit], p_nd, q_nd, {5: 0}
+        )
+        scaling.value = 0.01
+        constraints = ac_operating_constraints(
+            [unit], p_nd, q_nd, np.array([80.0])
+        )
+        assert p_inj.shape == (1,)
+        assert q_inj.shape == (1,)
+        assert all(constraint.is_dcp() for constraint in constraints)
+        assert coupling_constraints([unit], [p_nd], [q_nd]) == []
 
 
 class TestNondispatchableValidation:
@@ -130,11 +179,11 @@ class TestNondispatchableValidation:
 
     def test_df_nd_negative_values_raises(self):
         unit = _default_nd_unit()
-        df_nd = pd.DataFrame({unit.bus: [80.0, -1.0, 70.0]})
+        df_nd = pd.DataFrame({unit.device_id: [80.0, -1.0, 70.0]})
         # Create proper df_P and df_Q with 9 columns (one per bus in case9)
         df_P = pd.DataFrame(np.ones((3, 9)) * 100.0)
         df_Q = pd.DataFrame(np.ones((3, 9)) * 30.0)
-        with pytest.raises(ValueError, match="negative values"):
+        with pytest.raises(ValueError, match="negative value"):
             _solve_ac_multistep_nd(T=3, df_P=df_P, df_Q=df_Q,
                                    df_nd=df_nd, nondispatchable=[unit])
 
@@ -143,13 +192,13 @@ class TestNondispatchableValidation:
         df_nd = pd.DataFrame({"invalid_bus": [80.0, 80.0, 80.0]})
         df_P = pd.DataFrame(np.ones((3, 9)) * 50.0)  # Reduced load
         df_Q = pd.DataFrame(np.ones((3, 9)) * 15.0)
-        with pytest.raises(ValueError, match="cannot be cast to int"):
+        with pytest.raises(ValueError, match="columns must match device IDs exactly"):
             _solve_ac_multistep_nd(T=3, df_P=df_P, df_Q=df_Q,
                                    df_nd=df_nd, nondispatchable=[unit])
 
     def test_df_nd_wrong_T_raises(self):
         unit = _default_nd_unit()
-        df_nd = pd.DataFrame({unit.bus: [80.0, 80.0]})  # T=2
+        df_nd = pd.DataFrame({unit.device_id: [80.0, 80.0]})  # T=2
         df_P = pd.DataFrame(np.ones((3, 9)) * 100.0)
         df_Q = pd.DataFrame(np.ones((3, 9)) * 30.0)
         with pytest.raises(ValueError, match="df_nd has 2 rows but T=3"):
@@ -189,17 +238,71 @@ class TestNondispatchableValidation:
         assert Cnd.shape == (3, 1)
         assert Cnd[0, 0] == 1.0
 
-    def test_parse_nd_timeseries_non_integer_column_raises(self):
+    def test_parse_nd_timeseries_wrong_device_id_raises(self):
         from cvxopf.nondispatchable import _parse_nd_timeseries
-        df = pd.DataFrame({"not_a_bus": [50.0, 60.0]})
-        with pytest.raises(ValueError, match="column"):
-            _parse_nd_timeseries(df, T=2, ext_bus_ids={1, 2, 3}, ext_to_int={1:0,2:1,3:2})
+        unit = _default_nd_unit(device_id="wind")
+        df = pd.DataFrame({"not_wind": [50.0, 60.0]})
+        with pytest.raises(ValueError, match="columns must match device IDs exactly"):
+            _parse_nd_timeseries(df, T=2, units=[unit])
 
     def test_parse_nd_timeseries_negative_values_raises(self):
         from cvxopf.nondispatchable import _parse_nd_timeseries
-        df = pd.DataFrame({5: [50.0, -1.0]})
+        unit = _default_nd_unit(device_id="wind")
+        df = pd.DataFrame({"wind": [50.0, -1.0]})
         with pytest.raises(ValueError, match="negative"):
-            _parse_nd_timeseries(df, T=2, ext_bus_ids={5}, ext_to_int={5:0})
+            _parse_nd_timeseries(df, T=2, units=[unit])
+
+    def test_parse_nd_timeseries_reorders_colocated_units_by_device_id(self):
+        from cvxopf.nondispatchable import _parse_nd_timeseries
+        units = [
+            _default_nd_unit(bus=5, device_id="wind_a"),
+            _default_nd_unit(bus=5, device_id="wind_b"),
+        ]
+        frame = pd.DataFrame(
+            {"wind_b": [20.0, 21.0], "wind_a": [10.0, 11.0]}
+        )
+        values = _parse_nd_timeseries(frame, T=2, units=units)
+        np.testing.assert_array_equal(values, [[10.0, 20.0], [11.0, 21.0]])
+
+    @pytest.mark.parametrize(
+        ("units", "frame", "match"),
+        [
+            (
+                [_default_nd_unit(device_id=None)],
+                pd.DataFrame({"nd": [1.0]}),
+                "requires device_id",
+            ),
+            (
+                [
+                    _default_nd_unit(device_id="same"),
+                    _default_nd_unit(device_id="same"),
+                ],
+                pd.DataFrame({"same": [1.0]}),
+                "must be unique",
+            ),
+            (
+                [_default_nd_unit(device_id="nd")],
+                pd.DataFrame([[1.0, 2.0]], columns=["nd", "nd"]),
+                "columns must be unique",
+            ),
+            (
+                [_default_nd_unit(device_id="nd")],
+                pd.DataFrame({"other": [1.0]}),
+                "columns must match device IDs exactly",
+            ),
+            (
+                [_default_nd_unit(device_id="nd")],
+                pd.DataFrame({"nd": [np.nan]}),
+                "non-finite",
+            ),
+        ],
+    )
+    def test_parse_nd_timeseries_rejects_invalid_identity_contract(
+        self, units, frame, match
+    ):
+        from cvxopf.nondispatchable import _parse_nd_timeseries
+        with pytest.raises(ValueError, match=match):
+            _parse_nd_timeseries(frame, T=1, units=units)
 
     def test_df_nd_provided_without_nondispatchable_emits_warning(self):
         df_P, df_Q = _flat_load_dfs(case9, T=3)
@@ -475,7 +578,7 @@ class TestNondispatchableACMultistep:
         df_P = pd.DataFrame(np.ones((T, 9)) * 50)
         df_Q = pd.DataFrame(np.ones((T, 9)) * 15)
         # Varying availability: 100, 75, 50 MW
-        df_nd = pd.DataFrame({unit.bus: [100.0, 75.0, 50.0]})
+        df_nd = pd.DataFrame({unit.device_id: [100.0, 75.0, 50.0]})
         _, results = _solve_ac_multistep_nd(T, df_P, df_Q, df_nd=df_nd, nondispatchable=[unit])
         
         for t in range(T):
@@ -561,7 +664,7 @@ class TestNondispatchableDCMultistep:
         df_P = pd.DataFrame(np.ones((T, 9)) * 50)  # Reduced load
         df_Q = pd.DataFrame(np.ones((T, 9)) * 15)
         # Varying availability: 100, 75, 50 MW
-        df_nd = pd.DataFrame({unit.bus: [100.0, 75.0, 50.0]})
+        df_nd = pd.DataFrame({unit.device_id: [100.0, 75.0, 50.0]})
         _, results = _solve_dc_multistep_nd(T, df_P, df_Q, df_nd=df_nd, nondispatchable=[unit])
         
         # Check that problem solved and p_nd is in results
@@ -572,7 +675,12 @@ class TestNondispatchableDCMultistep:
 
     def test_extract_dc_multistep_none_guard_with_nondispatchable(self):
         # Build but do not solve — variables have None values
-        unit = NondispatchableUnit(bus=5, p_available=80.0, apparent_power_rating=100.0)
+        unit = NondispatchableUnit(
+            bus=5,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
         df_P, df_Q = _flat_load_dfs(case9, T=3)
         df_nd = _flat_nd_df(unit, T=3)
         with warnings.catch_warnings():
@@ -581,13 +689,18 @@ class TestNondispatchableDCMultistep:
                 case9(), df_P, df_Q, T=3, formulation="lossy_dc",
                 nondispatchable=[unit], df_nd=df_nd,
             )
-        # Do not call build.solve() — p_gen values will be None
+        # Do not call build.solve() — Pg values will be None
         r = extract_results(build)
         assert r["Pg"] is None
         assert r["p_flows"] is None
 
     def test_extract_dc_multistep_p_nd_shape_with_explicit_df_nd(self):
-        unit = NondispatchableUnit(bus=5, p_available=80.0, apparent_power_rating=100.0)
+        unit = NondispatchableUnit(
+            bus=5,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
         df_P, df_Q = _flat_load_dfs(case9, T=3)
         df_nd = _flat_nd_df(unit, T=3)
         build, r = _solve_dc_multistep_nd(3, df_P, df_Q,
@@ -659,10 +772,12 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_ac_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
-        # For now, just test that both can be present without errors
+        build, results = _solve_ac_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert build.prob.status == "optimal"
+        assert "p_nd" in results
+        assert "b" in results
 
     def test_dc_single_both_solves_optimal(self):
         from cvxopf import StorageUnitIdeal
@@ -673,9 +788,12 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_dc_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_dc_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert build.prob.status == "optimal"
+        assert "p_nd" in results
+        assert "b" in results
 
     def test_ac_single_both_p_nd_and_b_in_results(self):
         from cvxopf import StorageUnitIdeal
@@ -686,10 +804,11 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_ac_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_ac_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert "p_nd" in results
-        # "b" would be in results if storage was actually passed
+        assert "b" in results
 
     def test_ac_multistep_both_solves_optimal(self):
         from cvxopf import StorageUnitIdeal
@@ -704,9 +823,16 @@ class TestNondispatchableWithStorage:
         df_P = pd.DataFrame(np.ones((T, 9)) * 50)
         df_Q = pd.DataFrame(np.ones((T, 9)) * 15)
         
-        build, results = _solve_ac_multistep_nd(T, df_P, df_Q, nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_ac_multistep_nd(
+            T,
+            df_P,
+            df_Q,
+            nondispatchable=[nd_unit],
+            storage=[storage_unit],
+        )
         assert build.prob.status == "optimal"
+        assert results["p_nd"].shape == (T, 1)
+        assert results["b"].shape == (T, 1)
 
 
 class TestNondispatchableMultipleUnits:

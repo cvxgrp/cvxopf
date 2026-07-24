@@ -161,13 +161,18 @@ economic-dispatch problem without a full network:
 ```python
 from cvxopf.testcases import make_singlenode_case
 from cvxopf.problem import build_opf
+from cvxopf.generator import DispatchableGenerator
 from cvxopf.results import extract_results
 
 case = make_singlenode_case(
     P_load_MW=250.0,
     generators=[
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},  # (c0, c1, c2)
-        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
     ],
 )
 
@@ -181,6 +186,39 @@ print(f"Pg (MW):   {results['Pg']}")
 The `examples/case14_formulation_comparison.py` script solves the IEEE
 14-bus case with all three formulations side by side and contrasts their
 dispatch and implied losses.
+
+### First-class dispatchable generators
+
+Pass `DispatchableGenerator` objects to define generator locations, operating
+bounds, and costs directly. Polynomial costs use lowest-power-first
+coefficients and are limited to degree two; piecewise-linear costs use
+explicit `(power_MW, cost)`
+breakpoints. All cost expressions are evaluated by the shared implementation
+in `cost.py`.
+
+```python
+from cvxopf import DispatchableGenerator, build_opf
+
+generators = [
+    DispatchableGenerator(
+        bus=1,
+        p_min_mw=10.0,
+        p_max_mw=250.0,
+        q_min_mvar=-300.0,
+        q_max_mvar=300.0,
+        cost_type="piecewise_linear",
+        cost_points=((0.0, 0.0), (100.0, 2500.0), (250.0, 7250.0)),
+    ),
+]
+
+# network_case needs bus, branch, and baseMVA, but may omit gen/gencost.
+build = build_opf(network_case, formulation="ac", generators=generators)
+```
+
+For backward compatibility, omitting `generators=` converts the case's
+MATPOWER `gen` and `gencost` tables to the same component representation at
+build time. Supplying `generators=` overrides those tables; they may be absent,
+and the input case dict is not mutated.
 
 ## Interactive notebooks
 
@@ -310,8 +348,9 @@ unit  = NondispatchableUnit(
     bus=5,
     p_available=100.0,            # MW — fallback for single-step
     apparent_power_rating=120.0,  # MVA — inverter nameplate
+    device_id="solar_5",          # stable key for external time series
 )
-df_nd = pd.DataFrame({5: [100.0, 75.0, 50.0]})  # MW available per step
+df_nd = pd.DataFrame({"solar_5": [100.0, 75.0, 50.0]})
 
 build = build_opf_multistep(
     ppc, df_P, df_Q, T=T, formulation="ac",
@@ -364,10 +403,12 @@ src/cvxopf/           Core package
   singlenode_dc_problem.py  Single-node DC dispatch helpers (convex QP)
   network.py          Ybus, incidence matrices, reindexing
   cost.py             Generator cost expression builders
+  generator.py        DispatchableGenerator component and MATPOWER conversion
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
-  storage.py          StorageUnitIdeal dataclass and helpers
-  nondispatchable.py  NondispatchableUnit dataclass and helpers
+  storage.py          Storage component: data, injections, constraints, cost
+  nondispatchable.py  ND component: data, injections, and constraints
+  hvdc.py             HVDC component and MATPOWER dcline conversion
   testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)
@@ -413,6 +454,17 @@ uv run --extra dev pytest tests/ -v
 pytest tests/ -v
 ```
 
+Run the project lint policy with:
+
+```bash
+uv run --extra dev ruff check .
+```
+
+The routine lint gate covers the package, tests, examples, and maintenance
+scripts. Exploratory `experiments/` code and interactive `notebooks/` are
+excluded; they are reviewed in the context of the study or notebook rather
+than held to the library policy.
+
 To regenerate the Pypower reference fixtures (requires `uv`):
 
 ```bash
@@ -441,4 +493,6 @@ package environment.
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
-- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
+- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power support
+- [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
+- [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)

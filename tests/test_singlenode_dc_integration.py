@@ -11,16 +11,15 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
-import sys
 from pathlib import Path
 
 from cvxopf.testcases import case9, case14, make_singlenode_case
 from cvxopf.problem import (
-    build_opf, build_opf_multistep, OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    build_opf, build_opf_multistep, OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.results import extract_results, compare_to_reference
+from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 
 
 OBJ_RTOL  = 1e-4
@@ -28,8 +27,8 @@ VAL_ATOL  = 1e-3
 SOC_ATOL  = 1e-4
 
 SIMPLE_GENS = [
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)),
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)),
 ]
 
 
@@ -173,7 +172,14 @@ class TestSinglenodeDcStorageIntegration:
     STORAGE = [StorageUnitIdeal(bus=1, apparent_power_rating=50.0,
                                 capacity=100.0, initial_soc=50.0,
                                 aging_weight=0.0)]
-    ND = [NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)]
+    ND = [
+        NondispatchableUnit(
+            bus=1,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
+    ]
 
     def test_storage_and_nd_together_single_step(self):
         _, r = _solve_singlenode(make_singlenode_case(100.0, SIMPLE_GENS),
@@ -181,11 +187,25 @@ class TestSinglenodeDcStorageIntegration:
         assert r["status"] == "optimal"
         assert "b" in r
         assert "p_nd" in r
+        assert abs(r["p_net"]) < VAL_ATOL
+
+    def test_nd_on_nonfirst_source_bus_uses_collapsed_mapping(self):
+        nd = [
+            NondispatchableUnit(
+                bus=5,
+                p_available=40.0,
+                apparent_power_rating=50.0,
+                device_id="nd-5",
+            )
+        ]
+        _, r = _solve_singlenode(case9(), nondispatchable=nd)
+        assert r["status"] == "optimal"
+        assert r["p_nd"][0] == pytest.approx(40.0, abs=VAL_ATOL)
 
     def test_storage_and_nd_together_multistep(self):
         df_P = pd.DataFrame(np.full((3, 1), 100.0))
         df_Q = pd.DataFrame(np.zeros((3, 1)))
-        df_nd = pd.DataFrame({1: [80.0, 80.0, 80.0]})
+        df_nd = pd.DataFrame({"nd": [80.0, 80.0, 80.0]})
         _, r = _solve_singlenode_multistep(
             make_singlenode_case(100.0, SIMPLE_GENS), df_P, df_Q, 3,
             storage=self.STORAGE, nondispatchable=self.ND, df_nd=df_nd,
@@ -193,6 +213,24 @@ class TestSinglenodeDcStorageIntegration:
         assert r["status"] == "optimal"
         assert r["b"].shape == (3, 1)
         assert r["p_nd"].shape == (3, 1)
+        assert np.all(np.abs(r["p_net"]) < VAL_ATOL)
+
+    def test_multistep_nd_on_nonfirst_source_bus_uses_collapsed_mapping(self):
+        nd = [
+            NondispatchableUnit(
+                bus=5,
+                p_available=40.0,
+                apparent_power_rating=50.0,
+                device_id="nd-5",
+            )
+        ]
+        df_P, df_Q = _flat_load_dfs(case9, 2)
+        df_nd = pd.DataFrame({"nd-5": [40.0, 30.0]})
+        _, r = _solve_singlenode_multistep(
+            case9(), df_P, df_Q, 2, nondispatchable=nd, df_nd=df_nd
+        )
+        assert r["status"] == "optimal"
+        assert np.allclose(r["p_nd"][:, 0], [40.0, 30.0], atol=VAL_ATOL)
 
     def test_fully_charged_storage_cannot_charge(self):
         storage = [StorageUnitIdeal(bus=1, apparent_power_rating=50.0,

@@ -51,7 +51,8 @@ GEN_STATUS = 7
 #                     = +1 if bus i is the to-bus of branch e,
 #                     =  0 otherwise.
 #       Out-of-service branches produce a column of zeros.
-#       Used in lossy DC OPF for flow conservation: A @ p_flows + p_gen = Pd.
+#       Used in lossy DC OPF for flow conservation:
+#       A @ p_flows + Cg @ Pg = Pd.
 #       Sign convention: flow is positive from from-bus to to-bus.
 # ---------------------------------------------------------------------------
 
@@ -231,9 +232,9 @@ def make_branch_node_incidence_matrix(case: dict) -> np.ndarray:
     flows from the from-bus to the to-bus. Flow conservation at each bus
     is then:
 
-        A @ p_flows + p_gen = Pd
+        A @ p_flows + Cg @ Pg = Pd
 
-    where p_gen is nodal generation and Pd is nodal load.
+    where Cg @ Pg is nodal generation and Pd is nodal load.
 
     Reference: Convex Optimization with Smart Grid Examples,
     https://doi.org/10.2172/3018252

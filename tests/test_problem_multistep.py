@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
-from cvxopf.testcases import case9, case14
+from cvxopf.testcases import case9
 from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild, OPFOptions
 from cvxopf.results import extract_results
 

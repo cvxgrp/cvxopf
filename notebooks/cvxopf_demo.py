@@ -553,7 +553,9 @@ def _(results, ppc, build, plt, np):
     _form    = build.formulation if build is not None else "unknown"
 
     if _form == "lossy_dc" and _status == "optimal":
-        _p_gen  = build.variables["p_gen"].value * build.data["baseMVA"]
+        _p_gen  = (
+            build.data["Cg"] @ build.variables["Pg"].value
+        ) * build.data["baseMVA"]
         _p_load = ppc["bus"][:, 2]
         _prices = -build.prob.constraints[0].dual_value * build.data["baseMVA"]
 

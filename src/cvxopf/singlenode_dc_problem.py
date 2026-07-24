@@ -43,49 +43,67 @@ This module is not part of the public API; use problem.py instead.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
 
 from cvxopf.network import reindex_case_to_consecutive
-from cvxopf.cost import poly_cost_expr
+from cvxopf.generator import (
+    DispatchableGenerator,
+    gen_from_matpower,
+    _prepare_data as generator_prepare_data,
+    _build_metadata as generator_build_metadata,
+    dc_injections as generator_dc_injections,
+    dc_operating_constraints as generator_dc_operating_constraints,
+    dc_network_constraints as generator_dc_network_constraints,
+    coupling_constraints as generator_coupling_constraints,
+    gen_cost_expr,
+)
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _validate_storage,
-    _make_storage_incidence_matrix,
-    _make_storage_soc_constraints,
+    _prepare_data as storage_prepare_data,
+    _build_metadata as storage_build_metadata,
+    dc_injections as storage_dc_injections,
+    dc_operating_constraints as storage_dc_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _validate_nondispatchable,
-    _make_nd_incidence_matrix,
-    _parse_nd_timeseries,
+    _prepare_data as nd_prepare_data,
+    _build_metadata as nd_build_metadata,
+    dc_injections as nd_dc_injections,
+    dc_operating_constraints as nd_dc_operating_constraints,
+    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.network import BUS_I
 
+if TYPE_CHECKING:
+    from cvxopf.problem import OPFBuild
+
 # MATPOWER column index constants
 PD = 2
-GEN_BUS = 0
-GEN_STATUS = 7
-PMIN = 9
-PMAX = 8
 
 
 def _make_singlenode_dc_step_constraints(
     Pg,
+    generator_injection,
     Pd_total_t: float,
     Pgmin,
     Pgmax,
-    baseMVA: float,
     ns: int = 0,
-    S_max=None,
-    storage_capacity=None,
+    storage_units=None,
+    storage_injection=None,
     b_t=None,
     soc_t=None,
     nnd: int = 0,
+    nd_units=None,
+    nd_injection=None,
     nd_p_available_t=None,
     p_nd_t=None,
-) -> list:
+) -> tuple[list, cp.Expression]:
     """
     Build constraints for a single time step of the single-node DC formulation.
 
@@ -97,14 +115,12 @@ def _make_singlenode_dc_step_constraints(
         Total load for this time step (scalar, per-unit).
     Pgmin, Pgmax : np.ndarray
         Generator bounds (ng,) in per-unit.
-    baseMVA : float
-        System base MVA.
     ns : int
         Number of storage units (0 if no storage).
-    S_max : np.ndarray or None
-        Storage apparent power ratings (ns,) in MW.
-    storage_capacity : np.ndarray or None
-        Storage capacities (ns,) in MWh.
+    storage_units : list[StorageUnitIdeal] or None
+        Storage devices whose DC operating constraints apply at this step.
+    storage_injection : cp.Expression or None
+        Collapsed one-node real-power injection, already scaled to per-unit.
     b_t : cp.Variable or None
         Storage real power variables (ns,) in MW.
     soc_t : cp.Variable or None
@@ -118,36 +134,33 @@ def _make_singlenode_dc_step_constraints(
 
     Returns
     -------
-    list
-        List of CVXPY constraints.
+    tuple[list, cp.Expression]
+        CVXPY constraints and the modeled scalar net injection.
     """
     constr = []
 
     # Section 1: Power balance (exactly one equality constraint)
-    storage_term = cp.multiply(1.0 / baseMVA, cp.sum(b_t)) if ns > 0 else 0
-    nd_term = cp.multiply(1.0 / baseMVA, cp.sum(p_nd_t)) if nnd > 0 else 0
-    constr.append(cp.sum(Pg) + storage_term + nd_term == Pd_total_t)
+    storage_term = storage_injection[0] if ns > 0 else 0
+    nd_term = nd_injection[0] if nnd > 0 else 0
+    p_net = (
+        generator_injection[0] + storage_term + nd_term - Pd_total_t
+    )
+    constr.append(p_net == 0)
 
     # Section 2: Generator bounds
-    constr.append(Pg >= Pgmin)
-    constr.append(Pg <= Pgmax)
+    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
 
     # Section 3: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
-        constr.append(b_t >= -S_max)
-        constr.append(b_t <= S_max)
+        constr += storage_dc_operating_constraints(storage_units, b_t, soc_t)
 
     # Section 3b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
-        constr.append(p_nd_t <= nd_p_available_t)
-        # p_nd_t >= 0 is enforced via nonneg=True on Variable declaration
+        constr += nd_dc_operating_constraints(
+            nd_units, p_nd_t, nd_p_available_t
+        )
 
-    # Section 4: Storage SoC bounds (omitted when ns == 0)
-    if ns > 0:
-        constr.append(soc_t >= 0.0)
-        constr.append(soc_t <= storage_capacity)
-
-    return constr
+    return constr, p_net
 
 
 def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
@@ -168,10 +181,7 @@ def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
     cp.Expression
         Total generation cost expression.
     """
-    ng = Pg.shape[0]
-    # Convert Pg from per-unit to MW for cost calculation
-    Pg_MW = [cp.multiply(baseMVA, Pg[k]) for k in range(ng)]
-    return poly_cost_expr(gencost, Pg_MW)
+    return gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
 
 
 def _parse_singlenode_dc_case(
@@ -180,6 +190,7 @@ def _parse_singlenode_dc_case(
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -208,86 +219,58 @@ def _parse_singlenode_dc_case(
     -----
     - Does NOT call validate_case (empty branch tables are acceptable).
     - Returns scalar Pd_total = sum(bus[:, PD]) / baseMVA, not per-bus Pd.
-    - Does NOT return A, r, f_max, nogen_buses, gen_bus, nl, or loss_weight.
+    - Does NOT return A, r, f_max, nogen_buses, nl, or loss_weight.
+      ``Cg`` and ``gen_bus`` use the collapsed one-node representation.
     """
     # Get external bus IDs for validation (before reindexing)
     original_bus = case["bus"]
     ext_bus_ids = set(original_bus[:, BUS_I].astype(int).tolist())
+    if generators is None:
+        generators = gen_from_matpower(case["gen"], case["gencost"])
 
     # Reindex to consecutive bus numbering
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
     bus = case["bus"]
-    gen = case["gen"]
-    gencost = case["gencost"]
 
-    nb = bus.shape[0]
-    ng = gen.shape[0]
-
+    source_nb = bus.shape[0]
     # Compute total load (scalar, not per-bus)
     Pd_total = float(np.sum(bus[:, PD]) / baseMVA)
 
-    # Extract generator data
-    status = gen[:, GEN_STATUS].astype(int)
-    Pgmin = gen[:, PMIN].astype(float) / baseMVA
-    Pgmax = gen[:, PMAX].astype(float) / baseMVA
-
-    # Zero out bounds for inactive generators
-    for k in range(ng):
-        if status[k] != 1:
-            Pgmin[k] = 0.0
-            Pgmax[k] = 0.0
+    collapsed_ext_to_int = {bus_id: 0 for bus_id in ext_bus_ids}
+    generator_data = generator_prepare_data(
+        generators,
+        baseMVA,
+        nb=1,
+        ext_to_int=collapsed_ext_to_int,
+        ext_bus_ids=ext_bus_ids,
+    )
 
     # Storage data (if present)
     storage_data = {}
-    if storage is not None:
-        _validate_storage(storage, ext_bus_ids)
-        storage_data = {
-            "ns": len(storage),
-            "Cs": _make_storage_incidence_matrix(storage, nb, ext_to_int),
-            "storage_bus": np.array([unit.bus for unit in storage], dtype=int),
-            "storage_apparent_power_rating": np.array(
-                [unit.apparent_power_rating for unit in storage], dtype=float
-            ),
-            "storage_capacity": np.array(
-                [unit.capacity for unit in storage], dtype=float
-            ),
-            "storage_initial_soc": np.array(
-                [unit.initial_soc for unit in storage], dtype=float
-            ),
-            "storage_aging_weight": np.array(
-                [unit.aging_weight for unit in storage], dtype=float
-            ),
-            "storage_delta": float(delta),
-        }
+    if storage:
+        storage_data = storage_prepare_data(
+            storage, 1, collapsed_ext_to_int, ext_bus_ids
+        )
+        storage_data["storage_delta"] = float(delta)
 
     # Nondispatchable data (if present)
     nd_data = {}
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-        nd_data = {
-            "nnd": len(nondispatchable),
-            "Cnd": _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int),
-            "nd_bus": np.array([unit.bus for unit in nondispatchable], dtype=int),
-            "nd_apparent_power_rating": np.array(
-                [unit.apparent_power_rating for unit in nondispatchable], dtype=float
-            ),
-            "nd_p_available": np.array(
-                [unit.p_available for unit in nondispatchable], dtype=float
-            ),
-        }
+    if nondispatchable:
+        nd_data = nd_prepare_data(
+            nondispatchable, 1, collapsed_ext_to_int, ext_bus_ids
+        )
 
     return {
         "baseMVA": baseMVA,
-        "nb": nb,
-        "ng": ng,
+        "nb": 1,
+        "source_nb": source_nb,
         "ext_to_int": ext_to_int,
         "ext_bus_ids": ext_bus_ids,
+        "collapsed_ext_to_int": collapsed_ext_to_int,
         "Pd_total": Pd_total,
-        "Pgmin": Pgmin,
-        "Pgmax": Pgmax,
-        "gencost": gencost,
+        **generator_data,
         **storage_data,
         **nd_data,
     }
@@ -301,6 +284,7 @@ def _build_singlenode_dc_single(
     nondispatchable: list[NondispatchableUnit] | None = None,
     *,
     hvdc=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """
     Build a single time-step single-node DC dispatch problem.
@@ -326,52 +310,96 @@ def _build_singlenode_dc_single(
     from cvxopf.problem import OPFBuild
 
     # Parse the case
-    d = _parse_singlenode_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_singlenode_dc_case(
+        case, options, storage, delta, nondispatchable, generators
+    )
 
     # Declare variables
-    Pg = cp.Variable(d["ng"], name="Pg", nonneg=True)
+    Pg = cp.Variable(d["ng"], name="Pg")
 
     # Storage variables (if present)
     b_t = None
     soc_t = None
+    storage_inj = None
     if "ns" in d:
         b_t = cp.Variable(d["ns"], name="b")
         soc_t = cp.Variable(d["ns"], name="soc")
+        storage_inj, storage_q_inj, storage_scaling = storage_dc_injections(
+            storage,
+            b_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+            incidence=d["Cs"],
+        )
+        assert storage_q_inj is None
+        storage_scaling.value = 1.0 / d["baseMVA"]
 
     # Nondispatchable variables (if present)
     p_nd_t = None
+    nd_inj = None
     if "nnd" in d:
-        p_nd_t = cp.Variable(d["nnd"], name="p_nd", nonneg=True)
+        p_nd_t = cp.Variable(d["nnd"], name="p_nd")
+        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
+            nondispatchable,
+            p_nd_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+            incidence=d["Cnd"],
+        )
+        assert nd_q_inj is None
+        nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Build constraints
-    constr = _make_singlenode_dc_step_constraints(
+    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
+        d["generators"],
+        Pg,
+        d["collapsed_ext_to_int"],
+        nb=1,
+        incidence=d["Cg"],
+    )
+    assert generator_q_inj is None
+    assert generator_scaling is None
+
+    constr, p_net_expr = _make_singlenode_dc_step_constraints(
         Pg=Pg,
+        generator_injection=generator_inj_expr,
         Pd_total_t=d["Pd_total"],
         Pgmin=d["Pgmin"],
         Pgmax=d["Pgmax"],
-        baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
-        S_max=d.get("storage_apparent_power_rating"),
-        storage_capacity=d.get("storage_capacity"),
+        storage_units=storage,
+        storage_injection=storage_inj,
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
+        nd_units=nondispatchable,
+        nd_injection=nd_inj,
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
+    )
+    constr.extend(
+        generator_dc_network_constraints(
+            d["generators"],
+            None,
+            d["collapsed_ext_to_int"],
+            controlled_buses=(),
+            enforce_vset=False,
+        )
     )
 
     # Build cost
     cost = _make_singlenode_dc_step_cost(Pg, d["gencost"], d["baseMVA"])
 
     # Add storage aging cost if present
+    storage_cost = None
     if "ns" in d:
-        aging_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
-        cost = cost + aging_cost
+        storage_cost = storage_cost_expr(storage, b_t)
+        cost = cost + storage_cost
 
     # Add storage SoC constraints if present
     if "ns" in d:
-        soc_constr = _make_storage_soc_constraints(
-            [b_t], [soc_t], d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        soc_constr = storage_coupling_constraints(
+            storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(soc_constr)
 
@@ -390,36 +418,24 @@ def _build_singlenode_dc_single(
     data = {
         "baseMVA": d["baseMVA"],
         "nb": d["nb"],
-        "ng": d["ng"],
+        "source_nb": d["source_nb"],
         "ext_to_int": d["ext_to_int"],
         "Pd_total": d["Pd_total"],
-        "Pgmin": d["Pgmin"],
-        "Pgmax": d["Pgmax"],
-        "gencost": d["gencost"],
     }
+    data.update(generator_build_metadata(d, reactive=False))
 
     # Add storage data if present
     if "ns" in d:
-        data.update({
-            "ns": d["ns"],
-            "Cs": d["Cs"],
-            "storage_bus": d["storage_bus"],
-            "storage_apparent_power_rating": d["storage_apparent_power_rating"],
-            "storage_capacity": d["storage_capacity"],
-            "storage_initial_soc": d["storage_initial_soc"],
-            "storage_delta": d["storage_delta"],
-            "storage_aging_weight": d["storage_aging_weight"],
-        })
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update({
-            "nnd": d["nnd"],
-            "Cnd": d["Cnd"],
-            "nd_bus": d["nd_bus"],
-            "nd_apparent_power_rating": d["nd_apparent_power_rating"],
-            "nd_p_available": d["nd_p_available"],
-        })
+        data.update(nd_build_metadata(d))
+        data["nd_p_available"] = d["nd_p_available"]
+
+    expressions = {"p_net": p_net_expr}
+    if storage_cost is not None:
+        expressions["storage_cost"] = storage_cost
 
     return OPFBuild(
         prob=prob,
@@ -427,6 +443,7 @@ def _build_singlenode_dc_single(
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
+        expressions=expressions,
     )
 
 
@@ -445,6 +462,7 @@ def _build_singlenode_dc_multistep(
     hvdc=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """
     Build a multi-step single-node DC dispatch problem.
@@ -499,12 +517,15 @@ def _build_singlenode_dc_multistep(
         )
 
     # Parse the case
-    d = _parse_singlenode_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_singlenode_dc_case(
+        case, options, storage, delta, nondispatchable, generators
+    )
 
     # Validate df_P column count before summing
-    if df_P.shape[1] != d["nb"]:
+    if df_P.shape[1] != d["source_nb"]:
         raise ValueError(
-            f"df_P has {df_P.shape[1]} columns but case has {d['nb']} buses."
+            f"df_P has {df_P.shape[1]} columns but case has "
+            f"{d['source_nb']} source buses."
         )
 
     # Compute total load per step (scalar per step, not per-bus)
@@ -514,71 +535,114 @@ def _build_singlenode_dc_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
-    # Parse nondispatchable time series (if present)
-    if "nnd" in d and df_nd is not None:
-        d["nd_available"] = _parse_nd_timeseries(
-            df_nd, T, d["ext_bus_ids"], d["ext_to_int"]
-        )
+    # The public builder guarantees a normalized ND time series when ND is active.
+    if "nnd" in d:
+        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     # Accumulators
     Pg_list = []
     b_list = []
     soc_list = []
     p_nd_list = []
+    p_net_expr_list = []
     all_constr = []
     total_cost = 0
+    storage_cost = 0
 
     for t in range(T):
         # Declare per-step variables
-        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}", nonneg=True)
+        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
 
         b_t = None
         soc_t = None
+        storage_inj_t = None
         if "ns" in d:
             b_t = cp.Variable(d["ns"], name=f"b_{t}")
             soc_t = cp.Variable(d["ns"], name=f"soc_{t}")
+            (
+                storage_inj_t,
+                storage_q_inj_t,
+                storage_scaling_t,
+            ) = storage_dc_injections(
+                storage,
+                b_t,
+                d["collapsed_ext_to_int"],
+                nb=1,
+                incidence=d["Cs"],
+            )
+            assert storage_q_inj_t is None
+            storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         p_nd_t = None
+        nd_inj_t = None
         if "nnd" in d:
-            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}", nonneg=True)
+            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}")
+            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
+                nondispatchable,
+                p_nd_t,
+                d["collapsed_ext_to_int"],
+                nb=1,
+                incidence=d["Cnd"],
+            )
+            assert nd_q_inj_t is None
+            nd_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Determine available ND power for this step
         if "nnd" in d:
-            if "nd_available" in d:
-                nd_p_available_t = d["nd_available"][t, :]
-            else:
-                nd_p_available_t = d["nd_p_available"]
+            nd_p_available_t = d["nd_available"][t, :]
         else:
             nd_p_available_t = None
 
         # Per-step constraints
-        step_constr = _make_singlenode_dc_step_constraints(
+        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
+            d["generators"],
+            Pg_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+            incidence=d["Cg"],
+        )
+        assert generator_q_inj_t is None
+        assert generator_scaling_t is None
+
+        step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
             Pg=Pg_t,
+            generator_injection=generator_inj_expr_t,
             Pd_total_t=float(Pd_series[t]),
             Pgmin=d["Pgmin"],
             Pgmax=d["Pgmax"],
-            baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
-            S_max=d.get("storage_apparent_power_rating"),
-            storage_capacity=d.get("storage_capacity"),
+            storage_units=storage,
+            storage_injection=storage_inj_t,
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
+            nd_units=nondispatchable,
+            nd_injection=nd_inj_t,
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
+        )
+        step_constr.extend(
+            generator_dc_network_constraints(
+                d["generators"],
+                None,
+                d["collapsed_ext_to_int"],
+                controlled_buses=(),
+                enforce_vset=False,
+            )
         )
         all_constr.extend(step_constr)
 
         # Per-step cost
         step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
         if "ns" in d:
-            step_cost = step_cost + cp.sum(
-                cp.multiply(d["storage_aging_weight"], cp.abs(b_t))
-            )
+            step_storage_cost = storage_cost_expr(storage, b_t)
+            storage_cost = storage_cost + step_storage_cost
+            step_cost = step_cost + step_storage_cost
         total_cost = total_cost + step_cost
 
         # Accumulate variables
         Pg_list.append(Pg_t)
+        p_net_expr_list.append(p_net_expr_t)
         if "ns" in d:
             b_list.append(b_t)
             soc_list.append(soc_t)
@@ -587,10 +651,21 @@ def _build_singlenode_dc_multistep(
 
     # Storage SoC dynamics (cross-step coupling)
     if "ns" in d:
-        soc_constr = _make_storage_soc_constraints(
-            b_list, soc_list, d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        soc_constr = storage_coupling_constraints(
+            storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(soc_constr)
+    all_constr.extend(
+        generator_coupling_constraints(
+            d["generators"], Pg_list, delta=delta
+        )
+    )
+    if "nnd" in d:
+        all_constr.extend(
+            nd_coupling_constraints(
+                nondispatchable, p_nd_list, delta=delta
+            )
+        )
 
     # Append user coupling constraints unchanged
     all_constr.extend(coupling_constraints)
@@ -610,38 +685,23 @@ def _build_singlenode_dc_multistep(
     data = dict(
         baseMVA=d["baseMVA"],
         nb=d["nb"],
-        ng=d["ng"],
+        source_nb=d["source_nb"],
         ext_to_int=d["ext_to_int"],
-        Pgmin=d["Pgmin"],
-        Pgmax=d["Pgmax"],
-        gencost=d["gencost"],
         T=T,
         Pd_series=Pd_series,
     )
+    data.update(generator_build_metadata(d, reactive=False))
 
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-        )
-        if "nd_available" in d:
-            data["nd_available"] = d["nd_available"]
-        else:
-            data["nd_p_available"] = d["nd_p_available"]
+        data.update(nd_build_metadata(d))
+        data["nd_available"] = d["nd_available"]
+
+    expressions = {"p_net": p_net_expr_list}
+    if "ns" in d:
+        expressions["storage_cost"] = storage_cost
 
     return OPFBuild(
         prob=prob,
@@ -649,4 +709,5 @@ def _build_singlenode_dc_multistep(
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
+        expressions=expressions,
     )

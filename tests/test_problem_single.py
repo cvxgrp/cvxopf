@@ -197,10 +197,7 @@ class TestFeasibility:
     @pytest.mark.parametrize("case_fn", [case9, case14])
     def test_voltage_magnitudes_within_bounds(self, case_fn):
         build, results = _solve(case_fn)
-        data  = build.data
-        vmin  = data["Ybus"]   # not used; pull from case directly
         Vm    = results["Vm"]
-        bus   = build.data
         # Vm bounds come from the variable bounds set in build_acopf
         v_var = build.variables["v"]
         lb    = v_var.attributes["bounds"][0].flatten()

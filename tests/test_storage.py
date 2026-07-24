@@ -6,13 +6,20 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
-from cvxopf.testcases import case9, case14
+from cvxopf.testcases import case9
 from cvxopf.problem import (
     build_opf, build_opf_multistep,
-    OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.results import extract_results
+from cvxopf.storage import (
+    ac_injections as storage_ac_injections,
+    dc_injections as storage_dc_injections,
+    ac_operating_constraints as storage_ac_operating_constraints,
+    dc_operating_constraints as storage_dc_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
+)
 
 # ---------------------------------------------------------------------------
 # Tolerances (use these exact values throughout)
@@ -98,6 +105,60 @@ def _solve_dc_multistep(T, df_P, df_Q, storage=None, delta=1.0,
         )
     build.solve()
     return build, extract_results(build)
+
+
+class TestStorageComponentInterface:
+    def test_ac_and_dc_injections_have_fixed_arity(self):
+        units = [_default_unit(bus=4)]
+        b = cp.Variable(1)
+        b_q = cp.Variable(1)
+
+        p_ac, q_ac, scale_ac = storage_ac_injections(
+            units, b, b_q, {4: 0}, nb=1
+        )
+        p_dc, q_dc, scale_dc = storage_dc_injections(
+            units, b, {4: 0}, nb=1
+        )
+
+        assert p_ac.shape == (1,)
+        assert q_ac.shape == (1,)
+        assert p_dc.shape == (1,)
+        assert q_dc is None
+        assert scale_ac.value is None
+        assert scale_dc.value is None
+        assert scale_ac.attributes["nonneg"]
+        assert scale_dc.attributes["nonneg"]
+
+    def test_operating_constraints_and_cost_are_dcp(self):
+        units = [_default_unit(aging_weight=0.5)]
+        b = cp.Variable(1)
+        b_q = cp.Variable(1)
+        soc = cp.Variable(1)
+
+        ac_constraints = storage_ac_operating_constraints(
+            units, b, b_q, soc
+        )
+        dc_constraints = storage_dc_operating_constraints(units, b, soc)
+        cost = storage_cost_expr(units, b)
+
+        assert all(constraint.is_dcp() for constraint in ac_constraints)
+        assert all(constraint.is_dcp() for constraint in dc_constraints)
+        assert cost.is_dcp()
+
+    def test_coupling_constraints_recover_soc_trajectory(self):
+        units = [_default_unit(initial_soc=50.0)]
+        b = [cp.Variable(1), cp.Variable(1)]
+        soc = [cp.Variable(1), cp.Variable(1)]
+        constraints = storage_coupling_constraints(
+            units, b, soc, delta=0.5
+        )
+        constraints += [b[0] == [10.0], b[1] == [-4.0]]
+
+        cp.Problem(cp.Minimize(0), constraints).solve()
+
+        assert len(constraints) == 4
+        assert soc[0].value[0] == pytest.approx(45.0)
+        assert soc[1].value[0] == pytest.approx(47.0)
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +281,10 @@ class TestDeltaValidation:
         build = build_opf(case9(), formulation="ac", storage=None, delta=-1.0)
         assert isinstance(build, OPFBuild)
 
+    def test_delta_negative_with_empty_storage_does_not_raise(self):
+        build = build_opf(case9(), formulation="ac", storage=[], delta=-1.0)
+        assert isinstance(build, OPFBuild)
+
     def test_delta_default_is_one(self):
         # build.data["storage_delta"] should be 1.0 by default
         unit  = _default_unit()
@@ -240,7 +305,8 @@ class TestStorageNoStorage:
         # Results should be identical (no storage is the default).
         build1 = build_opf(case9(), formulation="ac")
         build2 = build_opf(case9(), formulation="ac", storage=None)
-        build1.solve(); build2.solve()
+        build1.solve()
+        build2.solve()
         r1 = extract_results(build1)
         r2 = extract_results(build2)
         assert r1["status"] == r2["status"]
@@ -249,7 +315,8 @@ class TestStorageNoStorage:
     def test_dc_single_no_storage_results_unchanged(self):
         build1 = build_opf(case9(), formulation="lossy_dc")
         build2 = build_opf(case9(), formulation="lossy_dc", storage=None)
-        build1.solve(); build2.solve()
+        build1.solve()
+        build2.solve()
         r1 = extract_results(build1)
         r2 = extract_results(build2)
         assert r1["status"] == r2["status"]
@@ -278,6 +345,12 @@ class TestStorageNoStorage:
     def test_ns_absent_from_data_when_no_storage(self):
         build, _ = _solve_ac_single()
         assert "ns" not in build.data
+
+    @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+    def test_empty_storage_list_is_absent(self, formulation):
+        build = build_opf(case9(), formulation=formulation, storage=[])
+        assert "ns" not in build.data
+        assert "b" not in build.variables
 
 
 class TestStorageACSingle:
@@ -770,8 +843,8 @@ class TestStorageDelta:
         # |soc - initial_soc| should be smaller with delta=0.25
         delta_soc_1   = abs(r1["soc"][0]   - 50.0)
         delta_soc_025 = abs(r025["soc"][0] - 50.0)
-        # This is a soft check — just verify both are feasible
         assert r1["status"] == r025["status"] == "optimal"
+        assert delta_soc_025 <= delta_soc_1 + VAL_ATOL
 
 
 class TestStorageCouplingConstraintHook:

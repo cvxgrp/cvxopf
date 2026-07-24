@@ -19,7 +19,7 @@ build_acopf_multistep(case, df_P, df_Q, *, T, options, coupling_constraints)
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,16 @@ import cvxpy as cp
 
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
-from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.hvdc import HVDCLink, _hvdc_static_box
+from cvxopf.nondispatchable import (
+    NondispatchableUnit,
+    _parse_nd_timeseries,
+)
+from cvxopf.hvdc import (
+    HVDCLink,
+    _hvdc_static_box,
+    _parse_hvdc_timeseries,
+)
+from cvxopf.generator import DispatchableGenerator, _case_with_generators
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +125,7 @@ class OPFBuild:
         AC multi-step: each value is a list of length T.
 
         DC single-step keys:
-            p_flows, p_gen
+            p_flows, Pg
 
         DC multi-step: each value is a list of length T.
 
@@ -139,9 +147,10 @@ class OPFBuild:
         DC keys: baseMVA, nb, ng, nl, ext_to_int,
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
-        Singlenode DC keys: baseMVA, nb, ng, ext_to_int,
+        Singlenode DC keys: baseMVA, nb (= 1), source_nb, ng, ext_to_int,
                  Pd_total, Pgmin, Pgmax, gencost
-        Multi-step additionally: T, Pd_series (and Qd_series for AC)
+        Multi-step additionally: T, Pd_series (and Qd_series for AC).
+        Presence of T is the explicit single- versus multi-step discriminator.
         For singlenode_dc, Pd_series has shape (T,) — one scalar per step,
         not (T, nb).
         When storage is present: ns, Cs, storage_bus,
@@ -155,12 +164,16 @@ class OPFBuild:
     is_convex : bool
         True for convex formulations (lossy_dc, singlenode_dc); False for
         nonconvex (ac). Controls solver defaults in solve().
+    expressions : dict
+        Named modeled CVXPY expressions used for solved-value reporting.
+        Multi-step expressions are stored as lists of length T.
     """
     prob:        cp.Problem
     variables:   dict
     data:        dict
     formulation: str
     is_convex:   bool
+    expressions: dict = field(default_factory=dict)
 
     def solve(self, **kwargs) -> None:
         """
@@ -231,6 +244,12 @@ def _get_multistep_builders():
     }
 
 
+def _validate_temporal_delta(delta: float, *, storage) -> None:
+    """Validate the time step when an active device has temporal constraints."""
+    if storage and delta <= 0:
+        raise ValueError(f"delta must be > 0, got {delta}")
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -244,6 +263,7 @@ def build_opf(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -251,7 +271,9 @@ def build_opf(
     Parameters
     ----------
     case : dict
-        MATPOWER-format case dict. Need not be pre-reindexed.
+        MATPOWER-format case dict. Need not be pre-reindexed. When
+        ``generators`` is supplied explicitly, ``gen`` and ``gencost`` may be
+        omitted; temporary tables are generated without mutating this dict.
     formulation : str
         "ac"
             Full AC-OPF via DNLP (nonconvex). Solved by IPOPT.
@@ -271,13 +293,18 @@ def build_opf(
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance.
     delta : float, optional
-        Time step duration in hours (default 1.0). Used for storage SoC
-        dynamics when storage is present. Ignored when storage is None.
-        Must be > 0 when storage is present.
+        Time step duration in hours (default 1.0). Passed to every component's
+        temporal coupling hook and used by storage SoC dynamics. Must be > 0
+        when an active device has temporal constraints.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
         Each unit is a NondispatchableUnit dataclass instance.
+    generators : list[DispatchableGenerator] | None, optional
+        Dispatchable generators. If None, convert the case dict's
+        ``gen``/``gencost`` tables to DispatchableGenerator objects at build
+        time. Unlike other device arguments, None means MATPOWER fallback,
+        not absence.
 
     Returns
     -------
@@ -286,10 +313,13 @@ def build_opf(
     """
     if options is None:
         options = OPFOptions()
+    if generators is not None and len(generators) == 0:
+        raise ValueError(
+            "generators must contain at least one DispatchableGenerator; "
+            "use generators=None to load generators from the case."
+        )
 
-    # Validate delta when storage is present
-    if storage is not None and delta <= 0:
-        raise ValueError(f"delta must be > 0, got {delta}")
+    _validate_temporal_delta(delta, storage=storage)
 
     builders = _get_single_builders()
     if formulation not in builders:
@@ -297,8 +327,14 @@ def build_opf(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
-    return builders[formulation](case, options, storage, delta, nondispatchable,
-                                  hvdc=hvdc)
+    normalized_case = (
+        _case_with_generators(case, generators)
+        if generators is not None else case
+    )
+    return builders[formulation](
+        normalized_case, options, storage, delta, nondispatchable,
+        hvdc=hvdc, generators=generators,
+    )
 
 
 def build_opf_multistep(
@@ -317,6 +353,7 @@ def build_opf_multistep(
     hvdc: list[HVDCLink] | None = None,
     df_hvdc_min: pd.DataFrame | None = None,
     df_hvdc_max: pd.DataFrame | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -324,7 +361,8 @@ def build_opf_multistep(
     Parameters
     ----------
     case : dict
-        MATPOWER-format case dict.
+        MATPOWER-format case dict. When ``generators`` is supplied explicitly,
+        ``gen`` and ``gencost`` may be omitted.
     df_P : pd.DataFrame, shape (T, nb)
         Active load time series in MW.
     df_Q : pd.DataFrame, shape (T, nb)
@@ -347,9 +385,9 @@ def build_opf_multistep(
         Each unit is a StorageUnitIdeal dataclass instance. Storage SoC
         dynamics are automatically added as coupling constraints.
     delta : float, optional
-        Time step duration in hours (default 1.0). Used for storage SoC
-        dynamics when storage is present. Ignored when storage is None.
-        Must be > 0 when storage is present.
+        Time step duration in hours (default 1.0). Used by active temporal
+        devices; currently, storage SoC dynamics. Ignored when no active
+        device has temporal constraints and otherwise must be > 0.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
@@ -357,9 +395,13 @@ def build_opf_multistep(
     df_nd : pd.DataFrame | None, optional
         Nondispatchable available power time series in MW.
         Shape (T, nnd) where nnd = len(nondispatchable).
-        Column names must be external bus IDs (integers).
+        Columns must exactly match the units' unique, nonempty ``device_id``
+        values; arbitrary input order is aligned to device-list order.
         If None and nondispatchable is not None, the p_available field
         from each NondispatchableUnit is tiled across all T steps.
+    generators : list[DispatchableGenerator] | None, optional
+        Dispatchable generators. If None, convert the case dict's
+        ``gen``/``gencost`` tables at build time.
 
     Returns
     -------
@@ -370,45 +412,60 @@ def build_opf_multistep(
         options = OPFOptions()
     if coupling_constraints is None:
         coupling_constraints = []
+    if generators is not None and len(generators) == 0:
+        raise ValueError(
+            "generators must contain at least one DispatchableGenerator; "
+            "use generators=None to load generators from the case."
+        )
 
-    # Validate delta when storage is present
-    if storage is not None and delta <= 0:
-        raise ValueError(f"delta must be > 0, got {delta}")
+    _validate_temporal_delta(delta, storage=storage)
 
-    # Validate and handle df_nd tiling fallback
-    if nondispatchable is not None and df_nd is None:
+    # Normalize ND availability once at the public API boundary.
+    if nondispatchable:
+        if df_nd is None:
+            warnings.warn(
+                "df_nd not provided; tiling p_available from each "
+                "NondispatchableUnit across all T steps.",
+                UserWarning,
+                stacklevel=2,
+            )
+            nd_available = np.tile(
+                [unit.p_available for unit in nondispatchable], (T, 1)
+            )
+        else:
+            nd_available = _parse_nd_timeseries(df_nd, T, nondispatchable)
+        df_nd = pd.DataFrame(nd_available)
+    elif df_nd is not None:
         warnings.warn(
-            "df_nd not provided; tiling p_available from each NondispatchableUnit "
-            "across all T steps.",
+            "df_nd is ignored because no nondispatchable units were provided.",
             UserWarning,
             stacklevel=2,
         )
-        # Create df_nd by tiling p_available from each unit
-        df_nd = pd.DataFrame(
-            {u.bus: [u.p_available] * T for u in nondispatchable}
-        )
-    elif nondispatchable is None and df_nd is not None:
-        warnings.warn(
-            "df_nd is ignored because nondispatchable=None.",
-            UserWarning,
-            stacklevel=2,
-        )
+        df_nd = None
 
     # HVDC frame handling: tile static box or validate provided frames.
-    if hvdc is not None:
-        if df_hvdc_min is None or df_hvdc_max is None:
+    if hvdc and formulation != "singlenode_dc":
+        if df_hvdc_min is None and df_hvdc_max is None:
             warnings.warn(
                 "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
-                "HVDCLink.mode fields across all T steps.",
+                "HVDCLink bounds across all T steps.",
                 UserWarning,
                 stacklevel=2,
             )
             p_min_static, p_max_static = _hvdc_static_box(hvdc)
             df_hvdc_min = pd.DataFrame(np.tile(p_min_static, (T, 1)))
             df_hvdc_max = pd.DataFrame(np.tile(p_max_static, (T, 1)))
+        elif df_hvdc_min is None or df_hvdc_max is None:
+            raise ValueError(
+                "df_hvdc_min and df_hvdc_max must be provided together."
+            )
         else:
-            mins = df_hvdc_min.values
-            maxs = df_hvdc_max.values
+            mins = _parse_hvdc_timeseries(
+                df_hvdc_min, hvdc, T, "df_hvdc_min"
+            )
+            maxs = _parse_hvdc_timeseries(
+                df_hvdc_max, hvdc, T, "df_hvdc_max"
+            )
             if np.any(mins > maxs):
                 bad = np.argwhere(mins > maxs)
                 t_bad, k_bad = bad[0]
@@ -417,6 +474,18 @@ def build_opf_multistep(
                     f"df_hvdc_max[{t_bad},{k_bad}] = {maxs[t_bad, k_bad]:.4g}; "
                     f"box invariant p_min <= p_max violated."
                 )
+            aligned_ids = [link.device_id for link in hvdc]
+            df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
+            df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
+    elif not hvdc and (df_hvdc_min is not None or df_hvdc_max is not None):
+        warnings.warn(
+            "df_hvdc_min/df_hvdc_max are ignored because no HVDC links "
+            "were provided.",
+            UserWarning,
+            stacklevel=2,
+        )
+        df_hvdc_min = None
+        df_hvdc_max = None
 
     builders = _get_multistep_builders()
     if formulation not in builders:
@@ -424,10 +493,15 @@ def build_opf_multistep(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
+    normalized_case = (
+        _case_with_generators(case, generators)
+        if generators is not None else case
+    )
     return builders[formulation](
-        case, df_P, df_Q, T, options, coupling_constraints,
+        normalized_case, df_P, df_Q, T, options, coupling_constraints,
         storage, delta, nondispatchable, df_nd,
         hvdc=hvdc, df_hvdc_min=df_hvdc_min, df_hvdc_max=df_hvdc_max,
+        generators=generators,
     )
 
 

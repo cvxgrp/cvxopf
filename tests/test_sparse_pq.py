@@ -270,17 +270,17 @@ class TestSparsePQMultistep:
 
 class TestSparsePQDCNoEffect:
 
-    def test_dc_sparse_pq_true_still_uses_p_gen_p_flows(self):
+    def test_dc_sparse_pq_true_still_uses_Pg_p_flows(self):
         """sparse_pq=True is silently ignored for DC formulation."""
         build = build_opf(case9(), formulation="lossy_dc",
                           options=OPFOptions(sparse_pq=True))
-        assert "p_gen"   in build.variables
+        assert "Pg"      in build.variables
         assert "p_flows" in build.variables
         assert "P_vec"   not in build.variables
         assert "P"       not in build.variables
 
-    def test_dc_sparse_pq_false_still_uses_p_gen_p_flows(self):
+    def test_dc_sparse_pq_false_still_uses_Pg_p_flows(self):
         build = build_opf(case9(), formulation="lossy_dc",
                           options=OPFOptions(sparse_pq=False))
-        assert "p_gen"   in build.variables
+        assert "Pg"      in build.variables
         assert "p_flows" in build.variables

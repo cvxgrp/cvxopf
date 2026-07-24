@@ -21,13 +21,16 @@ import numpy as np
 import pandas as pd
 import pytest
 import cvxpy as cp
+from cvxopf.generator import DispatchableGenerator
 
 from cvxopf.hvdc import (
     HVDCLink,
     _validate_hvdc,
     _make_hvdc_incidence_matrices,
     _hvdc_static_box,
-    hvdc_injections,
+    _parse_hvdc_timeseries,
+    ac_injections,
+    dc_injections,
     dc_operating_constraints,
     ac_operating_constraints,
     hvdc_cost_expr,
@@ -93,13 +96,11 @@ class TestHVDCValidation:
         with pytest.raises(ValueError, match="to_bus 99"):
             _validate_hvdc([_link(to_bus=99)], _EXT_BUS_IDS)
 
-    def test_p_max_zero_raises(self):
-        with pytest.raises(ValueError, match="p_max_mw must be > 0"):
-            _validate_hvdc([_link(p_max_mw=0.0)], _EXT_BUS_IDS)
+    def test_zero_pinned_box_allowed(self):
+        _validate_hvdc([_link(p_min_mw=0.0, p_max_mw=0.0)], _EXT_BUS_IDS)
 
-    def test_p_max_negative_raises(self):
-        with pytest.raises(ValueError, match="p_max_mw must be > 0"):
-            _validate_hvdc([_link(p_max_mw=-10.0)], _EXT_BUS_IDS)
+    def test_reverse_only_box_allowed(self):
+        _validate_hvdc([_link(p_min_mw=-100.0, p_max_mw=-10.0)], _EXT_BUS_IDS)
 
     def test_p_min_gt_p_max_raises(self):
         with pytest.raises(ValueError, match="p_min_mw"):
@@ -110,8 +111,12 @@ class TestHVDCValidation:
         _validate_hvdc([_link(p_min_mw=50.0, p_max_mw=50.0)], _EXT_BUS_IDS)
 
     def test_loss_negative_raises(self):
-        with pytest.raises(ValueError, match="loss_percent must be >= 0"):
+        with pytest.raises(ValueError, match="between 0 and 100"):
             _validate_hvdc([_link(loss_percent=-1.0)], _EXT_BUS_IDS)
+
+    def test_loss_above_100_raises(self):
+        with pytest.raises(ValueError, match="between 0 and 100"):
+            _validate_hvdc([_link(loss_percent=101.0)], _EXT_BUS_IDS)
 
     def test_c2_negative_raises(self):
         with pytest.raises(ValueError, match="c2 must be >= 0"):
@@ -120,6 +125,11 @@ class TestHVDCValidation:
     def test_c1_negative_raises(self):
         with pytest.raises(ValueError, match="c1 must be >= 0"):
             _validate_hvdc([_link(cost_coeffs=(0.0, -1.0, 0.0))], _EXT_BUS_IDS)
+
+    @pytest.mark.parametrize("coeffs", [None, 1.0, (0.0, 1.0), ("a", 1.0, 2.0)])
+    def test_invalid_cost_coeff_shape_or_type_raises_value_error(self, coeffs):
+        with pytest.raises(ValueError, match="cost_coeffs"):
+            _validate_hvdc([_link(cost_coeffs=coeffs)], _EXT_BUS_IDS)
 
     def test_error_message_includes_index(self):
         bad = [_link(), _link(from_bus=1, to_bus=1)]
@@ -194,6 +204,39 @@ class TestHVDCStaticBox:
         p_min, p_max = _hvdc_static_box([])
         assert p_min.shape == (0,)
         assert p_max.shape == (0,)
+
+
+class TestHVDCTimeseriesIdentity:
+    def test_paired_frames_align_independently_to_link_order(self):
+        links = [
+            _link(from_bus=1, to_bus=2),
+            _link(from_bus=2, to_bus=3),
+        ]
+        links[0].device_id = "east"
+        links[1].device_id = "west"
+        mins = _parse_hvdc_timeseries(
+            pd.DataFrame({"west": [-20.0], "east": [-10.0]}),
+            links,
+            1,
+            "df_hvdc_min",
+        )
+        maxs = _parse_hvdc_timeseries(
+            pd.DataFrame({"east": [10.0], "west": [20.0]}),
+            links,
+            1,
+            "df_hvdc_max",
+        )
+        np.testing.assert_array_equal(mins, [[-10.0, -20.0]])
+        np.testing.assert_array_equal(maxs, [[10.0, 20.0]])
+
+    def test_external_frame_requires_link_device_ids(self):
+        with pytest.raises(ValueError, match="requires device_id"):
+            _parse_hvdc_timeseries(
+                pd.DataFrame({"hvdc": [0.0]}),
+                [_link()],
+                1,
+                "df_hvdc_min",
+            )
 
 
 class TestHVDCFromDcline:
@@ -286,7 +329,7 @@ class TestHVDCFromDcline:
 class TestHVDCCostExpr:
     def test_zero_cost_is_zero(self):
         p_in = cp.Variable((1,))
-        expr = hvdc_cost_expr((0.0, 0.0, 0.0), p_in)
+        expr = hvdc_cost_expr([_link(cost_coeffs=(0.0, 0.0, 0.0))], p_in)
         # Should be a valid CVXPY expression evaluating to 0 when p_in=0
         prob = cp.Problem(cp.Minimize(expr), [p_in == 0])
         prob.solve()
@@ -294,14 +337,18 @@ class TestHVDCCostExpr:
 
     def test_quadratic_is_dcp_convex(self):
         p_in = cp.Variable((2,))
-        expr = hvdc_cost_expr((1.0, 2.0, 3.0), p_in)
+        links = [
+            _link(cost_coeffs=(1.0, 2.0, 3.0)),
+            _link(cost_coeffs=(1.0, 2.0, 3.0)),
+        ]
+        expr = hvdc_cost_expr(links, p_in)
         assert expr.is_dcp()
         assert expr.is_convex()
 
     def test_cost_symmetric(self):
         # Cost should be the same for +p and -p
         p_in = cp.Variable((1,))
-        expr = hvdc_cost_expr((0.0, 1.0, 0.0), p_in)
+        expr = hvdc_cost_expr([_link(cost_coeffs=(0.0, 1.0, 0.0))], p_in)
         prob_pos = cp.Problem(cp.Minimize(0), [p_in == 5.0])
         prob_pos.solve()
         p_in.value = np.array([5.0])
@@ -336,26 +383,37 @@ class TestACDelegates:
 
 
 class TestHVDCInjections:
-    def test_returns_two_tuple(self):
+    def test_ac_and_dc_return_fixed_three_tuple(self):
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
-        assert isinstance(inv_bMVA, cp.Parameter)
-        assert hasattr(inj, "is_affine")
+        p_ac, q_ac, scale_ac = ac_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        p_dc, q_dc, scale_dc = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_ac is q_dc is None
+        assert isinstance(scale_ac, cp.Parameter)
+        assert isinstance(scale_dc, cp.Parameter)
+        assert p_ac.shape == p_dc.shape == (_NB,)
 
     def test_injection_is_cvxpy_expression(self):
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, _ = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        inj, q_inj, _ = dc_injections(links, p_in, p_out, _EXT_TO_INT)
+        assert q_inj is None
         assert hasattr(inj, "is_affine")
 
     def test_parameter_unset(self):
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        _, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        _, q_inj, inv_bMVA = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_inj is None
         assert inv_bMVA.value is None
 
     def test_convention_b_sign_lossless(self):
@@ -366,7 +424,10 @@ class TestHVDCInjections:
         links = [_link(from_bus=1, to_bus=2, loss_percent=0.0)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        inj, q_inj, inv_bMVA = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_inj is None
         inv_bMVA.value = 1.0 / baseMVA
 
         p_min_t = np.array([-100.0])
@@ -541,10 +602,20 @@ class TestHVDCWiring:
     """
 
     _GENS = [
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)
+        ),
     ]
-    _LINK = HVDCLink(from_bus=1, to_bus=2, p_min_mw=-50.0, p_max_mw=50.0)
+    _LINK = HVDCLink(
+        from_bus=1,
+        to_bus=2,
+        p_min_mw=-50.0,
+        p_max_mw=50.0,
+        device_id="hvdc",
+    )
 
     def _case(self):
         return make_singlenode_case(300.0, self._GENS)
@@ -567,8 +638,8 @@ class TestHVDCWiring:
         T = 3
         df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, 1)))
-        df_min = pd.DataFrame(np.tile([-50.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([50.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-50.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([50.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -584,10 +655,8 @@ class TestHVDCWiring:
             )
         assert "n_hvdc" not in build.data
 
-    def test_singlenode_multistep_no_hvdc_frames_emits_tile_warning(self):
-        # problem.py tile-fallback fires when hvdc is not None and frames absent.
-        # The singlenode builder still drops hvdc, but the warning from
-        # problem.py is expected and correct.
+    def test_singlenode_multistep_no_hvdc_frames_is_silent(self):
+        # Singlenode drops HVDC before formulation-specific normalization.
         case = self._case()
         T = 2
         df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
@@ -609,7 +678,7 @@ class TestHVDCWiring:
             for x in w
             if issubclass(x.category, UserWarning) and "hvdc" in str(x.message).lower()
         ]
-        assert len(tile_warns) == 1
+        assert len(tile_warns) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -622,7 +691,13 @@ class TestHVDCLossyDCWiring:
     and build.variables with HVDC keys. Detection contract: "n_hvdc" in
     build.data. Variables: p_hvdc_in / p_hvdc_out."""
 
-    _LINK = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-100.0, p_max_mw=100.0)
+    _LINK = HVDCLink(
+        from_bus=4,
+        to_bus=9,
+        p_min_mw=-100.0,
+        p_max_mw=100.0,
+        device_id="hvdc",
+    )
 
     def test_single_step_data_key_present(self):
         build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
@@ -658,8 +733,8 @@ class TestHVDCLossyDCWiring:
         nb = case["bus"].shape[0]
         df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, nb)))
-        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([100.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([100.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -739,11 +814,12 @@ class TestHVDCLossyDCSolve:
         bMVA = build.data["baseMVA"]
 
         p_flows = build.variables["p_flows"].value
-        p_gen = build.variables["p_gen"].value
+        Pg = build.variables["Pg"].value
+        Cg = build.data["Cg"]
         p_in = build.variables["p_hvdc_in"].value
         p_out = build.variables["p_hvdc_out"].value
 
-        balance = A @ p_flows + p_gen + (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
+        balance = A @ p_flows + Cg @ Pg + (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
         np.testing.assert_allclose(balance, Pd, atol=1e-4)
 
     def test_pinned_lossless_p_in_and_p_out(self):
@@ -788,12 +864,13 @@ class TestHVDCLossyDCSolve:
             p_min_mw=-1000.0,
             p_max_mw=1000.0,
             loss_percent=loss_pct,
+            device_id="hvdc",
         )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
         # Pin step 0 to -60 MW (degenerate box)
-        df_min = pd.DataFrame([[-60.0]])
-        df_max = pd.DataFrame([[-60.0]])
+        df_min = pd.DataFrame([[-60.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[-60.0]], columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -836,11 +913,17 @@ class TestHVDCLossyDCSolve:
         # T=1 multistep must give the same optimal objective as single-step.
         case = self._CASE()
         nb = case["bus"].shape[0]
-        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-50.0, p_max_mw=50.0)
+        lnk = HVDCLink(
+            from_bus=4,
+            to_bus=9,
+            p_min_mw=-50.0,
+            p_max_mw=50.0,
+            device_id="hvdc",
+        )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
-        df_min = pd.DataFrame([[-50.0]])
-        df_max = pd.DataFrame([[50.0]])
+        df_min = pd.DataFrame([[-50.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[50.0]], columns=["hvdc"])
 
         build_s = build_opf(case, formulation="lossy_dc", hvdc=[lnk])
         build_s.solve()
@@ -874,7 +957,13 @@ class TestHVDCACWiring:
     and build.variables with HVDC keys. Detection contract: "n_hvdc" in
     build.data. Variables: p_hvdc_in / p_hvdc_out."""
 
-    _LINK = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-100.0, p_max_mw=100.0)
+    _LINK = HVDCLink(
+        from_bus=4,
+        to_bus=9,
+        p_min_mw=-100.0,
+        p_max_mw=100.0,
+        device_id="hvdc",
+    )
 
     def test_single_step_data_key_present(self):
         build = build_opf(case9(), formulation="ac", hvdc=[self._LINK])
@@ -910,8 +999,8 @@ class TestHVDCACWiring:
         nb = case["bus"].shape[0]
         df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, nb)))
-        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([100.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([100.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -1074,11 +1163,17 @@ class TestHVDCACSOlve:
         # T=1 multistep must give the same optimal objective as single-step.
         case = self._CASE()
         nb = case["bus"].shape[0]
-        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-50.0, p_max_mw=50.0)
+        lnk = HVDCLink(
+            from_bus=4,
+            to_bus=9,
+            p_min_mw=-50.0,
+            p_max_mw=50.0,
+            device_id="hvdc",
+        )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
-        df_min = pd.DataFrame([[-50.0]])
-        df_max = pd.DataFrame([[50.0]])
+        df_min = pd.DataFrame([[-50.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[50.0]], columns=["hvdc"])
 
         build_s = build_opf(case, formulation="ac", hvdc=[lnk])
         build_s.solve()
@@ -1132,6 +1227,15 @@ class TestHVDCResultExtraction:
         r = extract_results(build)
         assert "p_hvdc_in" in r and "p_hvdc_out" in r and "hvdc_loss" in r
         assert r["p_hvdc_in"].shape == (1,)
+        expected = (
+            build.data["Cg"] @ build.variables["Pg"].value
+            + build.data["Ch_from"] @ build.variables["p_hvdc_in"].value
+            / build.data["baseMVA"]
+            + build.data["Ch_to"] @ build.variables["p_hvdc_out"].value
+            / build.data["baseMVA"]
+            - build.data["Pd"]
+        ) * build.data["baseMVA"]
+        np.testing.assert_allclose(r["p_net"], expected, atol=1e-6)
 
     def test_hvdc_loss_nonneg(self):
         build = build_opf(

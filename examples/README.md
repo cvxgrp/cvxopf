@@ -309,7 +309,7 @@ Generator dispatch (MW)
   Note: AC total Pg (268.29 MW) > load (259.0 MW) due to resistive losses.
   DC total Pg (259.00 MW) equals load exactly
   because DC losses appear in the objective but not in the
-  flow conservation constraint (A @ p_flows + p_gen = Pd).
+  flow conservation constraint (A @ p_flows + Cg @ Pg = Pd).
 
 ----------------------------------------------------------------------
 Bus voltages — AC only (DC formulation does not model voltages)

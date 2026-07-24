@@ -55,11 +55,11 @@ class TestReturnType:
 
     def test_variables_has_expected_keys(self):
         build = build_opf(case9(), formulation="lossy_dc")
-        assert set(build.variables.keys()) == {"p_flows", "p_gen"}
+        assert set(build.variables.keys()) == {"p_flows", "Pg"}
 
     def test_variables_does_not_have_ac_keys(self):
         build = build_opf(case9(), formulation="lossy_dc")
-        ac_keys = {"theta", "v", "P", "Q", "p", "q", "Pg", "Qg"}
+        ac_keys = {"theta", "v", "P", "Q", "p", "q", "Qg"}
         assert ac_keys.isdisjoint(set(build.variables.keys()))
 
     def test_data_has_expected_keys(self):
@@ -147,15 +147,16 @@ class TestFeasibility:
     @pytest.mark.parametrize("case_fn", [case9, case14])
     def test_flow_conservation_satisfied(self, case_fn):
         """
-        A @ p_flows + p_gen == Pd must hold at every bus.
+        A @ p_flows + Cg @ Pg == Pd must hold at every bus.
         All quantities in p.u.
         """
         build, _ = _solve(case_fn)
         A        = build.data["A"]
+        Cg       = build.data["Cg"]
         Pd       = build.data["Pd"]
-        p_gen    = build.variables["p_gen"].value
+        Pg       = build.variables["Pg"].value
         p_flows  = build.variables["p_flows"].value
-        residual = A @ p_flows + p_gen - Pd
+        residual = A @ p_flows + Cg @ Pg - Pd
         assert np.allclose(residual, 0.0, atol=FLOW_CONSERVATION_ATOL), \
             f"Flow conservation violated; max residual: {np.abs(residual).max():.2e}"
 

@@ -10,6 +10,8 @@ Solver: IPOPT (via cyipopt).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -17,32 +19,50 @@ import cvxpy as cp
 from cvxopf.network import (
     reindex_case_to_consecutive,
     make_ybus_matpower,
-    make_incidence_matrix,
     make_ybus_sparsity_mask,
 )
-from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.generator import (
+    DispatchableGenerator,
+    gen_from_matpower,
+    _prepare_data as generator_prepare_data,
+    _build_metadata as generator_build_metadata,
+    ac_injections as generator_ac_injections,
+    ac_operating_constraints as generator_ac_operating_constraints,
+    ac_network_constraints as generator_ac_network_constraints,
+    coupling_constraints as generator_coupling_constraints,
+    gen_cost_expr,
+)
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _validate_storage,
-    _make_storage_incidence_matrix,
-    _make_storage_soc_constraints,
+    _prepare_data as storage_prepare_data,
+    _build_metadata as storage_build_metadata,
+    ac_injections as storage_ac_injections,
+    ac_operating_constraints as storage_ac_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _validate_nondispatchable,
-    _make_nd_incidence_matrix,
-    _parse_nd_timeseries,
+    _prepare_data as nd_prepare_data,
+    _build_metadata as nd_build_metadata,
+    ac_injections as nd_ac_injections,
+    ac_operating_constraints as nd_ac_operating_constraints,
+    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
-    _validate_hvdc,
-    _make_hvdc_incidence_matrices,
+    _prepare_data as hvdc_prepare_data,
+    _build_metadata as hvdc_build_metadata,
     _hvdc_static_box,
-    hvdc_injections,
+    ac_injections as hvdc_ac_injections,
     ac_operating_constraints as hvdc_ac_operating_constraints,
+    coupling_constraints as hvdc_coupling_constraints,
     hvdc_cost_expr,
 )
+
+if TYPE_CHECKING:
+    from cvxopf.problem import OPFBuild
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
@@ -53,13 +73,6 @@ VMIN       = 12
 VMAX       = 11
 PD         = 2
 QD         = 3
-GEN_BUS    = 0
-GEN_STATUS = 7
-PMIN       = 9
-PMAX       = 8
-QMIN       = 4
-QMAX       = 3
-VG         = 5
 
 
 # ---------------------------------------------------------------------------
@@ -98,21 +111,27 @@ def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndar
     return Rp
 
 
-def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, hvdc: list[HVDCLink] | None = None) -> dict:
+def _parse_case(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    hvdc: list[HVDCLink] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
     Returns a flat dict consumed by the AC single-step and multistep builders.
     """
     validate_case(case)
+    if generators is None:
+        generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
-    gen     = case["gen"]
-    gencost = case["gencost"]
     nb      = bus.shape[0]
-    ng      = gen.shape[0]
-
     Ybus    = make_ybus_matpower(case)
     G       = np.real(Ybus)
     B       = np.imag(Ybus)
@@ -134,110 +153,49 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
     Pd = bus[:, PD].astype(float) / baseMVA
     Qd = bus[:, QD].astype(float) / baseMVA
 
-    status  = gen[:, GEN_STATUS].astype(int)
-    Pgmin   = gen[:, PMIN].astype(float) / baseMVA
-    Pgmax   = gen[:, PMAX].astype(float) / baseMVA
-    Qgmin   = gen[:, QMIN].astype(float) / baseMVA
-    Qgmax   = gen[:, QMAX].astype(float) / baseMVA
-
-    for k in range(ng):
-        if status[k] != 1:
-            Pgmin[k] = Pgmax[k] = Qgmin[k] = Qgmax[k] = 0.0
-
-    Cg      = make_incidence_matrix(case)
-    gen_bus = gen[:, GEN_BUS].astype(int)
-
     # Get external bus IDs for validation (needed for both storage and nondispatchable)
     if ext_to_int is not None:
         ext_bus_ids = set(ext_to_int.keys())
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+
+    generator_data = generator_prepare_data(
+        generators, baseMVA, nb, ext_to_int, ext_bus_ids
+    )
     
     # Parse storage if present
     storage_data = {}
-    if storage is not None:
-        _validate_storage(storage, ext_bus_ids)
-    
-    # Validate nondispatchable units
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-    
-    # Parse storage if present (continued)
-    if storage is not None:
-        # Create storage incidence matrix
-        Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
-        
-        # Extract storage parameters
-        storage_bus = np.array([
-            ext_to_int[u.bus] if ext_to_int else u.bus
-            for u in storage
-        ], dtype=int)
-        storage_apparent_power_rating = np.array([u.apparent_power_rating for u in storage])
-        storage_capacity = np.array([u.capacity for u in storage])
-        storage_initial_soc = np.array([u.initial_soc for u in storage])
-        storage_aging_weight = np.array([u.aging_weight for u in storage])
-        
-        storage_data = dict(
-            ns=len(storage),
-            Cs=Cs,
-            storage_bus=storage_bus,
-            storage_apparent_power_rating=storage_apparent_power_rating,
-            storage_capacity=storage_capacity,
-            storage_initial_soc=storage_initial_soc,
-            storage_delta=float(delta),
-            storage_aging_weight=storage_aging_weight,
+    if storage:
+        storage_data = storage_prepare_data(
+            storage, nb, ext_to_int, ext_bus_ids
         )
+        storage_data["storage_delta"] = float(delta)
 
     # Parse nondispatchable if present
     nd_data = {}
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        # Validate nondispatchable units
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-        
-        # Create nondispatchable incidence matrix
-        Cnd = _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int)
-        
-        # Extract nondispatchable parameters
-        nd_bus = np.array([
-            ext_to_int[u.bus] if ext_to_int else u.bus
-            for u in nondispatchable
-        ], dtype=int)
-        nd_apparent_power_rating = np.array([u.apparent_power_rating for u in nondispatchable])
-        nd_p_available = np.array([u.p_available for u in nondispatchable])
-        
-        nd_data = dict(
-            nnd=len(nondispatchable),
-            Cnd=Cnd,
-            nd_bus=nd_bus,
-            nd_apparent_power_rating=nd_apparent_power_rating,
-            nd_p_available=nd_p_available,
+    if nondispatchable:
+        nd_data = nd_prepare_data(
+            nondispatchable, nb, ext_to_int, ext_bus_ids
         )
 
     # Parse HVDC links if present
     hvdc_data = {}
-    if hvdc is not None and len(hvdc) > 0:
-        _validate_hvdc(hvdc, ext_bus_ids)
-        Ch_from, Ch_to = _make_hvdc_incidence_matrices(hvdc, nb, ext_to_int)
-        hvdc_data = dict(
-            n_hvdc=len(hvdc),
-            Ch_from=Ch_from,
-            Ch_to=Ch_to,
+    if hvdc:
+        hvdc_data = hvdc_prepare_data(
+            hvdc, nb, ext_to_int, ext_bus_ids
         )
 
     return dict(
         case=case, baseMVA=baseMVA,
-        bus=bus, gen=gen, gencost=gencost,
-        nb=nb, ng=ng,
+        bus=bus,
+        nb=nb,
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
         ref=ref, pv=pv, ext_to_int=ext_to_int,
         ext_bus_ids=ext_bus_ids,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
-        status=status, gen_bus=gen_bus,
-        Pgmin=Pgmin, Pgmax=Pgmax,
-        Qgmin=Qgmin, Qgmax=Qgmax,
-        Cg=Cg,
+        **generator_data,
         **storage_data,
         **nd_data,
         **hvdc_data,
@@ -247,7 +205,6 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
 def _make_step_variables(
     nb: int, ng: int,
     vmin_arr, vmax_arr,
-    Pgmin, Pgmax,
     Qgmin, Qgmax,
     E,
     suffix: str,
@@ -273,8 +230,8 @@ def _make_step_variables(
                         bounds=[vmin_arr[:, None], vmax_arr[:, None]])
     p     = cp.Variable(nb, name=name("p"))
     q     = cp.Variable(nb, name=name("q"))
-    Pg    = cp.Variable(ng, name=name("Pg"), bounds=[Pgmin, Pgmax])
-    Qg    = cp.Variable(ng, name=name("Qg"), bounds=[Qgmin, Qgmax])
+    Pg    = cp.Variable(ng, name=name("Pg"))
+    Qg    = cp.Variable(ng, name=name("Qg"))
 
     if sparse_pq:
         nnz   = len(E[0])
@@ -295,24 +252,24 @@ def _make_step_constraints(
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
     G, B, E, Z,
     rows, cols, G_vec, B_vec, Rp,
-    Cg, Pd, Qd, ref,
-    pv, status, gen_bus, gen,
+    generator_injection_p, generator_injection_q,
+    Pgmin, Pgmax, Qgmin, Qgmax, Pd, Qd, ref,
+    pv, generators, ext_to_int,
     enforce_vset: bool,
-    VG_col: int,
     sparse_pq: bool,
-    baseMVA: float,
     # Storage — all None when storage=None
     ns: int = 0,
-    Cs=None,
-    S_max=None,
-    storage_capacity=None,
+    storage_units=None,
+    storage_injection_p=None,
+    storage_injection_q=None,
     b_t=None,
     b_q_t=None,
     soc_t=None,
     # Nondispatchable — all None when nondispatchable=None
     nnd: int = 0,
-    Cnd=None,
-    nd_apparent_power_rating=None,
+    nd_units=None,
+    nd_injection_p=None,
+    nd_injection_q=None,
     nd_p_available_t=None,
     p_nd_t=None,
     q_nd_t=None,
@@ -341,7 +298,7 @@ def _make_step_constraints(
           — omitted when nnd==0
       4c. HVDC operating constraints (box bounds, loss-branch equality)
           — omitted when n_hvdc==0
-      5. Voltage setpoint pinning — omitted when enforce_vset=False
+      5. Generator-owned AC network constraints
 
     The caller must not append additional p== or q== constraints after
     this function returns.
@@ -411,14 +368,23 @@ def _make_step_constraints(
     # Exactly one p== and one q== constraint.
     # Storage and nondispatchable injection added here if present.
     # ------------------------------------------------------------------
-    storage_injection_p = (1.0 / baseMVA) * (Cs @ b_t) if ns > 0 else 0
-    storage_injection_q = (1.0 / baseMVA) * (Cs @ b_q_t) if ns > 0 else 0
-    nd_injection_p = (1.0 / baseMVA) * (Cnd @ p_nd_t) if nnd > 0 else 0
-    nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
+    storage_injection_p = storage_injection_p if ns > 0 else 0
+    storage_injection_q = storage_injection_q if ns > 0 else 0
+    nd_injection_p = nd_injection_p if nnd > 0 else 0
+    nd_injection_q = nd_injection_q if nnd > 0 else 0
     hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
 
-    constr.append(p == Cg @ Pg - Pd + storage_injection_p + nd_injection_p + hvdc_injection_p)
-    constr.append(q == Cg @ Qg - Qd + storage_injection_q + nd_injection_q)
+    constr.append(
+        p == generator_injection_p - Pd
+        + storage_injection_p + nd_injection_p + hvdc_injection_p
+    )
+    constr.append(
+        q == generator_injection_q - Qd
+        + storage_injection_q + nd_injection_q
+    )
+    constr += generator_ac_operating_constraints(
+        Pg, Qg, Pgmin, Pgmax, Qgmin, Qgmax
+    )
 
     # ------------------------------------------------------------------
     # Section 4: Storage operating constraints
@@ -426,12 +392,9 @@ def _make_step_constraints(
     # Omitted entirely when ns == 0.
     # ------------------------------------------------------------------
     if ns > 0:
-        for s in range(ns):
-            constr.append(
-                cp.sum_squares(cp.vstack([b_t[s], b_q_t[s]])) <= float(S_max[s]) ** 2
-            )
-        constr.append(soc_t >= 0.0)
-        constr.append(soc_t <= storage_capacity)
+        constr += storage_ac_operating_constraints(
+            storage_units, b_t, b_q_t, soc_t
+        )
 
     # ------------------------------------------------------------------
     # Section 4b: Nondispatchable operating constraints
@@ -439,14 +402,9 @@ def _make_step_constraints(
     # Omitted entirely when nnd == 0.
     # ------------------------------------------------------------------
     if nnd > 0:
-        for n in range(nnd):
-            # Upper bound: available real power (time-varying), engineering units (MW)
-            constr.append(p_nd_t[n] <= float(nd_p_available_t[n]))
-            # Apparent power circle, engineering units (MW² + MVAr² ≤ MVA²)
-            constr.append(
-                cp.sum_squares(cp.vstack([p_nd_t[n], q_nd_t[n]])) <= float(nd_apparent_power_rating[n]) ** 2
-            )
-        # Lower bound already encoded via nonneg=True on p_nd_t variable declaration
+        constr += nd_ac_operating_constraints(
+            nd_units, p_nd_t, q_nd_t, nd_p_available_t
+        )
 
     # ------------------------------------------------------------------
     # Section 4c: HVDC operating constraints
@@ -459,14 +417,15 @@ def _make_step_constraints(
         )
 
     # ------------------------------------------------------------------
-    # Section 5: Voltage setpoint pinning
-    # Omitted when enforce_vset=False.
+    # Section 5: Generator-owned AC network constraints.
     # ------------------------------------------------------------------
-    if enforce_vset:
-        for b in np.r_[np.array([ref]), pv]:
-            idx = np.where((gen_bus == int(b)) & (status == 1))[0]
-            if idx.size:
-                constr.append(v[int(b)] == float(gen[idx[0], VG_col]))
+    constr += generator_ac_network_constraints(
+        generators,
+        v,
+        ext_to_int,
+        np.r_[np.array([ref]), pv],
+        enforce_vset=enforce_vset,
+    )
 
     return constr
 
@@ -475,7 +434,16 @@ def _make_step_constraints(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, *, hvdc=None) -> "OPFBuild":
+def _build_ac_single(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    *,
+    hvdc=None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -485,13 +453,14 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
 
     # Create step variables
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
         d["nb"], d["ng"],
         d["vmin_arr"], d["vmax_arr"],
-        d["Pgmin"], d["Pgmax"],
         d["Qgmin"], d["Qgmax"],
         E=d["E"],
         suffix="",
@@ -501,20 +470,34 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
 
     # Create storage variables if present
     b_t = b_q_t = soc_t = None
-    if "ns" in d and d["ns"] > 0:
+    storage_inj_p = storage_inj_q = None
+    if "ns" in d:
         ns = d["ns"]
         # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
         b_t = cp.Variable(ns, name="b")
         b_q_t = cp.Variable(ns, name="b_q")
         soc_t = cp.Variable(ns, name="soc")
+        storage_inj_p, storage_inj_q, storage_scaling = storage_ac_injections(
+            storage, b_t, b_q_t, d["ext_to_int"], incidence=d["Cs"]
+        )
+        storage_scaling.value = 1.0 / d["baseMVA"]
 
     # Create nondispatchable variables if present
     p_nd_t = q_nd_t = None
-    if "nnd" in d and d["nnd"] > 0:
+    nd_inj_p = nd_inj_q = None
+    if "nnd" in d:
         nnd = d["nnd"]
         # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
-        p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
+        p_nd_t = cp.Variable(nnd, name="p_nd")
         q_nd_t = cp.Variable(nnd, name="q_nd")
+        nd_inj_p, nd_inj_q, nd_scaling = nd_ac_injections(
+            nondispatchable,
+            p_nd_t,
+            q_nd_t,
+            d["ext_to_int"],
+            incidence=d["Cnd"],
+        )
+        nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Create HVDC variables if present
     p_in = p_out = None
@@ -523,30 +506,49 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         n_hvdc = d["n_hvdc"]
         p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
         p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
-        hvdc_inj_expr, inv_bMVA = hvdc_injections(hvdc, p_in, p_out, d["ext_to_int"])
+        hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_ac_injections(
+            hvdc,
+            p_in,
+            p_out,
+            d["ext_to_int"],
+            incidence=(d["Ch_from"], d["Ch_to"]),
+        )
+        assert hvdc_q_inj is None
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
+
+    generator_inj_p, generator_inj_q, generator_scaling = (
+        generator_ac_injections(
+            d["generators"],
+            Pg,
+            Qg,
+            d["ext_to_int"],
+            incidence=d["Cg"],
+        )
+    )
+    assert generator_scaling is None
 
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-        d["Cg"], d["Pd"], d["Qd"], d["ref"],
-        d["pv"], d["status"], d["gen_bus"], d["gen"],
+        generator_inj_p, generator_inj_q,
+        d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
+        d["Pd"], d["Qd"], d["ref"],
+        d["pv"], d["generators"], d["ext_to_int"],
         enforce_vset=options.enforce_vset,
-        VG_col=VG,
         sparse_pq=options.sparse_pq,
-        baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
-        Cs=d.get("Cs"),
-        S_max=d.get("storage_apparent_power_rating"),
-        storage_capacity=d.get("storage_capacity"),
+        storage_units=storage,
+        storage_injection_p=storage_inj_p,
+        storage_injection_q=storage_inj_q,
         b_t=b_t,
         b_q_t=b_q_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
-        Cnd=d.get("Cnd"),
-        nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+        nd_units=nondispatchable,
+        nd_injection_p=nd_inj_p,
+        nd_injection_q=nd_inj_q,
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
         q_nd_t=q_nd_t,
@@ -561,22 +563,20 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
     )
 
     # Build cost: generation cost plus storage aging cost plus HVDC cost
-    gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg)
-    if "ns" in d and d["ns"] > 0:
-        # L1 aging penalty on real power cycling
-        storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+    gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
+    storage_cost = None
+    if "ns" in d:
+        storage_cost = storage_cost_expr(storage, b_t)
         total_cost = gen_cost + storage_cost
     else:
         total_cost = gen_cost
     if "n_hvdc" in d:
-        for k in range(d["n_hvdc"]):
-            total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in[k])
+        total_cost = total_cost + hvdc_cost_expr(hvdc, p_in)
     
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            [b_t], [soc_t],
-            d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+    if "ns" in d:
+        storage_coupling = storage_coupling_constraints(
+            storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(storage_coupling)
     
@@ -591,13 +591,13 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
                          p=p, q=q, Pg=Pg, Qg=Qg)
     
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_t
         variables["b_q"] = b_q_t
         variables["soc"] = soc_t
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_t
         variables["q_nd"] = q_nd_t
 
@@ -608,50 +608,36 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
 
     # Build data dict
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
+        baseMVA=d["baseMVA"], nb=d["nb"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
         Ybus=d["Ybus"], G=d["G"], B=d["B"], E=d["E"], Z=d["Z"],
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
-        Pd=d["Pd"], Qd=d["Qd"], Cg=d["Cg"],
-        Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
-        Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
+        Pd=d["Pd"], Qd=d["Qd"],
     )
+    data.update(generator_build_metadata(d, reactive=True))
 
     # Add storage data if present
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-            nd_p_available=d["nd_p_available"],
-        )
+        data.update(nd_build_metadata(d))
+        data["nd_p_available"] = d["nd_p_available"]
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(
-            n_hvdc=d["n_hvdc"],
-            Ch_from=d["Ch_from"],
-            Ch_to=d["Ch_to"],
-        )
+        data.update(hvdc_build_metadata(d))
+
+    expressions = {"p_net": p, "q_net": q}
+    if storage_cost is not None:
+        expressions["storage_cost"] = storage_cost
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
+        expressions=expressions,
     )
 
 
@@ -670,6 +656,7 @@ def _build_ac_multistep(
     hvdc=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -680,13 +667,14 @@ def _build_ac_multistep(
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
     
-    # Parse nondispatchable timeseries if present
-    if "nnd" in d and df_nd is not None:
-        nd_available = _parse_nd_timeseries(df_nd, T, d["ext_bus_ids"], d["ext_to_int"])
-        d["nd_available"] = nd_available
+    # The public builder guarantees a normalized ND time series when ND is active.
+    if "nnd" in d:
+        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -701,6 +689,7 @@ def _build_ac_multistep(
     p_hvdc_in_list, p_hvdc_out_list          = [], []
     all_constr  = []
     total_cost  = 0
+    storage_cost = 0
 
     for t in range(T):
         # Create step variables
@@ -708,7 +697,6 @@ def _build_ac_multistep(
             _make_step_variables(
                 d["nb"], d["ng"],
                 d["vmin_arr"], d["vmax_arr"],
-                d["Pgmin"], d["Pgmax"],
                 d["Qgmin"], d["Qgmax"],
                 E=d["E"],
                 suffix=f"_{t}",
@@ -718,18 +706,40 @@ def _build_ac_multistep(
 
         # Create storage variables if present
         b_t = b_q_t = soc_t = None
-        if "ns" in d and d["ns"] > 0:
+        storage_inj_p_t = storage_inj_q_t = None
+        if "ns" in d:
             ns = d["ns"]
             b_t = cp.Variable(ns, name=f"b_{t}")
             b_q_t = cp.Variable(ns, name=f"b_q_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
+            (
+                storage_inj_p_t,
+                storage_inj_q_t,
+                storage_scaling_t,
+            ) = storage_ac_injections(
+                storage,
+                b_t,
+                b_q_t,
+                d["ext_to_int"],
+                incidence=d["Cs"],
+            )
+            storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create nondispatchable variables if present
         p_nd_t = q_nd_t = None
-        if "nnd" in d and d["nnd"] > 0:
+        nd_inj_p_t = nd_inj_q_t = None
+        if "nnd" in d:
             nnd = d["nnd"]
-            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
+            nd_inj_p_t, nd_inj_q_t, nd_scaling_t = nd_ac_injections(
+                nondispatchable,
+                p_nd_t,
+                q_nd_t,
+                d["ext_to_int"],
+                incidence=d["Cnd"],
+            )
+            nd_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create HVDC variables if present
         p_in_t = p_out_t = None
@@ -739,34 +749,56 @@ def _build_ac_multistep(
             n_hvdc = d["n_hvdc"]
             p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
             p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
-            hvdc_inj_expr_t, inv_bMVA_t = hvdc_injections(hvdc, p_in_t, p_out_t, d["ext_to_int"])
+            hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_ac_injections(
+                hvdc,
+                p_in_t,
+                p_out_t,
+                d["ext_to_int"],
+                incidence=(d["Ch_from"], d["Ch_to"]),
+            )
+            assert hvdc_q_inj_t is None
             inv_bMVA_t.value = 1.0 / d["baseMVA"]
             p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
             p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
 
         # Get available power for this time step
-        nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
+        if "nnd" in d:
+            nd_p_available_t = d["nd_available"][t, :]
+        else:
+            nd_p_available_t = None
+
+        generator_inj_p_t, generator_inj_q_t, generator_scaling_t = (
+            generator_ac_injections(
+                d["generators"],
+                Pg_t,
+                Qg_t,
+                d["ext_to_int"],
+                incidence=d["Cg"],
+            )
+        )
+        assert generator_scaling_t is None
 
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-            d["Cg"], Pd_series[t], Qd_series[t], d["ref"],
-            d["pv"], d["status"], d["gen_bus"], d["gen"],
+            generator_inj_p_t, generator_inj_q_t,
+            d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
+            Pd_series[t], Qd_series[t], d["ref"],
+            d["pv"], d["generators"], d["ext_to_int"],
             enforce_vset=options.enforce_vset,
-            VG_col=VG,
             sparse_pq=options.sparse_pq,
-            baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
-            Cs=d.get("Cs"),
-            S_max=d.get("storage_apparent_power_rating"),
-            storage_capacity=d.get("storage_capacity"),
+            storage_units=storage,
+            storage_injection_p=storage_inj_p_t,
+            storage_injection_q=storage_inj_q_t,
             b_t=b_t,
             b_q_t=b_q_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
-            Cnd=d.get("Cnd"),
-            nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+            nd_units=nondispatchable,
+            nd_injection_p=nd_inj_p_t,
+            nd_injection_q=nd_inj_q_t,
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
             q_nd_t=q_nd_t,
@@ -783,11 +815,10 @@ def _build_ac_multistep(
         all_constr.extend(step_constr)
 
         # Add generation cost and HVDC cost (inside loop, per-step)
-        gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
+        gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
         total_cost = total_cost + gen_cost
         if "n_hvdc" in d:
-            for k in range(d["n_hvdc"]):
-                total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in_t[k])
+            total_cost = total_cost + hvdc_cost_expr(hvdc, p_in_t)
 
         theta_list.append(theta_t)
         v_list.append(v_t)
@@ -799,13 +830,13 @@ def _build_ac_multistep(
         Qg_list.append(Qg_t)
         
         # Add storage variables to lists
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             b_list.append(b_t)
             b_q_list.append(b_q_t)
             soc_list.append(soc_t)
 
         # Add nondispatchable variables to lists
-        if "nnd" in d and d["nnd"] > 0:
+        if "nnd" in d:
             p_nd_list.append(p_nd_t)
             q_nd_list.append(q_nd_t)
 
@@ -815,19 +846,35 @@ def _build_ac_multistep(
             p_hvdc_out_list.append(p_out_t)
 
     # Add storage aging cost if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         for t in range(T):
-            # L1 aging penalty on real power cycling
-            storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_list[t])))
-            total_cost = total_cost + storage_cost
+            step_storage_cost = storage_cost_expr(storage, b_list[t])
+            storage_cost = storage_cost + step_storage_cost
+            total_cost = total_cost + step_storage_cost
 
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            b_list, soc_list,
-            d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+    if "ns" in d:
+        storage_coupling = storage_coupling_constraints(
+            storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
+    all_constr.extend(
+        generator_coupling_constraints(
+            d["generators"], Pg_list, Qg_list, delta=delta
+        )
+    )
+    if "nnd" in d:
+        all_constr.extend(
+            nd_coupling_constraints(
+                nondispatchable, p_nd_list, q_nd_list, delta=delta
+            )
+        )
+    if "n_hvdc" in d:
+        all_constr.extend(
+            hvdc_coupling_constraints(
+                hvdc, p_hvdc_in_list, p_hvdc_out_list, delta=delta
+            )
+        )
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -847,13 +894,13 @@ def _build_ac_multistep(
         )
     
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_list
         variables["b_q"] = b_q_list
         variables["soc"] = soc_list
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_list
         variables["q_nd"] = q_nd_list
 
@@ -864,51 +911,36 @@ def _build_ac_multistep(
 
     # Build data dict
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"],
+        baseMVA=d["baseMVA"], nb=d["nb"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
         Ybus=d["Ybus"], G=d["G"], B=d["B"], E=d["E"], Z=d["Z"],
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
-        Cg=d["Cg"],
-        Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
-        Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
         T=T,
         Pd_series=Pd_series,
         Qd_series=Qd_series,
     )
+    data.update(generator_build_metadata(d, reactive=True))
     
     # Add storage data if present
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-            nd_available=d.get("nd_available"),  # Only present in multistep
-        )
+        data.update(nd_build_metadata(d))
+        data["nd_available"] = d["nd_available"]
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(
-            n_hvdc=d["n_hvdc"],
-            Ch_from=d["Ch_from"],
-            Ch_to=d["Ch_to"],
-        )
+        data.update(hvdc_build_metadata(d))
+
+    expressions = {"p_net": p_list, "q_net": q_list}
+    if "ns" in d:
+        expressions["storage_cost"] = storage_cost
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
+        expressions=expressions,
     )

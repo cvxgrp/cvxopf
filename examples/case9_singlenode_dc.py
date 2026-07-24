@@ -18,6 +18,7 @@ from cvxopf.testcases import case9, make_singlenode_case
 from cvxopf.problem import build_opf, build_opf_multistep, StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 
 
 # ---------------------------------------------------------------------------
@@ -36,15 +37,24 @@ print(f"[case9 single-step] status={r['status']}, objective={r['objective']:.2f}
 case = make_singlenode_case(
     P_load_MW=250.0,
     generators=[
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},
-        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
     ],
 )
 storage = StorageUnitIdeal(
     bus=1, apparent_power_rating=50.0, capacity=100.0,
     initial_soc=50.0, aging_weight=1e-2,
 )
-nd_unit = NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)
+nd_unit = NondispatchableUnit(
+    bus=1,
+    p_available=80.0,
+    apparent_power_rating=100.0,
+    device_id="solar",
+)
 
 build = build_opf(case, formulation="singlenode_dc",
                   storage=[storage], nondispatchable=[nd_unit])
@@ -69,7 +79,7 @@ df_Q = pd.DataFrame(np.zeros((T, 1)))
 
 # Nondispatchable availability: daytime solar profile
 solar = np.clip(80.0 * np.sin(np.linspace(0, np.pi, T)), 0, None)
-df_nd = pd.DataFrame({1: solar})
+df_nd = pd.DataFrame({"solar": solar})
 
 build = build_opf_multistep(
     case, df_P, df_Q, T=T,
