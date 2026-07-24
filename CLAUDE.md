@@ -381,17 +381,15 @@ dc_problem.py →  network.py, data.py
 singlenode_dc_problem.py → generator.py (collapsed incidence, bounds, cost)
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 results.py    →  problem.py             (OPFBuild type only, unchanged)
-storage.py    →  numpy only             (no other cvxopf imports)
+storage.py    →  cvxpy, numpy           (no other cvxopf imports)
 nondispatchable.py → numpy only         (no other cvxopf imports)
 ```
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
 
-The `storage.py → numpy only` / `nondispatchable.py → numpy only` lines above
-describe the **current** code and are left as-is until the Milestone 16
-component refactor lands (which will give those modules a `cvxpy` import); M16
-is the aspirational forward pattern, not a description of today's modules. See
-`plans/milestone-16-unify-components.md`.
+`storage.py` now follows the M16 component pattern. The
+`nondispatchable.py → numpy only` line remains current until the next M16
+component slice. See `plans/milestone-16-unify-components.md`.
 
 ---
 

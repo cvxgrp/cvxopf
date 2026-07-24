@@ -57,7 +57,11 @@ from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
     _make_storage_incidence_matrix,
-    _make_storage_soc_constraints,
+    _storage_static_data,
+    dc_injections as storage_dc_injections,
+    dc_operating_constraints as storage_dc_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -163,20 +167,12 @@ def _parse_dc_case(
             ext_to_int[u.bus] if ext_to_int is not None else u.bus
             for u in storage
         ], dtype=int)
-        storage_apparent_power_rating = np.array([u.apparent_power_rating for u in storage])
-        storage_capacity = np.array([u.capacity for u in storage])
-        storage_initial_soc = np.array([u.initial_soc for u in storage])
-        storage_aging_weight = np.array([u.aging_weight for u in storage])
-
         storage_data = dict(
             ns=len(storage),
             Cs=Cs,
             storage_bus=storage_bus,
-            storage_apparent_power_rating=storage_apparent_power_rating,
-            storage_capacity=storage_capacity,
-            storage_initial_soc=storage_initial_soc,
             storage_delta=float(delta),
-            storage_aging_weight=storage_aging_weight,
+            **_storage_static_data(storage),
         )
 
     # Parse nondispatchable if present
@@ -238,9 +234,8 @@ def _make_dc_step_constraints(
     A, Pd, f_max, Pgmin, Pgmax,
     baseMVA: float,
     ns: int = 0,
-    Cs=None,
-    S_max=None,
-    storage_capacity=None,
+    storage_units=None,
+    storage_injection=None,
     b_t=None,
     soc_t=None,
     nnd: int = 0,
@@ -258,7 +253,7 @@ def _make_dc_step_constraints(
 ) -> list:
     """Build the list of CVXPY constraints for one DC time step."""
     # Section 1: Nodal real power balance
-    storage_term = cp.multiply((1.0 / baseMVA), Cs @ b_t) if ns > 0 else 0
+    storage_term = storage_injection if ns > 0 else 0
     nd_term = cp.multiply((1.0 / baseMVA), Cnd @ p_nd_t) if nnd > 0 else 0
     hvdc_term = hvdc_injection_expr if n_hvdc > 0 else 0
     constr = [
@@ -274,7 +269,7 @@ def _make_dc_step_constraints(
 
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
-        constr += [b_t >= -S_max, b_t <= S_max]
+        constr += storage_dc_operating_constraints(storage_units, b_t, soc_t)
 
     # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
@@ -286,10 +281,6 @@ def _make_dc_step_constraints(
         constr += hvdc_dc_operating_constraints(
             links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
         )
-
-    # Section 6: Storage SoC bounds (omitted when ns == 0)
-    if ns > 0:
-        constr += [soc_t >= 0.0, soc_t <= storage_capacity]
 
     return constr
 
@@ -340,10 +331,16 @@ def _build_lossy_dc_single(
 
     # Create storage variables if present
     b_t = soc_t = None
+    storage_inj = None
     if "ns" in d and d["ns"] > 0:
         ns = d["ns"]
         b_t = cp.Variable(ns, name="b")
         soc_t = cp.Variable(ns, name="soc")
+        storage_inj, storage_q_inj, storage_scaling = storage_dc_injections(
+            storage, b_t, d["ext_to_int"]
+        )
+        assert storage_q_inj is None
+        storage_scaling.value = 1.0 / d["baseMVA"]
 
     # Create nondispatchable variables if present
     p_nd_t = None
@@ -373,9 +370,8 @@ def _build_lossy_dc_single(
         d["Pgmin"], d["Pgmax"],
         baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
-        Cs=d.get("Cs"),
-        S_max=d.get("storage_apparent_power_rating"),
-        storage_capacity=d.get("storage_capacity"),
+        storage_units=storage,
+        storage_injection=storage_inj,
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
@@ -399,7 +395,7 @@ def _build_lossy_dc_single(
 
     # Add storage aging cost if present
     if "ns" in d and d["ns"] > 0:
-        cost = cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+        cost = cost + storage_cost_expr(storage, b_t)
 
     # Add HVDC cost if present
     if "n_hvdc" in d and d["n_hvdc"] > 0:
@@ -408,9 +404,8 @@ def _build_lossy_dc_single(
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            [b_t], [soc_t],
-            d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        storage_coupling = storage_coupling_constraints(
+            storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(storage_coupling)
 
@@ -554,10 +549,18 @@ def _build_lossy_dc_multistep(
 
         # Create storage variables if present
         b_t = soc_t = None
+        storage_inj_t = None
         if "ns" in d and d["ns"] > 0:
             ns = d["ns"]
             b_t = cp.Variable(ns, name=f"b_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
+            (
+                storage_inj_t,
+                storage_q_inj_t,
+                storage_scaling_t,
+            ) = storage_dc_injections(storage, b_t, d["ext_to_int"])
+            assert storage_q_inj_t is None
+            storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create nondispatchable variables if present
         p_nd_t = None
@@ -592,9 +595,8 @@ def _build_lossy_dc_multistep(
             d["Pgmin"], d["Pgmax"],
             baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
-            Cs=d.get("Cs"),
-            S_max=d.get("storage_apparent_power_rating"),
-            storage_capacity=d.get("storage_capacity"),
+            storage_units=storage,
+            storage_injection=storage_inj_t,
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
@@ -617,7 +619,7 @@ def _build_lossy_dc_multistep(
 
         # Add storage aging cost if present
         if "ns" in d and d["ns"] > 0:
-            step_cost = step_cost + cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
+            step_cost = step_cost + storage_cost_expr(storage, b_t)
 
         # Add HVDC cost if present
         if "n_hvdc" in d and d["n_hvdc"] > 0:
@@ -645,9 +647,8 @@ def _build_lossy_dc_multistep(
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            b_list, soc_list,
-            d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        storage_coupling = storage_coupling_constraints(
+            storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
 

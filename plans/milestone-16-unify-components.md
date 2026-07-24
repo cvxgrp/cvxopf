@@ -42,10 +42,16 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
 3. **`_make_*_incidence_matrix(...)`** — `(nb, n)` bus-mapping matrix.
 4. **Static vectorizer(s)** — pull dataclass fields into `(n,)` numpy arrays
    (e.g. `_hvdc_static_box`), and any timeseries parser (`_parse_nd_timeseries`).
-5. **`injections(units, vars..., ext_to_int)`** — returns
-   `(injection_expr, inv_baseMVA)` where `injection_expr` is the scaled
-   nodal-balance addend and `inv_baseMVA` is an **unbound `cp.Parameter`** the
-   constructor binds before solving. Never instantiates `cp.Variable`.
+5. **`ac_injections(...)` / `dc_injections(...)`** — network-specific
+   injection builders with fixed return arity:
+   `(p_injection, q_injection_or_None, scaling_or_None)`.
+   The AC-network method returns coordinated real/reactive nodal addends; the
+   DC-network method returns the real addend and `q_injection=None`. This
+   distinction is by network channels, not convexity: a future SOCP AC-network
+   formulation uses `ac_injections`. Engineering-unit devices return an
+   **unbound nonnegative `inv_baseMVA` `cp.Parameter`** as `scaling`; per-unit
+   devices return `None`. Absence of a reactive channel is represented by
+   `None`, never scalar zero. Neither method instantiates `cp.Variable`.
 6. **`ac_operating_constraints(...)` / `dc_operating_constraints(...)`** — the
    per-step feasible region, forked by formulation. Pass-through delegation
    where the two coincide (HVDC does this; the fork exists so the interface
@@ -131,6 +137,12 @@ reactive terms: HVDC is unity-PF (real only); ND has `q_nd` in AC only.
 - **Balance composition.** Section 3 sums per-component injection addends into
   the single `p ==`/`q ==`; generator's injection builder returns `Cg @ Pg`.
   Preserves the "exactly one `p ==`" contract. ✅ confirmed.
+- **Paired network-specific injection builders.** Every component exposes
+  `ac_injections` and `dc_injections`, each returning
+  `(p_expr, q_expr_or_None, scaling_or_None)`. Real and reactive mappings stay
+  coordinated inside one call; the explicit network fork matches the
+  operating-constraint API and supports future reactive HVDC controls.
+  ✅ confirmed.
 - **Generator cost boundary.** New `src/cvxopf/generator.py` owns the
   builder-facing generator cost interface, but imports and delegates to
   `poly_cost_expr` in `cost.py`. `cost.py` remains the single authoritative

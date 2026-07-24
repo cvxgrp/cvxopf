@@ -13,6 +13,14 @@ from cvxopf.problem import (
     StorageUnitIdeal,
 )
 from cvxopf.results import extract_results
+from cvxopf.storage import (
+    ac_injections as storage_ac_injections,
+    dc_injections as storage_dc_injections,
+    ac_operating_constraints as storage_ac_operating_constraints,
+    dc_operating_constraints as storage_dc_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
+)
 
 # ---------------------------------------------------------------------------
 # Tolerances (use these exact values throughout)
@@ -98,6 +106,60 @@ def _solve_dc_multistep(T, df_P, df_Q, storage=None, delta=1.0,
         )
     build.solve()
     return build, extract_results(build)
+
+
+class TestStorageComponentInterface:
+    def test_ac_and_dc_injections_have_fixed_arity(self):
+        units = [_default_unit(bus=4)]
+        b = cp.Variable(1)
+        b_q = cp.Variable(1)
+
+        p_ac, q_ac, scale_ac = storage_ac_injections(
+            units, b, b_q, {4: 0}, nb=1
+        )
+        p_dc, q_dc, scale_dc = storage_dc_injections(
+            units, b, {4: 0}, nb=1
+        )
+
+        assert p_ac.shape == (1,)
+        assert q_ac.shape == (1,)
+        assert p_dc.shape == (1,)
+        assert q_dc is None
+        assert scale_ac.value is None
+        assert scale_dc.value is None
+        assert scale_ac.attributes["nonneg"]
+        assert scale_dc.attributes["nonneg"]
+
+    def test_operating_constraints_and_cost_are_dcp(self):
+        units = [_default_unit(aging_weight=0.5)]
+        b = cp.Variable(1)
+        b_q = cp.Variable(1)
+        soc = cp.Variable(1)
+
+        ac_constraints = storage_ac_operating_constraints(
+            units, b, b_q, soc
+        )
+        dc_constraints = storage_dc_operating_constraints(units, b, soc)
+        cost = storage_cost_expr(units, b)
+
+        assert all(constraint.is_dcp() for constraint in ac_constraints)
+        assert all(constraint.is_dcp() for constraint in dc_constraints)
+        assert cost.is_dcp()
+
+    def test_coupling_constraints_recover_soc_trajectory(self):
+        units = [_default_unit(initial_soc=50.0)]
+        b = [cp.Variable(1), cp.Variable(1)]
+        soc = [cp.Variable(1), cp.Variable(1)]
+        constraints = storage_coupling_constraints(
+            units, b, soc, delta=0.5
+        )
+        constraints += [b[0] == [10.0], b[1] == [-4.0]]
+
+        cp.Problem(cp.Minimize(0), constraints).solve()
+
+        assert len(constraints) == 4
+        assert soc[0].value[0] == pytest.approx(45.0)
+        assert soc[1].value[0] == pytest.approx(47.0)
 
 
 # ---------------------------------------------------------------------------

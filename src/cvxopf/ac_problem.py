@@ -35,7 +35,11 @@ from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
     _make_storage_incidence_matrix,
-    _make_storage_soc_constraints,
+    _storage_static_data,
+    ac_injections as storage_ac_injections,
+    ac_operating_constraints as storage_ac_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -177,20 +181,12 @@ def _parse_case(
             ext_to_int[u.bus] if ext_to_int else u.bus
             for u in storage
         ], dtype=int)
-        storage_apparent_power_rating = np.array([u.apparent_power_rating for u in storage])
-        storage_capacity = np.array([u.capacity for u in storage])
-        storage_initial_soc = np.array([u.initial_soc for u in storage])
-        storage_aging_weight = np.array([u.aging_weight for u in storage])
-        
         storage_data = dict(
             ns=len(storage),
             Cs=Cs,
             storage_bus=storage_bus,
-            storage_apparent_power_rating=storage_apparent_power_rating,
-            storage_capacity=storage_capacity,
-            storage_initial_soc=storage_initial_soc,
             storage_delta=float(delta),
-            storage_aging_weight=storage_aging_weight,
+            **_storage_static_data(storage),
         )
 
     # Parse nondispatchable if present
@@ -306,9 +302,9 @@ def _make_step_constraints(
     baseMVA: float,
     # Storage — all None when storage=None
     ns: int = 0,
-    Cs=None,
-    S_max=None,
-    storage_capacity=None,
+    storage_units=None,
+    storage_injection_p=None,
+    storage_injection_q=None,
     b_t=None,
     b_q_t=None,
     soc_t=None,
@@ -414,8 +410,8 @@ def _make_step_constraints(
     # Exactly one p== and one q== constraint.
     # Storage and nondispatchable injection added here if present.
     # ------------------------------------------------------------------
-    storage_injection_p = (1.0 / baseMVA) * (Cs @ b_t) if ns > 0 else 0
-    storage_injection_q = (1.0 / baseMVA) * (Cs @ b_q_t) if ns > 0 else 0
+    storage_injection_p = storage_injection_p if ns > 0 else 0
+    storage_injection_q = storage_injection_q if ns > 0 else 0
     nd_injection_p = (1.0 / baseMVA) * (Cnd @ p_nd_t) if nnd > 0 else 0
     nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
     hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
@@ -433,12 +429,9 @@ def _make_step_constraints(
     # Omitted entirely when ns == 0.
     # ------------------------------------------------------------------
     if ns > 0:
-        for s in range(ns):
-            constr.append(
-                cp.sum_squares(cp.vstack([b_t[s], b_q_t[s]])) <= float(S_max[s]) ** 2
-            )
-        constr.append(soc_t >= 0.0)
-        constr.append(soc_t <= storage_capacity)
+        constr += storage_ac_operating_constraints(
+            storage_units, b_t, b_q_t, soc_t
+        )
 
     # ------------------------------------------------------------------
     # Section 4b: Nondispatchable operating constraints
@@ -518,12 +511,17 @@ def _build_ac_single(
 
     # Create storage variables if present
     b_t = b_q_t = soc_t = None
+    storage_inj_p = storage_inj_q = None
     if "ns" in d and d["ns"] > 0:
         ns = d["ns"]
         # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
         b_t = cp.Variable(ns, name="b")
         b_q_t = cp.Variable(ns, name="b_q")
         soc_t = cp.Variable(ns, name="soc")
+        storage_inj_p, storage_inj_q, storage_scaling = storage_ac_injections(
+            storage, b_t, b_q_t, d["ext_to_int"]
+        )
+        storage_scaling.value = 1.0 / d["baseMVA"]
 
     # Create nondispatchable variables if present
     p_nd_t = q_nd_t = None
@@ -560,9 +558,9 @@ def _build_ac_single(
         sparse_pq=options.sparse_pq,
         baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
-        Cs=d.get("Cs"),
-        S_max=d.get("storage_apparent_power_rating"),
-        storage_capacity=d.get("storage_capacity"),
+        storage_units=storage,
+        storage_injection_p=storage_inj_p,
+        storage_injection_q=storage_inj_q,
         b_t=b_t,
         b_q_t=b_q_t,
         soc_t=soc_t,
@@ -585,9 +583,7 @@ def _build_ac_single(
     # Build cost: generation cost plus storage aging cost plus HVDC cost
     gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
     if "ns" in d and d["ns"] > 0:
-        # L1 aging penalty on real power cycling
-        storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
-        total_cost = gen_cost + storage_cost
+        total_cost = gen_cost + storage_cost_expr(storage, b_t)
     else:
         total_cost = gen_cost
     if "n_hvdc" in d:
@@ -596,9 +592,8 @@ def _build_ac_single(
     
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            [b_t], [soc_t],
-            d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        storage_coupling = storage_coupling_constraints(
+            storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(storage_coupling)
     
@@ -743,11 +738,20 @@ def _build_ac_multistep(
 
         # Create storage variables if present
         b_t = b_q_t = soc_t = None
+        storage_inj_p_t = storage_inj_q_t = None
         if "ns" in d and d["ns"] > 0:
             ns = d["ns"]
             b_t = cp.Variable(ns, name=f"b_{t}")
             b_q_t = cp.Variable(ns, name=f"b_q_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
+            (
+                storage_inj_p_t,
+                storage_inj_q_t,
+                storage_scaling_t,
+            ) = storage_ac_injections(
+                storage, b_t, b_q_t, d["ext_to_int"]
+            )
+            storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create nondispatchable variables if present
         p_nd_t = q_nd_t = None
@@ -788,9 +792,9 @@ def _build_ac_multistep(
             sparse_pq=options.sparse_pq,
             baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
-            Cs=d.get("Cs"),
-            S_max=d.get("storage_apparent_power_rating"),
-            storage_capacity=d.get("storage_capacity"),
+            storage_units=storage,
+            storage_injection_p=storage_inj_p_t,
+            storage_injection_q=storage_inj_q_t,
             b_t=b_t,
             b_q_t=b_q_t,
             soc_t=soc_t,
@@ -847,15 +851,12 @@ def _build_ac_multistep(
     # Add storage aging cost if present
     if "ns" in d and d["ns"] > 0:
         for t in range(T):
-            # L1 aging penalty on real power cycling
-            storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_list[t])))
-            total_cost = total_cost + storage_cost
+            total_cost = total_cost + storage_cost_expr(storage, b_list[t])
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
-        storage_coupling = _make_storage_soc_constraints(
-            b_list, soc_list,
-            d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        storage_coupling = storage_coupling_constraints(
+            storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
 

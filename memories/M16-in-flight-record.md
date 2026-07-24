@@ -37,6 +37,11 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
 8. Singlenode collapses into the `dc_*` path via a `ones` incidence (favour
    reuse unless very inefficient).
 9. Add per-object DCP conformance tests (also SOCP groundwork).
+10. Injection API is network-specific and fixed-arity:
+    `ac_injections` / `dc_injections` return
+    `(p_expr, q_expr_or_None, scaling_or_None)`. Future SOCP uses the AC-network
+    method; future reactive HVDC remains representable without splitting real
+    and reactive incidence/sign logic across functions.
 
 ## Constraint taxonomy (five categories — keep structurally distinct)
 
@@ -82,8 +87,15 @@ Explicit lists may accompany network-only cases without `gen`/`gencost`; a
 temporary case copy feeds the existing validator and reindexer. Full suite on
 2026-07-24: 846 passed, 29 expected project warnings.
 
-**Next:** review and commit the generator integration slice, then begin the
-storage component refactor.
+**Current storage slice (staged locally):** `storage.py` now owns static data
+vectorization, paired AC/DC injections, operating constraints (including SoC
+bounds), cross-step SoC coupling, and L1 cycling cost. AC, lossy DC, and
+single-node builders compose these methods; single-node uses collapsed
+incidence. Component-level DCP, fixed-arity injection, and trajectory tests
+are added.
+
+**Next:** full-suite review and commit the storage slice, then begin
+nondispatchable generation.
 
 **Cost-boundary review 2026-07-24:** `cost.py` already implements and tests
 both `MODEL=2` polynomial and `MODEL=1` piecewise-linear costs, including the

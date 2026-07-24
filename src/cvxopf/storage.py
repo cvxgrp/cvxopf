@@ -11,20 +11,19 @@ Storage devices are bus-connected inverters with:
 - L1 aging penalty on real power cycling in the objective
 
 Import chain:
-  storage.py  →  (no cvxopf imports)
+  storage.py  →  cvxpy, numpy, stdlib (no cvxopf imports)
   problem.py  →  storage.py   (imports StorageUnitIdeal, re-exports for public API)
   ac_problem.py → storage.py  (imports StorageUnitIdeal, _validate_storage,
                               _make_storage_incidence_matrix)
   dc_problem.py → storage.py  (imports StorageUnitIdeal, _validate_storage,
                               _make_storage_incidence_matrix)
 
-No circularity. storage.py imports only numpy and standard library.
+No circularity.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import warnings
 
 import numpy as np
 import cvxpy as cp
@@ -196,49 +195,117 @@ def _make_storage_incidence_matrix(
     return Cs
 
 
-# ---------------------------------------------------------------------------
-# SoC dynamics constraint generation
-# ---------------------------------------------------------------------------
+def _storage_static_data(storage_units: list) -> dict:
+    """Vectorize static storage fields into numpy arrays."""
+    return {
+        "storage_apparent_power_rating": np.array(
+            [unit.apparent_power_rating for unit in storage_units], dtype=float
+        ),
+        "storage_capacity": np.array(
+            [unit.capacity for unit in storage_units], dtype=float
+        ),
+        "storage_initial_soc": np.array(
+            [unit.initial_soc for unit in storage_units], dtype=float
+        ),
+        "storage_aging_weight": np.array(
+            [unit.aging_weight for unit in storage_units], dtype=float
+        ),
+    }
 
-def _make_storage_soc_constraints(
+
+def ac_injections(
+    storage_units: list,
+    b: cp.Variable,
+    b_q: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+) -> tuple:
+    """Return coordinated real/reactive storage injections for an AC network."""
+    if nb is None:
+        nb = len(ext_to_int)
+    Cs = _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+    inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
+    return (
+        cp.multiply(inv_baseMVA, Cs @ b),
+        cp.multiply(inv_baseMVA, Cs @ b_q),
+        inv_baseMVA,
+    )
+
+
+def dc_injections(
+    storage_units: list,
+    b: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+) -> tuple:
+    """Return real storage injection and no reactive channel for a DC network."""
+    if nb is None:
+        nb = len(ext_to_int)
+    Cs = _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+    inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
+    return cp.multiply(inv_baseMVA, Cs @ b), None, inv_baseMVA
+
+
+def ac_operating_constraints(
+    storage_units: list,
+    b: cp.Variable,
+    b_q: cp.Variable,
+    soc: cp.Variable,
+) -> list:
+    """AC inverter circle and per-step state-of-charge bounds."""
+    data = _storage_static_data(storage_units)
+    constraints = [
+        cp.sum_squares(cp.vstack([b[s], b_q[s]]))
+        <= data["storage_apparent_power_rating"][s] ** 2
+        for s in range(len(storage_units))
+    ]
+    constraints += [
+        soc >= 0.0,
+        soc <= data["storage_capacity"],
+    ]
+    return constraints
+
+
+def dc_operating_constraints(
+    storage_units: list,
+    b: cp.Variable,
+    soc: cp.Variable,
+) -> list:
+    """DC real-power box and per-step state-of-charge bounds."""
+    data = _storage_static_data(storage_units)
+    rating = data["storage_apparent_power_rating"]
+    return [
+        b >= -rating,
+        b <= rating,
+        soc >= 0.0,
+        soc <= data["storage_capacity"],
+    ]
+
+
+def coupling_constraints(
+    storage_units: list,
     b_list: list,
     soc_list: list,
-    storage_initial_soc: np.ndarray,
-    storage_delta: float,
-    T: int,
-    ns: int,
+    delta: float,
 ) -> list:
-    """
-    Generate SoC dynamics constraints linking adjacent time steps.
-
-    Returns a list of CVXPY equality constraints:
-      soc[0][s] == initial_soc[s] - b[0][s] * delta   for each s
-      soc[t][s] == soc[t-1][s] - b[t][s] * delta      for t>=1, each s
-
-    These are cross-step constraints and belong in the coupling
-    constraints block, not in per-step constraints.
-
-    Parameters
-    ----------
-    b_list : list of cp.Variable, length T, each shape (ns,)
-    soc_list : list of cp.Variable, length T, each shape (ns,)
-    storage_initial_soc : np.ndarray, shape (ns,)
-    storage_delta : float
-        Time step duration in hours (scalar, same for all units)
-    T : int
-    ns : int
-
-    Returns
-    -------
-    list of cp.Constraint
-    """
-    constr = []
-    for s in range(ns):
-        constr.append(
-            soc_list[0][s] == storage_initial_soc[s] - b_list[0][s] * storage_delta
+    """Cross-step ideal-storage state-of-charge dynamics."""
+    initial_soc = _storage_static_data(storage_units)["storage_initial_soc"]
+    constraints = []
+    for s in range(len(storage_units)):
+        constraints.append(
+            soc_list[0][s] == initial_soc[s] - b_list[0][s] * float(delta)
         )
-        for t in range(1, T):
-            constr.append(
-                soc_list[t][s] == soc_list[t - 1][s] - b_list[t][s] * storage_delta
+        for t in range(1, len(b_list)):
+            constraints.append(
+                soc_list[t][s]
+                == soc_list[t - 1][s] - b_list[t][s] * float(delta)
             )
-    return constr
+    return constraints
+
+
+def storage_cost_expr(storage_units: list, b: cp.Variable) -> cp.Expression:
+    """Per-step L1 cycling cost; reactive power is intentionally unpenalized."""
+    weights = _storage_static_data(storage_units)["storage_aging_weight"]
+    return cp.sum(cp.multiply(weights, cp.abs(b)))

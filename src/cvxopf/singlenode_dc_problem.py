@@ -63,7 +63,11 @@ from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
     _make_storage_incidence_matrix,
-    _make_storage_soc_constraints,
+    _storage_static_data,
+    dc_injections as storage_dc_injections,
+    dc_operating_constraints as storage_dc_operating_constraints,
+    coupling_constraints as storage_coupling_constraints,
+    storage_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -85,8 +89,8 @@ def _make_singlenode_dc_step_constraints(
     Pgmax,
     baseMVA: float,
     ns: int = 0,
-    S_max=None,
-    storage_capacity=None,
+    storage_units=None,
+    storage_injection=None,
     b_t=None,
     soc_t=None,
     nnd: int = 0,
@@ -108,10 +112,10 @@ def _make_singlenode_dc_step_constraints(
         System base MVA.
     ns : int
         Number of storage units (0 if no storage).
-    S_max : np.ndarray or None
-        Storage apparent power ratings (ns,) in MW.
-    storage_capacity : np.ndarray or None
-        Storage capacities (ns,) in MWh.
+    storage_units : list[StorageUnitIdeal] or None
+        Storage devices whose DC operating constraints apply at this step.
+    storage_injection : cp.Expression or None
+        Collapsed one-node real-power injection, already scaled to per-unit.
     b_t : cp.Variable or None
         Storage real power variables (ns,) in MW.
     soc_t : cp.Variable or None
@@ -131,7 +135,7 @@ def _make_singlenode_dc_step_constraints(
     constr = []
 
     # Section 1: Power balance (exactly one equality constraint)
-    storage_term = cp.multiply(1.0 / baseMVA, cp.sum(b_t)) if ns > 0 else 0
+    storage_term = storage_injection[0] if ns > 0 else 0
     nd_term = cp.multiply(1.0 / baseMVA, cp.sum(p_nd_t)) if nnd > 0 else 0
     constr.append(generator_injection[0] + storage_term + nd_term == Pd_total_t)
 
@@ -140,18 +144,12 @@ def _make_singlenode_dc_step_constraints(
 
     # Section 3: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
-        constr.append(b_t >= -S_max)
-        constr.append(b_t <= S_max)
+        constr += storage_dc_operating_constraints(storage_units, b_t, soc_t)
 
     # Section 3b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
         constr.append(p_nd_t <= nd_p_available_t)
         # p_nd_t >= 0 is enforced via nonneg=True on Variable declaration
-
-    # Section 4: Storage SoC bounds (omitted when ns == 0)
-    if ns > 0:
-        constr.append(soc_t >= 0.0)
-        constr.append(soc_t <= storage_capacity)
 
     return constr
 
@@ -247,21 +245,12 @@ def _parse_singlenode_dc_case(
         _validate_storage(storage, ext_bus_ids)
         storage_data = {
             "ns": len(storage),
-            "Cs": _make_storage_incidence_matrix(storage, nb, ext_to_int),
-            "storage_bus": np.array([unit.bus for unit in storage], dtype=int),
-            "storage_apparent_power_rating": np.array(
-                [unit.apparent_power_rating for unit in storage], dtype=float
+            "Cs": _make_storage_incidence_matrix(
+                storage, 1, collapsed_ext_to_int
             ),
-            "storage_capacity": np.array(
-                [unit.capacity for unit in storage], dtype=float
-            ),
-            "storage_initial_soc": np.array(
-                [unit.initial_soc for unit in storage], dtype=float
-            ),
-            "storage_aging_weight": np.array(
-                [unit.aging_weight for unit in storage], dtype=float
-            ),
+            "storage_bus": np.zeros(len(storage), dtype=int),
             "storage_delta": float(delta),
+            **_storage_static_data(storage),
         }
 
     # Nondispatchable data (if present)
@@ -343,9 +332,18 @@ def _build_singlenode_dc_single(
     # Storage variables (if present)
     b_t = None
     soc_t = None
+    storage_inj = None
     if "ns" in d:
         b_t = cp.Variable(d["ns"], name="b")
         soc_t = cp.Variable(d["ns"], name="soc")
+        storage_inj, storage_q_inj, storage_scaling = storage_dc_injections(
+            storage,
+            b_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+        )
+        assert storage_q_inj is None
+        storage_scaling.value = 1.0 / d["baseMVA"]
 
     # Nondispatchable variables (if present)
     p_nd_t = None
@@ -369,8 +367,8 @@ def _build_singlenode_dc_single(
         Pgmax=d["Pgmax"],
         baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
-        S_max=d.get("storage_apparent_power_rating"),
-        storage_capacity=d.get("storage_capacity"),
+        storage_units=storage,
+        storage_injection=storage_inj,
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
@@ -383,13 +381,12 @@ def _build_singlenode_dc_single(
 
     # Add storage aging cost if present
     if "ns" in d:
-        aging_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
-        cost = cost + aging_cost
+        cost = cost + storage_cost_expr(storage, b_t)
 
     # Add storage SoC constraints if present
     if "ns" in d:
-        soc_constr = _make_storage_soc_constraints(
-            [b_t], [soc_t], d["storage_initial_soc"], d["storage_delta"], T=1, ns=d["ns"]
+        soc_constr = storage_coupling_constraints(
+            storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(soc_constr)
 
@@ -557,9 +554,22 @@ def _build_singlenode_dc_multistep(
 
         b_t = None
         soc_t = None
+        storage_inj_t = None
         if "ns" in d:
             b_t = cp.Variable(d["ns"], name=f"b_{t}")
             soc_t = cp.Variable(d["ns"], name=f"soc_{t}")
+            (
+                storage_inj_t,
+                storage_q_inj_t,
+                storage_scaling_t,
+            ) = storage_dc_injections(
+                storage,
+                b_t,
+                d["collapsed_ext_to_int"],
+                nb=1,
+            )
+            assert storage_q_inj_t is None
+            storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         p_nd_t = None
         if "nnd" in d:
@@ -591,8 +601,8 @@ def _build_singlenode_dc_multistep(
             Pgmax=d["Pgmax"],
             baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
-            S_max=d.get("storage_apparent_power_rating"),
-            storage_capacity=d.get("storage_capacity"),
+            storage_units=storage,
+            storage_injection=storage_inj_t,
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
@@ -604,9 +614,7 @@ def _build_singlenode_dc_multistep(
         # Per-step cost
         step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
         if "ns" in d:
-            step_cost = step_cost + cp.sum(
-                cp.multiply(d["storage_aging_weight"], cp.abs(b_t))
-            )
+            step_cost = step_cost + storage_cost_expr(storage, b_t)
         total_cost = total_cost + step_cost
 
         # Accumulate variables
@@ -619,8 +627,8 @@ def _build_singlenode_dc_multistep(
 
     # Storage SoC dynamics (cross-step coupling)
     if "ns" in d:
-        soc_constr = _make_storage_soc_constraints(
-            b_list, soc_list, d["storage_initial_soc"], d["storage_delta"], T, d["ns"]
+        soc_constr = storage_coupling_constraints(
+            storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(soc_constr)
 
