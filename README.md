@@ -405,8 +405,9 @@ src/cvxopf/           Core package
   generator.py        DispatchableGenerator component and MATPOWER conversion
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
-  storage.py          StorageUnitIdeal dataclass and helpers
-  nondispatchable.py  NondispatchableUnit dataclass and helpers
+  storage.py          Storage component: data, injections, constraints, cost
+  nondispatchable.py  ND component: data, injections, and constraints
+  hvdc.py             HVDC component and MATPOWER dcline conversion
   testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)

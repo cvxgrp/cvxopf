@@ -158,7 +158,7 @@ def _parse_dc_case(
     
     # Parse storage if present
     storage_data = {}
-    if storage is not None:
+    if storage:
         # Validate storage units
         _validate_storage(storage, ext_bus_ids)
         
@@ -314,7 +314,7 @@ def _build_lossy_dc_single(
     from cvxopf.problem import OPFBuild
 
     # Emit warning if storage is present in DC formulation
-    if storage is not None:
+    if storage:
         warnings.warn(
             "Storage apparent_power_rating is applied as a real power limit "
             "only for formulation='lossy_dc'. Reactive power is not modelled "
@@ -333,7 +333,7 @@ def _build_lossy_dc_single(
     # Create storage variables if present
     b_t = soc_t = None
     storage_inj = None
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         ns = d["ns"]
         b_t = cp.Variable(ns, name="b")
         soc_t = cp.Variable(ns, name="soc")
@@ -406,7 +406,7 @@ def _build_lossy_dc_single(
     )
 
     # Add storage aging cost if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         cost = cost + storage_cost_expr(storage, b_t)
 
     # Add HVDC cost if present
@@ -414,7 +414,7 @@ def _build_lossy_dc_single(
         cost = cost + hvdc_cost_expr(hvdc, p_in)
 
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         storage_coupling = storage_coupling_constraints(
             storage, [b_t], [soc_t], d["storage_delta"]
         )
@@ -424,7 +424,7 @@ def _build_lossy_dc_single(
     variables = dict(p_flows=p_flows, Pg=Pg)
 
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_t
         variables["soc"] = soc_t
 
@@ -449,7 +449,7 @@ def _build_lossy_dc_single(
     )
 
     # Add storage data if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         data.update(
             ns=d["ns"],
             Cs=d["Cs"],
@@ -514,7 +514,7 @@ def _build_lossy_dc_multistep(
         )
 
     # Emit warning if storage is present in DC formulation
-    if storage is not None:
+    if storage:
         warnings.warn(
             "Storage apparent_power_rating is applied as a real power limit "
             "only for formulation='lossy_dc'. Reactive power is not modelled "
@@ -563,7 +563,7 @@ def _build_lossy_dc_multistep(
         # Create storage variables if present
         b_t = soc_t = None
         storage_inj_t = None
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             ns = d["ns"]
             b_t = cp.Variable(ns, name=f"b_{t}")
             soc_t = cp.Variable(ns, name=f"soc_{t}")
@@ -648,7 +648,7 @@ def _build_lossy_dc_multistep(
         )
 
         # Add storage aging cost if present
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             step_cost = step_cost + storage_cost_expr(storage, b_t)
 
         # Add HVDC cost if present
@@ -661,7 +661,7 @@ def _build_lossy_dc_multistep(
         Pg_list.append(Pg_t)
 
         # Add storage variables to lists
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             b_list.append(b_t)
             soc_list.append(soc_t)
 
@@ -675,7 +675,7 @@ def _build_lossy_dc_multistep(
             p_hvdc_out_list.append(p_out_t)
 
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         storage_coupling = storage_coupling_constraints(
             storage, b_list, soc_list, d["storage_delta"]
         )
@@ -687,7 +687,7 @@ def _build_lossy_dc_multistep(
     variables = dict(p_flows=p_flows_list, Pg=Pg_list)
 
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_list
         variables["soc"] = soc_list
 
@@ -713,7 +713,7 @@ def _build_lossy_dc_multistep(
     )
 
     # Add storage data if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         data.update(
             ns=d["ns"],
             Cs=d["Cs"],

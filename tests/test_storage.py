@@ -341,6 +341,12 @@ class TestStorageNoStorage:
         build, _ = _solve_ac_single()
         assert "ns" not in build.data
 
+    @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+    def test_empty_storage_list_is_absent(self, formulation):
+        build = build_opf(case9(), formulation=formulation, storage=[])
+        assert "ns" not in build.data
+        assert "b" not in build.variables
+
 
 class TestStorageACSingle:
     """Single time-step AC-OPF with one storage unit."""

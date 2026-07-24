@@ -247,7 +247,7 @@ def _parse_singlenode_dc_case(
 
     # Storage data (if present)
     storage_data = {}
-    if storage is not None:
+    if storage:
         _validate_storage(storage, ext_bus_ids)
         storage_data = {
             "ns": len(storage),
@@ -265,8 +265,10 @@ def _parse_singlenode_dc_case(
         _validate_nondispatchable(nondispatchable, ext_bus_ids)
         nd_data = {
             "nnd": len(nondispatchable),
-            "Cnd": _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int),
-            "nd_bus": np.array([unit.bus for unit in nondispatchable], dtype=int),
+            "Cnd": _make_nd_incidence_matrix(
+                nondispatchable, 1, collapsed_ext_to_int
+            ),
+            "nd_bus": np.zeros(len(nondispatchable), dtype=int),
             **_nd_static_data(nondispatchable),
         }
 

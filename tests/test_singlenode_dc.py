@@ -177,6 +177,26 @@ class TestParseSinglenodeDcCase:
         d = _parse_singlenode_dc_case(case9(), OPFOptions(), None, 1.0, None)
         assert d["nb"] == 9
 
+    def test_device_metadata_uses_collapsed_internal_bus(self):
+        storage = StorageUnitIdeal(
+            bus=5,
+            apparent_power_rating=10.0,
+            capacity=20.0,
+            initial_soc=5.0,
+        )
+        nd = NondispatchableUnit(
+            bus=7,
+            p_available=10.0,
+            apparent_power_rating=12.0,
+        )
+        d = _parse_singlenode_dc_case(
+            case9(), OPFOptions(), [storage], 1.0, [nd]
+        )
+        np.testing.assert_array_equal(d["storage_bus"], [0])
+        np.testing.assert_array_equal(d["nd_bus"], [0])
+        np.testing.assert_array_equal(d["Cs"], [[1.0]])
+        np.testing.assert_array_equal(d["Cnd"], [[1.0]])
+
     def test_pgmin_shape(self):
         case = make_singlenode_case(250.0, GENS)
         d = _parse_singlenode_dc_case(case, OPFOptions(), None, 1.0, None)

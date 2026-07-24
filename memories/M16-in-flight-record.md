@@ -1,13 +1,13 @@
 ---
-name: m16-in-flight-record
-description: Running build log for Milestone 16 (unify grid component model patterns) — decisions, findings, commit checkpoints
+name: m16-completion-record
+description: Completed build record for Milestone 16 (unify grid component model patterns) — decisions, findings, and commit checkpoints
 metadata:
   type: project
 ---
 
-# Milestone 16 — in-flight build record
+# Milestone 16 — completion record
 
-Running log of the M16 build (unify grid component model patterns). Plan lives
+Completed record of the M16 build (unify grid component model patterns). Plan lives
 at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
 (`src/cvxopf/hvdc.py`). See also [[cvxopf-session-working-style]] and
 [[feedback_commit_workflow]].
@@ -17,7 +17,8 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
 1. Incremental, one milestone / several commits; **generators as pilot** →
    storage → nondispatchable; green tests between each.
 2. Balance composition: components supply injection addends; constructor sums
-   into the single `p ==`/`q ==`. Generator injection returns `Cg @ Pg`.
+   into the single `p ==`/`q ==`. AC generator injection returns coordinated
+   `Cg @ Pg` and `Cg @ Qg`; DC returns `Cg @ Pg` and no reactive channel.
 3. New `src/cvxopf/generator.py` owns the builder-facing generator cost
    interface and delegates to `cost.poly_cost_expr`. `cost.py` remains the
    single source of truth for polynomial and PWL cost modeling.
@@ -74,28 +75,35 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
   so 816 baseline unaffected. Validated in isolation: Cg matches
   network.make_incidence_matrix; bounds match MATPOWER read; gencost round-trips
   exactly on case9/case14 (incl. startup/shutdown, F8). Ruff clean.
+- `35fd0b8` — generator polynomial/PWL representation with authoritative cost
+  evaluation retained in `cost.py`.
+- `342f9e0` — compose first-class generators across AC, lossy DC, and
+  singlenode formulations with MATPOWER fallback.
+- `7f8ef3e` — compose storage through the component interface.
+- `43181e3` — unify ND/HVDC contracts and stable external device identity.
+- `dfc215b` — align generator real/reactive ownership and collection-level
+  HVDC cost composition.
 
 ## Status
 
-**Current:** generator component and cost representation committed in
-`35fd0b8`; generator integration is staged locally. AC, lossy DC, and
-single-node builders now compose generator-owned parsing, incidence,
-injection, operating constraints, and cost delegation. Lossy DC uses
-per-generator `Pg` with `Cg @ Pg`; `make_singlenode_case` accepts the shared
-dataclass; the public API accepts `generators=` with MATPOWER fallback.
-Explicit lists may accompany network-only cases without `gen`/`gencost`; a
-temporary case copy feeds the existing validator and reindexer. Full suite on
-2026-07-24: 846 passed, 29 expected project warnings.
+**Complete 2026-07-24.** Generators, storage, nondispatchable units, and HVDC
+now expose formulation-specific fixed-arity injection methods, own their
+operating regions and temporal coupling slots, and retain authoritative cost
+boundaries. Builders create variables and compose device contributions into
+the network equations without re-synthesizing device models.
 
-**Current storage slice (staged locally):** `storage.py` now owns static data
-vectorization, paired AC/DC injections, operating constraints (including SoC
-bounds), cross-step SoC coupling, and L1 cycling cost. AC, lossy DC, and
-single-node builders compose these methods; single-node uses collapsed
-incidence. Component-level DCP, fixed-arity injection, and trajectory tests
-are added.
+Generator data uses `DispatchableGenerator` with MATPOWER import fallback;
+polynomial and PWL cost math remains authoritative in `cost.py`. Singlenode
+reuses DC device methods through collapsed incidence. External ND/HVDC tables
+use stable device IDs with exact-set alignment; static fallbacks do not require
+IDs. Generator and storage IDs become necessary only when future external
+keyed schedules address those devices.
 
-**Next:** full-suite review and commit the storage slice, then begin
-nondispatchable generation.
+The final cross-cutting pass standardized storage presence guards, internal
+`storage_bus`/`nd_bus` metadata, removed duplicate AC ND validation, aligned
+generator real/reactive ownership, made HVDC cost collection-level, and added
+four-component interface-conformance tests. The sanctioned exception remains:
+singlenode accepts and silently drops HVDC.
 
 **Cost-boundary review 2026-07-24:** `cost.py` already implements and tests
 both `MODEL=2` polynomial and `MODEL=1` piecewise-linear costs, including the

@@ -76,7 +76,7 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: all tests pass (baseline currently 816; run to confirm)
+Expected result: all tests pass (baseline currently 865; run to confirm)
 
 To run a single test file:
 
@@ -320,7 +320,7 @@ ignored otherwise.
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
 | `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
-| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are treated as absent and never write zero-count keys. |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 
@@ -367,31 +367,26 @@ problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
 problem.py    →  generator.py            (DispatchableGenerator, case normalization)
 problem.py    →  ac_problem.py           (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
-ac_problem.py →  storage.py             (StorageUnitIdeal, _validate_storage,
-                                          _make_storage_incidence_matrix,
-                                          _make_storage_soc_constraints)
-ac_problem.py →  nondispatchable.py     (NondispatchableUnit,
-                                          _validate_nondispatchable,
-                                          _make_nd_incidence_matrix,
-                                          _parse_nd_timeseries)
+ac_problem.py →  storage.py             (storage component interface)
+ac_problem.py →  nondispatchable.py     (ND component interface)
 ac_problem.py →  generator.py           (generator component interface)
 ac_problem.py →  network.py, data.py
-dc_problem.py →  storage.py             (same as ac_problem.py)
-dc_problem.py →  nondispatchable.py     (same as ac_problem.py)
+dc_problem.py →  storage.py             (storage component interface)
+dc_problem.py →  nondispatchable.py     (ND component interface)
 dc_problem.py →  generator.py           (generator component interface)
 dc_problem.py →  network.py, data.py
 singlenode_dc_problem.py → generator.py (collapsed incidence, bounds, cost)
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 results.py    →  problem.py             (OPFBuild type only, unchanged)
 storage.py    →  cvxpy, numpy           (no other cvxopf imports)
-nondispatchable.py → numpy only         (no other cvxopf imports)
+nondispatchable.py → data.py, cvxpy, numpy
+hvdc.py       →  data.py, cvxpy, numpy
 ```
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
 
-`storage.py` now follows the M16 component pattern. The
-`nondispatchable.py → numpy only` line remains current until the next M16
-component slice. See `plans/milestone-16-unify-components.md`.
+All four device modules now follow the M16 component pattern. See
+`plans/milestone-16-unify-components.md`.
 
 ---
 
@@ -615,7 +610,7 @@ is present.
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
-| 16 — Unify grid component model patterns | 🟡 In progress | Investigation complete and additive `DispatchableGenerator` module landed; constructor integration is next, followed by storage and nondispatchable. HVDC (M7) is the reference implementation. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
+| 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components) and M12 (terminal-SoC hard/soft machinery). See `plans/milestone-17-hierarchical-dc-ac.md`. |
 
 ---

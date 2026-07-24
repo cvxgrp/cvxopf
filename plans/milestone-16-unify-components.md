@@ -1,7 +1,6 @@
 # Milestone 16 — Unify grid component model patterns
 
-**Status:** in progress — investigation complete; generator component module
-landed additively; constructor integration is next
+**Status:** complete — implementation and cross-component conformance verified
 **Branch:** `unify-model`
 **Nature of work:** cleanup, review, and standardization — *not* a mechanical
 relocation. Where formulations diverge in how they express the same physical
@@ -18,18 +17,18 @@ below is anchored to that module's shape.
 Bring **every** grid component into alignment with the component pattern that
 HVDC establishes: dataclass, validation, incidence, per-step operating
 constraints, cross-step coupling constraints, injection builder, and cost
-expression — all co-located in one module that imports only `cvxpy`, `numpy`,
-and stdlib (no other cvxopf module). Every OPF formulation constructor (AC,
+expression — all co-located in one module. Narrow shared dependencies remain
+authoritative: generators delegate cost math to `cost.py`, while ND/HVDC use
+the exact device-frame alignment helper in `data.py`. Every OPF formulation constructor (AC,
 lossy DC, singlenode DC, future SOCP) consumes each component by
 **composition**, calling its methods and wiring them into that formulation's
 network model, rather than re-synthesizing the equations per formulation.
 
 Components in scope:
-- **Dispatchable generators** (`generator.py` now exists; constructor wiring is
-  still pending)
-- **Storage** (`storage.py`; partially component-shaped)
-- **Nondispatchable** (`nondispatchable.py`; partially component-shaped)
-- **HVDC** (`hvdc.py`) — the reference; not refactored, used as the template
+- **Dispatchable generators** (`generator.py`)
+- **Storage** (`storage.py`)
+- **Nondispatchable** (`nondispatchable.py`)
+- **HVDC** (`hvdc.py`)
 
 ---
 
@@ -58,7 +57,9 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
    shape is uniform).
 7. **`coupling_constraints(...)`** — cross-step (temporal) constraints. Returns
    `[]` for memoryless components. **New in M16** (see §4).
-8. **`*_cost_expr(...)`** — the component's contribution to the objective.
+8. **`*_cost_expr(...)` where the component has a cost** — the component's
+   collection-level contribution to the objective. ND intentionally has no
+   cost method; absence is clearer than a ceremonial zero expression.
 
 **Invariant (from HVDC):** the module never creates `cp.Variable`s. The
 constructor creates all variables in its own scope and passes them in. This is
@@ -186,12 +187,12 @@ availability table is introduced, and must then use this same contract.
 
 ---
 
-## 5. Inconsistencies found — investigate, document, resolve
+## 5. Inconsistencies found — resolved
 
-These surfaced while reading all four constructors. Each gets a written finding
-in the milestone's final report; the prior inclination is to standardize.
+These surfaced while reading all four constructors. Their resolutions are
+implemented and recorded in `memories/M16-in-flight-record.md`.
 
-1. **Generator bounds — three mechanisms (decision B).**
+1. **Generator bounds — resolved.**
    - AC: `bounds=[Pgmin,Pgmax]` on a per-generator `Pg` variable.
    - DC: `p_gen` is a *nodal* `(nb,)` variable; bounds applied as
      `p_gen[gen_bus]>=Pgmin`, `p_gen[gen_bus]<=Pgmax`, plus `p_gen[nogen]==0`.
@@ -201,25 +202,26 @@ in the milestone's final report; the prior inclination is to standardize.
      or incidental? **Prior lean:** standardize on a per-generator `Pg` with an
      explicit generator-incidence `Cg @ Pg` into balance (DC's `nogen` zeroing
      then falls out for free), unless the investigation shows the nodal form is
-     required. Written finding either way.
-2. **`baseMVA` scaling seam — three idioms.** `1.0/baseMVA` float (AC storage),
+   required. **Resolution:** per-generator variables and `Cg @ Pg` everywhere;
+   AC generator feasibility owns both real and reactive bounds.
+2. **`baseMVA` scaling seam — resolved.** `1.0/baseMVA` float (AC storage),
    `cp.multiply(1.0/baseMVA, ...)` (DC storage/ND/singlenode), `cp.Parameter`
-   (HVDC). Standardize on the `cp.Parameter` seam (decision above).
-3. **Storage detection guard asymmetry.** AC uses `"ns" in d and d["ns"] > 0`;
+   (HVDC). **Resolution:** uniform `cp.Parameter` seam.
+3. **Storage detection guard asymmetry — resolved.** AC uses `"ns" in d and d["ns"] > 0`;
    DC uses `"ns" in d and d["ns"] > 0`; singlenode uses bare `"ns" in d`.
    CLAUDE.md's contract is `"ns" in build.data` (presence, never `ns=0`).
-   Standardize the guard to bare presence and confirm no `ns=0` is ever written.
-4. **`storage_bus` internal-vs-external.** AC/DC store `ext_to_int[u.bus]`
-   (internal); singlenode stores `u.bus` (external). Pick one, document it.
-5. **Nondispatchable single-step validation double-call (AC).** `_parse_case`
-   validates ND twice (once in the shared block, once in the ND block).
-   Remove the duplicate.
-6. **HVDC singlenode contract.** singlenode accepts `hvdc=` and silently drops
+   **Resolution:** parsers omit empty lists and all builders use bare presence.
+4. **`storage_bus` internal-vs-external — resolved.** Formulation-internal
+   indexing throughout; singlenode publishes collapsed bus index zero. `nd_bus`
+   and `Cnd` follow the same convention.
+5. **Nondispatchable single-step validation double-call (AC) — resolved.**
+   The duplicate call was removed.
+6. **HVDC singlenode contract — confirmed exception.** singlenode accepts `hvdc=` and silently drops
    it (`n_hvdc` never added to `build.data`, no warning). This is the one
    documented exception to "every formulation consumes every component."
    Preserve and document; the component interface does not force a
    `singlenode_operating_constraints` on components a formulation drops.
-7. **Two generator "types" — converge on one (standardization goal).**
+7. **Two generator "types" — resolved.**
    `make_singlenode_case(generators=[...])` already takes a **list of dicts**
    (`{"P_max_MW":..., "cost_coeffs":...}`), and the README advertises it. M16
    introduces `DispatchableGenerator` as the real component. **Decision: converge
@@ -228,10 +230,8 @@ in the milestone's final report; the prior inclination is to standardize.
    (or build them internally from a lightweight form), so there is exactly one
    generator representation across the whole package. If a convenience dict form
    is retained at the `make_singlenode_case` boundary for ergonomics, it must
-   funnel into `DispatchableGenerator` immediately — never coexist as a second
-   first-class type. The `build_opf(generators=...)` and
-   `make_singlenode_case(generators=...)` parameters must take the same type.
-   This is an outward-facing change; call it out in the migration notes.
+   **Resolution:** both entry points use `DispatchableGenerator`; MATPOWER
+   tables are converted at the boundary.
 
 ---
 
@@ -263,24 +263,24 @@ which is the standardization spirit of this milestone.
 
 ---
 
-## 7. Proposed commit sequence (incremental, green between each)
+## 7. Completed commit sequence
 
-0. **Investigation commit (no behaviour change).** Written findings for §5
+0. ✅ **Investigation commit (no behaviour change).** Written findings for §5
    items 1–6; decision on §6. Baseline test run recorded.
-1. **Generators pilot.** New `generator.py`: `DispatchableGenerator`,
+1. ✅ **Generators pilot.** New `generator.py`: `DispatchableGenerator`,
    `_validate_*`, `_make_generator_incidence`, `gen_from_matpower`,
-   `injections`, `ac_/dc_operating_constraints`, `coupling_constraints`→`[]`,
+   `ac_/dc_injections`, `ac_/dc_operating_constraints`, `coupling_constraints`→`[]`,
    `gen_cost_expr` (delegates to `cost.poly_cost_expr`). Rewire all three constructors to
    compose it. Resolve bounds inconsistency (§5.1). DCP test (decision).
-2. **Storage.** Move operating region (AC circle / DC box), SoC bounds,
+2. ✅ **Storage.** Move operating region (AC circle / DC box), SoC bounds,
    injection, aging cost, and `coupling_constraints` (SoC dynamics) into
    `storage.py`. Rewire constructors. `storage.py` gains `cvxpy` import
    (update the import-chain doc in CLAUDE.md — it currently says numpy-only).
-3. **Nondispatchable.** Same treatment; operating region, injection into
+3. ✅ **Nondispatchable.** Same treatment; operating region, injection into
    `nondispatchable.py`; `coupling_constraints`→`[]`. Rewire.
-4. **Cross-cutting cleanup.** Uniform `cp.Parameter` seam, detection-guard
+4. ✅ **Cross-cutting cleanup.** Uniform `cp.Parameter` seam, detection-guard
    standardization, `storage_bus` convention, remove ND double-validate.
-5. **Docs + final report.** Update CLAUDE.md (import chains, module
+5. ✅ **Docs + final report.** Update CLAUDE.md (import chains, module
    responsibilities, the numpy-only lines for storage/ND), flip Milestone 16
    to complete, write `experiments/`-style findings if warranted, update memory.
    **README doc-clean (explicit scope):**
@@ -300,7 +300,7 @@ which is the standardization spirit of this milestone.
 ## 8. Test strategy
 
 - Full suite green after **every** commit (`uv run --extra dev pytest tests/`;
-  baseline 512 passed).
+  initial M16 baseline 816 passed).
 - New: DCP-check test for convex paths post-generator-refactor.
 - New: a per-component interface conformance test (each component exposes the
   eight interface members; memoryless ones return `[]` from

@@ -167,15 +167,11 @@ def _parse_case(
     
     # Parse storage if present
     storage_data = {}
-    if storage is not None:
+    if storage:
         _validate_storage(storage, ext_bus_ids)
     
-    # Validate nondispatchable units
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-    
     # Parse storage if present (continued)
-    if storage is not None:
+    if storage:
         # Create storage incidence matrix
         Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
         
@@ -513,7 +509,7 @@ def _build_ac_single(
     # Create storage variables if present
     b_t = b_q_t = soc_t = None
     storage_inj_p = storage_inj_q = None
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         ns = d["ns"]
         # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
         b_t = cp.Variable(ns, name="b")
@@ -595,7 +591,7 @@ def _build_ac_single(
 
     # Build cost: generation cost plus storage aging cost plus HVDC cost
     gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         total_cost = gen_cost + storage_cost_expr(storage, b_t)
     else:
         total_cost = gen_cost
@@ -603,7 +599,7 @@ def _build_ac_single(
         total_cost = total_cost + hvdc_cost_expr(hvdc, p_in)
     
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         storage_coupling = storage_coupling_constraints(
             storage, [b_t], [soc_t], d["storage_delta"]
         )
@@ -620,7 +616,7 @@ def _build_ac_single(
                          p=p, q=q, Pg=Pg, Qg=Qg)
     
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_t
         variables["b_q"] = b_q_t
         variables["soc"] = soc_t
@@ -753,7 +749,7 @@ def _build_ac_multistep(
         # Create storage variables if present
         b_t = b_q_t = soc_t = None
         storage_inj_p_t = storage_inj_q_t = None
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             ns = d["ns"]
             b_t = cp.Variable(ns, name=f"b_{t}")
             b_q_t = cp.Variable(ns, name=f"b_q_{t}")
@@ -864,7 +860,7 @@ def _build_ac_multistep(
         Qg_list.append(Qg_t)
         
         # Add storage variables to lists
-        if "ns" in d and d["ns"] > 0:
+        if "ns" in d:
             b_list.append(b_t)
             b_q_list.append(b_q_t)
             soc_list.append(soc_t)
@@ -880,12 +876,12 @@ def _build_ac_multistep(
             p_hvdc_out_list.append(p_out_t)
 
     # Add storage aging cost if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         for t in range(T):
             total_cost = total_cost + storage_cost_expr(storage, b_list[t])
 
     # Add storage SoC dynamics constraints if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         storage_coupling = storage_coupling_constraints(
             storage, b_list, soc_list, d["storage_delta"]
         )
@@ -909,7 +905,7 @@ def _build_ac_multistep(
         )
     
     # Add storage variables if present
-    if "ns" in d and d["ns"] > 0:
+    if "ns" in d:
         variables["b"] = b_list
         variables["b_q"] = b_q_list
         variables["soc"] = soc_list
