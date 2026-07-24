@@ -68,7 +68,7 @@ def main():
     print(f"Total objective: {results['objective']:.2f} $")
 
     # Display results by time step
-    print(f"\nResults by time step:")
+    print("\nResults by time step:")
     print("-" * 60)
     
     for t in range(T):
@@ -90,7 +90,7 @@ def main():
         print(f"  Conventional generation (Pg): {results['Pg'][t, :]}")
 
     # Verify that p_nd respects the available power bounds
-    print(f"\nVerification:")
+    print("\nVerification:")
     print("-" * 60)
     
     # Check that p_nd <= available power at each step
@@ -111,7 +111,7 @@ def main():
     apr_ok = np.all(apparent_power <= nd_unit.apparent_power_rating + 1e-4)
     print(f"apparent power constraints: {apr_ok}")
 
-    print(f"\nExample completed successfully!")
+    print("\nExample completed successfully!")
 
 
 if __name__ == "__main__":

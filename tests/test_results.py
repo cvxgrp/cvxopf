@@ -7,7 +7,7 @@ import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
+from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild
 from cvxopf.results import extract_results, compare_to_reference
 
 

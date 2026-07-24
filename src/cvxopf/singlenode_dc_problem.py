@@ -43,6 +43,8 @@ This module is not part of the public API; use problem.py instead.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -74,6 +76,9 @@ from cvxopf.nondispatchable import (
     coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.network import BUS_I
+
+if TYPE_CHECKING:
+    from cvxopf.problem import OPFBuild
 
 # MATPOWER column index constants
 PD = 2

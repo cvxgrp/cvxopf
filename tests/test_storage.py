@@ -6,11 +6,10 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
-from cvxopf.testcases import case9, case14
+from cvxopf.testcases import case9
 from cvxopf.problem import (
     build_opf, build_opf_multistep,
-    OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.results import extract_results
 from cvxopf.storage import (
@@ -302,7 +301,8 @@ class TestStorageNoStorage:
         # Results should be identical (no storage is the default).
         build1 = build_opf(case9(), formulation="ac")
         build2 = build_opf(case9(), formulation="ac", storage=None)
-        build1.solve(); build2.solve()
+        build1.solve()
+        build2.solve()
         r1 = extract_results(build1)
         r2 = extract_results(build2)
         assert r1["status"] == r2["status"]
@@ -311,7 +311,8 @@ class TestStorageNoStorage:
     def test_dc_single_no_storage_results_unchanged(self):
         build1 = build_opf(case9(), formulation="lossy_dc")
         build2 = build_opf(case9(), formulation="lossy_dc", storage=None)
-        build1.solve(); build2.solve()
+        build1.solve()
+        build2.solve()
         r1 = extract_results(build1)
         r2 = extract_results(build2)
         assert r1["status"] == r2["status"]
@@ -838,8 +839,8 @@ class TestStorageDelta:
         # |soc - initial_soc| should be smaller with delta=0.25
         delta_soc_1   = abs(r1["soc"][0]   - 50.0)
         delta_soc_025 = abs(r025["soc"][0] - 50.0)
-        # This is a soft check — just verify both are feasible
         assert r1["status"] == r025["status"] == "optimal"
+        assert delta_soc_025 <= delta_soc_1 + VAL_ATOL
 
 
 class TestStorageCouplingConstraintHook:

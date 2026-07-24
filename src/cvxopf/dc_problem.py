@@ -32,6 +32,7 @@ This module is not part of the public API; use problem.py instead.
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -76,6 +77,9 @@ from cvxopf.hvdc import (
     coupling_constraints as hvdc_coupling_constraints,
     hvdc_cost_expr,
 )
+
+if TYPE_CHECKING:
+    from cvxopf.problem import OPFBuild
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices

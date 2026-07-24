@@ -11,16 +11,14 @@ import pandas as pd
 import pytest
 import cvxpy as cp
 
-import sys
 from pathlib import Path
 
 from cvxopf.testcases import case9, case14, make_singlenode_case
 from cvxopf.problem import (
-    build_opf, build_opf_multistep, OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    build_opf, build_opf_multistep, OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.results import extract_results, compare_to_reference
+from cvxopf.results import extract_results
 from cvxopf.generator import DispatchableGenerator
 
 

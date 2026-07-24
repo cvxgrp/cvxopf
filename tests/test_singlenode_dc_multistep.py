@@ -9,8 +9,7 @@ import pytest
 
 from cvxopf.testcases import case9, make_singlenode_case
 from cvxopf.problem import (
-    build_opf, build_opf_multistep, OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    build_opf, build_opf_multistep, OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results

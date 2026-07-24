@@ -56,19 +56,39 @@ def _flat_load_dfs(case_fn, T):
     df_Q    = pd.DataFrame(np.tile(Qd_base, (T, 1)))
     return df_P, df_Q
 
-def _solve_ac_single_nd(nondispatchable=None):
-    build = build_opf(case9(), formulation="ac", nondispatchable=nondispatchable)
+def _solve_ac_single_nd(nondispatchable=None, storage=None):
+    build = build_opf(
+        case9(),
+        formulation="ac",
+        nondispatchable=nondispatchable,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
-def _solve_dc_single_nd(nondispatchable=None):
-    build = build_opf(case9(), formulation="lossy_dc", nondispatchable=nondispatchable)
+def _solve_dc_single_nd(nondispatchable=None, storage=None):
+    build = build_opf(
+        case9(),
+        formulation="lossy_dc",
+        nondispatchable=nondispatchable,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
-def _solve_ac_multistep_nd(T, df_P, df_Q, df_nd=None, nondispatchable=None):
-    build = build_opf_multistep(case9(), df_P, df_Q, T=T, formulation="ac",
-                                 nondispatchable=nondispatchable, df_nd=df_nd)
+def _solve_ac_multistep_nd(
+    T, df_P, df_Q, df_nd=None, nondispatchable=None, storage=None
+):
+    build = build_opf_multistep(
+        case9(),
+        df_P,
+        df_Q,
+        T=T,
+        formulation="ac",
+        nondispatchable=nondispatchable,
+        df_nd=df_nd,
+        storage=storage,
+    )
     build.solve()
     return build, extract_results(build)
 
@@ -752,10 +772,12 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_ac_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
-        # For now, just test that both can be present without errors
+        build, results = _solve_ac_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert build.prob.status == "optimal"
+        assert "p_nd" in results
+        assert "b" in results
 
     def test_dc_single_both_solves_optimal(self):
         from cvxopf import StorageUnitIdeal
@@ -766,9 +788,12 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_dc_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_dc_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert build.prob.status == "optimal"
+        assert "p_nd" in results
+        assert "b" in results
 
     def test_ac_single_both_p_nd_and_b_in_results(self):
         from cvxopf import StorageUnitIdeal
@@ -779,10 +804,11 @@ class TestNondispatchableWithStorage:
         )
         nd_unit = _default_nd_unit()
         
-        build, results = _solve_ac_single_nd(nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_ac_single_nd(
+            nondispatchable=[nd_unit], storage=[storage_unit]
+        )
         assert "p_nd" in results
-        # "b" would be in results if storage was actually passed
+        assert "b" in results
 
     def test_ac_multistep_both_solves_optimal(self):
         from cvxopf import StorageUnitIdeal
@@ -797,9 +823,16 @@ class TestNondispatchableWithStorage:
         df_P = pd.DataFrame(np.ones((T, 9)) * 50)
         df_Q = pd.DataFrame(np.ones((T, 9)) * 15)
         
-        build, results = _solve_ac_multistep_nd(T, df_P, df_Q, nondispatchable=[nd_unit])
-        # Note: storage parameter would be passed if we had the full storage test setup
+        build, results = _solve_ac_multistep_nd(
+            T,
+            df_P,
+            df_Q,
+            nondispatchable=[nd_unit],
+            storage=[storage_unit],
+        )
         assert build.prob.status == "optimal"
+        assert results["p_nd"].shape == (T, 1)
+        assert results["b"].shape == (T, 1)
 
 
 class TestNondispatchableMultipleUnits:

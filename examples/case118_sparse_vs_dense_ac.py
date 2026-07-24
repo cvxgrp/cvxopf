@@ -54,8 +54,6 @@ def main():
         build.solve()
         t_total   = time.perf_counter() - t_solve_0
 
-        t_ipopt   = build.prob.solver_stats.solve_time
-
         r = extract_results(build)
         results[label.strip()] = r
 

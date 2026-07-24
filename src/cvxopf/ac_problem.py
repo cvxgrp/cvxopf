@@ -10,6 +10,8 @@ Solver: IPOPT (via cyipopt).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -54,6 +56,9 @@ from cvxopf.hvdc import (
     coupling_constraints as hvdc_coupling_constraints,
     hvdc_cost_expr,
 )
+
+if TYPE_CHECKING:
+    from cvxopf.problem import OPFBuild
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices

@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild, OPFOptions
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild
 from cvxopf.results import extract_results
 
 

@@ -33,6 +33,10 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
+      - name: Run Ruff
+        if: matrix.python-version == '3.11'
+        run: ruff check .
+
       - name: Run tests
         run: pytest --cov=cvxopf --cov-branch --cov-report=xml
 

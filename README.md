@@ -454,6 +454,17 @@ uv run --extra dev pytest tests/ -v
 pytest tests/ -v
 ```
 
+Run the project lint policy with:
+
+```bash
+uv run --extra dev ruff check .
+```
+
+The routine lint gate covers the package, tests, examples, and maintenance
+scripts. Exploratory `experiments/` code and interactive `notebooks/` are
+excluded; they are reviewed in the context of the study or notebook rather
+than held to the library policy.
+
 To regenerate the Pypower reference fixtures (requires `uv`):
 
 ```bash
