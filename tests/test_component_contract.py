@@ -87,6 +87,87 @@ def test_all_component_injection_methods_return_fixed_three_tuple():
         assert len(result) == 3
 
 
+def test_device_preparation_helpers_return_existing_flat_contract():
+    ext_to_int = {1: 0, 2: 1}
+    ext_bus_ids = set(ext_to_int)
+
+    gen = DispatchableGenerator(bus=1, p_max_mw=100.0)
+    gen_data = generator._prepare_data(
+        [gen], 100.0, 2, ext_to_int, ext_bus_ids
+    )
+    assert {
+        "ng", "generators", "Cg", "gen_bus", "status", "vg",
+        "Pgmin", "Pgmax", "Qgmin", "Qgmax", "gencost",
+    } <= set(gen_data)
+    np.testing.assert_array_equal(gen_data["Cg"], [[1.0], [0.0]])
+
+    store = StorageUnitIdeal(2, 10.0, 20.0, 5.0)
+    storage_data = storage._prepare_data(
+        [store], 2, ext_to_int, ext_bus_ids
+    )
+    assert {"ns", "Cs", "storage_bus"} <= set(storage_data)
+    np.testing.assert_array_equal(storage_data["Cs"], [[0.0], [1.0]])
+
+    nd = NondispatchableUnit(2, 10.0, 12.0)
+    nd_data = nondispatchable._prepare_data(
+        [nd], 2, ext_to_int, ext_bus_ids
+    )
+    assert {"nnd", "Cnd", "nd_bus"} <= set(nd_data)
+    np.testing.assert_array_equal(nd_data["Cnd"], [[0.0], [1.0]])
+
+    link = HVDCLink(1, 2, -10.0, 10.0)
+    hvdc_data = hvdc._prepare_data(
+        [link], 2, ext_to_int, ext_bus_ids
+    )
+    assert {"n_hvdc", "Ch_from", "Ch_to"} == set(hvdc_data)
+
+
+def test_dc_injections_use_supplied_prepared_incidence():
+    ext_to_int = {1: 0, 2: 1}
+    routed_to_bus_two = np.array([[0.0], [1.0]])
+
+    gen = DispatchableGenerator(bus=1, p_max_mw=100.0)
+    pg = cp.Variable(1)
+    gen_inj, _, _ = generator.dc_injections(
+        [gen], pg, ext_to_int, incidence=routed_to_bus_two
+    )
+    pg.value = np.array([0.3])
+    np.testing.assert_allclose(gen_inj.value, [0.0, 0.3])
+
+    store = StorageUnitIdeal(1, 10.0, 20.0, 5.0)
+    b = cp.Variable(1)
+    storage_inj, _, storage_scale = storage.dc_injections(
+        [store], b, ext_to_int, incidence=routed_to_bus_two
+    )
+    storage_scale.value = 0.01
+    b.value = np.array([10.0])
+    np.testing.assert_allclose(storage_inj.value, [0.0, 0.1])
+
+    nd = NondispatchableUnit(1, 10.0, 12.0)
+    p_nd = cp.Variable(1)
+    nd_inj, _, nd_scale = nondispatchable.dc_injections(
+        [nd], p_nd, ext_to_int, incidence=routed_to_bus_two
+    )
+    nd_scale.value = 0.01
+    p_nd.value = np.array([10.0])
+    np.testing.assert_allclose(nd_inj.value, [0.0, 0.1])
+
+    link = HVDCLink(1, 2, -10.0, 10.0)
+    p_in = cp.Variable(1)
+    p_out = cp.Variable(1)
+    hvdc_inj, _, hvdc_scale = hvdc.dc_injections(
+        [link],
+        p_in,
+        p_out,
+        ext_to_int,
+        incidence=(routed_to_bus_two, np.array([[1.0], [0.0]])),
+    )
+    hvdc_scale.value = 0.01
+    p_in.value = np.array([10.0])
+    p_out.value = np.array([-10.0])
+    np.testing.assert_allclose(hvdc_inj.value, [-0.1, 0.1])
+
+
 def test_memoryless_components_have_empty_coupling_slot():
     assert generator.coupling_constraints([], []) == []
     assert nondispatchable.coupling_constraints([], []) == []

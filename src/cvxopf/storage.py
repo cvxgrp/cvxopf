@@ -224,6 +224,26 @@ def _storage_static_data(storage_units: list) -> dict:
     }
 
 
+def _prepare_data(
+    storage_units: list,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent storage data."""
+    _validate_storage(storage_units, ext_bus_ids)
+    return {
+        "ns": len(storage_units),
+        "Cs": _make_storage_incidence_matrix(
+            storage_units, nb, ext_to_int
+        ),
+        "storage_bus": np.array(
+            [ext_to_int[unit.bus] for unit in storage_units], dtype=int
+        ),
+        **_storage_static_data(storage_units),
+    }
+
+
 def ac_injections(
     storage_units: list,
     b: cp.Variable,
@@ -231,11 +251,16 @@ def ac_injections(
     ext_to_int: dict,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """Return coordinated real/reactive storage injections for an AC network."""
     if nb is None:
         nb = len(ext_to_int)
-    Cs = _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+    Cs = (
+        _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
     return (
         cp.multiply(inv_baseMVA, Cs @ b),
@@ -250,11 +275,16 @@ def dc_injections(
     ext_to_int: dict,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """Return real storage injection and no reactive channel for a DC network."""
     if nb is None:
         nb = len(ext_to_int)
-    Cs = _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+    Cs = (
+        _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
     return cp.multiply(inv_baseMVA, Cs @ b), None, inv_baseMVA
 

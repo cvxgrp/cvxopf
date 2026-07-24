@@ -22,12 +22,9 @@ from cvxopf.network import (
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
 from cvxopf.generator import (
     DispatchableGenerator,
-    _validate_generators,
     gen_from_matpower,
-    generator_bounds,
-    generator_gencost,
+    _prepare_data as generator_prepare_data,
     ac_injections as generator_ac_injections,
-    make_generator_incidence,
     ac_operating_constraints as generator_ac_operating_constraints,
     ac_network_constraints as generator_ac_network_constraints,
     coupling_constraints as generator_coupling_constraints,
@@ -35,9 +32,7 @@ from cvxopf.generator import (
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _validate_storage,
-    _make_storage_incidence_matrix,
-    _storage_static_data,
+    _prepare_data as storage_prepare_data,
     ac_injections as storage_ac_injections,
     ac_operating_constraints as storage_ac_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
@@ -45,17 +40,14 @@ from cvxopf.storage import (
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _validate_nondispatchable,
-    _make_nd_incidence_matrix,
-    _nd_static_data,
+    _prepare_data as nd_prepare_data,
     ac_injections as nd_ac_injections,
     ac_operating_constraints as nd_ac_operating_constraints,
     coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
-    _validate_hvdc,
-    _make_hvdc_incidence_matrices,
+    _prepare_data as hvdc_prepare_data,
     _hvdc_static_box,
     ac_injections as hvdc_ac_injections,
     ac_operating_constraints as hvdc_ac_operating_constraints,
@@ -131,8 +123,6 @@ def _parse_case(
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
     nb      = bus.shape[0]
-    ng      = len(generators)
-
     Ybus    = make_ybus_matpower(case)
     G       = np.real(Ybus)
     B       = np.imag(Ybus)
@@ -160,83 +150,43 @@ def _parse_case(
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
 
-    _validate_generators(generators, ext_bus_ids)
-    Pgmin, Pgmax, Qgmin, Qgmax = generator_bounds(generators, baseMVA)
-    Cg = make_generator_incidence(generators, nb, ext_to_int)
-    gen_bus = np.array([ext_to_int[g.bus] for g in generators], dtype=int)
-    status = np.array([g.status for g in generators], dtype=int)
-    vg = np.array([g.vg for g in generators], dtype=float)
-    gencost = generator_gencost(generators)
+    generator_data = generator_prepare_data(
+        generators, baseMVA, nb, ext_to_int, ext_bus_ids
+    )
     
     # Parse storage if present
     storage_data = {}
     if storage:
-        _validate_storage(storage, ext_bus_ids)
-    
-    # Parse storage if present (continued)
-    if storage:
-        # Create storage incidence matrix
-        Cs = _make_storage_incidence_matrix(storage, nb, ext_to_int)
-        
-        # Extract storage parameters
-        storage_bus = np.array([
-            ext_to_int[u.bus] if ext_to_int else u.bus
-            for u in storage
-        ], dtype=int)
-        storage_data = dict(
-            ns=len(storage),
-            Cs=Cs,
-            storage_bus=storage_bus,
-            storage_delta=float(delta),
-            **_storage_static_data(storage),
+        storage_data = storage_prepare_data(
+            storage, nb, ext_to_int, ext_bus_ids
         )
+        storage_data["storage_delta"] = float(delta)
 
     # Parse nondispatchable if present
     nd_data = {}
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        # Validate nondispatchable units
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-        
-        # Create nondispatchable incidence matrix
-        Cnd = _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int)
-        
-        # Extract nondispatchable parameters
-        nd_bus = np.array([
-            ext_to_int[u.bus] if ext_to_int else u.bus
-            for u in nondispatchable
-        ], dtype=int)
-        nd_data = dict(
-            nnd=len(nondispatchable),
-            Cnd=Cnd,
-            nd_bus=nd_bus,
-            **_nd_static_data(nondispatchable),
+    if nondispatchable:
+        nd_data = nd_prepare_data(
+            nondispatchable, nb, ext_to_int, ext_bus_ids
         )
 
     # Parse HVDC links if present
     hvdc_data = {}
-    if hvdc is not None and len(hvdc) > 0:
-        _validate_hvdc(hvdc, ext_bus_ids)
-        Ch_from, Ch_to = _make_hvdc_incidence_matrices(hvdc, nb, ext_to_int)
-        hvdc_data = dict(
-            n_hvdc=len(hvdc),
-            Ch_from=Ch_from,
-            Ch_to=Ch_to,
+    if hvdc:
+        hvdc_data = hvdc_prepare_data(
+            hvdc, nb, ext_to_int, ext_bus_ids
         )
 
     return dict(
         case=case, baseMVA=baseMVA,
-        bus=bus, generators=generators, gencost=gencost,
-        nb=nb, ng=ng,
+        bus=bus,
+        nb=nb,
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
         ref=ref, pv=pv, ext_to_int=ext_to_int,
         ext_bus_ids=ext_bus_ids,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
-        status=status, gen_bus=gen_bus, vg=vg,
-        Pgmin=Pgmin, Pgmax=Pgmax,
-        Qgmin=Qgmin, Qgmax=Qgmax,
-        Cg=Cg,
+        **generator_data,
         **storage_data,
         **nd_data,
         **hvdc_data,
@@ -520,7 +470,7 @@ def _build_ac_single(
         b_q_t = cp.Variable(ns, name="b_q")
         soc_t = cp.Variable(ns, name="soc")
         storage_inj_p, storage_inj_q, storage_scaling = storage_ac_injections(
-            storage, b_t, b_q_t, d["ext_to_int"]
+            storage, b_t, b_q_t, d["ext_to_int"], incidence=d["Cs"]
         )
         storage_scaling.value = 1.0 / d["baseMVA"]
 
@@ -533,7 +483,11 @@ def _build_ac_single(
         p_nd_t = cp.Variable(nnd, name="p_nd")
         q_nd_t = cp.Variable(nnd, name="q_nd")
         nd_inj_p, nd_inj_q, nd_scaling = nd_ac_injections(
-            nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
+            nondispatchable,
+            p_nd_t,
+            q_nd_t,
+            d["ext_to_int"],
+            incidence=d["Cnd"],
         )
         nd_scaling.value = 1.0 / d["baseMVA"]
 
@@ -545,7 +499,11 @@ def _build_ac_single(
         p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
         p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
         hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_ac_injections(
-            hvdc, p_in, p_out, d["ext_to_int"]
+            hvdc,
+            p_in,
+            p_out,
+            d["ext_to_int"],
+            incidence=(d["Ch_from"], d["Ch_to"]),
         )
         assert hvdc_q_inj is None
         inv_bMVA.value = 1.0 / d["baseMVA"]
@@ -553,7 +511,11 @@ def _build_ac_single(
 
     generator_inj_p, generator_inj_q, generator_scaling = (
         generator_ac_injections(
-            d["generators"], Pg, Qg, d["ext_to_int"]
+            d["generators"],
+            Pg,
+            Qg,
+            d["ext_to_int"],
+            incidence=d["Cg"],
         )
     )
     assert generator_scaling is None
@@ -769,7 +731,11 @@ def _build_ac_multistep(
                 storage_inj_q_t,
                 storage_scaling_t,
             ) = storage_ac_injections(
-                storage, b_t, b_q_t, d["ext_to_int"]
+                storage,
+                b_t,
+                b_q_t,
+                d["ext_to_int"],
+                incidence=d["Cs"],
             )
             storage_scaling_t.value = 1.0 / d["baseMVA"]
 
@@ -781,7 +747,11 @@ def _build_ac_multistep(
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
             nd_inj_p_t, nd_inj_q_t, nd_scaling_t = nd_ac_injections(
-                nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
+                nondispatchable,
+                p_nd_t,
+                q_nd_t,
+                d["ext_to_int"],
+                incidence=d["Cnd"],
             )
             nd_scaling_t.value = 1.0 / d["baseMVA"]
 
@@ -794,7 +764,11 @@ def _build_ac_multistep(
             p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
             p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
             hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_ac_injections(
-                hvdc, p_in_t, p_out_t, d["ext_to_int"]
+                hvdc,
+                p_in_t,
+                p_out_t,
+                d["ext_to_int"],
+                incidence=(d["Ch_from"], d["Ch_to"]),
             )
             assert hvdc_q_inj_t is None
             inv_bMVA_t.value = 1.0 / d["baseMVA"]
@@ -812,7 +786,11 @@ def _build_ac_multistep(
 
         generator_inj_p_t, generator_inj_q_t, generator_scaling_t = (
             generator_ac_injections(
-                d["generators"], Pg_t, Qg_t, d["ext_to_int"]
+                d["generators"],
+                Pg_t,
+                Qg_t,
+                d["ext_to_int"],
+                incidence=d["Cg"],
             )
         )
         assert generator_scaling_t is None

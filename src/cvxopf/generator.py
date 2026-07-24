@@ -271,6 +271,38 @@ def generator_bounds(gens: list, baseMVA: float) -> tuple:
     return Pgmin, Pgmax, Qgmin, Qgmax
 
 
+def _prepare_data(
+    generators: list,
+    baseMVA: float,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent generator data."""
+    _validate_generators(generators, ext_bus_ids)
+    Pgmin, Pgmax, Qgmin, Qgmax = generator_bounds(generators, baseMVA)
+    return {
+        "ng": len(generators),
+        "generators": generators,
+        "Cg": make_generator_incidence(generators, nb, ext_to_int),
+        "gen_bus": np.array(
+            [ext_to_int[generator.bus] for generator in generators],
+            dtype=int,
+        ),
+        "status": np.array(
+            [generator.status for generator in generators], dtype=int
+        ),
+        "vg": np.array(
+            [generator.vg for generator in generators], dtype=float
+        ),
+        "Pgmin": Pgmin,
+        "Pgmax": Pgmax,
+        "Qgmin": Qgmin,
+        "Qgmax": Qgmax,
+        "gencost": generator_gencost(generators),
+    }
+
+
 def generator_gencost(gens: list) -> np.ndarray:
     """
     Serialize generator cost data to a MATPOWER gencost array.
@@ -348,6 +380,7 @@ def ac_injections(
     ext_to_int: dict,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """
     Build coordinated real/reactive generator injections for an AC network.
@@ -361,7 +394,11 @@ def ac_injections(
     """
     if nb is None:
         nb = len(ext_to_int)
-    Cg = make_generator_incidence(gens, nb, ext_to_int)
+    Cg = (
+        make_generator_incidence(gens, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     return Cg @ Pg, Cg @ Qg, None
 
 
@@ -371,11 +408,16 @@ def dc_injections(
     ext_to_int: dict,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """Build real generator injection and no reactive channel for a DC network."""
     if nb is None:
         nb = len(ext_to_int)
-    Cg = make_generator_incidence(gens, nb, ext_to_int)
+    Cg = (
+        make_generator_incidence(gens, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     return Cg @ Pg, None, None
 
 

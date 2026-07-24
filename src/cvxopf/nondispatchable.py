@@ -136,6 +136,24 @@ def _nd_static_data(units: list) -> dict:
     }
 
 
+def _prepare_data(
+    units: list,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent ND data."""
+    _validate_nondispatchable(units, ext_bus_ids)
+    return {
+        "nnd": len(units),
+        "Cnd": _make_nd_incidence_matrix(units, nb, ext_to_int),
+        "nd_bus": np.array(
+            [ext_to_int[unit.bus] for unit in units], dtype=int
+        ),
+        **_nd_static_data(units),
+    }
+
+
 def ac_injections(
     units: list,
     p_nd: cp.Variable,
@@ -143,11 +161,16 @@ def ac_injections(
     ext_to_int: dict | None,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """Return coordinated real/reactive ND injections for an AC network."""
     if nb is None:
         nb = len(ext_to_int)
-    Cnd = _make_nd_incidence_matrix(units, nb, ext_to_int)
+    Cnd = (
+        _make_nd_incidence_matrix(units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     inv_baseMVA = cp.Parameter(nonneg=True, name="nd_inv_baseMVA")
     return (
         cp.multiply(inv_baseMVA, Cnd @ p_nd),
@@ -162,11 +185,16 @@ def dc_injections(
     ext_to_int: dict | None,
     *,
     nb: int | None = None,
+    incidence: np.ndarray | None = None,
 ) -> tuple:
     """Return real ND injection and no reactive channel for a DC network."""
     if nb is None:
         nb = len(ext_to_int)
-    Cnd = _make_nd_incidence_matrix(units, nb, ext_to_int)
+    Cnd = (
+        _make_nd_incidence_matrix(units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     inv_baseMVA = cp.Parameter(nonneg=True, name="nd_inv_baseMVA")
     return cp.multiply(inv_baseMVA, Cnd @ p_nd), None, inv_baseMVA
 

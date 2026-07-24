@@ -202,6 +202,24 @@ def _make_hvdc_incidence_matrices(
     return Ch_from, Ch_to
 
 
+def _prepare_data(
+    links: list,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent HVDC data."""
+    _validate_hvdc(links, ext_bus_ids)
+    Ch_from, Ch_to = _make_hvdc_incidence_matrices(
+        links, nb, ext_to_int
+    )
+    return {
+        "n_hvdc": len(links),
+        "Ch_from": Ch_from,
+        "Ch_to": Ch_to,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Static box (trivial vectorizer — reads p_min_mw/p_max_mw directly)
 # ---------------------------------------------------------------------------
@@ -235,6 +253,8 @@ def dc_injections(
     p_in: cp.Variable,
     p_out: cp.Variable,
     ext_to_int: dict,
+    *,
+    incidence: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple:
     """
     Build the real nodal-balance addend for HVDC links in a DC network.
@@ -254,7 +274,11 @@ def dc_injections(
           inv_baseMVA.value = 1.0 / baseMVA
     """
     nb = len(ext_to_int)
-    Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
+    Ch_from, Ch_to = (
+        _make_hvdc_incidence_matrices(links, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
     inv_baseMVA = cp.Parameter(nonneg=True, name="hvdc_inv_baseMVA")
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
     return injection_expr, None, inv_baseMVA
@@ -265,6 +289,8 @@ def ac_injections(
     p_in: cp.Variable,
     p_out: cp.Variable,
     ext_to_int: dict,
+    *,
+    incidence: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple:
     """
     Build HVDC network injections for an AC network.
@@ -273,7 +299,9 @@ def ac_injections(
     This separate AC entry point is retained for future reactive-control
     models and for symmetry with the other device components.
     """
-    return dc_injections(links, p_in, p_out, ext_to_int)
+    return dc_injections(
+        links, p_in, p_out, ext_to_int, incidence=incidence
+    )
 
 
 def dc_operating_constraints(

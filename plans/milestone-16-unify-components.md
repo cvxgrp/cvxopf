@@ -41,7 +41,11 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
 3. **`_make_*_incidence_matrix(...)`** — `(nb, n)` bus-mapping matrix.
 4. **Static vectorizer(s)** — pull dataclass fields into `(n,)` numpy arrays
    (e.g. `_hvdc_static_box`), and any timeseries parser (`_parse_nd_timeseries`).
-5. **`ac_injections(...)` / `dc_injections(...)`** — network-specific
+5. **Private `_prepare_data(...)`** — validates the device collection and
+   returns the existing flat metadata contract: incidence, internal bus
+   indices, and static parameter arrays. AC, DC, and single-node parsers call
+   these device-owned helpers rather than reimplementing preparation.
+6. **`ac_injections(...)` / `dc_injections(...)`** — network-specific
    injection builders with fixed return arity:
    `(p_injection, q_injection_or_None, scaling_or_None)`.
    The AC-network method returns coordinated real/reactive nodal addends; the
@@ -51,17 +55,20 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
    **unbound nonnegative `inv_baseMVA` `cp.Parameter`** as `scaling`; per-unit
    devices return `None`. Absence of a reactive channel is represented by
    `None`, never scalar zero. Neither method instantiates `cp.Variable`.
-6. **`ac_operating_constraints(...)` / `dc_operating_constraints(...)`** — the
+   Each accepts an optional prepared `incidence=` keyword; builders pass the
+   matrix produced by `_prepare_data`, while omission preserves direct
+   component use and backward compatibility.
+7. **`ac_operating_constraints(...)` / `dc_operating_constraints(...)`** — the
    per-step feasible region, forked by formulation. Pass-through delegation
    where the two coincide (HVDC does this; the fork exists so the interface
    shape is uniform).
-7. **`coupling_constraints(...)`** — cross-step (temporal) constraints. Returns
+8. **`coupling_constraints(...)`** — cross-step (temporal) constraints. Returns
    `[]` for memoryless components. **New in M16** (see §4).
-8. **`ac_network_constraints(...)` / `dc_network_constraints(...)` where
+9. **`ac_network_constraints(...)` / `dc_network_constraints(...)` where
    device parameters constrain network variables.** Generator voltage
    setpoint pinning lives here rather than in the AC builder; the DC hook is
    empty. This is distinct from the device-local operating region.
-9. **`*_cost_expr(...)` where the component has a cost** — the component's
+10. **`*_cost_expr(...)` where the component has a cost** — the component's
    collection-level contribution to the objective. ND intentionally has no
    cost method; absence is clearer than a ceremonial zero expression.
 

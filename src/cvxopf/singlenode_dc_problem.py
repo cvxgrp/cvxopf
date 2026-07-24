@@ -50,12 +50,9 @@ import cvxpy as cp
 from cvxopf.network import reindex_case_to_consecutive
 from cvxopf.generator import (
     DispatchableGenerator,
-    _validate_generators,
     gen_from_matpower,
-    generator_bounds,
-    generator_gencost,
+    _prepare_data as generator_prepare_data,
     dc_injections as generator_dc_injections,
-    make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
     dc_network_constraints as generator_dc_network_constraints,
     coupling_constraints as generator_coupling_constraints,
@@ -63,9 +60,7 @@ from cvxopf.generator import (
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _validate_storage,
-    _make_storage_incidence_matrix,
-    _storage_static_data,
+    _prepare_data as storage_prepare_data,
     dc_injections as storage_dc_injections,
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
@@ -73,9 +68,7 @@ from cvxopf.storage import (
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _validate_nondispatchable,
-    _make_nd_incidence_matrix,
-    _nd_static_data,
+    _prepare_data as nd_prepare_data,
     dc_injections as nd_dc_injections,
     dc_operating_constraints as nd_dc_operating_constraints,
     coupling_constraints as nd_coupling_constraints,
@@ -234,61 +227,42 @@ def _parse_singlenode_dc_case(
     bus = case["bus"]
 
     source_nb = bus.shape[0]
-    ng = len(generators)
-
     # Compute total load (scalar, not per-bus)
     Pd_total = float(np.sum(bus[:, PD]) / baseMVA)
 
-    _validate_generators(generators, ext_bus_ids)
-    Pgmin, Pgmax, _, _ = generator_bounds(generators, baseMVA)
-    gencost = generator_gencost(generators)
     collapsed_ext_to_int = {bus_id: 0 for bus_id in ext_bus_ids}
-    Cg = make_generator_incidence(
-        generators, nb=1, ext_to_int=collapsed_ext_to_int
+    generator_data = generator_prepare_data(
+        generators,
+        baseMVA,
+        nb=1,
+        ext_to_int=collapsed_ext_to_int,
+        ext_bus_ids=ext_bus_ids,
     )
 
     # Storage data (if present)
     storage_data = {}
     if storage:
-        _validate_storage(storage, ext_bus_ids)
-        storage_data = {
-            "ns": len(storage),
-            "Cs": _make_storage_incidence_matrix(
-                storage, 1, collapsed_ext_to_int
-            ),
-            "storage_bus": np.zeros(len(storage), dtype=int),
-            "storage_delta": float(delta),
-            **_storage_static_data(storage),
-        }
+        storage_data = storage_prepare_data(
+            storage, 1, collapsed_ext_to_int, ext_bus_ids
+        )
+        storage_data["storage_delta"] = float(delta)
 
     # Nondispatchable data (if present)
     nd_data = {}
-    if nondispatchable is not None and len(nondispatchable) > 0:
-        _validate_nondispatchable(nondispatchable, ext_bus_ids)
-        nd_data = {
-            "nnd": len(nondispatchable),
-            "Cnd": _make_nd_incidence_matrix(
-                nondispatchable, 1, collapsed_ext_to_int
-            ),
-            "nd_bus": np.zeros(len(nondispatchable), dtype=int),
-            **_nd_static_data(nondispatchable),
-        }
+    if nondispatchable:
+        nd_data = nd_prepare_data(
+            nondispatchable, 1, collapsed_ext_to_int, ext_bus_ids
+        )
 
     return {
         "baseMVA": baseMVA,
         "nb": 1,
         "source_nb": source_nb,
-        "ng": ng,
         "ext_to_int": ext_to_int,
         "ext_bus_ids": ext_bus_ids,
         "collapsed_ext_to_int": collapsed_ext_to_int,
-        "generators": generators,
-        "Cg": Cg,
-        "gen_bus": np.zeros(ng, dtype=int),
         "Pd_total": Pd_total,
-        "Pgmin": Pgmin,
-        "Pgmax": Pgmax,
-        "gencost": gencost,
+        **generator_data,
         **storage_data,
         **nd_data,
     }
@@ -347,6 +321,7 @@ def _build_singlenode_dc_single(
             b_t,
             d["collapsed_ext_to_int"],
             nb=1,
+            incidence=d["Cs"],
         )
         assert storage_q_inj is None
         storage_scaling.value = 1.0 / d["baseMVA"]
@@ -357,7 +332,11 @@ def _build_singlenode_dc_single(
     if "nnd" in d:
         p_nd_t = cp.Variable(d["nnd"], name="p_nd")
         nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
-            nondispatchable, p_nd_t, d["collapsed_ext_to_int"], nb=1
+            nondispatchable,
+            p_nd_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+            incidence=d["Cnd"],
         )
         assert nd_q_inj is None
         nd_scaling.value = 1.0 / d["baseMVA"]
@@ -368,6 +347,7 @@ def _build_singlenode_dc_single(
         Pg,
         d["collapsed_ext_to_int"],
         nb=1,
+        incidence=d["Cg"],
     )
     assert generator_q_inj is None
     assert generator_scaling is None
@@ -600,6 +580,7 @@ def _build_singlenode_dc_multistep(
                 b_t,
                 d["collapsed_ext_to_int"],
                 nb=1,
+                incidence=d["Cs"],
             )
             assert storage_q_inj_t is None
             storage_scaling_t.value = 1.0 / d["baseMVA"]
@@ -609,7 +590,11 @@ def _build_singlenode_dc_multistep(
         if "nnd" in d:
             p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}")
             nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
-                nondispatchable, p_nd_t, d["collapsed_ext_to_int"], nb=1
+                nondispatchable,
+                p_nd_t,
+                d["collapsed_ext_to_int"],
+                nb=1,
+                incidence=d["Cnd"],
             )
             assert nd_q_inj_t is None
             nd_scaling_t.value = 1.0 / d["baseMVA"]
@@ -629,6 +614,7 @@ def _build_singlenode_dc_multistep(
             Pg_t,
             d["collapsed_ext_to_int"],
             nb=1,
+            incidence=d["Cg"],
         )
         assert generator_q_inj_t is None
         assert generator_scaling_t is None
