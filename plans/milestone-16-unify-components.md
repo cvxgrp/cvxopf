@@ -1,7 +1,8 @@
 # Milestone 16 — Unify grid component model patterns
 
-**Status:** planned (not started)
-**Branch:** to be created off `main` (current working branch: `unify-model`)
+**Status:** in progress — investigation complete; generator component module
+landed additively; constructor integration is next
+**Branch:** `unify-model`
 **Nature of work:** cleanup, review, and standardization — *not* a mechanical
 relocation. Where formulations diverge in how they express the same physical
 quantity, we investigate the divergence, document it, and (with a prior
@@ -24,7 +25,8 @@ lossy DC, singlenode DC, future SOCP) consumes each component by
 network model, rather than re-synthesizing the equations per formulation.
 
 Components in scope:
-- **Dispatchable generators** (currently only `cost.py`; no first-class component)
+- **Dispatchable generators** (`generator.py` now exists; constructor wiring is
+  still pending)
 - **Storage** (`storage.py`; partially component-shaped)
 - **Nondispatchable** (`nondispatchable.py`; partially component-shaped)
 - **HVDC** (`hvdc.py`) — the reference; not refactored, used as the template
@@ -129,9 +131,12 @@ reactive terms: HVDC is unity-PF (real only); ND has `q_nd` in AC only.
 - **Balance composition.** Section 3 sums per-component injection addends into
   the single `p ==`/`q ==`; generator's injection builder returns `Cg @ Pg`.
   Preserves the "exactly one `p ==`" contract. ✅ confirmed.
-- **Generator module.** New `src/cvxopf/generator.py`; `poly_cost_expr` moves
-  there, re-exported from `cost.py` for back-compat during transition.
-  ✅ confirmed.
+- **Generator cost boundary.** New `src/cvxopf/generator.py` owns the
+  builder-facing generator cost interface, but imports and delegates to
+  `poly_cost_expr` in `cost.py`. `cost.py` remains the single authoritative
+  implementation of polynomial and piecewise-linear generator costs. This is
+  a deliberate, conservative variation from components whose costs are simple
+  enough to live directly in the device module. ✅ confirmed.
 - **"List the generators" — primary API with case-file fallback.** Real
   `list[DispatchableGenerator]` dataclass parallel to `HVDCLink`, with a
   `gen_from_matpower(gen, gencost, ...)` importer parallel to `hvdc_from_dcline`.
@@ -237,7 +242,7 @@ which is the standardization spirit of this milestone.
 1. **Generators pilot.** New `generator.py`: `DispatchableGenerator`,
    `_validate_*`, `_make_generator_incidence`, `gen_from_matpower`,
    `injections`, `ac_/dc_operating_constraints`, `coupling_constraints`→`[]`,
-   `gen_cost_expr` (absorbs `poly_cost_expr`). Rewire all three constructors to
+   `gen_cost_expr` (delegates to `cost.poly_cost_expr`). Rewire all three constructors to
    compose it. Resolve bounds inconsistency (§5.1). DCP test (decision).
 2. **Storage.** Move operating region (AC circle / DC box), SoC bounds,
    injection, aging cost, and `coupling_constraints` (SoC dynamics) into

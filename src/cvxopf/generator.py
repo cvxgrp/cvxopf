@@ -7,11 +7,11 @@ co-locates the dataclass, validation, incidence, operating constraints,
 coupling-constraint slot, injection builder, and cost expression, and imports
 only cvxpy, numpy, stdlib, and the re-exported poly_cost_expr from cost.py.
 
-Generators are the primary cvxopf generation API. build_opf(generators=...)
-takes a list of DispatchableGenerator; when generators=None, the constructor
-falls back to gen_from_matpower(case), so standard MATPOWER/Pypower cases keep
-working unchanged. Unlike storage/nondispatchable/HVDC (where None means "none
-present"), None here means "read from the case" -- a system always has
+DispatchableGenerator is the target primary generation API. Constructor
+integration is staged in Milestone 16: once wired, build_opf(generators=...)
+will take a list of DispatchableGenerator and generators=None will fall back to
+gen_from_matpower(case). Unlike storage/nondispatchable/HVDC (where None means
+"none present"), None will mean "read from the case" -- a system always has
 generators.
 
 Units: generator variables (Pg, Qg) are in per-unit internally, matching the
@@ -36,7 +36,7 @@ Import chain:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import cvxpy as cp
@@ -81,10 +81,17 @@ class DispatchableGenerator:
         Reactive power upper bound Qmax (MVAr). AC only. Default 0.0.
     q_min_mvar : float
         Reactive power lower bound Qmin (MVAr). AC only. Default 0.0.
-    cost_coeffs : tuple of float
-        Polynomial cost (c0, c1, c2), lowest-first (package-wide convention,
-        matching HVDCLink). Acts on Pg in MW: c2*Pg^2 + c1*Pg + c0.
-        Default (0, 0, 0).
+    cost_type : {"polynomial", "piecewise_linear"}
+        Cost-function type. Default "polynomial".
+    cost_coeffs : tuple of float or None
+        Polynomial coefficients, lowest-power first. For example,
+        ``(c0, c1, c2)`` represents ``c2*Pg^2 + c1*Pg + c0`` with Pg in MW.
+        Used only when ``cost_type="polynomial"``. None means zero cost.
+    cost_points : tuple of (float, float) pairs or None
+        Piecewise-linear ``(power_MW, cost)`` breakpoints. Used only when
+        ``cost_type="piecewise_linear"`` and must contain at least two points
+        with strictly increasing power coordinates. Evaluation and any
+        lower-convex-hull treatment remain exclusively in ``cost.py``.
     startup : float
         Startup cost ($). Carried for round-trip fidelity with the MATPOWER
         gencost table. Inert in the current continuous OPF (startup/shutdown
@@ -107,7 +114,9 @@ class DispatchableGenerator:
     p_min_mw: float = 0.0
     q_max_mvar: float = 0.0
     q_min_mvar: float = 0.0
-    cost_coeffs: tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
+    cost_type: str = "polynomial"
+    cost_coeffs: tuple | None = None
+    cost_points: tuple | None = None
     startup: float = 0.0
     shutdown: float = 0.0
     status: int = 1
@@ -141,11 +150,46 @@ def _validate_generators(gens: list, ext_bus_ids: set) -> None:
                 f"Generator {i}: q_min_mvar ({g.q_min_mvar}) must be <= "
                 f"q_max_mvar ({g.q_max_mvar})"
             )
-        c0, c1, c2 = g.cost_coeffs
-        if c2 < 0:
+        if g.cost_type == "polynomial":
+            if g.cost_points is not None:
+                raise ValueError(
+                    f"Generator {i}: cost_points is only valid when "
+                    "cost_type='piecewise_linear'"
+                )
+            coeffs = (0.0,) if g.cost_coeffs is None else tuple(g.cost_coeffs)
+            if not coeffs:
+                raise ValueError(f"Generator {i}: cost_coeffs must not be empty")
+            if len(coeffs) == 3 and coeffs[2] < 0:
+                raise ValueError(
+                    f"Generator {i}: cost_coeffs c2 must be >= 0 (convex "
+                    f"quadratic), got {coeffs[2]}"
+                )
+        elif g.cost_type == "piecewise_linear":
+            if g.cost_coeffs is not None:
+                raise ValueError(
+                    f"Generator {i}: cost_coeffs is only valid when "
+                    "cost_type='polynomial'"
+                )
+            if g.cost_points is None or len(g.cost_points) < 2:
+                raise ValueError(
+                    f"Generator {i}: piecewise-linear cost requires at least "
+                    "two cost_points"
+                )
+            if any(len(point) != 2 for point in g.cost_points):
+                raise ValueError(
+                    f"Generator {i}: each cost_points entry must be a "
+                    "(power, cost) pair"
+                )
+            powers = np.asarray([point[0] for point in g.cost_points], dtype=float)
+            if np.any(np.diff(powers) <= 0):
+                raise ValueError(
+                    f"Generator {i}: cost_points power coordinates must be "
+                    "strictly increasing"
+                )
+        else:
             raise ValueError(
-                f"Generator {i}: cost_coeffs c2 must be >= 0 (convex "
-                f"quadratic), got {c2}"
+                f"Generator {i}: unknown cost_type={g.cost_type!r}; expected "
+                "'polynomial' or 'piecewise_linear'"
             )
 
 
@@ -191,25 +235,37 @@ def generator_bounds(gens: list, baseMVA: float) -> tuple:
 
 def generator_gencost(gens: list) -> np.ndarray:
     """
-    Build a MATPOWER model-2 gencost array (ng, 7) from cost_coeffs.
+    Serialize generator cost data to a MATPOWER gencost array.
 
-    cost_coeffs is lowest-first (c0, c1, c2); the row stores highest-power-first
-    [MODEL, STARTUP, SHUTDOWN, NCOST=3, c2, c1, c0]. Inverse of the reading in
-    gen_from_matpower; consumed by gen_cost_expr / poly_cost_expr. startup and
-    shutdown are carried through for round-trip fidelity (inert in the current
-    continuous OPF).
+    This function translates data only. Polynomial and PWL cost modeling stays
+    in cost.poly_cost_expr. Rows are padded to the widest row, as MATPOWER does
+    for mixed cost models.
     """
-    ng = len(gens)
-    gencost = np.zeros((ng, 7))
-    for k, g in enumerate(gens):
-        c0, c1, c2 = g.cost_coeffs
-        gencost[k, _COST_MODEL] = 2
-        gencost[k, _COST_STARTUP] = g.startup
-        gencost[k, _COST_SHUTDOWN] = g.shutdown
-        gencost[k, _COST_NCOST] = 3
-        gencost[k, 4] = c2
-        gencost[k, 5] = c1
-        gencost[k, 6] = c0
+    rows = []
+    for g in gens:
+        if g.cost_type == "polynomial":
+            coeffs = (0.0,) if g.cost_coeffs is None else tuple(g.cost_coeffs)
+            payload = list(reversed(coeffs))
+            model = 2
+            ncost = len(coeffs)
+        elif g.cost_type == "piecewise_linear":
+            points = () if g.cost_points is None else tuple(g.cost_points)
+            payload = [value for point in points for value in point]
+            model = 1
+            ncost = len(points)
+        else:
+            raise ValueError(
+                f"unknown cost_type={g.cost_type!r}; expected 'polynomial' "
+                "or 'piecewise_linear'"
+            )
+        rows.append(
+            [model, g.startup, g.shutdown, ncost, *payload]
+        )
+
+    width = max((len(row) for row in rows), default=0)
+    gencost = np.zeros((len(rows), width))
+    for k, row in enumerate(rows):
+        gencost[k, :len(row)] = row
     return gencost
 
 
@@ -291,27 +347,41 @@ def gen_from_matpower(gen: np.ndarray, gencost: np.ndarray) -> list:
     generator_gencost plus the bus/bound vectorizers. Order is preserved so Cg
     columns and gencost rows line up positionally with the case.
 
-    Model-2 (polynomial) gencost rows are read highest-power-first and reversed
-    to lowest-first (c0, c1, c2). Model-1 (piecewise-linear) rows are not
-    representable as cost_coeffs; for those, cost_coeffs is left (0, 0, 0) and
-    the constructor should use the gencost array verbatim (future extension).
+    Model-2 polynomial rows are read highest-power-first and reversed to the
+    component's lowest-power-first convention. Model-1 rows are converted to
+    explicit ``(power, cost)`` breakpoint pairs. ``generator_gencost`` is the
+    inverse serialization.
     """
     gens = []
     ng = gen.shape[0]
     for k in range(ng):
         row = gen[k]
-        cost = (0.0, 0.0, 0.0)
+        cost_type = None
+        cost_coeffs = None
+        cost_points = None
         startup = 0.0
         shutdown = 0.0
-        if gencost is not None and int(gencost[k, _COST_MODEL]) == 2:
+        if gencost is not None:
             startup = float(gencost[k, _COST_STARTUP])
             shutdown = float(gencost[k, _COST_SHUTDOWN])
             n = int(gencost[k, _COST_NCOST])
-            coeffs_hi_first = [float(gencost[k, 4 + j]) for j in range(n)]
-            coeffs_lo_first = list(reversed(coeffs_hi_first))
-            while len(coeffs_lo_first) < 3:
-                coeffs_lo_first.append(0.0)
-            cost = tuple(coeffs_lo_first[:3])
+            model = int(gencost[k, _COST_MODEL])
+            if model == 2:
+                coeffs_hi_first = tuple(float(v) for v in gencost[k, 4:4 + n])
+                cost_type = "polynomial"
+                cost_coeffs = tuple(reversed(coeffs_hi_first))
+            elif model == 1:
+                payload = gencost[k, 4:4 + 2 * n]
+                cost_type = "piecewise_linear"
+                cost_points = tuple(
+                    (float(payload[2 * j]), float(payload[2 * j + 1]))
+                    for j in range(n)
+                )
+            else:
+                raise ValueError(
+                    f"Generator {k}: unrecognised gencost MODEL={model}. "
+                    "Expected 1 or 2."
+                )
         gens.append(
             DispatchableGenerator(
                 bus=int(row[_GEN_BUS]),
@@ -319,7 +389,9 @@ def gen_from_matpower(gen: np.ndarray, gencost: np.ndarray) -> list:
                 p_min_mw=float(row[_PMIN]),
                 q_max_mvar=float(row[_QMAX]),
                 q_min_mvar=float(row[_QMIN]),
-                cost_coeffs=cost,
+                cost_type=cost_type or "polynomial",
+                cost_coeffs=cost_coeffs,
+                cost_points=cost_points,
                 startup=startup,
                 shutdown=shutdown,
                 status=int(row[_GEN_STATUS]),

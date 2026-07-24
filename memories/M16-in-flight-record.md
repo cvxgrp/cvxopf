@@ -18,8 +18,9 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
    storage → nondispatchable; green tests between each.
 2. Balance composition: components supply injection addends; constructor sums
    into the single `p ==`/`q ==`. Generator injection returns `Cg @ Pg`.
-3. New `src/cvxopf/generator.py`; `poly_cost_expr` moves there, re-exported
-   from `cost.py` for back-compat.
+3. New `src/cvxopf/generator.py` owns the builder-facing generator cost
+   interface and delegates to `cost.poly_cost_expr`. `cost.py` remains the
+   single source of truth for polynomial and PWL cost modeling.
 4. `DispatchableGenerator` dataclass + `gen_from_matpower` importer = the
    **primary generator API**. `build_opf` gains optional `generators=`.
    `None` → fall back to `gen_from_matpower(case)` (asymmetric vs storage/ND/
@@ -68,17 +69,31 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
 
 ## Status
 
-**Current:** §0 investigation COMPLETE. Baseline (816 passed) established.
-All seven findings F1–F7 recorded below (all RESOLVED with a standardization
-direction; F6 = preserve documented exception). No code changes yet.
+**Current:** §0 investigation COMPLETE and the additive generator component
+module LANDED in `c3ed408`. Its public exports and component-level conformance
+tests are now staged locally; full suite on 2026-07-24: 829 passed,
+29 expected warnings. The module is not yet wired into the public builders or
+formulation constructors, so existing optimization behavior remains unchanged.
 
-**Next:** commit 1 — generators pilot. Create `src/cvxopf/generator.py`
-(`DispatchableGenerator`, `_validate_*`, `_make_generator_incidence`,
-`gen_from_matpower`, `injections`→`Cg @ Pg`, `ac_/dc_operating_constraints`,
-`coupling_constraints`→`[]`, `gen_cost_expr` absorbing `poly_cost_expr`).
-Rewire all three constructors to compose it; apply F1 (per-gen `Pg` everywhere,
-DC drops `p_gen`/`nogen`), F7 (converge `make_singlenode_case`). Add DCP
-conformance test. Green between.
+**Next:** generator integration commit. Rewire all three constructors to
+compose `generator.py`; add `generators=` with MATPOWER fallback; apply F1
+(per-generator `Pg` everywhere, DC drops nodal `p_gen`/`nogen`) and F7
+(converge `make_singlenode_case`). Add fallback/list equivalence, interface,
+and DCP-conformance tests. Green between.
+
+**Cost-boundary review 2026-07-24:** `cost.py` already implements and tests
+both `MODEL=2` polynomial and `MODEL=1` piecewise-linear costs, including the
+documented lower-convex-hull treatment of nonconvex PWL data. Leave that
+implementation alone. `generator.py` imports and delegates to it, giving OPF
+builders one component-facing cost entry point without duplicating any cost
+modeling. The remaining integration issue is data preservation:
+`gen_from_matpower` must not discard a `MODEL=1` row when constructing the
+generator component representation. **Resolved locally:** the component now
+uses the explicit discriminator `cost_type="polynomial"|"piecewise_linear"`,
+with `cost_coeffs` for polynomial data and `(power, cost)` `cost_points` for
+PWL data. Mixed MODEL=1/MODEL=2 MATPOWER rows round-trip exactly through
+`gen_from_matpower`/`generator_gencost`; evaluation still delegates exclusively
+to `cost.py`.
 
 **Standardization directions (apply during impl):**
 - F1: per-generator `Pg (ng,)` + `Cg @ Pg` injection everywhere; DC drops
