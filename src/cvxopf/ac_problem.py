@@ -26,7 +26,7 @@ from cvxopf.generator import (
     gen_from_matpower,
     generator_bounds,
     generator_gencost,
-    injections as generator_injections,
+    ac_injections as generator_ac_injections,
     make_generator_incidence,
     ac_operating_constraints as generator_ac_operating_constraints,
     gen_cost_expr,
@@ -273,7 +273,7 @@ def _make_step_variables(
     p     = cp.Variable(nb, name=name("p"))
     q     = cp.Variable(nb, name=name("q"))
     Pg    = cp.Variable(ng, name=name("Pg"))
-    Qg    = cp.Variable(ng, name=name("Qg"), bounds=[Qgmin, Qgmax])
+    Qg    = cp.Variable(ng, name=name("Qg"))
 
     if sparse_pq:
         nnz   = len(E[0])
@@ -294,7 +294,8 @@ def _make_step_constraints(
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
     G, B, E, Z,
     rows, cols, G_vec, B_vec, Rp,
-    Cg, generator_injection, Pgmin, Pgmax, Pd, Qd, ref,
+    generator_injection_p, generator_injection_q,
+    Pgmin, Pgmax, Qgmin, Qgmax, Pd, Qd, ref,
     pv, status, gen_bus, vg,
     enforce_vset: bool,
     sparse_pq: bool,
@@ -417,11 +418,16 @@ def _make_step_constraints(
     hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
 
     constr.append(
-        p == generator_injection - Pd
+        p == generator_injection_p - Pd
         + storage_injection_p + nd_injection_p + hvdc_injection_p
     )
-    constr.append(q == Cg @ Qg - Qd + storage_injection_q + nd_injection_q)
-    constr += generator_ac_operating_constraints(Pg, Pgmin, Pgmax)
+    constr.append(
+        q == generator_injection_q - Qd
+        + storage_injection_q + nd_injection_q
+    )
+    constr += generator_ac_operating_constraints(
+        Pg, Qg, Pgmin, Pgmax, Qgmin, Qgmax
+    )
 
     # ------------------------------------------------------------------
     # Section 4: Storage operating constraints
@@ -545,8 +551,10 @@ def _build_ac_single(
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
-    generator_inj_expr, generator_scaling = generator_injections(
-        d["generators"], Pg, d["ext_to_int"]
+    generator_inj_p, generator_inj_q, generator_scaling = (
+        generator_ac_injections(
+            d["generators"], Pg, Qg, d["ext_to_int"]
+        )
     )
     assert generator_scaling is None
 
@@ -554,7 +562,8 @@ def _build_ac_single(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-        d["Cg"], generator_inj_expr, d["Pgmin"], d["Pgmax"],
+        generator_inj_p, generator_inj_q,
+        d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
         d["Pd"], d["Qd"], d["ref"],
         d["pv"], d["status"], d["gen_bus"], d["vg"],
         enforce_vset=options.enforce_vset,
@@ -591,8 +600,7 @@ def _build_ac_single(
     else:
         total_cost = gen_cost
     if "n_hvdc" in d:
-        for k in range(d["n_hvdc"]):
-            total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in[k])
+        total_cost = total_cost + hvdc_cost_expr(hvdc, p_in)
     
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
@@ -796,8 +804,10 @@ def _build_ac_multistep(
         else:
             nd_p_available_t = None
 
-        generator_inj_expr_t, generator_scaling_t = generator_injections(
-            d["generators"], Pg_t, d["ext_to_int"]
+        generator_inj_p_t, generator_inj_q_t, generator_scaling_t = (
+            generator_ac_injections(
+                d["generators"], Pg_t, Qg_t, d["ext_to_int"]
+            )
         )
         assert generator_scaling_t is None
 
@@ -805,7 +815,8 @@ def _build_ac_multistep(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-            d["Cg"], generator_inj_expr_t, d["Pgmin"], d["Pgmax"],
+            generator_inj_p_t, generator_inj_q_t,
+            d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
             Pd_series[t], Qd_series[t], d["ref"],
             d["pv"], d["status"], d["gen_bus"], d["vg"],
             enforce_vset=options.enforce_vset,
@@ -841,8 +852,7 @@ def _build_ac_multistep(
         gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
         total_cost = total_cost + gen_cost
         if "n_hvdc" in d:
-            for k in range(d["n_hvdc"]):
-                total_cost = total_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in_t[k])
+            total_cost = total_cost + hvdc_cost_expr(hvdc, p_in_t)
 
         theta_list.append(theta_t)
         v_list.append(v_t)

@@ -125,6 +125,9 @@ ND and HVDC expose optional `device_id`; supplying an external frame requires
 every relevant device to have a unique, nonempty string ID. Frame columns must
 match the ID set exactly and are reordered to device-list order. HVDC min/max
 frames are aligned independently. Static scalar/bound fallback requires no ID.
+This is an input-boundary distinction, not a physical device distinction:
+generator and storage IDs become necessary when an external keyed schedule or
+availability table is introduced, and must then use this same contract.
 
 ### 3.5 Cost contribution
 - Generator: `poly_cost_expr` (DCP-critical monomial form — preserve verbatim).
@@ -147,7 +150,8 @@ frames are aligned independently. Static scalar/bound fallback requires no ID.
   as the pilot** (least entangled: `cost.py` is nearly standalone), then
   storage, then nondispatchable. Green tests between each. ✅ confirmed.
 - **Balance composition.** Section 3 sums per-component injection addends into
-  the single `p ==`/`q ==`; generator's injection builder returns `Cg @ Pg`.
+  the single `p ==`/`q ==`; generator AC injection returns coordinated
+  `Cg @ Pg` and `Cg @ Qg`, while DC returns `Cg @ Pg` and no reactive channel.
   Preserves the "exactly one `p ==`" contract. ✅ confirmed.
 - **Paired network-specific injection builders.** Every component exposes
   `ac_injections` and `dc_injections`, each returning

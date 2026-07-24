@@ -324,17 +324,25 @@ def coupling_constraints(*args, **kwargs) -> list:
     return []
 
 
-def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
+def hvdc_cost_expr(links: list, p_in: cp.Variable) -> cp.Expression:
     """
-    Per-link HVDC cost expression: c2*|p_in|^2 + c1*|p_in| + c0.
+    Total HVDC cost over all links.
 
     Cost acts on the transfer magnitude so it is symmetric in flow direction.
     (c0, c1, c2) is lowest-first — the package-wide user-facing convention.
     Use cp.multiply for the linear term to avoid CvxpyDeprecationWarning.
     Written as an explicit monomial sum (not Horner) for DCP checker compatibility.
     """
-    c0, c1, c2 = cost_coeffs
-    return c2 * cp.square(p_in) + cp.multiply(c1, cp.abs(p_in)) + c0
+    total = 0
+    for k, link in enumerate(links):
+        c0, c1, c2 = link.cost_coeffs
+        total = (
+            total
+            + c2 * cp.square(p_in[k])
+            + cp.multiply(c1, cp.abs(p_in[k]))
+            + c0
+        )
+    return total
 
 
 # ---------------------------------------------------------------------------

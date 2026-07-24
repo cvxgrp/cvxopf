@@ -29,6 +29,7 @@ from cvxopf.hvdc import (
     _make_hvdc_incidence_matrices,
     _hvdc_static_box,
     _parse_hvdc_timeseries,
+    ac_injections,
     dc_injections,
     dc_operating_constraints,
     ac_operating_constraints,
@@ -321,7 +322,7 @@ class TestHVDCFromDcline:
 class TestHVDCCostExpr:
     def test_zero_cost_is_zero(self):
         p_in = cp.Variable((1,))
-        expr = hvdc_cost_expr((0.0, 0.0, 0.0), p_in)
+        expr = hvdc_cost_expr([_link(cost_coeffs=(0.0, 0.0, 0.0))], p_in)
         # Should be a valid CVXPY expression evaluating to 0 when p_in=0
         prob = cp.Problem(cp.Minimize(expr), [p_in == 0])
         prob.solve()
@@ -329,14 +330,18 @@ class TestHVDCCostExpr:
 
     def test_quadratic_is_dcp_convex(self):
         p_in = cp.Variable((2,))
-        expr = hvdc_cost_expr((1.0, 2.0, 3.0), p_in)
+        links = [
+            _link(cost_coeffs=(1.0, 2.0, 3.0)),
+            _link(cost_coeffs=(1.0, 2.0, 3.0)),
+        ]
+        expr = hvdc_cost_expr(links, p_in)
         assert expr.is_dcp()
         assert expr.is_convex()
 
     def test_cost_symmetric(self):
         # Cost should be the same for +p and -p
         p_in = cp.Variable((1,))
-        expr = hvdc_cost_expr((0.0, 1.0, 0.0), p_in)
+        expr = hvdc_cost_expr([_link(cost_coeffs=(0.0, 1.0, 0.0))], p_in)
         prob_pos = cp.Problem(cp.Minimize(0), [p_in == 5.0])
         prob_pos.solve()
         p_in.value = np.array([5.0])
@@ -371,16 +376,20 @@ class TestACDelegates:
 
 
 class TestHVDCInjections:
-    def test_returns_two_tuple(self):
+    def test_ac_and_dc_return_fixed_three_tuple(self):
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, q_inj, inv_bMVA = dc_injections(
+        p_ac, q_ac, scale_ac = ac_injections(
             links, p_in, p_out, _EXT_TO_INT
         )
-        assert q_inj is None
-        assert isinstance(inv_bMVA, cp.Parameter)
-        assert hasattr(inj, "is_affine")
+        p_dc, q_dc, scale_dc = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_ac is q_dc is None
+        assert isinstance(scale_ac, cp.Parameter)
+        assert isinstance(scale_dc, cp.Parameter)
+        assert p_ac.shape == p_dc.shape == (_NB,)
 
     def test_injection_is_cvxpy_expression(self):
         links = [_link(from_bus=1, to_bus=2)]

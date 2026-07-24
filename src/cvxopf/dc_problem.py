@@ -48,7 +48,7 @@ from cvxopf.generator import (
     gen_from_matpower,
     generator_bounds,
     generator_gencost,
-    injections as generator_injections,
+    dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
     gen_cost_expr,
@@ -369,9 +369,10 @@ def _build_lossy_dc_single(
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
-    generator_inj_expr, generator_scaling = generator_injections(
+    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
         d["generators"], Pg, d["ext_to_int"]
     )
+    assert generator_q_inj is None
     assert generator_scaling is None
 
     constr = _make_dc_step_constraints(
@@ -410,8 +411,7 @@ def _build_lossy_dc_single(
 
     # Add HVDC cost if present
     if "n_hvdc" in d and d["n_hvdc"] > 0:
-        for k in range(d["n_hvdc"]):
-            cost = cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in[k])
+        cost = cost + hvdc_cost_expr(hvdc, p_in)
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d and d["ns"] > 0:
@@ -612,9 +612,10 @@ def _build_lossy_dc_multistep(
         else:
             nd_p_available_t = None
 
-        generator_inj_expr_t, generator_scaling_t = generator_injections(
+        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
             d["generators"], Pg_t, d["ext_to_int"]
         )
+        assert generator_q_inj_t is None
         assert generator_scaling_t is None
 
         step_constr = _make_dc_step_constraints(
@@ -652,8 +653,7 @@ def _build_lossy_dc_multistep(
 
         # Add HVDC cost if present
         if "n_hvdc" in d and d["n_hvdc"] > 0:
-            for k in range(d["n_hvdc"]):
-                step_cost = step_cost + hvdc_cost_expr(hvdc[k].cost_coeffs, p_in_t[k])
+            step_cost = step_cost + hvdc_cost_expr(hvdc, p_in_t)
 
         all_constr.extend(step_constr)
         total_cost  = total_cost + step_cost

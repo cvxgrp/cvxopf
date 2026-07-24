@@ -54,7 +54,7 @@ from cvxopf.generator import (
     gen_from_matpower,
     generator_bounds,
     generator_gencost,
-    injections as generator_injections,
+    dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
     gen_cost_expr,
@@ -358,12 +358,13 @@ def _build_singlenode_dc_single(
         nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Build constraints
-    generator_inj_expr, generator_scaling = generator_injections(
+    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
         d["generators"],
         Pg,
         d["collapsed_ext_to_int"],
         nb=1,
     )
+    assert generator_q_inj is None
     assert generator_scaling is None
 
     constr = _make_singlenode_dc_step_constraints(
@@ -603,12 +604,13 @@ def _build_singlenode_dc_multistep(
             nd_p_available_t = None
 
         # Per-step constraints
-        generator_inj_expr_t, generator_scaling_t = generator_injections(
+        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
             d["generators"],
             Pg_t,
             d["collapsed_ext_to_int"],
             nb=1,
         )
+        assert generator_q_inj_t is None
         assert generator_scaling_t is None
 
         step_constr = _make_singlenode_dc_step_constraints(

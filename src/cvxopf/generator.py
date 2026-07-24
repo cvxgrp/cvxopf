@@ -17,8 +17,9 @@ generators.
 Units: generator variables (Pg, Qg) are in per-unit internally, matching the
 conventional-generator convention used throughout cvxopf (unlike storage and
 nondispatchable, which are in engineering units). Because Pg is already
-per-unit, the injection Cg @ Pg needs no baseMVA scaling -- injections returns
-(Cg @ Pg, None); the second slot exists only to match the HVDC interface shape.
+per-unit, generator injections need no baseMVA scaling. ``ac_injections``
+returns ``(Cg @ Pg, Cg @ Qg, None)`` and ``dc_injections`` returns
+``(Cg @ Pg, None, None)``.
 
 Cost: cost expressions receive Pg in MW (baseMVA * Pg). gen_cost_expr wraps
 poly_cost_expr; the DCP-critical explicit-monomial construction lives in
@@ -306,42 +307,61 @@ def _case_with_generators(case: dict, gens: list) -> dict:
     return normalized
 
 
-def injections(
+def ac_injections(
     gens: list,
     Pg: cp.Variable,
+    Qg: cp.Variable,
     ext_to_int: dict,
     *,
     nb: int | None = None,
 ) -> tuple:
     """
-    Build the generator nodal-balance addend Cg @ Pg.
+    Build coordinated real/reactive generator injections for an AC network.
 
     Pg is created by the calling problem builder and passed in; this function
     does not instantiate any cp.Variable.
 
     Returns
     -------
-    injection_expr : cp.Expression
-        Cg @ Pg, shape (nb,). Per-unit -- no baseMVA scaling (Pg is already
-        per-unit, unlike storage/ND engineering-unit variables).
-    scaling : None
-        Always None for generators; present to match the HVDC injection
-        interface (which returns an inv_baseMVA cp.Parameter).
+    Pg and Qg are already per-unit, so no scaling parameter is required.
     """
     if nb is None:
         nb = len(ext_to_int)
     Cg = make_generator_incidence(gens, nb, ext_to_int)
-    return Cg @ Pg, None
+    return Cg @ Pg, Cg @ Qg, None
 
 
-def ac_operating_constraints(Pg: cp.Variable, Pgmin, Pgmax) -> list:
+def dc_injections(
+    gens: list,
+    Pg: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+) -> tuple:
+    """Build real generator injection and no reactive channel for a DC network."""
+    if nb is None:
+        nb = len(ext_to_int)
+    Cg = make_generator_incidence(gens, nb, ext_to_int)
+    return Cg @ Pg, None, None
+
+
+def ac_operating_constraints(
+    Pg: cp.Variable,
+    Qg: cp.Variable,
+    Pgmin,
+    Pgmax,
+    Qgmin,
+    Qgmax,
+) -> list:
     """
-    AC per-generator real-power bounds: Pgmin <= Pg <= Pgmax (affine, DCP).
-
-    Reactive bounds (Qg) are applied by the AC constructor on the Qg variable
-    directly (no DC analogue), so they are not part of this method.
+    AC per-generator real/reactive power box (affine, DCP).
     """
-    return [Pg >= Pgmin, Pg <= Pgmax]
+    return [
+        Pg >= Pgmin,
+        Pg <= Pgmax,
+        Qg >= Qgmin,
+        Qg <= Qgmax,
+    ]
 
 
 def dc_operating_constraints(Pg: cp.Variable, Pgmin, Pgmax) -> list:
@@ -352,12 +372,12 @@ def dc_operating_constraints(Pg: cp.Variable, Pgmin, Pgmax) -> list:
     matches components where AC and DC diverge.
 
     Under Milestone 16, DC uses a per-generator Pg (ng,) wired into flow
-    conservation via Cg @ Pg (see injections), rather than a nodal p_gen (nb,)
+    conservation via Cg @ Pg (see dc_injections), rather than a nodal p_gen (nb,)
     with gen_bus-indexed bounds and nogen zeroing. The nodal form is redundant:
     Cg has no column at non-generator buses, so zero injection there is
     automatic.
     """
-    return ac_operating_constraints(Pg, Pgmin, Pgmax)
+    return [Pg >= Pgmin, Pg <= Pgmax]
 
 
 def coupling_constraints(*args, **kwargs) -> list:

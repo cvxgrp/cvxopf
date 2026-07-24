@@ -8,6 +8,7 @@ import pytest
 from cvxopf.generator import (
     DispatchableGenerator,
     _validate_generators,
+    ac_injections,
     ac_operating_constraints,
     coupling_constraints,
     dc_operating_constraints,
@@ -15,7 +16,7 @@ from cvxopf.generator import (
     gen_from_matpower,
     generator_bounds,
     generator_gencost,
-    injections,
+    dc_injections,
     make_generator_incidence,
 )
 from cvxopf.ac_problem import _parse_case as _parse_ac_case
@@ -200,16 +201,29 @@ def test_injection_and_operating_regions_are_dcp():
         DispatchableGenerator(bus=20, p_max_mw=50),
     ]
     Pg = cp.Variable(2)
-    injection, scaling = injections(generators, Pg, {10: 0, 20: 1})
+    Qg = cp.Variable(2)
+    p_ac, q_ac, ac_scaling = ac_injections(
+        generators, Pg, Qg, {10: 0, 20: 1}
+    )
+    p_dc, q_dc, dc_scaling = dc_injections(
+        generators, Pg, {10: 0, 20: 1}
+    )
     bounds = generator_bounds(generators, 100.0)
 
-    assert scaling is None
-    assert injection.shape == (2,)
-    for constraints in (
-        ac_operating_constraints(Pg, bounds[0], bounds[1]),
-        dc_operating_constraints(Pg, bounds[0], bounds[1]),
+    assert ac_scaling is dc_scaling is None
+    assert p_ac.shape == q_ac.shape == p_dc.shape == (2,)
+    assert q_dc is None
+    for variables, constraints in (
+        (
+            [Pg, Qg],
+            ac_operating_constraints(Pg, Qg, *bounds),
+        ),
+        ([Pg], dc_operating_constraints(Pg, bounds[0], bounds[1])),
     ):
-        problem = cp.Problem(cp.Minimize(cp.sum(Pg)), constraints)
+        problem = cp.Problem(
+            cp.Minimize(sum(cp.sum(variable) for variable in variables)),
+            constraints,
+        )
         assert problem.is_dcp()
 
 
