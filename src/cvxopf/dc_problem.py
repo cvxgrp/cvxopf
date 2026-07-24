@@ -208,16 +208,16 @@ def _make_dc_step_constraints(
     p_min_hvdc_t=None,
     p_max_hvdc_t=None,
     step: int = 0,
-) -> list:
-    """Build the list of CVXPY constraints for one DC time step."""
+) -> tuple[list, cp.Expression]:
+    """Build one DC step's constraints and modeled net bus injection."""
     # Section 1: Nodal real power balance
     storage_term = storage_injection if ns > 0 else 0
     nd_term = nd_injection if nnd > 0 else 0
     hvdc_term = hvdc_injection_expr if n_hvdc > 0 else 0
-    constr = [
-        A @ p_flows + generator_injection
-        + storage_term + nd_term + hvdc_term == Pd
-    ]
+    p_net = (
+        generator_injection + storage_term + nd_term + hvdc_term - Pd
+    )
+    constr = [A @ p_flows + p_net == 0]
 
     # Section 2: Branch flow limits
     constr.append(cp.abs(p_flows) <= f_max)
@@ -241,7 +241,7 @@ def _make_dc_step_constraints(
             links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
         )
 
-    return constr
+    return constr, p_net
 
 
 def _make_dc_step_cost(
@@ -340,7 +340,7 @@ def _build_lossy_dc_single(
     assert generator_q_inj is None
     assert generator_scaling is None
 
-    constr = _make_dc_step_constraints(
+    constr, p_net_expr = _make_dc_step_constraints(
         p_flows, Pg, generator_inj_expr,
         d["A"], d["Pd"], d["f_max"],
         d["Pgmin"], d["Pgmax"],
@@ -455,12 +455,14 @@ def _build_lossy_dc_single(
             Ch_to=d["Ch_to"],
         )
 
+    expressions = {"p_net": p_net_expr}
+    if storage_cost is not None:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
-        expressions=(
-            {"storage_cost": storage_cost} if storage_cost is not None else {}
-        ),
+        expressions=expressions,
     )
 
 
@@ -532,6 +534,7 @@ def _build_lossy_dc_multistep(
     p_nd_list       = []
     p_hvdc_in_list  = []
     p_hvdc_out_list = []
+    p_net_expr_list = []
     all_constr      = []
     total_cost      = 0
     storage_cost    = 0
@@ -607,7 +610,7 @@ def _build_lossy_dc_multistep(
         assert generator_q_inj_t is None
         assert generator_scaling_t is None
 
-        step_constr = _make_dc_step_constraints(
+        step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t, Pg_t, generator_inj_expr_t,
             d["A"], Pd_series[t], d["f_max"],
             d["Pgmin"], d["Pgmax"],
@@ -659,6 +662,7 @@ def _build_lossy_dc_multistep(
         total_cost  = total_cost + step_cost
         p_flows_list.append(p_flows_t)
         Pg_list.append(Pg_t)
+        p_net_expr_list.append(p_net_expr_t)
 
         # Add storage variables to lists
         if "ns" in d:
@@ -760,8 +764,12 @@ def _build_lossy_dc_multistep(
             Ch_to=d["Ch_to"],
         )
 
+    expressions = {"p_net": p_net_expr_list}
+    if "ns" in d:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
-        expressions={"storage_cost": storage_cost} if "ns" in d else {},
+        expressions=expressions,
     )

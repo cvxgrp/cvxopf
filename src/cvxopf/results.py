@@ -36,6 +36,15 @@ def _solved_expression_value(build: OPFBuild, name: str) -> float:
     return float(value) if value is not None else float("nan")
 
 
+def _solved_expression_values(build: OPFBuild, name: str):
+    """Evaluate a named single- or multi-step modeled expression."""
+    expression = build.expressions[name]
+    if isinstance(expression, list):
+        values = [item.value for item in expression]
+        return None if any(value is None for value in values) else np.array(values)
+    return expression.value
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -184,7 +193,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             Qg        = var["Qg"].value * baseMVA,
             Vm        = var["v"].value.flatten(),
             Va_deg    = np.rad2deg(var["theta"].value.flatten()),
-            p_net     = var["p"].value * baseMVA,
+            p_net     = _solved_expression_values(build, "p_net") * baseMVA,
             q_net     = var["q"].value * baseMVA,
         )
         
@@ -222,7 +231,6 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     Qg_rows = []
     Vm_rows = []
     Va_rows = []
-    p_rows  = []
     q_rows  = []
     b_rows  = []
     b_q_rows = []
@@ -237,7 +245,6 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         Qg_rows.append(var["Qg"][t].value)
         Vm_rows.append(var["v"][t].value.flatten())
         Va_rows.append(var["theta"][t].value.flatten())
-        p_rows.append(var["p"][t].value)
         q_rows.append(var["q"][t].value)
         
         # Extract storage results if present
@@ -263,7 +270,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         Qg        = np.array(Qg_rows) * baseMVA,
         Vm        = np.array(Vm_rows),
         Va_deg    = np.rad2deg(np.array(Va_rows)),
-        p_net     = np.array(p_rows) * baseMVA,
+        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
         q_net     = np.array(q_rows) * baseMVA,
     )
     
@@ -299,21 +306,17 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     Extract results for lossy DC formulation (single-step or multi-step).
 
     Pg is stored directly as a per-generator (ng,) variable. Nodal net
-    injection is reconstructed as Cg @ Pg - Pd.
+    injection is evaluated from the exact expression used in power balance.
     """
     var     = build.variables
     data    = build.data
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
-    Cg = data["Cg"]
-
     multistep = isinstance(var["Pg"], list)
 
     if not multistep:
         Pg_val      = var["Pg"].value
         p_flows_val = var["p_flows"].value
-        Pd          = data["Pd"]
-
         # Guard: solver may return None values if problem is infeasible
         if Pg_val is None or p_flows_val is None:
             return dict(
@@ -324,23 +327,12 @@ def _extract_dc_results(build: OPFBuild) -> dict:
                 p_net     = None,
             )
 
-        p_net = Cg @ Pg_val - Pd
-        if "ns" in data:
-            p_net += data["Cs"] @ var["b"].value / baseMVA
-        if "nnd" in data:
-            p_net += data["Cnd"] @ var["p_nd"].value / baseMVA
-        if "n_hvdc" in data:
-            p_net += (
-                data["Ch_from"] @ var["p_hvdc_in"].value
-                + data["Ch_to"] @ var["p_hvdc_out"].value
-            ) / baseMVA
-
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = Pg_val * baseMVA,
             p_flows   = p_flows_val * baseMVA,
-            p_net     = p_net * baseMVA,
+            p_net     = _solved_expression_values(build, "p_net") * baseMVA,
         )
         
         # Add storage results if present
@@ -370,10 +362,8 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         return results
 
     T            = data["T"]
-    Pd_series    = data["Pd_series"]
     Pg_rows      = []
     p_flows_rows = []
-    p_net_rows   = []
     b_rows       = []
     soc_rows     = []
     p_nd_rows    = []
@@ -393,18 +383,6 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             )
         Pg_rows.append(Pg_t)
         p_flows_rows.append(p_flows_t)
-        p_net_t = Cg @ Pg_t - Pd_series[t]
-        if "ns" in data:
-            p_net_t += data["Cs"] @ var["b"][t].value / baseMVA
-        if "nnd" in data:
-            p_net_t += data["Cnd"] @ var["p_nd"][t].value / baseMVA
-        if "n_hvdc" in data:
-            p_net_t += (
-                data["Ch_from"] @ var["p_hvdc_in"][t].value
-                + data["Ch_to"] @ var["p_hvdc_out"][t].value
-            ) / baseMVA
-        p_net_rows.append(p_net_t)
-        
         # Extract storage results if present
         if "ns" in data:
             b_rows.append(var["b"][t].value)
@@ -424,7 +402,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         objective = float(prob.value),
         Pg        = np.array(Pg_rows) * baseMVA,
         p_flows   = np.array(p_flows_rows) * baseMVA,
-        p_net     = np.array(p_net_rows) * baseMVA,
+        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
     )
     
     # Add storage results if present
@@ -480,17 +458,13 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
                 p_net     = None,
             )
 
-        p_net = np.sum(Pg_val) - data["Pd_total"]
-        if "ns" in data:
-            p_net += float(np.sum(var["b"].value)) / baseMVA
-        if "nnd" in data:
-            p_net += float(np.sum(var["p_nd"].value)) / baseMVA
-
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = Pg_val * baseMVA,          # (ng,) MW
-            p_net     = float(p_net * baseMVA),
+            p_net     = float(
+                _solved_expression_values(build, "p_net") * baseMVA
+            ),
         )
 
         # Add storage results if present
@@ -532,19 +506,11 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
         if "nnd" in data:
             p_nd_rows.append(var["p_nd"][t].value)
 
-    Pd_series = data["Pd_series"]  # shape (T,)
-
-    p_net = np.array([np.sum(r) for r in Pg_rows]) - Pd_series
-    if "ns" in data:
-        p_net += np.sum(np.array(b_rows), axis=1) / baseMVA
-    if "nnd" in data:
-        p_net += np.sum(np.array(p_nd_rows), axis=1) / baseMVA
-
     results = dict(
         status    = prob.status,
         objective = float(prob.value),
         Pg        = np.array(Pg_rows) * baseMVA,  # (T, ng)
-        p_net     = p_net * baseMVA,  # (T,)
+        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
     )
 
     # Add storage results if present

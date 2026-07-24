@@ -165,6 +165,7 @@ class OPFBuild:
         nonconvex (ac). Controls solver defaults in solve().
     expressions : dict
         Named modeled CVXPY expressions used for solved-value reporting.
+        Multi-step expressions are stored as lists of length T.
     """
     prob:        cp.Problem
     variables:   dict

@@ -96,7 +96,7 @@ def _make_singlenode_dc_step_constraints(
     nd_injection=None,
     nd_p_available_t=None,
     p_nd_t=None,
-) -> list:
+) -> tuple[list, cp.Expression]:
     """
     Build constraints for a single time step of the single-node DC formulation.
 
@@ -129,15 +129,18 @@ def _make_singlenode_dc_step_constraints(
 
     Returns
     -------
-    list
-        List of CVXPY constraints.
+    tuple[list, cp.Expression]
+        CVXPY constraints and the modeled scalar net injection.
     """
     constr = []
 
     # Section 1: Power balance (exactly one equality constraint)
     storage_term = storage_injection[0] if ns > 0 else 0
     nd_term = nd_injection[0] if nnd > 0 else 0
-    constr.append(generator_injection[0] + storage_term + nd_term == Pd_total_t)
+    p_net = (
+        generator_injection[0] + storage_term + nd_term - Pd_total_t
+    )
+    constr.append(p_net == 0)
 
     # Section 2: Generator bounds
     constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
@@ -152,7 +155,7 @@ def _make_singlenode_dc_step_constraints(
             nd_units, p_nd_t, nd_p_available_t
         )
 
-    return constr
+    return constr, p_net
 
 
 def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
@@ -352,7 +355,7 @@ def _build_singlenode_dc_single(
     assert generator_q_inj is None
     assert generator_scaling is None
 
-    constr = _make_singlenode_dc_step_constraints(
+    constr, p_net_expr = _make_singlenode_dc_step_constraints(
         Pg=Pg,
         generator_injection=generator_inj_expr,
         Pd_total_t=d["Pd_total"],
@@ -445,15 +448,17 @@ def _build_singlenode_dc_single(
             "nd_p_available": d["nd_p_available"],
         })
 
+    expressions = {"p_net": p_net_expr}
+    if storage_cost is not None:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob,
         variables=variables,
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
-        expressions=(
-            {"storage_cost": storage_cost} if storage_cost is not None else {}
-        ),
+        expressions=expressions,
     )
 
 
@@ -557,6 +562,7 @@ def _build_singlenode_dc_multistep(
     b_list = []
     soc_list = []
     p_nd_list = []
+    p_net_expr_list = []
     all_constr = []
     total_cost = 0
     storage_cost = 0
@@ -619,7 +625,7 @@ def _build_singlenode_dc_multistep(
         assert generator_q_inj_t is None
         assert generator_scaling_t is None
 
-        step_constr = _make_singlenode_dc_step_constraints(
+        step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
             Pg=Pg_t,
             generator_injection=generator_inj_expr_t,
             Pd_total_t=float(Pd_series[t]),
@@ -658,6 +664,7 @@ def _build_singlenode_dc_multistep(
 
         # Accumulate variables
         Pg_list.append(Pg_t)
+        p_net_expr_list.append(p_net_expr_t)
         if "ns" in d:
             b_list.append(b_t)
             soc_list.append(soc_t)
@@ -736,11 +743,15 @@ def _build_singlenode_dc_multistep(
         else:
             data["nd_p_available"] = d["nd_p_available"]
 
+    expressions = {"p_net": p_net_expr_list}
+    if "ns" in d:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob,
         variables=variables,
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
-        expressions={"storage_cost": storage_cost} if "ns" in d else {},
+        expressions=expressions,
     )

@@ -16,6 +16,7 @@ from cvxopf import (
 from cvxopf import generator, hvdc, nondispatchable, storage
 from cvxopf import ac_problem, dc_problem, singlenode_dc_problem
 from cvxopf.problem import build_opf, build_opf_multistep
+from cvxopf.results import extract_results
 from cvxopf.testcases import case9
 
 
@@ -346,3 +347,42 @@ def test_multistep_delta_must_be_positive_without_storage():
         build_opf_multistep(
             case, df_P, df_Q, T=1, formulation="ac", delta=0.0
         )
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_builders_retain_modeled_net_injection_expression(formulation):
+    case = case9()
+    single = build_opf(case, formulation=formulation)
+    assert isinstance(single.expressions["p_net"], cp.Expression)
+
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        multi = build_opf_multistep(
+            case, df_P, df_Q, T=T, formulation=formulation
+        )
+
+    assert len(multi.expressions["p_net"]) == T
+    assert all(
+        isinstance(expression, cp.Expression)
+        for expression in multi.expressions["p_net"]
+    )
+
+
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+def test_dc_results_use_retained_modeled_net_injection(formulation):
+    build = build_opf(case9(), formulation=formulation)
+    build.solve()
+    expected = np.asarray(build.expressions["p_net"].value) * build.data["baseMVA"]
+
+    # Input metadata is retained for inspection, but is not a second result
+    # model. Changing it after solve must not change the reported injection.
+    if formulation == "lossy_dc":
+        build.data["Pd"] = np.full_like(build.data["Pd"], 1e6)
+    else:
+        build.data["Pd_total"] = 1e6
+
+    actual = np.asarray(extract_results(build)["p_net"])
+    np.testing.assert_allclose(actual, expected)

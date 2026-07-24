@@ -643,12 +643,14 @@ def _build_ac_single(
             Ch_to=d["Ch_to"],
         )
 
+    expressions = {"p_net": p}
+    if storage_cost is not None:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
-        expressions=(
-            {"storage_cost": storage_cost} if storage_cost is not None else {}
-        ),
+        expressions=expressions,
     )
 
 
@@ -974,8 +976,12 @@ def _build_ac_multistep(
             Ch_to=d["Ch_to"],
         )
 
+    expressions = {"p_net": p_list}
+    if "ns" in d:
+        expressions["storage_cost"] = storage_cost
+
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
-        expressions={"storage_cost": storage_cost} if "ns" in d else {},
+        expressions=expressions,
     )
