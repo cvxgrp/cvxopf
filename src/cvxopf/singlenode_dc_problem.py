@@ -93,7 +93,6 @@ def _make_singlenode_dc_step_constraints(
     Pd_total_t: float,
     Pgmin,
     Pgmax,
-    baseMVA: float,
     ns: int = 0,
     storage_units=None,
     storage_injection=None,
@@ -116,8 +115,6 @@ def _make_singlenode_dc_step_constraints(
         Total load for this time step (scalar, per-unit).
     Pgmin, Pgmax : np.ndarray
         Generator bounds (ng,) in per-unit.
-    baseMVA : float
-        System base MVA.
     ns : int
         Number of storage units (0 if no storage).
     storage_units : list[StorageUnitIdeal] or None
@@ -369,7 +366,6 @@ def _build_singlenode_dc_single(
         Pd_total_t=d["Pd_total"],
         Pgmin=d["Pgmin"],
         Pgmax=d["Pgmax"],
-        baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
         storage_units=storage,
         storage_injection=storage_inj,
@@ -539,12 +535,9 @@ def _build_singlenode_dc_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
-    # Parse nondispatchable time series (if present)
+    # The public builder guarantees a normalized ND time series when ND is active.
     if "nnd" in d:
-        if df_nd is not None:
-            d["nd_available"] = df_nd.to_numpy(dtype=float)
-        else:
-            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
+        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     # Accumulators
     Pg_list = []
@@ -596,10 +589,7 @@ def _build_singlenode_dc_multistep(
 
         # Determine available ND power for this step
         if "nnd" in d:
-            if "nd_available" in d:
-                nd_p_available_t = d["nd_available"][t, :]
-            else:
-                nd_p_available_t = d["nd_p_available"]
+            nd_p_available_t = d["nd_available"][t, :]
         else:
             nd_p_available_t = None
 
@@ -620,7 +610,6 @@ def _build_singlenode_dc_multistep(
             Pd_total_t=float(Pd_series[t]),
             Pgmin=d["Pgmin"],
             Pgmax=d["Pgmax"],
-            baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
             storage_units=storage,
             storage_injection=storage_inj_t,

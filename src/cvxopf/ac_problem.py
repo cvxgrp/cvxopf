@@ -257,7 +257,6 @@ def _make_step_constraints(
     pv, generators, ext_to_int,
     enforce_vset: bool,
     sparse_pq: bool,
-    baseMVA: float,
     # Storage — all None when storage=None
     ns: int = 0,
     storage_units=None,
@@ -539,7 +538,6 @@ def _build_ac_single(
         d["pv"], d["generators"], d["ext_to_int"],
         enforce_vset=options.enforce_vset,
         sparse_pq=options.sparse_pq,
-        baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
         storage_units=storage,
         storage_injection_p=storage_inj_p,
@@ -674,12 +672,9 @@ def _build_ac_multistep(
     )
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
     
-    # Parse nondispatchable timeseries if present
+    # The public builder guarantees a normalized ND time series when ND is active.
     if "nnd" in d:
-        if df_nd is not None:
-            d["nd_available"] = df_nd.to_numpy(dtype=float)
-        else:
-            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
+        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -768,10 +763,7 @@ def _build_ac_multistep(
 
         # Get available power for this time step
         if "nnd" in d:
-            nd_p_available_t = (
-                d["nd_available"][t, :]
-                if "nd_available" in d else d["nd_p_available"]
-            )
+            nd_p_available_t = d["nd_available"][t, :]
         else:
             nd_p_available_t = None
 
@@ -796,7 +788,6 @@ def _build_ac_multistep(
             d["pv"], d["generators"], d["ext_to_int"],
             enforce_vset=options.enforce_vset,
             sparse_pq=options.sparse_pq,
-            baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
             storage_units=storage,
             storage_injection_p=storage_inj_p_t,

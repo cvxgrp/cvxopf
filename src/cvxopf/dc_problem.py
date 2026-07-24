@@ -197,7 +197,6 @@ def _parse_dc_case(
 def _make_dc_step_constraints(
     p_flows, Pg, generator_injection,
     A, Pd, f_max, Pgmin, Pgmax,
-    baseMVA: float,
     ns: int = 0,
     storage_units=None,
     storage_injection=None,
@@ -352,7 +351,6 @@ def _build_lossy_dc_single(
         p_flows, Pg, generator_inj_expr,
         d["A"], d["Pd"], d["f_max"],
         d["Pgmin"], d["Pgmax"],
-        baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
         storage_units=storage,
         storage_injection=storage_inj,
@@ -504,12 +502,9 @@ def _build_lossy_dc_multistep(
     )
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
     
-    # Parse nondispatchable timeseries if present
+    # The public builder guarantees a normalized ND time series when ND is active.
     if "nnd" in d:
-        if df_nd is not None:
-            d["nd_available"] = df_nd.to_numpy(dtype=float)
-        else:
-            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
+        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -586,10 +581,7 @@ def _build_lossy_dc_multistep(
 
         # Get available power for this time step
         if "nnd" in d:
-            nd_p_available_t = (
-                d["nd_available"][t, :]
-                if "nd_available" in d else d["nd_p_available"]
-            )
+            nd_p_available_t = d["nd_available"][t, :]
         else:
             nd_p_available_t = None
 
@@ -603,7 +595,6 @@ def _build_lossy_dc_multistep(
             p_flows_t, Pg_t, generator_inj_expr_t,
             d["A"], Pd_series[t], d["f_max"],
             d["Pgmin"], d["Pgmax"],
-            baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
             storage_units=storage,
             storage_injection=storage_inj_t,
