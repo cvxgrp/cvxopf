@@ -230,8 +230,11 @@ uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 ```
 
 Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
-adjust generator limits, branch flow limits, and load scale interactively.
-Results update automatically after each solve.
+and adjust generator limits, branch-flow reference values, and load scale
+interactively. The lossy DC formulation enforces the selected branch limits.
+The AC formulation currently uses them only as visualization thresholds; AC
+branch-limit constraints are not yet implemented. Results update automatically
+after each solve.
 
 ```bash
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
@@ -269,7 +272,7 @@ df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
 build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac")
 build.solve()
 results = extract_results(build)
-print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
@@ -311,7 +314,7 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
@@ -358,7 +361,7 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Total objective:      {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"ND real power (MW):   {results['p_nd']}")
 print(f"ND reactive (MVAr):   {results['q_nd']}")
 print(f"Curtailment (MW):     {results['curtailment']}")
@@ -484,8 +487,7 @@ package environment.
 - [ ] Branch flow limits (AC)
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
-- [x] HVDC transmission links (lossless + fixed-direction proportional loss) with reactive power suppport
-- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split)
+- [x] HVDC transmission links (lossless + fixed-direction proportional loss, unity power factor)
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
@@ -493,6 +495,6 @@ package environment.
 - [ ] Extend battery parameters: final SoC, penalty vs constraint
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
-- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power support
+- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
