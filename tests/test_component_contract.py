@@ -339,14 +339,14 @@ def test_dc_builders_compose_generator_network_hook(
     assert len(calls) == T
 
 
-def test_multistep_delta_must_be_positive_without_storage():
+def test_multistep_delta_is_ignored_without_temporal_devices():
     case = case9()
     df_P = pd.DataFrame([case["bus"][:, 2]])
     df_Q = pd.DataFrame([case["bus"][:, 3]])
-    with pytest.raises(ValueError, match="delta must be > 0"):
-        build_opf_multistep(
-            case, df_P, df_Q, T=1, formulation="ac", delta=0.0
-        )
+    build = build_opf_multistep(
+        case, df_P, df_Q, T=1, formulation="ac", delta=0.0
+    )
+    assert build.data["T"] == 1
 
 
 @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
@@ -354,6 +354,10 @@ def test_builders_retain_modeled_net_injection_expression(formulation):
     case = case9()
     single = build_opf(case, formulation=formulation)
     assert isinstance(single.expressions["p_net"], cp.Expression)
+    if formulation == "ac":
+        assert isinstance(single.expressions["q_net"], cp.Expression)
+    else:
+        assert "q_net" not in single.expressions
 
     T = 2
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
@@ -369,6 +373,14 @@ def test_builders_retain_modeled_net_injection_expression(formulation):
         isinstance(expression, cp.Expression)
         for expression in multi.expressions["p_net"]
     )
+    if formulation == "ac":
+        assert len(multi.expressions["q_net"]) == T
+        assert all(
+            isinstance(expression, cp.Expression)
+            for expression in multi.expressions["q_net"]
+        )
+    else:
+        assert "q_net" not in multi.expressions
 
 
 @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])

@@ -308,7 +308,7 @@ def _build_lossy_dc_single(
     # Create nondispatchable variables if present
     p_nd_t = None
     nd_inj = None
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         nnd = d["nnd"]
         p_nd_t = cp.Variable(nnd, name="p_nd")
         nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
@@ -323,7 +323,7 @@ def _build_lossy_dc_single(
     # Create HVDC variables if present
     p_in = p_out = None
     hvdc_inj_expr = None
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         n_hvdc = d["n_hvdc"]
         p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
         p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
@@ -390,7 +390,7 @@ def _build_lossy_dc_single(
         cost = cost + storage_cost
 
     # Add HVDC cost if present
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         cost = cost + hvdc_cost_expr(hvdc, p_in)
 
     # Add storage SoC dynamics constraints if present
@@ -409,11 +409,11 @@ def _build_lossy_dc_single(
         variables["soc"] = soc_t
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_t
 
     # Add HVDC variables if present
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         variables["p_hvdc_in"]  = p_in
         variables["p_hvdc_out"] = p_out
 
@@ -442,7 +442,7 @@ def _build_lossy_dc_single(
         )
 
     # Add nondispatchable data if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         data.update(
             nnd=d["nnd"],
             Cnd=d["Cnd"],
@@ -452,7 +452,7 @@ def _build_lossy_dc_single(
         )
 
     # Add HVDC data if present
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         data.update(
             n_hvdc=d["n_hvdc"],
             Ch_from=d["Ch_from"],
@@ -567,7 +567,7 @@ def _build_lossy_dc_multistep(
         # Create nondispatchable variables if present
         p_nd_t = None
         nd_inj_t = None
-        if "nnd" in d and d["nnd"] > 0:
+        if "nnd" in d:
             nnd = d["nnd"]
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
@@ -583,7 +583,7 @@ def _build_lossy_dc_multistep(
         p_in_t = p_out_t = None
         hvdc_inj_expr_t = None
         p_min_hvdc_t = p_max_hvdc_t = None
-        if "n_hvdc" in d and d["n_hvdc"] > 0:
+        if "n_hvdc" in d:
             n_hvdc = d["n_hvdc"]
             p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
             p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
@@ -659,7 +659,7 @@ def _build_lossy_dc_multistep(
             step_cost = step_cost + step_storage_cost
 
         # Add HVDC cost if present
-        if "n_hvdc" in d and d["n_hvdc"] > 0:
+        if "n_hvdc" in d:
             step_cost = step_cost + hvdc_cost_expr(hvdc, p_in_t)
 
         all_constr.extend(step_constr)
@@ -674,11 +674,11 @@ def _build_lossy_dc_multistep(
             soc_list.append(soc_t)
 
         # Add nondispatchable variables to lists
-        if "nnd" in d and d["nnd"] > 0:
+        if "nnd" in d:
             p_nd_list.append(p_nd_t)
 
         # Add HVDC variables to lists
-        if "n_hvdc" in d and d["n_hvdc"] > 0:
+        if "n_hvdc" in d:
             p_hvdc_in_list.append(p_in_t)
             p_hvdc_out_list.append(p_out_t)
 
@@ -717,11 +717,11 @@ def _build_lossy_dc_multistep(
         variables["soc"] = soc_list
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_list
 
     # Add HVDC variables if present
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         variables["p_hvdc_in"]  = p_hvdc_in_list
         variables["p_hvdc_out"] = p_hvdc_out_list
 
@@ -751,7 +751,7 @@ def _build_lossy_dc_multistep(
         )
 
     # Add nondispatchable data if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         data.update(
             nnd=d["nnd"],
             Cnd=d["Cnd"],
@@ -761,7 +761,7 @@ def _build_lossy_dc_multistep(
         )
 
     # Add HVDC data if present
-    if "n_hvdc" in d and d["n_hvdc"] > 0:
+    if "n_hvdc" in d:
         data.update(
             n_hvdc=d["n_hvdc"],
             Ch_from=d["Ch_from"],

@@ -482,7 +482,7 @@ def _build_ac_single(
     # Create nondispatchable variables if present
     p_nd_t = q_nd_t = None
     nd_inj_p = nd_inj_q = None
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         nnd = d["nnd"]
         # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
         p_nd_t = cp.Variable(nnd, name="p_nd")
@@ -595,7 +595,7 @@ def _build_ac_single(
         variables["soc"] = soc_t
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_t
         variables["q_nd"] = q_nd_t
 
@@ -648,7 +648,7 @@ def _build_ac_single(
             Ch_to=d["Ch_to"],
         )
 
-    expressions = {"p_net": p}
+    expressions = {"p_net": p, "q_net": q}
     if storage_cost is not None:
         expressions["storage_cost"] = storage_cost
 
@@ -749,7 +749,7 @@ def _build_ac_multistep(
         # Create nondispatchable variables if present
         p_nd_t = q_nd_t = None
         nd_inj_p_t = nd_inj_q_t = None
-        if "nnd" in d and d["nnd"] > 0:
+        if "nnd" in d:
             nnd = d["nnd"]
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
@@ -861,7 +861,7 @@ def _build_ac_multistep(
             soc_list.append(soc_t)
 
         # Add nondispatchable variables to lists
-        if "nnd" in d and d["nnd"] > 0:
+        if "nnd" in d:
             p_nd_list.append(p_nd_t)
             q_nd_list.append(q_nd_t)
 
@@ -925,7 +925,7 @@ def _build_ac_multistep(
         variables["soc"] = soc_list
 
     # Add nondispatchable variables if present
-    if "nnd" in d and d["nnd"] > 0:
+    if "nnd" in d:
         variables["p_nd"] = p_nd_list
         variables["q_nd"] = q_nd_list
 
@@ -981,7 +981,7 @@ def _build_ac_multistep(
             Ch_to=d["Ch_to"],
         )
 
-    expressions = {"p_net": p_list}
+    expressions = {"p_net": p_list, "q_net": q_list}
     if "ns" in d:
         expressions["storage_cost"] = storage_cost
 

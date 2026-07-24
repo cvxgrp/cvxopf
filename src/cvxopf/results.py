@@ -45,6 +45,15 @@ def _solved_expression_values(build: OPFBuild, name: str):
     return expression.value
 
 
+def _empty_results(build: OPFBuild, *fields: str) -> dict:
+    """Return the common result shape when no primal solution is available."""
+    return {
+        "status": build.prob.status,
+        "objective": float("nan"),
+        **{field: None for field in fields},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -183,9 +192,19 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
 
-    multistep = isinstance(var["Pg"], list)
+    multistep = "T" in data
 
     if not multistep:
+        if any(
+            variable.value is None
+            for variable in (
+                var["Pg"], var["Qg"], var["v"], var["theta"], var["p"], var["q"]
+            )
+        ):
+            return _empty_results(
+                build, "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"
+            )
+
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
@@ -194,7 +213,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             Vm        = var["v"].value.flatten(),
             Va_deg    = np.rad2deg(var["theta"].value.flatten()),
             p_net     = _solved_expression_values(build, "p_net") * baseMVA,
-            q_net     = var["q"].value * baseMVA,
+            q_net     = _solved_expression_values(build, "q_net") * baseMVA,
         )
         
         # Add storage results if present
@@ -210,11 +229,9 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         if "nnd" in data:
             results["p_nd"] = var["p_nd"].value
             results["q_nd"] = var["q_nd"].value
-            # Curtailment = available - actual production
-            if "nd_p_available" in data:  # single-step
-                results["curtailment"] = data["nd_p_available"] - results["p_nd"]
-            else:  # multistep - this shouldn't happen in single-step path
-                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
+            results["curtailment"] = (
+                data["nd_p_available"] - results["p_nd"]
+            )
         
         # Add HVDC results if present
         if "n_hvdc" in data:
@@ -231,7 +248,6 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     Qg_rows = []
     Vm_rows = []
     Va_rows = []
-    q_rows  = []
     b_rows  = []
     b_q_rows = []
     soc_rows = []
@@ -241,12 +257,17 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     p_hvdc_out_rows = []
 
     for t in range(T):
+        if any(
+            var[name][t].value is None
+            for name in ("Pg", "Qg", "v", "theta", "p", "q")
+        ):
+            return _empty_results(
+                build, "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"
+            )
         Pg_rows.append(var["Pg"][t].value)
         Qg_rows.append(var["Qg"][t].value)
         Vm_rows.append(var["v"][t].value.flatten())
         Va_rows.append(var["theta"][t].value.flatten())
-        q_rows.append(var["q"][t].value)
-        
         # Extract storage results if present
         if "ns" in data:
             b_rows.append(var["b"][t].value)
@@ -271,7 +292,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         Vm        = np.array(Vm_rows),
         Va_deg    = np.rad2deg(np.array(Va_rows)),
         p_net     = _solved_expression_values(build, "p_net") * baseMVA,
-        q_net     = np.array(q_rows) * baseMVA,
+        q_net     = _solved_expression_values(build, "q_net") * baseMVA,
     )
     
     # Add storage results if present
@@ -285,11 +306,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     if "nnd" in data:
         results["p_nd"] = np.array(p_nd_rows)
         results["q_nd"] = np.array(q_nd_rows)
-        # Curtailment = available - actual production
-        if "nd_available" in data:  # multistep
-            results["curtailment"] = data["nd_available"] - results["p_nd"]
-        else:  # single-step - this shouldn't happen in multistep path
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
+        results["curtailment"] = data["nd_available"] - results["p_nd"]
     
     # Add HVDC results if present
     if "n_hvdc" in data:
@@ -312,20 +329,14 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     data    = build.data
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
-    multistep = isinstance(var["Pg"], list)
+    multistep = "T" in data
 
     if not multistep:
         Pg_val      = var["Pg"].value
         p_flows_val = var["p_flows"].value
         # Guard: solver may return None values if problem is infeasible
         if Pg_val is None or p_flows_val is None:
-            return dict(
-                status    = prob.status,
-                objective = float("nan"),
-                Pg        = None,
-                p_flows   = None,
-                p_net     = None,
-            )
+            return _empty_results(build, "Pg", "p_flows", "p_net")
 
         results = dict(
             status    = prob.status,
@@ -346,11 +357,9 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         # Add nondispatchable results if present
         if "nnd" in data:
             results["p_nd"] = var["p_nd"].value
-            # Curtailment = available - actual production
-            if "nd_p_available" in data:  # single-step
-                results["curtailment"] = data["nd_p_available"] - results["p_nd"]
-            else:  # multistep - this shouldn't happen in single-step path
-                results["curtailment"] = data["nd_available"][0, :] - results["p_nd"] # pragma: no cover
+            results["curtailment"] = (
+                data["nd_p_available"] - results["p_nd"]
+            )
         
         # Add HVDC results if present
         if "n_hvdc" in data:
@@ -374,13 +383,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         Pg_t      = var["Pg"][t].value
         p_flows_t = var["p_flows"][t].value
         if Pg_t is None or p_flows_t is None:
-            return dict(
-                status    = prob.status,
-                objective = float("nan"),
-                Pg        = None,
-                p_flows   = None,
-                p_net     = None,
-            )
+            return _empty_results(build, "Pg", "p_flows", "p_net")
         Pg_rows.append(Pg_t)
         p_flows_rows.append(p_flows_t)
         # Extract storage results if present
@@ -414,11 +417,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     # Add nondispatchable results if present
     if "nnd" in data:
         results["p_nd"] = np.array(p_nd_rows)
-        # Curtailment = available - actual production
-        if "nd_available" in data:  # multistep
-            results["curtailment"] = data["nd_available"] - results["p_nd"]
-        else:  # single-step - this shouldn't happen in multistep path
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]  # pragma: no cover
+        results["curtailment"] = data["nd_available"] - results["p_nd"]
     
     # Add HVDC results if present
     if "n_hvdc" in data:
@@ -442,8 +441,7 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
 
-    # Detect single-step vs multi-step by checking if Pg is a list
-    multistep = isinstance(var["Pg"], list)
+    multistep = "T" in data
 
     if not multistep:
         # Single-step extraction
@@ -451,12 +449,7 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
 
         # Guard: solver may return None values if problem is infeasible
         if Pg_val is None:
-            return dict(
-                status    = prob.status,
-                objective = float("nan"),
-                Pg        = None,
-                p_net     = None,
-            )
+            return _empty_results(build, "Pg", "p_net")
 
         results = dict(
             status    = prob.status,
@@ -493,12 +486,7 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
     for t in range(T):
         Pg_val = var["Pg"][t].value
         if Pg_val is None:
-            return dict(
-                status=prob.status,
-                objective=float("nan"),
-                Pg=None,
-                p_net=None,
-            )
+            return _empty_results(build, "Pg", "p_net")
         Pg_rows.append(Pg_val)
         if "ns" in data:
             b_rows.append(var["b"][t].value)
@@ -522,9 +510,6 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
     # Add nondispatchable results if present
     if "nnd" in data:
         results["p_nd"] = np.array(p_nd_rows)  # (T, nnd)
-        if "nd_available" in data:
-            results["curtailment"] = data["nd_available"] - results["p_nd"]
-        else:
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
+        results["curtailment"] = data["nd_available"] - results["p_nd"]
 
     return results

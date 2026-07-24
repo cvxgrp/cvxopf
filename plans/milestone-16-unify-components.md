@@ -137,12 +137,13 @@ reactive terms: HVDC is unity-PF (real only); ND has `q_nd` in AC only.
 
 The builder forms the complete modeled net real injection once, uses that
 exact expression in network balance, and retains it as
-`OPFBuild.expressions["p_net"]`. For multistep problems the retained value is a
-length-`T` list. Result extraction evaluates these expressions and applies
-unit scaling; it does not reconstruct device arithmetic from `build.data`.
-In AC the retained expression is the existing network variable `p`; in lossy
-DC balance is `A @ p_flows + p_net == 0`; in single-node DC it is
-`p_net == 0`.
+`OPFBuild.expressions["p_net"]`. AC likewise retains its modeled reactive
+injection as `OPFBuild.expressions["q_net"]`. For multistep problems each
+retained value is a length-`T` list. Result extraction evaluates these
+expressions and applies unit scaling; it does not reconstruct device
+arithmetic from `build.data`. In AC the retained expressions are the existing
+network variables `p` and `q`; in lossy DC balance is
+`A @ p_flows + p_net == 0`; in single-node DC it is `p_net == 0`.
 
 The AC/DC injection API has fixed arity:
 `(p_expression, q_expression_or_None, scaling_parameter_or_None)`. “AC” and

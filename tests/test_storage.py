@@ -281,6 +281,10 @@ class TestDeltaValidation:
         build = build_opf(case9(), formulation="ac", storage=None, delta=-1.0)
         assert isinstance(build, OPFBuild)
 
+    def test_delta_negative_with_empty_storage_does_not_raise(self):
+        build = build_opf(case9(), formulation="ac", storage=[], delta=-1.0)
+        assert isinstance(build, OPFBuild)
+
     def test_delta_default_is_one(self):
         # build.data["storage_delta"] should be 1.0 by default
         unit  = _default_unit()

@@ -298,3 +298,52 @@ class TestEdgeCases:
         )
         with pytest.raises(ValueError, match="unknown formulation"):
             extract_results(dummy)
+
+    @pytest.mark.parametrize(
+        ("formulation", "fields"),
+        [
+            (
+                "ac",
+                {"Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"},
+            ),
+            ("lossy_dc", {"Pg", "p_flows", "p_net"}),
+            ("singlenode_dc", {"Pg", "p_net"}),
+        ],
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    def test_no_primal_solution_has_common_result_policy(
+        self, formulation, fields, multistep
+    ):
+        x = cp.Variable(1)
+        prob = cp.Problem(cp.Minimize(0), [x >= 1, x <= 0])
+        prob.solve()
+        value = [x] if multistep else x
+
+        if formulation == "ac":
+            variables = {
+                name: value
+                for name in ("Pg", "Qg", "v", "theta", "p", "q")
+            }
+        elif formulation == "lossy_dc":
+            variables = {"Pg": value, "p_flows": value}
+        else:
+            variables = {"Pg": value}
+
+        data = {"baseMVA": 100.0}
+        if multistep:
+            data["T"] = 1
+        expressions = {"p_net": [x] if multistep else x}
+        build = OPFBuild(
+            prob=prob,
+            variables=variables,
+            data=data,
+            formulation=formulation,
+            is_convex=formulation != "ac",
+            expressions=expressions,
+        )
+
+        results = extract_results(build)
+        assert results["status"] == "infeasible"
+        assert np.isnan(results["objective"])
+        assert fields <= results.keys()
+        assert all(results[field] is None for field in fields)
