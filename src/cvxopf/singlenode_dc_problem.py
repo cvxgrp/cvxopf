@@ -54,6 +54,7 @@ from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
     _prepare_data as generator_prepare_data,
+    _build_metadata as generator_build_metadata,
     dc_injections as generator_dc_injections,
     dc_operating_constraints as generator_dc_operating_constraints,
     dc_network_constraints as generator_dc_network_constraints,
@@ -63,6 +64,7 @@ from cvxopf.generator import (
 from cvxopf.storage import (
     StorageUnitIdeal,
     _prepare_data as storage_prepare_data,
+    _build_metadata as storage_build_metadata,
     dc_injections as storage_dc_injections,
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
@@ -71,6 +73,7 @@ from cvxopf.storage import (
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _prepare_data as nd_prepare_data,
+    _build_metadata as nd_build_metadata,
     dc_injections as nd_dc_injections,
     dc_operating_constraints as nd_dc_operating_constraints,
     coupling_constraints as nd_coupling_constraints,
@@ -420,38 +423,19 @@ def _build_singlenode_dc_single(
         "baseMVA": d["baseMVA"],
         "nb": d["nb"],
         "source_nb": d["source_nb"],
-        "ng": d["ng"],
         "ext_to_int": d["ext_to_int"],
         "Pd_total": d["Pd_total"],
-        "Pgmin": d["Pgmin"],
-        "Pgmax": d["Pgmax"],
-        "gencost": d["gencost"],
-        "Cg": d["Cg"],
-        "gen_bus": d["gen_bus"],
     }
+    data.update(generator_build_metadata(d, reactive=False))
 
     # Add storage data if present
     if "ns" in d:
-        data.update({
-            "ns": d["ns"],
-            "Cs": d["Cs"],
-            "storage_bus": d["storage_bus"],
-            "storage_apparent_power_rating": d["storage_apparent_power_rating"],
-            "storage_capacity": d["storage_capacity"],
-            "storage_initial_soc": d["storage_initial_soc"],
-            "storage_delta": d["storage_delta"],
-            "storage_aging_weight": d["storage_aging_weight"],
-        })
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update({
-            "nnd": d["nnd"],
-            "Cnd": d["Cnd"],
-            "nd_bus": d["nd_bus"],
-            "nd_apparent_power_rating": d["nd_apparent_power_rating"],
-            "nd_p_available": d["nd_p_available"],
-        })
+        data.update(nd_build_metadata(d))
+        data["nd_p_available"] = d["nd_p_available"]
 
     expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
@@ -713,40 +697,18 @@ def _build_singlenode_dc_multistep(
         baseMVA=d["baseMVA"],
         nb=d["nb"],
         source_nb=d["source_nb"],
-        ng=d["ng"],
         ext_to_int=d["ext_to_int"],
-        Pgmin=d["Pgmin"],
-        Pgmax=d["Pgmax"],
-        gencost=d["gencost"],
-        Cg=d["Cg"],
-        gen_bus=d["gen_bus"],
         T=T,
         Pd_series=Pd_series,
     )
+    data.update(generator_build_metadata(d, reactive=False))
 
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-        )
-        if "nd_available" in d:
-            data["nd_available"] = d["nd_available"]
-        else:
-            data["nd_p_available"] = d["nd_p_available"]
+        data.update(nd_build_metadata(d))
+        data["nd_available"] = d["nd_available"]
 
     expressions = {"p_net": p_net_expr_list}
     if "ns" in d:

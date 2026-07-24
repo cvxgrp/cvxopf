@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from cvxopf.hvdc import _loss_values
+from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
 
 
@@ -52,6 +54,57 @@ def _empty_results(build: OPFBuild, *fields: str) -> dict:
         "objective": float("nan"),
         **{field: None for field in fields},
     }
+
+
+def _variable_values(variable):
+    """Return one variable value or stack a multistep variable list."""
+    if isinstance(variable, list):
+        return np.array([item.value for item in variable])
+    return variable.value
+
+
+def _add_storage_results(results: dict, build: OPFBuild) -> None:
+    """Add storage-owned variables and modeled cost to a result dictionary."""
+    if "ns" not in build.data:
+        return
+    results["b"] = _variable_values(build.variables["b"])
+    if "b_q" in build.variables:
+        results["b_q"] = _variable_values(build.variables["b_q"])
+    results["soc"] = _variable_values(build.variables["soc"])
+    results["storage_cost"] = _solved_expression_value(build, "storage_cost")
+
+
+def _add_nd_results(results: dict, build: OPFBuild) -> None:
+    """Add ND variables and device-owned curtailment values."""
+    if "nnd" not in build.data:
+        return
+    results["p_nd"] = _variable_values(build.variables["p_nd"])
+    if "q_nd" in build.variables:
+        results["q_nd"] = _variable_values(build.variables["q_nd"])
+    availability_key = (
+        "nd_available" if "T" in build.data else "nd_p_available"
+    )
+    results["curtailment"] = _curtailment_values(
+        build.data[availability_key], results["p_nd"]
+    )
+
+
+def _add_hvdc_results(results: dict, build: OPFBuild) -> None:
+    """Add HVDC terminal injections and device-owned loss values."""
+    if "n_hvdc" not in build.data:
+        return
+    results["p_hvdc_in"] = _variable_values(build.variables["p_hvdc_in"])
+    results["p_hvdc_out"] = _variable_values(build.variables["p_hvdc_out"])
+    results["hvdc_loss"] = _loss_values(
+        results["p_hvdc_in"], results["p_hvdc_out"]
+    )
+
+
+def _add_device_results(results: dict, build: OPFBuild) -> None:
+    """Add every optional device's reported values."""
+    _add_storage_results(results, build)
+    _add_nd_results(results, build)
+    _add_hvdc_results(results, build)
 
 
 # ---------------------------------------------------------------------------
@@ -216,31 +269,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             q_net     = _solved_expression_values(build, "q_net") * baseMVA,
         )
         
-        # Add storage results if present
-        if "ns" in data:
-            results["b"] = var["b"].value
-            results["b_q"] = var["b_q"].value
-            results["soc"] = var["soc"].value
-            results["storage_cost"] = _solved_expression_value(
-                build, "storage_cost"
-            )
-        
-        # Add nondispatchable results if present
-        if "nnd" in data:
-            results["p_nd"] = var["p_nd"].value
-            results["q_nd"] = var["q_nd"].value
-            results["curtailment"] = (
-                data["nd_p_available"] - results["p_nd"]
-            )
-        
-        # Add HVDC results if present
-        if "n_hvdc" in data:
-            results["p_hvdc_in"]  = var["p_hvdc_in"].value
-            results["p_hvdc_out"] = var["p_hvdc_out"].value
-            # Total loss = sending - receiving magnitude; under Convention B
-            # (pure proportional loss) this is exactly p_in + p_out, >= 0.
-            results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
-        
+        _add_device_results(results, build)
         return results
 
     T       = data["T"]
@@ -248,14 +277,6 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     Qg_rows = []
     Vm_rows = []
     Va_rows = []
-    b_rows  = []
-    b_q_rows = []
-    soc_rows = []
-    p_nd_rows = []
-    q_nd_rows = []
-    p_hvdc_in_rows  = []
-    p_hvdc_out_rows = []
-
     for t in range(T):
         if any(
             var[name][t].value is None
@@ -268,22 +289,6 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         Qg_rows.append(var["Qg"][t].value)
         Vm_rows.append(var["v"][t].value.flatten())
         Va_rows.append(var["theta"][t].value.flatten())
-        # Extract storage results if present
-        if "ns" in data:
-            b_rows.append(var["b"][t].value)
-            b_q_rows.append(var["b_q"][t].value)
-            soc_rows.append(var["soc"][t].value)
-        
-        # Extract nondispatchable results if present
-        if "nnd" in data:
-            p_nd_rows.append(var["p_nd"][t].value)
-            q_nd_rows.append(var["q_nd"][t].value)
-        
-        # Extract HVDC results if present
-        if "n_hvdc" in data:
-            p_hvdc_in_rows.append(var["p_hvdc_in"][t].value)
-            p_hvdc_out_rows.append(var["p_hvdc_out"][t].value)
-
     results = dict(
         status    = prob.status,
         objective = float(prob.value),
@@ -295,26 +300,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         q_net     = _solved_expression_values(build, "q_net") * baseMVA,
     )
     
-    # Add storage results if present
-    if "ns" in data:
-        results["b"] = np.array(b_rows)
-        results["b_q"] = np.array(b_q_rows)
-        results["soc"] = np.array(soc_rows)
-        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
-    
-    # Add nondispatchable results if present
-    if "nnd" in data:
-        results["p_nd"] = np.array(p_nd_rows)
-        results["q_nd"] = np.array(q_nd_rows)
-        results["curtailment"] = data["nd_available"] - results["p_nd"]
-    
-    # Add HVDC results if present
-    if "n_hvdc" in data:
-        results["p_hvdc_in"]  = np.array(p_hvdc_in_rows)
-        results["p_hvdc_out"] = np.array(p_hvdc_out_rows)
-        # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
-        results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
-    
+    _add_device_results(results, build)
     return results
 
 
@@ -346,39 +332,12 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             p_net     = _solved_expression_values(build, "p_net") * baseMVA,
         )
         
-        # Add storage results if present
-        if "ns" in data:
-            results["b"] = var["b"].value
-            results["soc"] = var["soc"].value
-            results["storage_cost"] = _solved_expression_value(
-                build, "storage_cost"
-            )
-        
-        # Add nondispatchable results if present
-        if "nnd" in data:
-            results["p_nd"] = var["p_nd"].value
-            results["curtailment"] = (
-                data["nd_p_available"] - results["p_nd"]
-            )
-        
-        # Add HVDC results if present
-        if "n_hvdc" in data:
-            results["p_hvdc_in"]  = var["p_hvdc_in"].value
-            results["p_hvdc_out"] = var["p_hvdc_out"].value
-            # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
-            results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
-        
+        _add_device_results(results, build)
         return results
 
     T            = data["T"]
     Pg_rows      = []
     p_flows_rows = []
-    b_rows       = []
-    soc_rows     = []
-    p_nd_rows    = []
-    p_hvdc_in_rows  = []
-    p_hvdc_out_rows = []
-
     for t in range(T):
         Pg_t      = var["Pg"][t].value
         p_flows_t = var["p_flows"][t].value
@@ -386,20 +345,6 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             return _empty_results(build, "Pg", "p_flows", "p_net")
         Pg_rows.append(Pg_t)
         p_flows_rows.append(p_flows_t)
-        # Extract storage results if present
-        if "ns" in data:
-            b_rows.append(var["b"][t].value)
-            soc_rows.append(var["soc"][t].value)
-        
-        # Extract nondispatchable results if present
-        if "nnd" in data:
-            p_nd_rows.append(var["p_nd"][t].value)
-        
-        # Extract HVDC results if present
-        if "n_hvdc" in data:
-            p_hvdc_in_rows.append(var["p_hvdc_in"][t].value)
-            p_hvdc_out_rows.append(var["p_hvdc_out"][t].value)
-
     results = dict(
         status    = prob.status,
         objective = float(prob.value),
@@ -408,24 +353,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         p_net     = _solved_expression_values(build, "p_net") * baseMVA,
     )
     
-    # Add storage results if present
-    if "ns" in data:
-        results["b"] = np.array(b_rows)
-        results["soc"] = np.array(soc_rows)
-        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
-    
-    # Add nondispatchable results if present
-    if "nnd" in data:
-        results["p_nd"] = np.array(p_nd_rows)
-        results["curtailment"] = data["nd_available"] - results["p_nd"]
-    
-    # Add HVDC results if present
-    if "n_hvdc" in data:
-        results["p_hvdc_in"]  = np.array(p_hvdc_in_rows)
-        results["p_hvdc_out"] = np.array(p_hvdc_out_rows)
-        # Total loss = p_in + p_out (Convention B, pure proportional loss), >= 0.
-        results["hvdc_loss"] = results["p_hvdc_in"] + results["p_hvdc_out"]
-    
+    _add_device_results(results, build)
     return results
 
 
@@ -460,39 +388,17 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
             ),
         )
 
-        # Add storage results if present
-        if "ns" in data:
-            results["b"] = var["b"].value
-            results["soc"] = var["soc"].value
-            results["storage_cost"] = _solved_expression_value(
-                build, "storage_cost"
-            )
-
-        # Add nondispatchable results if present
-        if "nnd" in data:
-            results["p_nd"] = var["p_nd"].value
-            # Curtailment = available - actual production
-            results["curtailment"] = data["nd_p_available"] - results["p_nd"]
-
+        _add_device_results(results, build)
         return results
 
     # Multi-step extraction
     T = data["T"]
     Pg_rows = []
-    b_rows = []
-    soc_rows = []
-    p_nd_rows = []
-
     for t in range(T):
         Pg_val = var["Pg"][t].value
         if Pg_val is None:
             return _empty_results(build, "Pg", "p_net")
         Pg_rows.append(Pg_val)
-        if "ns" in data:
-            b_rows.append(var["b"][t].value)
-            soc_rows.append(var["soc"][t].value)
-        if "nnd" in data:
-            p_nd_rows.append(var["p_nd"][t].value)
 
     results = dict(
         status    = prob.status,
@@ -501,15 +407,5 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
         p_net     = _solved_expression_values(build, "p_net") * baseMVA,
     )
 
-    # Add storage results if present
-    if "ns" in data:
-        results["b"] = np.array(b_rows)      # (T, ns)
-        results["soc"] = np.array(soc_rows)  # (T, ns)
-        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
-
-    # Add nondispatchable results if present
-    if "nnd" in data:
-        results["p_nd"] = np.array(p_nd_rows)  # (T, nnd)
-        results["curtailment"] = data["nd_available"] - results["p_nd"]
-
+    _add_device_results(results, build)
     return results

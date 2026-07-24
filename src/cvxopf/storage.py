@@ -244,6 +244,21 @@ def _prepare_data(
     }
 
 
+def _build_metadata(prepared: dict) -> dict:
+    """Select storage-owned fields published through ``OPFBuild.data``."""
+    keys = (
+        "ns",
+        "Cs",
+        "storage_bus",
+        "storage_apparent_power_rating",
+        "storage_capacity",
+        "storage_initial_soc",
+        "storage_delta",
+        "storage_aging_weight",
+    )
+    return {key: prepared[key] for key in keys}
+
+
 def ac_injections(
     storage_units: list,
     b: cp.Variable,

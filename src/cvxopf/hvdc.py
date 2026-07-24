@@ -220,6 +220,17 @@ def _prepare_data(
     }
 
 
+def _build_metadata(prepared: dict) -> dict:
+    """Select HVDC-owned fields published through ``OPFBuild.data``."""
+    keys = ("n_hvdc", "Ch_from", "Ch_to")
+    return {key: prepared[key] for key in keys}
+
+
+def _loss_values(p_in, p_out):
+    """Return total terminal loss under the signed-injection convention."""
+    return np.asarray(p_in) + np.asarray(p_out)
+
+
 # ---------------------------------------------------------------------------
 # Static box (trivial vectorizer — reads p_min_mw/p_max_mw directly)
 # ---------------------------------------------------------------------------

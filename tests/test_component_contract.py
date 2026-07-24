@@ -123,6 +123,69 @@ def test_device_preparation_helpers_return_existing_flat_contract():
     assert {"n_hvdc", "Ch_from", "Ch_to"} == set(hvdc_data)
 
 
+def test_device_metadata_publication_is_device_owned():
+    ext_to_int = {1: 0, 2: 1}
+    ext_bus_ids = set(ext_to_int)
+
+    gen_data = generator._prepare_data(
+        [DispatchableGenerator(bus=1, p_max_mw=100.0)],
+        100.0,
+        2,
+        ext_to_int,
+        ext_bus_ids,
+    )
+    assert set(generator._build_metadata(gen_data, reactive=False)) == {
+        "ng", "Cg", "gen_bus", "gencost", "Pgmin", "Pgmax",
+    }
+    assert {"Qgmin", "Qgmax"} <= set(
+        generator._build_metadata(gen_data, reactive=True)
+    )
+
+    storage_data = storage._prepare_data(
+        [StorageUnitIdeal(1, 10.0, 20.0, 5.0)],
+        2,
+        ext_to_int,
+        ext_bus_ids,
+    )
+    storage_data["storage_delta"] = 1.0
+    assert set(storage._build_metadata(storage_data)) == {
+        "ns", "Cs", "storage_bus", "storage_apparent_power_rating",
+        "storage_capacity", "storage_initial_soc", "storage_delta",
+        "storage_aging_weight",
+    }
+
+    nd_data = nondispatchable._prepare_data(
+        [NondispatchableUnit(1, 10.0, 12.0)],
+        2,
+        ext_to_int,
+        ext_bus_ids,
+    )
+    assert set(nondispatchable._build_metadata(nd_data)) == {
+        "nnd", "Cnd", "nd_bus", "nd_apparent_power_rating",
+    }
+
+    hvdc_data = hvdc._prepare_data(
+        [HVDCLink(1, 2, -10.0, 10.0)],
+        2,
+        ext_to_int,
+        ext_bus_ids,
+    )
+    assert set(hvdc._build_metadata(hvdc_data)) == {
+        "n_hvdc", "Ch_from", "Ch_to",
+    }
+
+
+def test_device_owned_derived_result_values():
+    np.testing.assert_allclose(
+        nondispatchable._curtailment_values([10.0, 8.0], [7.0, 8.0]),
+        [3.0, 0.0],
+    )
+    np.testing.assert_allclose(
+        hvdc._loss_values([10.0, -5.0], [-9.5, 4.8]),
+        [0.5, -0.2],
+    )
+
+
 def test_dc_injections_use_supplied_prepared_incidence():
     ext_to_int = {1: 0, 2: 1}
     routed_to_bus_two = np.array([[0.0], [1.0]])

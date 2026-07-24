@@ -47,6 +47,7 @@ from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
     _prepare_data as generator_prepare_data,
+    _build_metadata as generator_build_metadata,
     dc_injections as generator_dc_injections,
     dc_operating_constraints as generator_dc_operating_constraints,
     dc_network_constraints as generator_dc_network_constraints,
@@ -56,6 +57,7 @@ from cvxopf.generator import (
 from cvxopf.storage import (
     StorageUnitIdeal,
     _prepare_data as storage_prepare_data,
+    _build_metadata as storage_build_metadata,
     dc_injections as storage_dc_injections,
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
@@ -64,6 +66,7 @@ from cvxopf.storage import (
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _prepare_data as nd_prepare_data,
+    _build_metadata as nd_build_metadata,
     dc_injections as nd_dc_injections,
     dc_operating_constraints as nd_dc_operating_constraints,
     coupling_constraints as nd_coupling_constraints,
@@ -71,6 +74,7 @@ from cvxopf.nondispatchable import (
 from cvxopf.hvdc import (
     HVDCLink,
     _prepare_data as hvdc_prepare_data,
+    _build_metadata as hvdc_build_metadata,
     _hvdc_static_box,
     dc_injections as hvdc_dc_injections,
     dc_operating_constraints as hvdc_dc_operating_constraints,
@@ -418,46 +422,27 @@ def _build_lossy_dc_single(
         variables["p_hvdc_out"] = p_out
 
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
+        baseMVA=d["baseMVA"], nb=d["nb"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
-        A=d["A"], Cg=d["Cg"],
+        A=d["A"],
         r=d["r"], f_max=d["f_max"],
         Pd=d["Pd"],
-        gen_bus=d["gen_bus"], gencost=d["gencost"],
-        Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
     )
+    data.update(generator_build_metadata(d, reactive=False))
 
     # Add storage data if present
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-            nd_p_available=d["nd_p_available"],
-        )
+        data.update(nd_build_metadata(d))
+        data["nd_p_available"] = d["nd_p_available"]
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(
-            n_hvdc=d["n_hvdc"],
-            Ch_from=d["Ch_from"],
-            Ch_to=d["Ch_to"],
-        )
+        data.update(hvdc_build_metadata(d))
 
     expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
@@ -726,47 +711,28 @@ def _build_lossy_dc_multistep(
         variables["p_hvdc_out"] = p_hvdc_out_list
 
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], ng=d["ng"], nl=d["nl"],
+        baseMVA=d["baseMVA"], nb=d["nb"], nl=d["nl"],
         ext_to_int=d["ext_to_int"],
-        A=d["A"], Cg=d["Cg"],
+        A=d["A"],
         r=d["r"], f_max=d["f_max"],
-        gen_bus=d["gen_bus"], gencost=d["gencost"],
-        Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
         T=T,
         Pd_series=Pd_series,
     )
+    data.update(generator_build_metadata(d, reactive=False))
 
     # Add storage data if present
     if "ns" in d:
-        data.update(
-            ns=d["ns"],
-            Cs=d["Cs"],
-            storage_bus=d["storage_bus"],
-            storage_apparent_power_rating=d["storage_apparent_power_rating"],
-            storage_capacity=d["storage_capacity"],
-            storage_initial_soc=d["storage_initial_soc"],
-            storage_delta=d["storage_delta"],
-            storage_aging_weight=d["storage_aging_weight"],
-        )
+        data.update(storage_build_metadata(d))
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(
-            nnd=d["nnd"],
-            Cnd=d["Cnd"],
-            nd_bus=d["nd_bus"],
-            nd_apparent_power_rating=d["nd_apparent_power_rating"],
-            nd_available=d.get("nd_available"),  # Only present in multistep
-        )
+        data.update(nd_build_metadata(d))
+        data["nd_available"] = d["nd_available"]
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(
-            n_hvdc=d["n_hvdc"],
-            Ch_from=d["Ch_from"],
-            Ch_to=d["Ch_to"],
-        )
+        data.update(hvdc_build_metadata(d))
 
     expressions = {"p_net": p_net_expr_list}
     if "ns" in d:

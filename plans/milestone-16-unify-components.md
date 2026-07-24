@@ -45,6 +45,9 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
    returns the existing flat metadata contract: incidence, internal bus
    indices, and static parameter arrays. AC, DC, and single-node parsers call
    these device-owned helpers rather than reimplementing preparation.
+   A private `_build_metadata(...)` helper selects the device-owned subset
+   published through `OPFBuild.data`; formulation builders retain ownership of
+   network and horizon metadata such as load series and ND availability.
 6. **`ac_injections(...)` / `dc_injections(...)`** — network-specific
    injection builders with fixed return arity:
    `(p_injection, q_injection_or_None, scaling_or_None)`.
@@ -71,6 +74,11 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
 10. **`*_cost_expr(...)` where the component has a cost** — the component's
    collection-level contribution to the objective. ND intentionally has no
    cost method; absence is clearer than a ceremonial zero expression.
+
+Result schema assembly, horizon stacking, and unit conversion remain
+centralized in `results.py`. Device-specific derived quantities do not:
+nondispatchable owns `available - dispatched` curtailment arithmetic, and
+HVDC owns terminal-loss arithmetic under its signed-injection convention.
 
 **Invariant (from HVDC):** the module never creates `cp.Variable`s. The
 constructor creates all variables in its own scope and passes them in. This is

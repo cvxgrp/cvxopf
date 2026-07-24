@@ -154,6 +154,17 @@ def _prepare_data(
     }
 
 
+def _build_metadata(prepared: dict) -> dict:
+    """Select static ND fields published through ``OPFBuild.data``."""
+    keys = ("nnd", "Cnd", "nd_bus", "nd_apparent_power_rating")
+    return {key: prepared[key] for key in keys}
+
+
+def _curtailment_values(available, dispatched):
+    """Return available minus dispatched real power in MW."""
+    return np.asarray(available) - np.asarray(dispatched)
+
+
 def ac_injections(
     units: list,
     p_nd: cp.Variable,

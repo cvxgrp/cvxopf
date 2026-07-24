@@ -303,6 +303,21 @@ def _prepare_data(
     }
 
 
+def _build_metadata(prepared: dict, *, reactive: bool) -> dict:
+    """Select generator-owned fields published through ``OPFBuild.data``."""
+    keys = (
+        "ng",
+        "Cg",
+        "gen_bus",
+        "gencost",
+        "Pgmin",
+        "Pgmax",
+    )
+    if reactive:
+        keys += ("Qgmin", "Qgmax")
+    return {key: prepared[key] for key in keys}
+
+
 def generator_gencost(gens: list) -> np.ndarray:
     """
     Serialize generator cost data to a MATPOWER gencost array.
