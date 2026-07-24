@@ -14,6 +14,7 @@ from cvxopf.testcases import case9, make_singlenode_case
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 import cvxpy as cp
 import numpy as np
 import pytest
@@ -21,13 +22,16 @@ import pytest
 
 # Shared test data
 GENS = [
-    {"P_max_MW": 150.0, "cost_coeffs": (10.0, 2.0, 0.01)},
-    {"P_max_MW": 100.0, "cost_coeffs": (5.0,  3.0, 0.02), "P_min_MW": 20.0},
+    DispatchableGenerator(bus=1, p_max_mw=150.0, cost_coeffs=(10.0, 2.0, 0.01)),
+    DispatchableGenerator(
+        bus=1, p_max_mw=100.0, p_min_mw=20.0,
+        cost_coeffs=(5.0, 3.0, 0.02),
+    ),
 ]
 
 SIMPLE_GENS = [
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)),
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)),
 ]
 
 
@@ -111,7 +115,11 @@ class TestMakeSinglenodeCase:
         assert result["branch"].shape == (0, 13)
 
     def test_single_generator(self):
-        single_gen = [{"P_max_MW": 100.0, "cost_coeffs": (5.0, 1.0, 0.01)}]
+        single_gen = [
+            DispatchableGenerator(
+                bus=1, p_max_mw=100.0, cost_coeffs=(5.0, 1.0, 0.01)
+            )
+        ]
         result = make_singlenode_case(50.0, single_gen)
         assert result["gen"].shape == (1, 21)
         assert result["gencost"].shape == (1, 7)
@@ -204,10 +212,10 @@ class TestParseSinglenodeDcCase:
         d = _parse_singlenode_dc_case(case, OPFOptions(), None, 1.0, None)
         assert "loss_weight" not in d
 
-    def test_no_gen_bus_in_result(self):
+    def test_gen_bus_is_collapsed_to_single_node(self):
         case = make_singlenode_case(250.0, GENS)
         d = _parse_singlenode_dc_case(case, OPFOptions(), None, 1.0, None)
-        assert "gen_bus" not in d
+        np.testing.assert_array_equal(d["gen_bus"], np.zeros(len(GENS), dtype=int))
 
     def test_ns_absent_when_no_storage(self):
         case = make_singlenode_case(250.0, GENS)
@@ -221,7 +229,11 @@ class TestParseSinglenodeDcCase:
 
     def test_storage_data_present_when_storage_given(self):
         # Use single-generator case for simplicity
-        single_gen = [{"P_max_MW": 100.0, "cost_coeffs": (5.0, 1.0, 0.01)}]
+        single_gen = [
+            DispatchableGenerator(
+                bus=1, p_max_mw=100.0, cost_coeffs=(5.0, 1.0, 0.01)
+            )
+        ]
         case = make_singlenode_case(100.0, single_gen)
         storage = [StorageUnitIdeal(bus=1, apparent_power_rating=50.0, 
                                     capacity=100.0, initial_soc=50.0, aging_weight=0.0)]
@@ -231,7 +243,11 @@ class TestParseSinglenodeDcCase:
 
     def test_nondispatchable_data_present_when_nd_given(self):
         # Use single-generator case for simplicity
-        single_gen = [{"P_max_MW": 100.0, "cost_coeffs": (5.0, 1.0, 0.01)}]
+        single_gen = [
+            DispatchableGenerator(
+                bus=1, p_max_mw=100.0, cost_coeffs=(5.0, 1.0, 0.01)
+            )
+        ]
         case = make_singlenode_case(100.0, single_gen)
         nd_unit = [NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)]
         d = _parse_singlenode_dc_case(case, OPFOptions(), None, 1.0, nd_unit)

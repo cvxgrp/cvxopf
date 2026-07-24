@@ -17,11 +17,20 @@ import cvxpy as cp
 from cvxopf.network import (
     reindex_case_to_consecutive,
     make_ybus_matpower,
-    make_incidence_matrix,
     make_ybus_sparsity_mask,
 )
-from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.generator import (
+    DispatchableGenerator,
+    _validate_generators,
+    gen_from_matpower,
+    generator_bounds,
+    generator_gencost,
+    injections as generator_injections,
+    make_generator_incidence,
+    ac_operating_constraints as generator_ac_operating_constraints,
+    gen_cost_expr,
+)
 from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
@@ -53,13 +62,6 @@ VMIN       = 12
 VMAX       = 11
 PD         = 2
 QD         = 3
-GEN_BUS    = 0
-GEN_STATUS = 7
-PMIN       = 9
-PMAX       = 8
-QMIN       = 4
-QMAX       = 3
-VG         = 5
 
 
 # ---------------------------------------------------------------------------
@@ -98,20 +100,28 @@ def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndar
     return Rp
 
 
-def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, hvdc: list[HVDCLink] | None = None) -> dict:
+def _parse_case(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    hvdc: list[HVDCLink] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
     Returns a flat dict consumed by the AC single-step and multistep builders.
     """
     validate_case(case)
+    if generators is None:
+        generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
-    gen     = case["gen"]
-    gencost = case["gencost"]
     nb      = bus.shape[0]
-    ng      = gen.shape[0]
+    ng      = len(generators)
 
     Ybus    = make_ybus_matpower(case)
     G       = np.real(Ybus)
@@ -134,24 +144,19 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
     Pd = bus[:, PD].astype(float) / baseMVA
     Qd = bus[:, QD].astype(float) / baseMVA
 
-    status  = gen[:, GEN_STATUS].astype(int)
-    Pgmin   = gen[:, PMIN].astype(float) / baseMVA
-    Pgmax   = gen[:, PMAX].astype(float) / baseMVA
-    Qgmin   = gen[:, QMIN].astype(float) / baseMVA
-    Qgmax   = gen[:, QMAX].astype(float) / baseMVA
-
-    for k in range(ng):
-        if status[k] != 1:
-            Pgmin[k] = Pgmax[k] = Qgmin[k] = Qgmax[k] = 0.0
-
-    Cg      = make_incidence_matrix(case)
-    gen_bus = gen[:, GEN_BUS].astype(int)
-
     # Get external bus IDs for validation (needed for both storage and nondispatchable)
     if ext_to_int is not None:
         ext_bus_ids = set(ext_to_int.keys())
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+
+    _validate_generators(generators, ext_bus_ids)
+    Pgmin, Pgmax, Qgmin, Qgmax = generator_bounds(generators, baseMVA)
+    Cg = make_generator_incidence(generators, nb, ext_to_int)
+    gen_bus = np.array([ext_to_int[g.bus] for g in generators], dtype=int)
+    status = np.array([g.status for g in generators], dtype=int)
+    vg = np.array([g.vg for g in generators], dtype=float)
+    gencost = generator_gencost(generators)
     
     # Parse storage if present
     storage_data = {}
@@ -226,7 +231,7 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
 
     return dict(
         case=case, baseMVA=baseMVA,
-        bus=bus, gen=gen, gencost=gencost,
+        bus=bus, generators=generators, gencost=gencost,
         nb=nb, ng=ng,
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
@@ -234,7 +239,7 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
         ext_bus_ids=ext_bus_ids,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
-        status=status, gen_bus=gen_bus,
+        status=status, gen_bus=gen_bus, vg=vg,
         Pgmin=Pgmin, Pgmax=Pgmax,
         Qgmin=Qgmin, Qgmax=Qgmax,
         Cg=Cg,
@@ -247,7 +252,6 @@ def _parse_case(case: dict, options, storage: list[StorageUnitIdeal] | None = No
 def _make_step_variables(
     nb: int, ng: int,
     vmin_arr, vmax_arr,
-    Pgmin, Pgmax,
     Qgmin, Qgmax,
     E,
     suffix: str,
@@ -273,7 +277,7 @@ def _make_step_variables(
                         bounds=[vmin_arr[:, None], vmax_arr[:, None]])
     p     = cp.Variable(nb, name=name("p"))
     q     = cp.Variable(nb, name=name("q"))
-    Pg    = cp.Variable(ng, name=name("Pg"), bounds=[Pgmin, Pgmax])
+    Pg    = cp.Variable(ng, name=name("Pg"))
     Qg    = cp.Variable(ng, name=name("Qg"), bounds=[Qgmin, Qgmax])
 
     if sparse_pq:
@@ -295,10 +299,9 @@ def _make_step_constraints(
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
     G, B, E, Z,
     rows, cols, G_vec, B_vec, Rp,
-    Cg, Pd, Qd, ref,
-    pv, status, gen_bus, gen,
+    Cg, generator_injection, Pgmin, Pgmax, Pd, Qd, ref,
+    pv, status, gen_bus, vg,
     enforce_vset: bool,
-    VG_col: int,
     sparse_pq: bool,
     baseMVA: float,
     # Storage — all None when storage=None
@@ -417,8 +420,12 @@ def _make_step_constraints(
     nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
     hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
 
-    constr.append(p == Cg @ Pg - Pd + storage_injection_p + nd_injection_p + hvdc_injection_p)
+    constr.append(
+        p == generator_injection - Pd
+        + storage_injection_p + nd_injection_p + hvdc_injection_p
+    )
     constr.append(q == Cg @ Qg - Qd + storage_injection_q + nd_injection_q)
+    constr += generator_ac_operating_constraints(Pg, Pgmin, Pgmax)
 
     # ------------------------------------------------------------------
     # Section 4: Storage operating constraints
@@ -466,7 +473,7 @@ def _make_step_constraints(
         for b in np.r_[np.array([ref]), pv]:
             idx = np.where((gen_bus == int(b)) & (status == 1))[0]
             if idx.size:
-                constr.append(v[int(b)] == float(gen[idx[0], VG_col]))
+                constr.append(v[int(b)] == float(vg[idx[0]]))
 
     return constr
 
@@ -475,7 +482,16 @@ def _make_step_constraints(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, *, hvdc=None) -> "OPFBuild":
+def _build_ac_single(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    *,
+    hvdc=None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -485,13 +501,14 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
 
     # Create step variables
     theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
         d["nb"], d["ng"],
         d["vmin_arr"], d["vmax_arr"],
-        d["Pgmin"], d["Pgmax"],
         d["Qgmin"], d["Qgmax"],
         E=d["E"],
         suffix="",
@@ -527,14 +544,19 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
+    generator_inj_expr, generator_scaling = generator_injections(
+        d["generators"], Pg, d["ext_to_int"]
+    )
+    assert generator_scaling is None
+
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
         d["G"], d["B"], d["E"], d["Z"],
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-        d["Cg"], d["Pd"], d["Qd"], d["ref"],
-        d["pv"], d["status"], d["gen_bus"], d["gen"],
+        d["Cg"], generator_inj_expr, d["Pgmin"], d["Pgmax"],
+        d["Pd"], d["Qd"], d["ref"],
+        d["pv"], d["status"], d["gen_bus"], d["vg"],
         enforce_vset=options.enforce_vset,
-        VG_col=VG,
         sparse_pq=options.sparse_pq,
         baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
@@ -561,7 +583,7 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
     )
 
     # Build cost: generation cost plus storage aging cost plus HVDC cost
-    gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg)
+    gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
     if "ns" in d and d["ns"] > 0:
         # L1 aging penalty on real power cycling
         storage_cost = cp.sum(cp.multiply(d["storage_aging_weight"], cp.abs(b_t)))
@@ -614,6 +636,7 @@ def _build_ac_single(case: dict, options, storage: list[StorageUnitIdeal] | None
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
         Pd=d["Pd"], Qd=d["Qd"], Cg=d["Cg"],
+        gen_bus=d["gen_bus"], gencost=d["gencost"],
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
     )
@@ -670,6 +693,7 @@ def _build_ac_multistep(
     hvdc=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -680,7 +704,9 @@ def _build_ac_multistep(
             "It is planned for Milestone 4."
         )
 
-    d = _parse_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
     
     # Parse nondispatchable timeseries if present
@@ -708,7 +734,6 @@ def _build_ac_multistep(
             _make_step_variables(
                 d["nb"], d["ng"],
                 d["vmin_arr"], d["vmax_arr"],
-                d["Pgmin"], d["Pgmax"],
                 d["Qgmin"], d["Qgmax"],
                 E=d["E"],
                 suffix=f"_{t}",
@@ -747,14 +772,19 @@ def _build_ac_multistep(
         # Get available power for this time step
         nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
 
+        generator_inj_expr_t, generator_scaling_t = generator_injections(
+            d["generators"], Pg_t, d["ext_to_int"]
+        )
+        assert generator_scaling_t is None
+
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
             d["G"], d["B"], d["E"], d["Z"],
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-            d["Cg"], Pd_series[t], Qd_series[t], d["ref"],
-            d["pv"], d["status"], d["gen_bus"], d["gen"],
+            d["Cg"], generator_inj_expr_t, d["Pgmin"], d["Pgmax"],
+            Pd_series[t], Qd_series[t], d["ref"],
+            d["pv"], d["status"], d["gen_bus"], d["vg"],
             enforce_vset=options.enforce_vset,
-            VG_col=VG,
             sparse_pq=options.sparse_pq,
             baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
@@ -783,7 +813,7 @@ def _build_ac_multistep(
         all_constr.extend(step_constr)
 
         # Add generation cost and HVDC cost (inside loop, per-step)
-        gen_cost = poly_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
+        gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
         total_cost = total_cost + gen_cost
         if "n_hvdc" in d:
             for k in range(d["n_hvdc"]):
@@ -870,6 +900,7 @@ def _build_ac_multistep(
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
         Cg=d["Cg"],
+        gen_bus=d["gen_bus"], gencost=d["gencost"],
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         Qgmin=d["Qgmin"], Qgmax=d["Qgmax"],
         T=T,

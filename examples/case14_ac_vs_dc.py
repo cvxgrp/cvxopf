@@ -111,7 +111,7 @@ def main():
           f"({total_load:.1f} MW) due to resistive losses.")
     print(f"  DC total Pg ({r_dc['Pg'].sum():.2f} MW) equals load exactly")
     print(f"  because DC losses appear in the objective but not in the")
-    print(f"  flow conservation constraint (A @ p_flows + p_gen = Pd).")
+    print(f"  flow conservation constraint (A @ p_flows + Cg @ Pg = Pd).")
 
     # ------------------------------------------------------------------
     # Bus voltages (AC only)

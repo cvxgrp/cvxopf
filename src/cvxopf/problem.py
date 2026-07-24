@@ -29,6 +29,7 @@ import cvxpy as cp
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, _hvdc_static_box
+from cvxopf.generator import DispatchableGenerator, _case_with_generators
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ class OPFBuild:
         AC multi-step: each value is a list of length T.
 
         DC single-step keys:
-            p_flows, p_gen
+            p_flows, Pg
 
         DC multi-step: each value is a list of length T.
 
@@ -244,6 +245,7 @@ def build_opf(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -251,7 +253,9 @@ def build_opf(
     Parameters
     ----------
     case : dict
-        MATPOWER-format case dict. Need not be pre-reindexed.
+        MATPOWER-format case dict. Need not be pre-reindexed. When
+        ``generators`` is supplied explicitly, ``gen`` and ``gencost`` may be
+        omitted; temporary tables are generated without mutating this dict.
     formulation : str
         "ac"
             Full AC-OPF via DNLP (nonconvex). Solved by IPOPT.
@@ -278,6 +282,11 @@ def build_opf(
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
         Each unit is a NondispatchableUnit dataclass instance.
+    generators : list[DispatchableGenerator] | None, optional
+        Dispatchable generators. If None, convert the case dict's
+        ``gen``/``gencost`` tables to DispatchableGenerator objects at build
+        time. Unlike other device arguments, None means MATPOWER fallback,
+        not absence.
 
     Returns
     -------
@@ -297,8 +306,14 @@ def build_opf(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
-    return builders[formulation](case, options, storage, delta, nondispatchable,
-                                  hvdc=hvdc)
+    normalized_case = (
+        _case_with_generators(case, generators)
+        if generators is not None else case
+    )
+    return builders[formulation](
+        normalized_case, options, storage, delta, nondispatchable,
+        hvdc=hvdc, generators=generators,
+    )
 
 
 def build_opf_multistep(
@@ -317,6 +332,7 @@ def build_opf_multistep(
     hvdc: list[HVDCLink] | None = None,
     df_hvdc_min: pd.DataFrame | None = None,
     df_hvdc_max: pd.DataFrame | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -324,7 +340,8 @@ def build_opf_multistep(
     Parameters
     ----------
     case : dict
-        MATPOWER-format case dict.
+        MATPOWER-format case dict. When ``generators`` is supplied explicitly,
+        ``gen`` and ``gencost`` may be omitted.
     df_P : pd.DataFrame, shape (T, nb)
         Active load time series in MW.
     df_Q : pd.DataFrame, shape (T, nb)
@@ -360,6 +377,9 @@ def build_opf_multistep(
         Column names must be external bus IDs (integers).
         If None and nondispatchable is not None, the p_available field
         from each NondispatchableUnit is tiled across all T steps.
+    generators : list[DispatchableGenerator] | None, optional
+        Dispatchable generators. If None, convert the case dict's
+        ``gen``/``gencost`` tables at build time.
 
     Returns
     -------
@@ -424,10 +444,15 @@ def build_opf_multistep(
             f"Unknown formulation '{formulation}'. "
             f"Supported: {sorted(builders.keys())}"
         )
+    normalized_case = (
+        _case_with_generators(case, generators)
+        if generators is not None else case
+    )
     return builders[formulation](
-        case, df_P, df_Q, T, options, coupling_constraints,
+        normalized_case, df_P, df_Q, T, options, coupling_constraints,
         storage, delta, nondispatchable, df_nd,
         hvdc=hvdc, df_hvdc_min=df_hvdc_min, df_hvdc_max=df_hvdc_max,
+        generators=generators,
     )
 
 

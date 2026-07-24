@@ -18,6 +18,7 @@ from cvxopf.testcases import case9, make_singlenode_case
 from cvxopf.problem import build_opf, build_opf_multistep, StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 
 
 # ---------------------------------------------------------------------------
@@ -36,8 +37,12 @@ print(f"[case9 single-step] status={r['status']}, objective={r['objective']:.2f}
 case = make_singlenode_case(
     P_load_MW=250.0,
     generators=[
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},
-        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
     ],
 )
 storage = StorageUnitIdeal(

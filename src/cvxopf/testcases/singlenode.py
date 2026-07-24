@@ -9,10 +9,17 @@ from __future__ import annotations
 
 import numpy as np
 
+from cvxopf.generator import (
+    DispatchableGenerator,
+    _validate_generators,
+    generator_gencost,
+    generator_matpower_gen,
+)
+
 
 def make_singlenode_case(
     P_load_MW: float,
-    generators: list[dict],
+    generators: list[DispatchableGenerator],
     baseMVA: float = 100.0,
 ) -> dict:
     """
@@ -22,11 +29,8 @@ def make_singlenode_case(
     ----------
     P_load_MW : float
         Total system real load in MW (>= 0).
-    generators : list[dict]
-        List of generator specifications. Each dict must contain:
-        - "P_max_MW": float, required
-        - "cost_coeffs": tuple or list of exactly 3 floats (c0, c1, c2), required
-        - "P_min_MW": float, optional, default 0.0
+    generators : list[DispatchableGenerator]
+        Dispatchable generators connected to the single bus (external ID 1).
     baseMVA : float, default 100.0
         System base MVA.
 
@@ -55,28 +59,7 @@ def make_singlenode_case(
     VMAX = 11
     VMIN = 12
 
-    # gen table
-    GEN_BUS = 0
-    PG = 1
-    QG = 2
-    QMAX = 3
-    QMIN = 4
-    VG = 5
-    MBASE = 6
-    GEN_STATUS = 7
-    PMAX = 8
-    PMIN = 9
-
-    # gencost table
-    MODEL = 0
-    STARTUP = 1
-    SHUTDOWN = 2
-    NCOST = 3
-    C2 = 4
-    C1 = 5
-    C0 = 6
-
-    ng = len(generators)
+    _validate_generators(generators, {1})
 
     # Build bus table: single bus
     bus = np.zeros((1, 13))
@@ -90,32 +73,8 @@ def make_singlenode_case(
     bus[0, VMAX] = 1.1
     bus[0, VMIN] = 0.9
 
-    # Build gen table
-    gen = np.zeros((ng, 21))
-    for k in range(ng):
-        gen[k, GEN_BUS] = 1
-        gen[k, PG] = 0.0
-        gen[k, QG] = 0.0
-        gen[k, QMAX] = 0.0
-        gen[k, QMIN] = 0.0
-        gen[k, VG] = 1.0
-        gen[k, MBASE] = baseMVA
-        gen[k, GEN_STATUS] = 1
-        gen[k, PMAX] = generators[k]["P_max_MW"]
-        gen[k, PMIN] = generators[k].get("P_min_MW", 0.0)
-
-    # Build gencost table
-    gencost = np.zeros((ng, 7))
-    for k in range(ng):
-        gencost[k, MODEL] = 2
-        gencost[k, STARTUP] = 0.0
-        gencost[k, SHUTDOWN] = 0.0
-        gencost[k, NCOST] = 3
-        c0, c1, c2 = generators[k]["cost_coeffs"]
-        # MATPOWER format: c2, c1, c0 (quadratic, linear, constant)
-        gencost[k, C2] = c2
-        gencost[k, C1] = c1
-        gencost[k, C0] = c0
+    gen = generator_matpower_gen(generators, baseMVA)
+    gencost = generator_gencost(generators)
 
     # Empty branch table
     branch = np.zeros((0, 13))

@@ -25,6 +25,9 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
    **primary generator API**. `build_opf` gains optional `generators=`.
    `None` → fall back to `gen_from_matpower(case)` (asymmetric vs storage/ND/
    HVDC where `None` = none present; generators are load-bearing).
+   With an explicit list, `gen`/`gencost` may be absent from the network case;
+   a temporary normalized case preserves the existing validator/reindexer and
+   never mutates caller data.
 5. **Converge on ONE generator type.** `make_singlenode_case(generators=[dicts])`
    must funnel into `DispatchableGenerator`; no second first-class type.
    Standardization is the goal; special cases are the enemy.
@@ -69,17 +72,18 @@ at `plans/milestone-16-unify-components.md`. Reference implementation: HVDC
 
 ## Status
 
-**Current:** §0 investigation COMPLETE and the additive generator component
-module LANDED in `c3ed408`. Its public exports and component-level conformance
-tests are now staged locally; full suite on 2026-07-24: 829 passed,
-29 expected warnings. The module is not yet wired into the public builders or
-formulation constructors, so existing optimization behavior remains unchanged.
+**Current:** generator component and cost representation committed in
+`35fd0b8`; generator integration is staged locally. AC, lossy DC, and
+single-node builders now compose generator-owned parsing, incidence,
+injection, operating constraints, and cost delegation. Lossy DC uses
+per-generator `Pg` with `Cg @ Pg`; `make_singlenode_case` accepts the shared
+dataclass; the public API accepts `generators=` with MATPOWER fallback.
+Explicit lists may accompany network-only cases without `gen`/`gencost`; a
+temporary case copy feeds the existing validator and reindexer. Full suite on
+2026-07-24: 846 passed, 29 expected project warnings.
 
-**Next:** generator integration commit. Rewire all three constructors to
-compose `generator.py`; add `generators=` with MATPOWER fallback; apply F1
-(per-generator `Pg` everywhere, DC drops nodal `p_gen`/`nogen`) and F7
-(converge `make_singlenode_case`). Add fallback/list equivalence, interface,
-and DCP-conformance tests. Green between.
+**Next:** review and commit the generator integration slice, then begin the
+storage component refactor.
 
 **Cost-boundary review 2026-07-24:** `cost.py` already implements and tests
 both `MODEL=2` polynomial and `MODEL=1` piecewise-linear costs, including the

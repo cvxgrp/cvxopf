@@ -10,7 +10,7 @@ Formulation
 -----------
 Variables:
     p_flows  (nl,)  branch real power flows, p.u.
-    p_gen    (nb,)  nodal real generation, p.u., nonneg
+    Pg       (ng,)  per-generator real generation, p.u.
 
 Objective:
     minimize  G + loss_weight * L
@@ -20,10 +20,9 @@ Objective:
         L = sum_e r_e * p_flows_e^2                         line losses
 
 Constraints:
-    A @ p_flows + p_gen == Pd      flow conservation at every bus
+    A @ p_flows + Cg @ Pg == Pd    flow conservation at every bus
     |p_flows[e]| <= f_max[e]       branch flow limits
-    Pgmin[k] <= p_gen[gen_bus[k]] <= Pgmax[k]
-    p_gen[non_gen_buses] == 0
+    Pgmin <= Pg <= Pgmax
 
 This is a convex QP; the default solver is CLARABEL (nlp=False).
 
@@ -41,10 +40,19 @@ import cvxpy as cp
 from cvxopf.network import (
     reindex_case_to_consecutive,
     make_branch_node_incidence_matrix,
-    make_incidence_matrix,
 )
-from cvxopf.cost import poly_cost_expr
 from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.generator import (
+    DispatchableGenerator,
+    _validate_generators,
+    gen_from_matpower,
+    generator_bounds,
+    generator_gencost,
+    injections as generator_injections,
+    make_generator_incidence,
+    dc_operating_constraints as generator_dc_operating_constraints,
+    gen_cost_expr,
+)
 from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
@@ -66,17 +74,12 @@ from cvxopf.hvdc import (
     dc_operating_constraints as hvdc_dc_operating_constraints,
     hvdc_cost_expr,
 )
-from cvxopf.network import BUS_I
 
 # ---------------------------------------------------------------------------
 # MATPOWER column indices
 # ---------------------------------------------------------------------------
 
 PD         = 2
-GEN_BUS    = 0
-GEN_STATUS = 7
-PMIN       = 9
-PMAX       = 8
 BR_R       = 2
 BR_STATUS  = 10
 RATE_A     = 5
@@ -86,25 +89,32 @@ RATE_A     = 5
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, hvdc: list[HVDCLink] | None = None) -> dict:
+def _parse_dc_case(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    hvdc: list[HVDCLink] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
     Returns a flat dict consumed by the DC single-step and multistep builders.
     """
     validate_case(case)
+    if generators is None:
+        generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
     branch  = case["branch"]
-    gen     = case["gen"]
-    gencost = case["gencost"]
     nb      = bus.shape[0]
-    ng      = gen.shape[0]
+    ng      = len(generators)
     nl      = branch.shape[0]
 
     A  = make_branch_node_incidence_matrix(case)
-    Cg = make_incidence_matrix(case)
 
     # branch resistances (p.u.)
     r = branch[:, BR_R].astype(float) / 1.0   # already dimensionless p.u.
@@ -129,24 +139,15 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
     # nodal load (p.u.)
     Pd = bus[:, PD].astype(float) / baseMVA
 
-    # generator data
-    status  = gen[:, GEN_STATUS].astype(int)
-    gen_bus = gen[:, GEN_BUS].astype(int)
-    Pgmin   = gen[:, PMIN].astype(float) / baseMVA
-    Pgmax   = gen[:, PMAX].astype(float) / baseMVA
-
-    for k in range(ng):
-        if status[k] != 1:
-            Pgmin[k] = Pgmax[k] = 0.0
-
-    # non-generator bus indices
-    all_buses    = set(range(nb))
-    gen_bus_set  = set(gen_bus[status == 1].tolist())
-    nogen_buses  = sorted(all_buses - gen_bus_set)
-
     # External bus IDs for validation — use ext_to_int keys (external MATPOWER
-    # numbering) not bus[:, BUS_I] which is already reindexed to 0-based.
+    # numbering) rather than the already-reindexed bus table.
     ext_bus_ids = set(ext_to_int.keys())
+
+    _validate_generators(generators, ext_bus_ids)
+    Pgmin, Pgmax, _, _ = generator_bounds(generators, baseMVA)
+    Cg = make_generator_incidence(generators, nb, ext_to_int)
+    gen_bus = np.array([ext_to_int[g.bus] for g in generators], dtype=int)
+    gencost = generator_gencost(generators)
     
     # Parse storage if present
     storage_data = {}
@@ -222,10 +223,9 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
         A=A, Cg=Cg,
         r=r, f_max=f_max,
         Pd=Pd,
-        status=status, gen_bus=gen_bus,
+        generators=generators, gen_bus=gen_bus,
         Pgmin=Pgmin, Pgmax=Pgmax,
         gencost=gencost,
-        nogen_buses=nogen_buses,
         loss_weight=options.loss_weight,
         **storage_data,
         **nd_data,
@@ -234,8 +234,8 @@ def _parse_dc_case(case: dict, options, storage: list[StorageUnitIdeal] | None =
 
 
 def _make_dc_step_constraints(
-    p_flows, p_gen,
-    A, Pd, f_max, gen_bus, Pgmin, Pgmax, nogen_buses,
+    p_flows, Pg, generator_injection,
+    A, Pd, f_max, Pgmin, Pgmax,
     baseMVA: float,
     ns: int = 0,
     Cs=None,
@@ -261,17 +261,16 @@ def _make_dc_step_constraints(
     storage_term = cp.multiply((1.0 / baseMVA), Cs @ b_t) if ns > 0 else 0
     nd_term = cp.multiply((1.0 / baseMVA), Cnd @ p_nd_t) if nnd > 0 else 0
     hvdc_term = hvdc_injection_expr if n_hvdc > 0 else 0
-    constr = [A @ p_flows + p_gen + storage_term + nd_term + hvdc_term == Pd]
+    constr = [
+        A @ p_flows + generator_injection
+        + storage_term + nd_term + hvdc_term == Pd
+    ]
 
     # Section 2: Branch flow limits
     constr.append(cp.abs(p_flows) <= f_max)
 
     # Section 3: Generator bounds
-    constr += [p_gen[gen_bus] >= Pgmin, p_gen[gen_bus] <= Pgmax]
-
-    # Section 4: Non-generator bus zeroing
-    if nogen_buses:
-        constr.append(p_gen[nogen_buses] == 0.0)
+    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
 
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
@@ -296,13 +295,11 @@ def _make_dc_step_constraints(
 
 
 def _make_dc_step_cost(
-    p_gen, gen_bus, gencost, baseMVA,
+    Pg, gencost, baseMVA,
     r, p_flows, loss_weight,
 ) -> cp.Expression:
     """Build the per-step DC cost expression."""
-    ng    = len(gen_bus)
-    Pg_MW = [cp.multiply(baseMVA, p_gen[int(gen_bus[k])]) for k in range(ng)]
-    G     = poly_cost_expr(gencost, Pg_MW)
+    G     = gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
     L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
     return G + cp.multiply(loss_weight, L)
 
@@ -311,7 +308,16 @@ def _make_dc_step_cost(
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
 
-def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] | None = None, delta: float = 1.0, nondispatchable: list[NondispatchableUnit] | None = None, *, hvdc=None) -> "OPFBuild":
+def _build_lossy_dc_single(
+    case: dict,
+    options,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    *,
+    hvdc=None,
+    generators: list[DispatchableGenerator] | None = None,
+) -> "OPFBuild":
     """Build a single time-step lossy DC OPF problem."""
     from cvxopf.problem import OPFBuild
 
@@ -325,10 +331,12 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
             stacklevel=3,
         )
 
-    d = _parse_dc_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_dc_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
-    p_gen   = cp.Variable(d["nb"], name="p_gen", nonneg=True)
+    Pg = cp.Variable(d["ng"], name="Pg")
 
     # Create storage variables if present
     b_t = soc_t = None
@@ -354,11 +362,15 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
+    generator_inj_expr, generator_scaling = generator_injections(
+        d["generators"], Pg, d["ext_to_int"]
+    )
+    assert generator_scaling is None
+
     constr = _make_dc_step_constraints(
-        p_flows, p_gen,
+        p_flows, Pg, generator_inj_expr,
         d["A"], d["Pd"], d["f_max"],
-        d["gen_bus"], d["Pgmin"], d["Pgmax"],
-        d["nogen_buses"],
+        d["Pgmin"], d["Pgmax"],
         baseMVA=d["baseMVA"],
         ns=d.get("ns", 0),
         Cs=d.get("Cs"),
@@ -381,7 +393,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
     )
 
     cost = _make_dc_step_cost(
-        p_gen, d["gen_bus"], d["gencost"], d["baseMVA"],
+        Pg, d["gencost"], d["baseMVA"],
         d["r"], p_flows, d["loss_weight"],
     )
 
@@ -403,7 +415,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         constr.extend(storage_coupling)
 
     prob      = cp.Problem(cp.Minimize(cost), constr)
-    variables = dict(p_flows=p_flows, p_gen=p_gen)
+    variables = dict(p_flows=p_flows, Pg=Pg)
 
     # Add storage variables if present
     if "ns" in d and d["ns"] > 0:
@@ -425,7 +437,7 @@ def _build_lossy_dc_single(case: dict, options, storage: list[StorageUnitIdeal] 
         A=d["A"], Cg=d["Cg"],
         r=d["r"], f_max=d["f_max"],
         Pd=d["Pd"],
-        gen_bus=d["gen_bus"],
+        gen_bus=d["gen_bus"], gencost=d["gencost"],
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
     )
@@ -482,6 +494,7 @@ def _build_lossy_dc_multistep(
     hvdc=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """Build a T-step lossy DC OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
@@ -510,7 +523,9 @@ def _build_lossy_dc_multistep(
         np.zeros_like(df_P.to_numpy()), columns=df_P.columns
     )
 
-    d = _parse_dc_case(case, options, storage, delta, nondispatchable, hvdc)
+    d = _parse_dc_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators
+    )
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
     
     # Parse nondispatchable timeseries if present
@@ -524,7 +539,7 @@ def _build_lossy_dc_multistep(
         )
 
     p_flows_list    = []
-    p_gen_list      = []
+    Pg_list         = []
     b_list          = []
     soc_list        = []
     p_nd_list       = []
@@ -535,7 +550,7 @@ def _build_lossy_dc_multistep(
 
     for t in range(T):
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
-        p_gen_t   = cp.Variable(d["nb"], name=f"p_gen_{t}", nonneg=True)
+        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
 
         # Create storage variables if present
         b_t = soc_t = None
@@ -566,11 +581,15 @@ def _build_lossy_dc_multistep(
         # Get available power for this time step
         nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
 
+        generator_inj_expr_t, generator_scaling_t = generator_injections(
+            d["generators"], Pg_t, d["ext_to_int"]
+        )
+        assert generator_scaling_t is None
+
         step_constr = _make_dc_step_constraints(
-            p_flows_t, p_gen_t,
+            p_flows_t, Pg_t, generator_inj_expr_t,
             d["A"], Pd_series[t], d["f_max"],
-            d["gen_bus"], d["Pgmin"], d["Pgmax"],
-            d["nogen_buses"],
+            d["Pgmin"], d["Pgmax"],
             baseMVA=d["baseMVA"],
             ns=d.get("ns", 0),
             Cs=d.get("Cs"),
@@ -592,7 +611,7 @@ def _build_lossy_dc_multistep(
             step=t,
         )
         step_cost = _make_dc_step_cost(
-            p_gen_t, d["gen_bus"], d["gencost"], d["baseMVA"],
+            Pg_t, d["gencost"], d["baseMVA"],
             d["r"], p_flows_t, d["loss_weight"],
         )
 
@@ -608,7 +627,7 @@ def _build_lossy_dc_multistep(
         all_constr.extend(step_constr)
         total_cost  = total_cost + step_cost
         p_flows_list.append(p_flows_t)
-        p_gen_list.append(p_gen_t)
+        Pg_list.append(Pg_t)
 
         # Add storage variables to lists
         if "ns" in d and d["ns"] > 0:
@@ -635,7 +654,7 @@ def _build_lossy_dc_multistep(
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
-    variables = dict(p_flows=p_flows_list, p_gen=p_gen_list)
+    variables = dict(p_flows=p_flows_list, Pg=Pg_list)
 
     # Add storage variables if present
     if "ns" in d and d["ns"] > 0:
@@ -656,7 +675,7 @@ def _build_lossy_dc_multistep(
         ext_to_int=d["ext_to_int"],
         A=d["A"], Cg=d["Cg"],
         r=d["r"], f_max=d["f_max"],
-        gen_bus=d["gen_bus"],
+        gen_bus=d["gen_bus"], gencost=d["gencost"],
         Pgmin=d["Pgmin"], Pgmax=d["Pgmax"],
         loss_weight=d["loss_weight"],
         T=T,

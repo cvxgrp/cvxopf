@@ -161,13 +161,18 @@ economic-dispatch problem without a full network:
 ```python
 from cvxopf.testcases import make_singlenode_case
 from cvxopf.problem import build_opf
+from cvxopf.generator import DispatchableGenerator
 from cvxopf.results import extract_results
 
 case = make_singlenode_case(
     P_load_MW=250.0,
     generators=[
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},  # (c0, c1, c2)
-        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
     ],
 )
 
@@ -181,6 +186,38 @@ print(f"Pg (MW):   {results['Pg']}")
 The `examples/case14_formulation_comparison.py` script solves the IEEE
 14-bus case with all three formulations side by side and contrasts their
 dispatch and implied losses.
+
+### First-class dispatchable generators
+
+Pass `DispatchableGenerator` objects to define generator locations, operating
+bounds, and costs directly. Polynomial costs use lowest-power-first
+coefficients; piecewise-linear costs use explicit `(power_MW, cost)`
+breakpoints. All cost expressions are evaluated by the shared implementation
+in `cost.py`.
+
+```python
+from cvxopf import DispatchableGenerator, build_opf
+
+generators = [
+    DispatchableGenerator(
+        bus=1,
+        p_min_mw=10.0,
+        p_max_mw=250.0,
+        q_min_mvar=-300.0,
+        q_max_mvar=300.0,
+        cost_type="piecewise_linear",
+        cost_points=((0.0, 0.0), (100.0, 2500.0), (250.0, 7250.0)),
+    ),
+]
+
+# network_case needs bus, branch, and baseMVA, but may omit gen/gencost.
+build = build_opf(network_case, formulation="ac", generators=generators)
+```
+
+For backward compatibility, omitting `generators=` converts the case's
+MATPOWER `gen` and `gencost` tables to the same component representation at
+build time. Supplying `generators=` overrides those tables; they may be absent,
+and the input case dict is not mutated.
 
 ## Interactive notebooks
 
@@ -364,6 +401,7 @@ src/cvxopf/           Core package
   singlenode_dc_problem.py  Single-node DC dispatch helpers (convex QP)
   network.py          Ybus, incidence matrices, reindexing
   cost.py             Generator cost expression builders
+  generator.py        DispatchableGenerator component and MATPOWER conversion
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
   storage.py          StorageUnitIdeal dataclass and helpers

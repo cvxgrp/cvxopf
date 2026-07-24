@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import cvxpy as cp
+from cvxopf.generator import DispatchableGenerator
 
 from cvxopf.hvdc import (
     HVDCLink,
@@ -541,8 +542,12 @@ class TestHVDCWiring:
     """
 
     _GENS = [
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)
+        ),
     ]
     _LINK = HVDCLink(from_bus=1, to_bus=2, p_min_mw=-50.0, p_max_mw=50.0)
 
@@ -739,11 +744,12 @@ class TestHVDCLossyDCSolve:
         bMVA = build.data["baseMVA"]
 
         p_flows = build.variables["p_flows"].value
-        p_gen = build.variables["p_gen"].value
+        Pg = build.variables["Pg"].value
+        Cg = build.data["Cg"]
         p_in = build.variables["p_hvdc_in"].value
         p_out = build.variables["p_hvdc_out"].value
 
-        balance = A @ p_flows + p_gen + (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
+        balance = A @ p_flows + Cg @ Pg + (1.0 / bMVA) * (Ch_from @ p_in + Ch_to @ p_out)
         np.testing.assert_allclose(balance, Pd, atol=1e-4)
 
     def test_pinned_lossless_p_in_and_p_out(self):

@@ -581,7 +581,7 @@ class TestNondispatchableDCMultistep:
                 case9(), df_P, df_Q, T=3, formulation="lossy_dc",
                 nondispatchable=[unit], df_nd=df_nd,
             )
-        # Do not call build.solve() — p_gen values will be None
+        # Do not call build.solve() — Pg values will be None
         r = extract_results(build)
         assert r["Pg"] is None
         assert r["p_flows"] is None

@@ -14,11 +14,12 @@ from cvxopf.problem import (
 )
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 
 
 SIMPLE_GENS = [
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)),
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)),
 ]
 
 OBJ_RTOL = 1e-4

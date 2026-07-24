@@ -77,7 +77,7 @@ The device's instantaneous feasible set at a single time step. Forked into
 |---|---|---|---|
 | Storage | apparent-power circle `b²+b_q²≤S²` | real-power box `\|b\|≤S` | real-power box `\|b\|≤S` |
 | Nondispatchable | circle `p_nd²+q_nd²≤P²` ∧ `0≤p_nd≤R` | `0≤p_nd≤R` only | `0≤p_nd≤R` only |
-| Generator | bounds `Pgmin≤Pg≤Pgmax` | `Pgmin≤p_gen[gen_bus]≤Pgmax` + `nogen==0` | `Pgmin≤Pg≤Pgmax` |
+| Generator | bounds `Pgmin≤Pg≤Pgmax` | bounds `Pgmin≤Pg≤Pgmax` | bounds `Pgmin≤Pg≤Pgmax` |
 | HVDC | box + loss-branch equality | box + loss-branch equality | (dropped) |
 
 ### 3.2 Per-step bounds that are not the operating region
@@ -293,6 +293,10 @@ which is the standardization spirit of this milestone.
   - `generators=<list>` → the primary cvxopf API path; use the list.
   - `generators=None` (default) → fall back to `gen_from_matpower(case)`, so
     existing calls and standard MATPOWER test files keep working unchanged.
+  - With an explicit list, the case may omit `gen` and `gencost`.
+    `problem.py` serializes the objects into a temporary shallow case copy so
+    the existing validation/reindexing path remains authoritative; the
+    caller's dict is not mutated.
   - **Invariant pinned by test:** `build_opf(case, generators=gen_from_matpower(case))`
     must produce a problem identical to `build_opf(case)` — same `build.data`
     arrays (`Pgmin`, `Pgmax`, `gencost`, `Cg`, `gen_bus`), same objective, same

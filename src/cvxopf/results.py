@@ -67,7 +67,7 @@ def extract_results(build: OPFBuild) -> dict:
             status      str          CVXPY solve status
             objective   float        Optimal cost ($/hr)
             Pg          np.ndarray   (ng,)  Per-generator output, MW
-                                            extracted from p_gen at gen_bus
+                                            stored per generator as Pg
             p_flows     np.ndarray   (nl,)  Branch real power flows, MW
             p_net       np.ndarray   (nb,)  Net real bus injection, MW
 
@@ -294,24 +294,24 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     """
     Extract results for lossy DC formulation (single-step or multi-step).
 
-    Pg is extracted from p_gen at gen_bus indices, giving a (ng,) array
-    that aligns with the AC convention.
+    Pg is stored directly as a per-generator (ng,) variable. Nodal net
+    injection is reconstructed as Cg @ Pg - Pd.
     """
     var     = build.variables
     data    = build.data
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
-    gen_bus = data["gen_bus"]
+    Cg = data["Cg"]
 
-    multistep = isinstance(var["p_gen"], list)
+    multistep = isinstance(var["Pg"], list)
 
     if not multistep:
-        p_gen_val   = var["p_gen"].value
+        Pg_val      = var["Pg"].value
         p_flows_val = var["p_flows"].value
         Pd          = data["Pd"]
 
         # Guard: solver may return None values if problem is infeasible
-        if p_gen_val is None or p_flows_val is None:
+        if Pg_val is None or p_flows_val is None:
             return dict(
                 status    = prob.status,
                 objective = float("nan"),
@@ -323,9 +323,9 @@ def _extract_dc_results(build: OPFBuild) -> dict:
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
-            Pg        = p_gen_val[gen_bus] * baseMVA,
+            Pg        = Pg_val * baseMVA,
             p_flows   = p_flows_val * baseMVA,
-            p_net     = (p_gen_val - Pd) * baseMVA,
+            p_net     = (Cg @ Pg_val - Pd) * baseMVA,
         )
         
         # Add storage results if present
@@ -366,9 +366,9 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     p_hvdc_out_rows = []
 
     for t in range(T):
-        p_gen_t   = var["p_gen"][t].value
+        Pg_t      = var["Pg"][t].value
         p_flows_t = var["p_flows"][t].value
-        if p_gen_t is None or p_flows_t is None:
+        if Pg_t is None or p_flows_t is None:
             return dict(
                 status    = prob.status,
                 objective = float("nan"),
@@ -376,9 +376,9 @@ def _extract_dc_results(build: OPFBuild) -> dict:
                 p_flows   = None,
                 p_net     = None,
             )
-        Pg_rows.append(p_gen_t[gen_bus])
+        Pg_rows.append(Pg_t)
         p_flows_rows.append(p_flows_t)
-        p_net_rows.append(p_gen_t - Pd_series[t])
+        p_net_rows.append(Cg @ Pg_t - Pd_series[t])
         
         # Extract storage results if present
         if "ns" in data:

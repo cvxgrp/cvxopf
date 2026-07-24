@@ -21,6 +21,7 @@ from cvxopf.problem import (
 )
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results, compare_to_reference
+from cvxopf.generator import DispatchableGenerator
 
 
 OBJ_RTOL  = 1e-4
@@ -28,8 +29,8 @@ VAL_ATOL  = 1e-3
 SOC_ATOL  = 1e-4
 
 SIMPLE_GENS = [
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)),
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)),
 ]
 
 

@@ -46,9 +46,12 @@ from cvxopf.cost import poly_cost_expr
 
 # MATPOWER column indices (gen and gencost tables)
 _GEN_BUS = 0
+_PG = 1
+_QG = 2
 _QMAX = 3
 _QMIN = 4
 _VG = 5
+_MBASE = 6
 _GEN_STATUS = 7
 _PMAX = 8
 _PMIN = 9
@@ -262,14 +265,54 @@ def generator_gencost(gens: list) -> np.ndarray:
             [model, g.startup, g.shutdown, ncost, *payload]
         )
 
-    width = max((len(row) for row in rows), default=0)
+    width = max((len(row) for row in rows), default=5)
     gencost = np.zeros((len(rows), width))
     for k, row in enumerate(rows):
         gencost[k, :len(row)] = row
     return gencost
 
 
-def injections(gens: list, Pg: cp.Variable, ext_to_int: dict) -> tuple:
+def generator_matpower_gen(gens: list, baseMVA: float) -> np.ndarray:
+    """Serialize generators to a MATPOWER gen array with 21 columns."""
+    gen = np.zeros((len(gens), 21))
+    for k, g in enumerate(gens):
+        gen[k, _GEN_BUS] = g.bus
+        gen[k, _PG] = 0.0
+        gen[k, _QG] = 0.0
+        gen[k, _QMAX] = g.q_max_mvar
+        gen[k, _QMIN] = g.q_min_mvar
+        gen[k, _VG] = g.vg
+        gen[k, _MBASE] = baseMVA
+        gen[k, _GEN_STATUS] = g.status
+        gen[k, _PMAX] = g.p_max_mw
+        gen[k, _PMIN] = g.p_min_mw
+    return gen
+
+
+def _case_with_generators(case: dict, gens: list) -> dict:
+    """
+    Return a shallow case copy with ``gen`` and ``gencost`` built from gens.
+
+    This is the normalization seam for the first-class generator API. It lets
+    callers supply a network-only MATPOWER-style case (bus, branch, baseMVA)
+    together with ``generators=`` while preserving the existing case
+    validation and reindexing path internally. The input case is not mutated.
+    """
+    ext_bus_ids = set(np.asarray(case["bus"])[:, 0].astype(int).tolist())
+    _validate_generators(gens, ext_bus_ids)
+    normalized = dict(case)
+    normalized["gen"] = generator_matpower_gen(gens, float(case["baseMVA"]))
+    normalized["gencost"] = generator_gencost(gens)
+    return normalized
+
+
+def injections(
+    gens: list,
+    Pg: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+) -> tuple:
     """
     Build the generator nodal-balance addend Cg @ Pg.
 
@@ -285,7 +328,8 @@ def injections(gens: list, Pg: cp.Variable, ext_to_int: dict) -> tuple:
         Always None for generators; present to match the HVDC injection
         interface (which returns an inv_baseMVA cp.Parameter).
     """
-    nb = len(ext_to_int)
+    if nb is None:
+        nb = len(ext_to_int)
     Cg = make_generator_incidence(gens, nb, ext_to_int)
     return Cg @ Pg, None
 

@@ -48,7 +48,17 @@ import pandas as pd
 import cvxpy as cp
 
 from cvxopf.network import reindex_case_to_consecutive
-from cvxopf.cost import poly_cost_expr
+from cvxopf.generator import (
+    DispatchableGenerator,
+    _validate_generators,
+    gen_from_matpower,
+    generator_bounds,
+    generator_gencost,
+    injections as generator_injections,
+    make_generator_incidence,
+    dc_operating_constraints as generator_dc_operating_constraints,
+    gen_cost_expr,
+)
 from cvxopf.storage import (
     StorageUnitIdeal,
     _validate_storage,
@@ -65,14 +75,11 @@ from cvxopf.network import BUS_I
 
 # MATPOWER column index constants
 PD = 2
-GEN_BUS = 0
-GEN_STATUS = 7
-PMIN = 9
-PMAX = 8
 
 
 def _make_singlenode_dc_step_constraints(
     Pg,
+    generator_injection,
     Pd_total_t: float,
     Pgmin,
     Pgmax,
@@ -126,11 +133,10 @@ def _make_singlenode_dc_step_constraints(
     # Section 1: Power balance (exactly one equality constraint)
     storage_term = cp.multiply(1.0 / baseMVA, cp.sum(b_t)) if ns > 0 else 0
     nd_term = cp.multiply(1.0 / baseMVA, cp.sum(p_nd_t)) if nnd > 0 else 0
-    constr.append(cp.sum(Pg) + storage_term + nd_term == Pd_total_t)
+    constr.append(generator_injection[0] + storage_term + nd_term == Pd_total_t)
 
     # Section 2: Generator bounds
-    constr.append(Pg >= Pgmin)
-    constr.append(Pg <= Pgmax)
+    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
 
     # Section 3: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
@@ -168,10 +174,7 @@ def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
     cp.Expression
         Total generation cost expression.
     """
-    ng = Pg.shape[0]
-    # Convert Pg from per-unit to MW for cost calculation
-    Pg_MW = [cp.multiply(baseMVA, Pg[k]) for k in range(ng)]
-    return poly_cost_expr(gencost, Pg_MW)
+    return gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
 
 
 def _parse_singlenode_dc_case(
@@ -180,6 +183,7 @@ def _parse_singlenode_dc_case(
     storage: list[StorageUnitIdeal] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -208,36 +212,34 @@ def _parse_singlenode_dc_case(
     -----
     - Does NOT call validate_case (empty branch tables are acceptable).
     - Returns scalar Pd_total = sum(bus[:, PD]) / baseMVA, not per-bus Pd.
-    - Does NOT return A, r, f_max, nogen_buses, gen_bus, nl, or loss_weight.
+    - Does NOT return A, r, f_max, nogen_buses, nl, or loss_weight.
+      ``Cg`` and ``gen_bus`` use the collapsed one-node representation.
     """
     # Get external bus IDs for validation (before reindexing)
     original_bus = case["bus"]
     ext_bus_ids = set(original_bus[:, BUS_I].astype(int).tolist())
+    if generators is None:
+        generators = gen_from_matpower(case["gen"], case["gencost"])
 
     # Reindex to consecutive bus numbering
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
     bus = case["bus"]
-    gen = case["gen"]
-    gencost = case["gencost"]
 
     nb = bus.shape[0]
-    ng = gen.shape[0]
+    ng = len(generators)
 
     # Compute total load (scalar, not per-bus)
     Pd_total = float(np.sum(bus[:, PD]) / baseMVA)
 
-    # Extract generator data
-    status = gen[:, GEN_STATUS].astype(int)
-    Pgmin = gen[:, PMIN].astype(float) / baseMVA
-    Pgmax = gen[:, PMAX].astype(float) / baseMVA
-
-    # Zero out bounds for inactive generators
-    for k in range(ng):
-        if status[k] != 1:
-            Pgmin[k] = 0.0
-            Pgmax[k] = 0.0
+    _validate_generators(generators, ext_bus_ids)
+    Pgmin, Pgmax, _, _ = generator_bounds(generators, baseMVA)
+    gencost = generator_gencost(generators)
+    collapsed_ext_to_int = {bus_id: 0 for bus_id in ext_bus_ids}
+    Cg = make_generator_incidence(
+        generators, nb=1, ext_to_int=collapsed_ext_to_int
+    )
 
     # Storage data (if present)
     storage_data = {}
@@ -284,6 +286,10 @@ def _parse_singlenode_dc_case(
         "ng": ng,
         "ext_to_int": ext_to_int,
         "ext_bus_ids": ext_bus_ids,
+        "collapsed_ext_to_int": collapsed_ext_to_int,
+        "generators": generators,
+        "Cg": Cg,
+        "gen_bus": np.zeros(ng, dtype=int),
         "Pd_total": Pd_total,
         "Pgmin": Pgmin,
         "Pgmax": Pgmax,
@@ -301,6 +307,7 @@ def _build_singlenode_dc_single(
     nondispatchable: list[NondispatchableUnit] | None = None,
     *,
     hvdc=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """
     Build a single time-step single-node DC dispatch problem.
@@ -326,10 +333,12 @@ def _build_singlenode_dc_single(
     from cvxopf.problem import OPFBuild
 
     # Parse the case
-    d = _parse_singlenode_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_singlenode_dc_case(
+        case, options, storage, delta, nondispatchable, generators
+    )
 
     # Declare variables
-    Pg = cp.Variable(d["ng"], name="Pg", nonneg=True)
+    Pg = cp.Variable(d["ng"], name="Pg")
 
     # Storage variables (if present)
     b_t = None
@@ -344,8 +353,17 @@ def _build_singlenode_dc_single(
         p_nd_t = cp.Variable(d["nnd"], name="p_nd", nonneg=True)
 
     # Build constraints
+    generator_inj_expr, generator_scaling = generator_injections(
+        d["generators"],
+        Pg,
+        d["collapsed_ext_to_int"],
+        nb=1,
+    )
+    assert generator_scaling is None
+
     constr = _make_singlenode_dc_step_constraints(
         Pg=Pg,
+        generator_injection=generator_inj_expr,
         Pd_total_t=d["Pd_total"],
         Pgmin=d["Pgmin"],
         Pgmax=d["Pgmax"],
@@ -396,6 +414,8 @@ def _build_singlenode_dc_single(
         "Pgmin": d["Pgmin"],
         "Pgmax": d["Pgmax"],
         "gencost": d["gencost"],
+        "Cg": d["Cg"],
+        "gen_bus": d["gen_bus"],
     }
 
     # Add storage data if present
@@ -445,6 +465,7 @@ def _build_singlenode_dc_multistep(
     hvdc=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
 ) -> "OPFBuild":
     """
     Build a multi-step single-node DC dispatch problem.
@@ -499,7 +520,9 @@ def _build_singlenode_dc_multistep(
         )
 
     # Parse the case
-    d = _parse_singlenode_dc_case(case, options, storage, delta, nondispatchable)
+    d = _parse_singlenode_dc_case(
+        case, options, storage, delta, nondispatchable, generators
+    )
 
     # Validate df_P column count before summing
     if df_P.shape[1] != d["nb"]:
@@ -530,7 +553,7 @@ def _build_singlenode_dc_multistep(
 
     for t in range(T):
         # Declare per-step variables
-        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}", nonneg=True)
+        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
 
         b_t = None
         soc_t = None
@@ -552,8 +575,17 @@ def _build_singlenode_dc_multistep(
             nd_p_available_t = None
 
         # Per-step constraints
+        generator_inj_expr_t, generator_scaling_t = generator_injections(
+            d["generators"],
+            Pg_t,
+            d["collapsed_ext_to_int"],
+            nb=1,
+        )
+        assert generator_scaling_t is None
+
         step_constr = _make_singlenode_dc_step_constraints(
             Pg=Pg_t,
+            generator_injection=generator_inj_expr_t,
             Pd_total_t=float(Pd_series[t]),
             Pgmin=d["Pgmin"],
             Pgmax=d["Pgmax"],
@@ -615,6 +647,8 @@ def _build_singlenode_dc_multistep(
         Pgmin=d["Pgmin"],
         Pgmax=d["Pgmax"],
         gencost=d["gencost"],
+        Cg=d["Cg"],
+        gen_bus=d["gen_bus"],
         T=T,
         Pd_series=Pd_series,
     )

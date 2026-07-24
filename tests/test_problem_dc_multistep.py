@@ -102,7 +102,7 @@ class TestReturnType:
             build = build_opf_multistep(
                 case9(), df_P, df_Q, T=T, formulation="lossy_dc"
             )
-        for key in ("p_flows", "p_gen"):
+        for key in ("p_flows", "Pg"):
             assert isinstance(build.variables[key], list)
             assert len(build.variables[key]) == T, \
                 f"variables['{key}'] should have length T={T}"

@@ -222,11 +222,11 @@ Objective: minimize `G + loss_weight * L`
 - `loss_weight` is user-configurable via `OPFOptions.loss_weight` (default 1.0)
 
 Constraints:
-- `A @ p_flows + p_gen == Pd` — flow conservation at every bus
+- `A @ p_flows + Cg @ Pg == Pd` — flow conservation at every bus
 - `|p_flows[e]| <= f_max[e]` — branch flow limits
 - Generator output bounds
 
-Variables: `p_flows`, `p_gen`
+Variables: `p_flows`, `Pg`
 
 **Device models in DC** – No reactive term (`b_q`, `q_nd` absent). Storage uses a real‑power bound `|b_t| ≤ S_max` (emits a `UserWarning`). Nondispatchable units have only the real‑power bound `0 ≤ p_nd_t ≤ R_t` (apparent rating stored but not enforced). HVDC model is identical to AC (box bounds plus proportional‑loss coupling). Results omit `Vm`, `Va_deg`, `Qg`, `q_net` (see the results-key table under `"ac"`).
 
@@ -362,6 +362,7 @@ to avoid circular imports. The import chain is:
 ```
 problem.py    →  storage.py              (StorageUnitIdeal, re-exported)
 problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
+problem.py    →  generator.py            (DispatchableGenerator, case normalization)
 problem.py    →  ac_problem.py           (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
 ac_problem.py →  storage.py             (StorageUnitIdeal, _validate_storage,
@@ -371,10 +372,14 @@ ac_problem.py →  nondispatchable.py     (NondispatchableUnit,
                                           _validate_nondispatchable,
                                           _make_nd_incidence_matrix,
                                           _parse_nd_timeseries)
-ac_problem.py →  network.py, cost.py, data.py   (unchanged)
+ac_problem.py →  generator.py           (generator component interface)
+ac_problem.py →  network.py, data.py
 dc_problem.py →  storage.py             (same as ac_problem.py)
 dc_problem.py →  nondispatchable.py     (same as ac_problem.py)
-dc_problem.py →  network.py, cost.py, data.py   (unchanged)
+dc_problem.py →  generator.py           (generator component interface)
+dc_problem.py →  network.py, data.py
+singlenode_dc_problem.py → generator.py (collapsed incidence, bounds, cost)
+generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 results.py    →  problem.py             (OPFBuild type only, unchanged)
 storage.py    →  numpy only             (no other cvxopf imports)
 nondispatchable.py → numpy only         (no other cvxopf imports)
@@ -524,7 +529,8 @@ There are two distinct incidence matrices in `network.py`:
 - `make_incidence_matrix(case)` — generator-to-bus matrix `Cg`, shape
   `(nb, ng)`. Used in both AC and DC to link generator variables to buses.
 - `make_branch_node_incidence_matrix(case)` — branch-node matrix `A`,
-  shape `(nb, nl)`. Used in DC for flow conservation `A @ p_flows + p_gen = Pd`.
+  shape `(nb, nl)`. Used in DC for flow conservation
+  `A @ p_flows + Cg @ Pg = Pd`.
 
 Do not confuse them. See the module-level comment in `network.py`.
 

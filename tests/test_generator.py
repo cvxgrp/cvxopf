@@ -2,6 +2,7 @@
 
 import cvxpy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 from cvxopf.generator import (
@@ -17,6 +18,9 @@ from cvxopf.generator import (
     injections,
     make_generator_incidence,
 )
+from cvxopf.ac_problem import _parse_case as _parse_ac_case
+from cvxopf.problem import OPFOptions, build_opf, build_opf_multistep
+from cvxopf.results import extract_results
 from cvxopf.testcases import case9, case14
 from cvxopf.testcases.case9_pwl import case9_pwl
 
@@ -46,6 +50,126 @@ def test_matpower_mixed_pwl_roundtrip_preserves_generator_data():
         (250.0, 7250.0),
     )
     np.testing.assert_allclose(generator_gencost(generators), case["gencost"])
+
+
+@pytest.mark.parametrize("case_factory", [case9, case9_pwl])
+def test_ac_parser_fallback_matches_explicit_generator_list(case_factory):
+    case = case_factory()
+    generators = gen_from_matpower(case["gen"], case["gencost"])
+
+    fallback = _parse_ac_case(case, OPFOptions())
+    explicit = _parse_ac_case(case, OPFOptions(), generators=generators)
+
+    for key in (
+        "Cg",
+        "gen_bus",
+        "Pgmin",
+        "Pgmax",
+        "Qgmin",
+        "Qgmax",
+        "gencost",
+    ):
+        np.testing.assert_allclose(explicit[key], fallback[key])
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_public_explicit_generators_match_matpower_fallback(formulation):
+    case = case9()
+    generators = gen_from_matpower(case["gen"], case["gencost"])
+
+    fallback = build_opf(case, formulation=formulation)
+    explicit = build_opf(case, formulation=formulation, generators=generators)
+
+    for key in ("Cg", "gen_bus", "Pgmin", "Pgmax", "gencost"):
+        if key in fallback.data:
+            np.testing.assert_allclose(explicit.data[key], fallback.data[key])
+
+    fallback.solve()
+    explicit.solve()
+    fallback_results = extract_results(fallback)
+    explicit_results = extract_results(explicit)
+    assert explicit_results["objective"] == pytest.approx(
+        fallback_results["objective"], rel=1e-8, abs=1e-6
+    )
+    np.testing.assert_allclose(
+        explicit_results["Pg"], fallback_results["Pg"], rtol=1e-7, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_public_pwl_generators_preserve_matpower_cost_data(formulation):
+    case = case9_pwl()
+    generators = gen_from_matpower(case["gen"], case["gencost"])
+
+    fallback = build_opf(case, formulation=formulation)
+    explicit = build_opf(case, formulation=formulation, generators=generators)
+
+    np.testing.assert_allclose(explicit.data["gencost"], fallback.data["gencost"])
+    np.testing.assert_allclose(explicit.data["gencost"], case["gencost"])
+
+
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+def test_public_explicit_generator_convex_paths_are_dcp(formulation):
+    case = case9_pwl()
+    generators = gen_from_matpower(case["gen"], case["gencost"])
+    build = build_opf(case, formulation=formulation, generators=generators)
+
+    assert build.prob.is_dcp()
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_public_explicit_generators_override_case_generator_data(formulation):
+    case = case9()
+    generators = gen_from_matpower(case["gen"], case["gencost"])
+    generators[0].p_max_mw = 123.0
+
+    build = build_opf(case, formulation=formulation, generators=generators)
+
+    assert build.data["Pgmax"][0] == pytest.approx(1.23)
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_explicit_generators_allow_network_case_without_legacy_tables(formulation):
+    complete_case = case9()
+    generators = gen_from_matpower(
+        complete_case["gen"], complete_case["gencost"]
+    )
+    network_case = {
+        key: value for key, value in complete_case.items()
+        if key not in {"gen", "gencost"}
+    }
+
+    build = build_opf(
+        network_case, formulation=formulation, generators=generators
+    )
+
+    assert build.data["ng"] == len(generators)
+    assert "gen" not in network_case
+    assert "gencost" not in network_case
+
+
+def test_explicit_generators_allow_network_only_multistep_case():
+    complete_case = case9()
+    generators = gen_from_matpower(
+        complete_case["gen"], complete_case["gencost"]
+    )
+    network_case = {
+        key: value for key, value in complete_case.items()
+        if key not in {"gen", "gencost"}
+    }
+    df_P = pd.DataFrame([complete_case["bus"][:, 2]])
+
+    build = build_opf_multistep(
+        network_case,
+        df_P,
+        None,
+        T=1,
+        formulation="lossy_dc",
+        generators=generators,
+    )
+
+    assert build.data["ng"] == len(generators)
+    assert build.prob.is_dcp()
 
 
 def test_bounds_and_incidence_preserve_inactive_generator_semantics():
