@@ -1,5 +1,7 @@
 """Cross-device conformance tests for the Milestone 16 component contract."""
 
+import warnings
+
 import cvxpy as cp
 import numpy as np
 import pandas as pd
@@ -13,7 +15,7 @@ from cvxopf import (
 )
 from cvxopf import generator, hvdc, nondispatchable, storage
 from cvxopf import ac_problem, dc_problem, singlenode_dc_problem
-from cvxopf.problem import build_opf_multistep
+from cvxopf.problem import build_opf, build_opf_multistep
 from cvxopf.testcases import case9
 
 
@@ -104,8 +106,8 @@ def test_multistep_builders_compose_generator_coupling_hook(
 ):
     calls = []
 
-    def coupling_spy(generators, Pg_list, Qg_list=None):
-        calls.append((generators, Pg_list, Qg_list))
+    def coupling_spy(generators, Pg_list, Qg_list=None, delta=1.0):
+        calls.append((generators, Pg_list, Qg_list, delta))
         return []
 
     monkeypatch.setattr(
@@ -116,9 +118,150 @@ def test_multistep_builders_compose_generator_coupling_hook(
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
     df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
 
-    build_opf_multistep(
-        case, df_P, df_Q, T=T, formulation=formulation
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        build_opf_multistep(
+            case, df_P, df_Q, T=T, formulation=formulation, delta=0.5
+        )
 
     assert len(calls) == 1
     assert len(calls[0][1]) == T
+    assert calls[0][3] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    ("formulation", "builder_module"),
+    [
+        ("ac", ac_problem),
+        ("lossy_dc", dc_problem),
+        ("singlenode_dc", singlenode_dc_problem),
+    ],
+)
+def test_multistep_builders_compose_nd_coupling_hook(
+    formulation, builder_module, monkeypatch
+):
+    calls = []
+
+    def coupling_spy(units, p_nd_list, q_nd_list=None, delta=1.0):
+        calls.append((units, p_nd_list, q_nd_list, delta))
+        return []
+
+    monkeypatch.setattr(builder_module, "nd_coupling_constraints", coupling_spy)
+    case = case9()
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+    units = [NondispatchableUnit(5, 20.0, 25.0, device_id="nd")]
+    df_nd = pd.DataFrame({"nd": [20.0, 15.0]})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        build_opf_multistep(
+            case,
+            df_P,
+            df_Q,
+            T=T,
+            formulation=formulation,
+            nondispatchable=units,
+            df_nd=df_nd,
+            delta=0.5,
+        )
+
+    assert len(calls) == 1
+    assert len(calls[0][1]) == T
+    assert calls[0][3] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    ("formulation", "builder_module"),
+    [("ac", ac_problem), ("lossy_dc", dc_problem)],
+)
+def test_multistep_builders_compose_hvdc_coupling_hook(
+    formulation, builder_module, monkeypatch
+):
+    calls = []
+
+    def coupling_spy(links, p_in_list, p_out_list, delta=1.0):
+        calls.append((links, p_in_list, p_out_list, delta))
+        return []
+
+    monkeypatch.setattr(
+        builder_module, "hvdc_coupling_constraints", coupling_spy
+    )
+    case = case9()
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+    links = [HVDCLink(4, 9, -10.0, 10.0, device_id="hvdc")]
+    df_min = pd.DataFrame({"hvdc": [-10.0, -10.0]})
+    df_max = pd.DataFrame({"hvdc": [10.0, 10.0]})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        build_opf_multistep(
+            case,
+            df_P,
+            df_Q,
+            T=T,
+            formulation=formulation,
+            hvdc=links,
+            df_hvdc_min=df_min,
+            df_hvdc_max=df_max,
+            delta=0.5,
+        )
+
+    assert len(calls) == 1
+    assert len(calls[0][1]) == T
+    assert calls[0][3] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    ("formulation", "builder_module"),
+    [
+        ("lossy_dc", dc_problem),
+        ("singlenode_dc", singlenode_dc_problem),
+    ],
+)
+def test_dc_builders_compose_generator_network_hook(
+    formulation, builder_module, monkeypatch
+):
+    calls = []
+
+    def network_spy(
+        generators,
+        network_state,
+        ext_to_int,
+        controlled_buses,
+        *,
+        enforce_vset,
+    ):
+        calls.append((generators, network_state, ext_to_int))
+        return []
+
+    monkeypatch.setattr(
+        builder_module, "generator_dc_network_constraints", network_spy
+    )
+    case = case9()
+    build_opf(case, formulation=formulation)
+    assert len(calls) == 1
+
+    calls.clear()
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        build_opf_multistep(
+            case, df_P, df_Q, T=T, formulation=formulation
+        )
+    assert len(calls) == T
+
+
+def test_multistep_delta_must_be_positive_without_storage():
+    case = case9()
+    df_P = pd.DataFrame([case["bus"][:, 2]])
+    df_Q = pd.DataFrame([case["bus"][:, 3]])
+    with pytest.raises(ValueError, match="delta must be > 0"):
+        build_opf_multistep(
+            case, df_P, df_Q, T=1, formulation="ac", delta=0.0
+        )

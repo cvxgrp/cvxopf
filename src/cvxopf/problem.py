@@ -147,7 +147,7 @@ class OPFBuild:
         DC keys: baseMVA, nb, ng, nl, ext_to_int,
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
-        Singlenode DC keys: baseMVA, nb, ng, ext_to_int,
+        Singlenode DC keys: baseMVA, nb (= 1), source_nb, ng, ext_to_int,
                  Pd_total, Pgmin, Pgmax, gencost
         Multi-step additionally: T, Pd_series (and Qd_series for AC)
         For singlenode_dc, Pd_series has shape (T,) — one scalar per step,
@@ -285,9 +285,8 @@ def build_opf(
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance.
     delta : float, optional
-        Time step duration in hours (default 1.0). Used for storage SoC
-        dynamics when storage is present. Ignored when storage is None.
-        Must be > 0 when storage is present.
+        Time step duration in hours (default 1.0). Passed to every component's
+        temporal coupling hook and used by storage SoC dynamics. Must be > 0.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
@@ -305,6 +304,11 @@ def build_opf(
     """
     if options is None:
         options = OPFOptions()
+    if generators is not None and len(generators) == 0:
+        raise ValueError(
+            "generators must contain at least one DispatchableGenerator; "
+            "use generators=None to load generators from the case."
+        )
 
     # Validate delta when storage is present
     if storage is not None and delta <= 0:
@@ -401,9 +405,14 @@ def build_opf_multistep(
         options = OPFOptions()
     if coupling_constraints is None:
         coupling_constraints = []
+    if generators is not None and len(generators) == 0:
+        raise ValueError(
+            "generators must contain at least one DispatchableGenerator; "
+            "use generators=None to load generators from the case."
+        )
 
-    # Validate delta when storage is present
-    if storage and delta <= 0:
+    # Delta is part of every component's temporal coupling contract.
+    if delta <= 0:
         raise ValueError(f"delta must be > 0, got {delta}")
 
     # Normalize ND availability once at the public API boundary.

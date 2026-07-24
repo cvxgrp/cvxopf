@@ -138,13 +138,27 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
                 f"HVDC link {i}: loss_percent must be between 0 and 100, "
                 f"got {lnk.loss_percent}"
             )
-        if len(lnk.cost_coeffs) != 3:
+        try:
+            coeffs = tuple(lnk.cost_coeffs)
+        except TypeError as exc:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain exactly "
+                f"(c0, c1, c2), got {lnk.cost_coeffs!r}"
+            ) from exc
+        if len(coeffs) != 3:
             raise ValueError(
                 f"HVDC link {i}: cost_coeffs must contain exactly "
                 f"(c0, c1, c2), got {lnk.cost_coeffs!r}"
             )
-        c0, c1, c2 = lnk.cost_coeffs
-        if not np.all(np.isfinite(np.asarray(lnk.cost_coeffs, dtype=float))):
+        try:
+            numeric_coeffs = np.asarray(coeffs, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain only finite "
+                "numeric values"
+            ) from exc
+        c0, c1, c2 = numeric_coeffs
+        if not np.all(np.isfinite(numeric_coeffs)):
             raise ValueError(
                 f"HVDC link {i}: cost_coeffs must contain only finite values"
             )
@@ -342,6 +356,7 @@ def coupling_constraints(
     links: list,
     p_in_list: list,
     p_out_list: list,
+    delta: float = 1.0,
 ) -> list:
     """HVDC links are memoryless under the current model."""
     return []

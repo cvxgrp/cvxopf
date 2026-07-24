@@ -899,15 +899,21 @@ def _build_ac_multistep(
         )
         all_constr.extend(storage_coupling)
     all_constr.extend(
-        generator_coupling_constraints(d["generators"], Pg_list, Qg_list)
+        generator_coupling_constraints(
+            d["generators"], Pg_list, Qg_list, delta=delta
+        )
     )
     if "nnd" in d:
         all_constr.extend(
-            nd_coupling_constraints(nondispatchable, p_nd_list, q_nd_list)
+            nd_coupling_constraints(
+                nondispatchable, p_nd_list, q_nd_list, delta=delta
+            )
         )
     if "n_hvdc" in d:
         all_constr.extend(
-            hvdc_coupling_constraints(hvdc, p_hvdc_in_list, p_hvdc_out_list)
+            hvdc_coupling_constraints(
+                hvdc, p_hvdc_in_list, p_hvdc_out_list, delta=delta
+            )
         )
 
     all_constr.extend(coupling_constraints)

@@ -126,6 +126,11 @@ class TestHVDCValidation:
         with pytest.raises(ValueError, match="c1 must be >= 0"):
             _validate_hvdc([_link(cost_coeffs=(0.0, -1.0, 0.0))], _EXT_BUS_IDS)
 
+    @pytest.mark.parametrize("coeffs", [None, 1.0, (0.0, 1.0), ("a", 1.0, 2.0)])
+    def test_invalid_cost_coeff_shape_or_type_raises_value_error(self, coeffs):
+        with pytest.raises(ValueError, match="cost_coeffs"):
+            _validate_hvdc([_link(cost_coeffs=coeffs)], _EXT_BUS_IDS)
+
     def test_error_message_includes_index(self):
         bad = [_link(), _link(from_bus=1, to_bus=1)]
         with pytest.raises(ValueError, match="link 1"):

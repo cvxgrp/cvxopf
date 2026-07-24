@@ -153,6 +153,10 @@ def _validate_generators(gens: list, ext_bus_ids: set) -> None:
                 raise ValueError(
                     f"Generator {i}: {name} must be finite, got {value}"
                 )
+        if g.status not in (0, 1):
+            raise ValueError(
+                f"Generator {i}: status must be exactly 0 or 1, got {g.status}"
+            )
         if g.bus not in ext_bus_ids:
             raise ValueError(
                 f"Generator {i}: bus {g.bus} not in case bus table. "
@@ -439,8 +443,21 @@ def ac_network_constraints(
     return constraints
 
 
-def dc_network_constraints(*args, **kwargs) -> list:
-    """Generators have no additional network-variable constraints in DC."""
+def dc_network_constraints(
+    generators: list,
+    network_state,
+    ext_to_int: dict,
+    controlled_buses,
+    *,
+    enforce_vset: bool,
+) -> list:
+    """
+    Return generator-to-network constraints for a DC formulation.
+
+    The current lossy-DC and single-node models have no generator-controlled
+    network state, so this hook is empty. Its argument shape matches the AC
+    hook and is composed by both DC builders.
+    """
     return []
 
 
@@ -448,6 +465,7 @@ def coupling_constraints(
     generators: list,
     Pg_list: list,
     Qg_list: list | None = None,
+    delta: float = 1.0,
 ) -> list:
     """
     Cross-step coupling constraints for generators. Empty today.

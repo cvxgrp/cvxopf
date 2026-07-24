@@ -57,6 +57,7 @@ from cvxopf.generator import (
     dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
+    dc_network_constraints as generator_dc_network_constraints,
     coupling_constraints as generator_coupling_constraints,
     gen_cost_expr,
 )
@@ -389,6 +390,15 @@ def _build_singlenode_dc_single(
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
     )
+    constr.extend(
+        generator_dc_network_constraints(
+            d["generators"],
+            None,
+            d["collapsed_ext_to_int"],
+            controlled_buses=(),
+            enforce_vset=False,
+        )
+    )
 
     # Build cost
     cost = _make_singlenode_dc_step_cost(Pg, d["gencost"], d["baseMVA"])
@@ -641,6 +651,15 @@ def _build_singlenode_dc_multistep(
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
         )
+        step_constr.extend(
+            generator_dc_network_constraints(
+                d["generators"],
+                None,
+                d["collapsed_ext_to_int"],
+                controlled_buses=(),
+                enforce_vset=False,
+            )
+        )
         all_constr.extend(step_constr)
 
         # Per-step cost
@@ -665,9 +684,17 @@ def _build_singlenode_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(soc_constr)
-    all_constr.extend(generator_coupling_constraints(d["generators"], Pg_list))
+    all_constr.extend(
+        generator_coupling_constraints(
+            d["generators"], Pg_list, delta=delta
+        )
+    )
     if "nnd" in d:
-        all_constr.extend(nd_coupling_constraints(nondispatchable, p_nd_list))
+        all_constr.extend(
+            nd_coupling_constraints(
+                nondispatchable, p_nd_list, delta=delta
+            )
+        )
 
     # Append user coupling constraints unchanged
     all_constr.extend(coupling_constraints)

@@ -253,6 +253,32 @@ def test_higher_order_polynomial_cost_recommends_pwl():
         _validate_generators([generator_unit], {1})
 
 
+@pytest.mark.parametrize("status", [np.nan, -1, 2, "1"])
+def test_generator_status_must_be_binary(status):
+    generator_unit = DispatchableGenerator(
+        bus=1, p_max_mw=100, status=status
+    )
+    with pytest.raises(ValueError, match="status must be exactly 0 or 1"):
+        _validate_generators([generator_unit], {1})
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+def test_explicit_empty_generator_list_rejected_single_step(formulation):
+    with pytest.raises(ValueError, match="at least one DispatchableGenerator"):
+        build_opf(case9(), formulation=formulation, generators=[])
+
+
+def test_explicit_empty_generator_list_rejected_multistep():
+    case = case9()
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+    with pytest.raises(ValueError, match="at least one DispatchableGenerator"):
+        build_opf_multistep(
+            case, df_P, df_Q, T=T, formulation="ac", generators=[]
+        )
+
+
 def test_generator_owns_voltage_setpoint_network_constraint():
     generators = [
         DispatchableGenerator(bus=10, p_max_mw=100, vg=1.03),
@@ -282,7 +308,13 @@ def test_generator_network_constraints_are_empty_when_disabled_or_dc():
         controlled_buses=[0],
         enforce_vset=False,
     ) == []
-    assert dc_network_constraints([generator_unit]) == []
+    assert dc_network_constraints(
+        [generator_unit],
+        None,
+        {1: 0},
+        controlled_buses=(),
+        enforce_vset=False,
+    ) == []
 
 
 def test_piecewise_linear_generator_cost_delegates_to_cost_module():

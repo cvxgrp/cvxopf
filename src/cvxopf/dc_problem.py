@@ -51,6 +51,7 @@ from cvxopf.generator import (
     dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
+    dc_network_constraints as generator_dc_network_constraints,
     coupling_constraints as generator_coupling_constraints,
     gen_cost_expr,
 )
@@ -401,6 +402,15 @@ def _build_lossy_dc_single(
         p_max_hvdc_t=p_max_hvdc if "n_hvdc" in d else None,
         step=0,
     )
+    constr.extend(
+        generator_dc_network_constraints(
+            d["generators"],
+            p_flows,
+            d["ext_to_int"],
+            controlled_buses=(),
+            enforce_vset=False,
+        )
+    )
 
     cost = _make_dc_step_cost(
         Pg, d["gencost"], d["baseMVA"],
@@ -650,6 +660,15 @@ def _build_lossy_dc_multistep(
             p_max_hvdc_t=p_max_hvdc_t,
             step=t,
         )
+        step_constr.extend(
+            generator_dc_network_constraints(
+                d["generators"],
+                p_flows_t,
+                d["ext_to_int"],
+                controlled_buses=(),
+                enforce_vset=False,
+            )
+        )
         step_cost = _make_dc_step_cost(
             Pg_t, d["gencost"], d["baseMVA"],
             d["r"], p_flows_t, d["loss_weight"],
@@ -690,12 +709,22 @@ def _build_lossy_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
-    all_constr.extend(generator_coupling_constraints(d["generators"], Pg_list))
+    all_constr.extend(
+        generator_coupling_constraints(
+            d["generators"], Pg_list, delta=delta
+        )
+    )
     if "nnd" in d:
-        all_constr.extend(nd_coupling_constraints(nondispatchable, p_nd_list))
+        all_constr.extend(
+            nd_coupling_constraints(
+                nondispatchable, p_nd_list, delta=delta
+            )
+        )
     if "n_hvdc" in d:
         all_constr.extend(
-            hvdc_coupling_constraints(hvdc, p_hvdc_in_list, p_hvdc_out_list)
+            hvdc_coupling_constraints(
+                hvdc, p_hvdc_in_list, p_hvdc_out_list, delta=delta
+            )
         )
 
     all_constr.extend(coupling_constraints)

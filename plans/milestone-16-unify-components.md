@@ -112,7 +112,9 @@ time-step loop, never inside the per-step builder.
 - **Generator / ND / HVDC** — return `[]` today. The `coupling_constraints`
   slot is retained so future ramp limits (generators), min-up/min-down, or
   HVDC ramp constraints have a defined home without re-architecting. Every
-  multistep builder composes all three hooks today.
+  multistep builder composes all three hooks today. Every hook receives the
+  problem time-step duration `delta`, even while memoryless implementations
+  return `[]`.
 
 ### 3.4 Device-to-network constraints
 Constraints coupling a device parameter to a network-owned variable remain
@@ -143,7 +145,7 @@ This is an input-boundary distinction, not a physical device distinction:
 generator and storage IDs become necessary when an external keyed schedule or
 availability table is introduced, and must then use this same contract.
 
-### 3.5 Cost contribution
+### 3.6 Cost contribution
 - Generator: `poly_cost_expr` (DCP-critical monomial form — preserve verbatim).
 - Storage: L1 aging `Σ_t λ·|b_t|`.
 - Nondispatchable: **none** (no cost, no curtailment penalty — do not add).

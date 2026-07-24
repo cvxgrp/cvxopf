@@ -200,6 +200,7 @@ def coupling_constraints(
     units: list,
     p_nd_list: list,
     q_nd_list: list | None = None,
+    delta: float = 1.0,
 ) -> list:
     """ND units are memoryless under the current model."""
     return []
