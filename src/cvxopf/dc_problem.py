@@ -51,6 +51,7 @@ from cvxopf.generator import (
     dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
+    coupling_constraints as generator_coupling_constraints,
     gen_cost_expr,
 )
 from cvxopf.storage import (
@@ -68,9 +69,9 @@ from cvxopf.nondispatchable import (
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
     _nd_static_data,
-    _parse_nd_timeseries,
     dc_injections as nd_dc_injections,
     dc_operating_constraints as nd_dc_operating_constraints,
+    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
@@ -79,6 +80,7 @@ from cvxopf.hvdc import (
     _hvdc_static_box,
     dc_injections as hvdc_dc_injections,
     dc_operating_constraints as hvdc_dc_operating_constraints,
+    coupling_constraints as hvdc_coupling_constraints,
     hvdc_cost_expr,
 )
 
@@ -348,7 +350,7 @@ def _build_lossy_dc_single(
     nd_inj = None
     if "nnd" in d and d["nnd"] > 0:
         nnd = d["nnd"]
-        p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
+        p_nd_t = cp.Variable(nnd, name="p_nd")
         nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
             nondispatchable, p_nd_t, d["ext_to_int"]
         )
@@ -406,8 +408,10 @@ def _build_lossy_dc_single(
     )
 
     # Add storage aging cost if present
+    storage_cost = None
     if "ns" in d:
-        cost = cost + storage_cost_expr(storage, b_t)
+        storage_cost = storage_cost_expr(storage, b_t)
+        cost = cost + storage_cost
 
     # Add HVDC cost if present
     if "n_hvdc" in d and d["n_hvdc"] > 0:
@@ -482,6 +486,9 @@ def _build_lossy_dc_single(
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
+        expressions=(
+            {"storage_cost": storage_cost} if storage_cost is not None else {}
+        ),
     )
 
 
@@ -537,7 +544,7 @@ def _build_lossy_dc_multistep(
     # Parse nondispatchable timeseries if present
     if "nnd" in d:
         if df_nd is not None:
-            d["nd_available"] = _parse_nd_timeseries(df_nd, T, nondispatchable)
+            d["nd_available"] = df_nd.to_numpy(dtype=float)
         else:
             d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
@@ -555,6 +562,7 @@ def _build_lossy_dc_multistep(
     p_hvdc_out_list = []
     all_constr      = []
     total_cost      = 0
+    storage_cost    = 0
 
     for t in range(T):
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
@@ -580,7 +588,7 @@ def _build_lossy_dc_multistep(
         nd_inj_t = None
         if "nnd" in d and d["nnd"] > 0:
             nnd = d["nnd"]
-            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
                 nondispatchable, p_nd_t, d["ext_to_int"]
             )
@@ -649,7 +657,9 @@ def _build_lossy_dc_multistep(
 
         # Add storage aging cost if present
         if "ns" in d:
-            step_cost = step_cost + storage_cost_expr(storage, b_t)
+            step_storage_cost = storage_cost_expr(storage, b_t)
+            storage_cost = storage_cost + step_storage_cost
+            step_cost = step_cost + step_storage_cost
 
         # Add HVDC cost if present
         if "n_hvdc" in d and d["n_hvdc"] > 0:
@@ -680,6 +690,13 @@ def _build_lossy_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
+    all_constr.extend(generator_coupling_constraints(d["generators"], Pg_list))
+    if "nnd" in d:
+        all_constr.extend(nd_coupling_constraints(nondispatchable, p_nd_list))
+    if "n_hvdc" in d:
+        all_constr.extend(
+            hvdc_coupling_constraints(hvdc, p_hvdc_in_list, p_hvdc_out_list)
+        )
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -746,4 +763,5 @@ def _build_lossy_dc_multistep(
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="lossy_dc", is_convex=True,
+        expressions={"storage_cost": storage_cost} if "ns" in d else {},
     )

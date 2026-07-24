@@ -29,6 +29,8 @@ from cvxopf.generator import (
     ac_injections as generator_ac_injections,
     make_generator_incidence,
     ac_operating_constraints as generator_ac_operating_constraints,
+    ac_network_constraints as generator_ac_network_constraints,
+    coupling_constraints as generator_coupling_constraints,
     gen_cost_expr,
 )
 from cvxopf.storage import (
@@ -46,9 +48,9 @@ from cvxopf.nondispatchable import (
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
     _nd_static_data,
-    _parse_nd_timeseries,
     ac_injections as nd_ac_injections,
     ac_operating_constraints as nd_ac_operating_constraints,
+    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
@@ -57,6 +59,7 @@ from cvxopf.hvdc import (
     _hvdc_static_box,
     ac_injections as hvdc_ac_injections,
     ac_operating_constraints as hvdc_ac_operating_constraints,
+    coupling_constraints as hvdc_coupling_constraints,
     hvdc_cost_expr,
 )
 
@@ -292,7 +295,7 @@ def _make_step_constraints(
     rows, cols, G_vec, B_vec, Rp,
     generator_injection_p, generator_injection_q,
     Pgmin, Pgmax, Qgmin, Qgmax, Pd, Qd, ref,
-    pv, status, gen_bus, vg,
+    pv, generators, ext_to_int,
     enforce_vset: bool,
     sparse_pq: bool,
     baseMVA: float,
@@ -337,7 +340,7 @@ def _make_step_constraints(
           — omitted when nnd==0
       4c. HVDC operating constraints (box bounds, loss-branch equality)
           — omitted when n_hvdc==0
-      5. Voltage setpoint pinning — omitted when enforce_vset=False
+      5. Generator-owned AC network constraints
 
     The caller must not append additional p== or q== constraints after
     this function returns.
@@ -456,14 +459,15 @@ def _make_step_constraints(
         )
 
     # ------------------------------------------------------------------
-    # Section 5: Voltage setpoint pinning
-    # Omitted when enforce_vset=False.
+    # Section 5: Generator-owned AC network constraints.
     # ------------------------------------------------------------------
-    if enforce_vset:
-        for b in np.r_[np.array([ref]), pv]:
-            idx = np.where((gen_bus == int(b)) & (status == 1))[0]
-            if idx.size:
-                constr.append(v[int(b)] == float(vg[idx[0]]))
+    constr += generator_ac_network_constraints(
+        generators,
+        v,
+        ext_to_int,
+        np.r_[np.array([ref]), pv],
+        enforce_vset=enforce_vset,
+    )
 
     return constr
 
@@ -526,7 +530,7 @@ def _build_ac_single(
     if "nnd" in d and d["nnd"] > 0:
         nnd = d["nnd"]
         # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
-        p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
+        p_nd_t = cp.Variable(nnd, name="p_nd")
         q_nd_t = cp.Variable(nnd, name="q_nd")
         nd_inj_p, nd_inj_q, nd_scaling = nd_ac_injections(
             nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
@@ -561,7 +565,7 @@ def _build_ac_single(
         generator_inj_p, generator_inj_q,
         d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
         d["Pd"], d["Qd"], d["ref"],
-        d["pv"], d["status"], d["gen_bus"], d["vg"],
+        d["pv"], d["generators"], d["ext_to_int"],
         enforce_vset=options.enforce_vset,
         sparse_pq=options.sparse_pq,
         baseMVA=d["baseMVA"],
@@ -591,8 +595,10 @@ def _build_ac_single(
 
     # Build cost: generation cost plus storage aging cost plus HVDC cost
     gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
+    storage_cost = None
     if "ns" in d:
-        total_cost = gen_cost + storage_cost_expr(storage, b_t)
+        storage_cost = storage_cost_expr(storage, b_t)
+        total_cost = gen_cost + storage_cost
     else:
         total_cost = gen_cost
     if "n_hvdc" in d:
@@ -678,6 +684,9 @@ def _build_ac_single(
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
+        expressions=(
+            {"storage_cost": storage_cost} if storage_cost is not None else {}
+        ),
     )
 
 
@@ -715,7 +724,7 @@ def _build_ac_multistep(
     # Parse nondispatchable timeseries if present
     if "nnd" in d:
         if df_nd is not None:
-            d["nd_available"] = _parse_nd_timeseries(df_nd, T, nondispatchable)
+            d["nd_available"] = df_nd.to_numpy(dtype=float)
         else:
             d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
@@ -732,6 +741,7 @@ def _build_ac_multistep(
     p_hvdc_in_list, p_hvdc_out_list          = [], []
     all_constr  = []
     total_cost  = 0
+    storage_cost = 0
 
     for t in range(T):
         # Create step variables
@@ -768,7 +778,7 @@ def _build_ac_multistep(
         nd_inj_p_t = nd_inj_q_t = None
         if "nnd" in d and d["nnd"] > 0:
             nnd = d["nnd"]
-            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
             nd_inj_p_t, nd_inj_q_t, nd_scaling_t = nd_ac_injections(
                 nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
@@ -814,7 +824,7 @@ def _build_ac_multistep(
             generator_inj_p_t, generator_inj_q_t,
             d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
             Pd_series[t], Qd_series[t], d["ref"],
-            d["pv"], d["status"], d["gen_bus"], d["vg"],
+            d["pv"], d["generators"], d["ext_to_int"],
             enforce_vset=options.enforce_vset,
             sparse_pq=options.sparse_pq,
             baseMVA=d["baseMVA"],
@@ -878,7 +888,9 @@ def _build_ac_multistep(
     # Add storage aging cost if present
     if "ns" in d:
         for t in range(T):
-            total_cost = total_cost + storage_cost_expr(storage, b_list[t])
+            step_storage_cost = storage_cost_expr(storage, b_list[t])
+            storage_cost = storage_cost + step_storage_cost
+            total_cost = total_cost + step_storage_cost
 
     # Add storage SoC dynamics constraints if present
     if "ns" in d:
@@ -886,6 +898,17 @@ def _build_ac_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
+    all_constr.extend(
+        generator_coupling_constraints(d["generators"], Pg_list, Qg_list)
+    )
+    if "nnd" in d:
+        all_constr.extend(
+            nd_coupling_constraints(nondispatchable, p_nd_list, q_nd_list)
+        )
+    if "n_hvdc" in d:
+        all_constr.extend(
+            hvdc_coupling_constraints(hvdc, p_hvdc_in_list, p_hvdc_out_list)
+        )
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -970,4 +993,5 @@ def _build_ac_multistep(
     return OPFBuild(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
+        expressions={"storage_cost": storage_cost} if "ns" in d else {},
     )

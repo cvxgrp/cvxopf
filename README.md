@@ -191,7 +191,8 @@ dispatch and implied losses.
 
 Pass `DispatchableGenerator` objects to define generator locations, operating
 bounds, and costs directly. Polynomial costs use lowest-power-first
-coefficients; piecewise-linear costs use explicit `(power_MW, cost)`
+coefficients and are limited to degree two; piecewise-linear costs use
+explicit `(power_MW, cost)`
 breakpoints. All cost expressions are evaluated by the shared implementation
 in `cost.py`.
 

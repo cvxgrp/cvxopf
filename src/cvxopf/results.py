@@ -30,6 +30,12 @@ import numpy as np
 from cvxopf.problem import OPFBuild
 
 
+def _solved_expression_value(build: OPFBuild, name: str) -> float:
+    """Return a scalar value from the exact expression used by the model."""
+    value = build.expressions[name].value
+    return float(value) if value is not None else float("nan")
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -187,8 +193,8 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             results["b"] = var["b"].value
             results["b_q"] = var["b_q"].value
             results["soc"] = var["soc"].value
-            results["storage_cost"] = float(
-                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            results["storage_cost"] = _solved_expression_value(
+                build, "storage_cost"
             )
         
         # Add nondispatchable results if present
@@ -266,9 +272,7 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         results["b"] = np.array(b_rows)
         results["b_q"] = np.array(b_q_rows)
         results["soc"] = np.array(soc_rows)
-        results["storage_cost"] = float(
-            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
-        )
+        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
     
     # Add nondispatchable results if present
     if "nnd" in data:
@@ -320,20 +324,31 @@ def _extract_dc_results(build: OPFBuild) -> dict:
                 p_net     = None,
             )
 
+        p_net = Cg @ Pg_val - Pd
+        if "ns" in data:
+            p_net += data["Cs"] @ var["b"].value / baseMVA
+        if "nnd" in data:
+            p_net += data["Cnd"] @ var["p_nd"].value / baseMVA
+        if "n_hvdc" in data:
+            p_net += (
+                data["Ch_from"] @ var["p_hvdc_in"].value
+                + data["Ch_to"] @ var["p_hvdc_out"].value
+            ) / baseMVA
+
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = Pg_val * baseMVA,
             p_flows   = p_flows_val * baseMVA,
-            p_net     = (Cg @ Pg_val - Pd) * baseMVA,
+            p_net     = p_net * baseMVA,
         )
         
         # Add storage results if present
         if "ns" in data:
             results["b"] = var["b"].value
             results["soc"] = var["soc"].value
-            results["storage_cost"] = float(
-                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            results["storage_cost"] = _solved_expression_value(
+                build, "storage_cost"
             )
         
         # Add nondispatchable results if present
@@ -378,7 +393,17 @@ def _extract_dc_results(build: OPFBuild) -> dict:
             )
         Pg_rows.append(Pg_t)
         p_flows_rows.append(p_flows_t)
-        p_net_rows.append(Cg @ Pg_t - Pd_series[t])
+        p_net_t = Cg @ Pg_t - Pd_series[t]
+        if "ns" in data:
+            p_net_t += data["Cs"] @ var["b"][t].value / baseMVA
+        if "nnd" in data:
+            p_net_t += data["Cnd"] @ var["p_nd"][t].value / baseMVA
+        if "n_hvdc" in data:
+            p_net_t += (
+                data["Ch_from"] @ var["p_hvdc_in"][t].value
+                + data["Ch_to"] @ var["p_hvdc_out"][t].value
+            ) / baseMVA
+        p_net_rows.append(p_net_t)
         
         # Extract storage results if present
         if "ns" in data:
@@ -406,9 +431,7 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     if "ns" in data:
         results["b"] = np.array(b_rows)
         results["soc"] = np.array(soc_rows)
-        results["storage_cost"] = float(
-            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
-        )
+        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
     
     # Add nondispatchable results if present
     if "nnd" in data:
@@ -457,19 +480,25 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
                 p_net     = None,
             )
 
+        p_net = np.sum(Pg_val) - data["Pd_total"]
+        if "ns" in data:
+            p_net += float(np.sum(var["b"].value)) / baseMVA
+        if "nnd" in data:
+            p_net += float(np.sum(var["p_nd"].value)) / baseMVA
+
         results = dict(
             status    = prob.status,
             objective = float(prob.value),
             Pg        = Pg_val * baseMVA,          # (ng,) MW
-            p_net     = float(np.sum(Pg_val) * baseMVA - data["Pd_total"] * baseMVA),  # scalar MW
+            p_net     = float(p_net * baseMVA),
         )
 
         # Add storage results if present
         if "ns" in data:
             results["b"] = var["b"].value
             results["soc"] = var["soc"].value
-            results["storage_cost"] = float(
-                np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
+            results["storage_cost"] = _solved_expression_value(
+                build, "storage_cost"
             )
 
         # Add nondispatchable results if present
@@ -505,20 +534,24 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
 
     Pd_series = data["Pd_series"]  # shape (T,)
 
+    p_net = np.array([np.sum(r) for r in Pg_rows]) - Pd_series
+    if "ns" in data:
+        p_net += np.sum(np.array(b_rows), axis=1) / baseMVA
+    if "nnd" in data:
+        p_net += np.sum(np.array(p_nd_rows), axis=1) / baseMVA
+
     results = dict(
         status    = prob.status,
         objective = float(prob.value),
         Pg        = np.array(Pg_rows) * baseMVA,  # (T, ng)
-        p_net     = (np.array([np.sum(r) for r in Pg_rows]) - Pd_series) * baseMVA,  # (T,)
+        p_net     = p_net * baseMVA,  # (T,)
     )
 
     # Add storage results if present
     if "ns" in data:
         results["b"] = np.array(b_rows)      # (T, ns)
         results["soc"] = np.array(soc_rows)  # (T, ns)
-        results["storage_cost"] = float(
-            np.sum(data["storage_aging_weight"] * np.abs(results["b"]))
-        )
+        results["storage_cost"] = _solved_expression_value(build, "storage_cost")
 
     # Add nondispatchable results if present
     if "nnd" in data:

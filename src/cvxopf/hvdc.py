@@ -65,7 +65,8 @@ class HVDCLink:
         A degenerate box (p_min_mw == p_max_mw) pins p_in via coincident
         bounds — not a separate equality constraint.
     p_max_mw : float
-        Upper bound on p_in (MW). Must be > 0.
+        Upper bound on p_in (MW). Together with p_min_mw, may describe
+        forward-only, reverse-only, bidirectional, or zero-pinned operation.
     loss_percent : float
         Proportional loss as a percentage (0–100). loss_frac = loss_percent/100.
         Fixed converter loss (LOSS0) is not modelled; see Milestone 15.
@@ -103,6 +104,16 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
     if not links:
         return
     for i, lnk in enumerate(links):
+        numeric_fields = {
+            "p_min_mw": lnk.p_min_mw,
+            "p_max_mw": lnk.p_max_mw,
+            "loss_percent": lnk.loss_percent,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"HVDC link {i}: {name} must be finite, got {value}"
+                )
         if lnk.from_bus == lnk.to_bus:
             raise ValueError(
                 f"HVDC link {i}: from_bus and to_bus must differ, got {lnk.from_bus}"
@@ -117,18 +128,26 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
                 f"HVDC link {i}: to_bus {lnk.to_bus} not in case bus table. "
                 f"Valid IDs: {sorted(ext_bus_ids)}"
             )
-        if lnk.p_max_mw <= 0:
-            raise ValueError(f"HVDC link {i}: p_max_mw must be > 0, got {lnk.p_max_mw}")
         if lnk.p_min_mw > lnk.p_max_mw:
             raise ValueError(
                 f"HVDC link {i}: p_min_mw ({lnk.p_min_mw}) must be <= "
                 f"p_max_mw ({lnk.p_max_mw})"
             )
-        if lnk.loss_percent < 0:
+        if not 0 <= lnk.loss_percent <= 100:
             raise ValueError(
-                f"HVDC link {i}: loss_percent must be >= 0, got {lnk.loss_percent}"
+                f"HVDC link {i}: loss_percent must be between 0 and 100, "
+                f"got {lnk.loss_percent}"
+            )
+        if len(lnk.cost_coeffs) != 3:
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain exactly "
+                f"(c0, c1, c2), got {lnk.cost_coeffs!r}"
             )
         c0, c1, c2 = lnk.cost_coeffs
+        if not np.all(np.isfinite(np.asarray(lnk.cost_coeffs, dtype=float))):
+            raise ValueError(
+                f"HVDC link {i}: cost_coeffs must contain only finite values"
+            )
         if c2 < 0:
             raise ValueError(
                 f"HVDC link {i}: cost_coeffs c2 must be >= 0 (convex quadratic), "
@@ -222,7 +241,7 @@ def dc_injections(
     """
     nb = len(ext_to_int)
     Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
-    inv_baseMVA = cp.Parameter(name="hvdc_inv_baseMVA")
+    inv_baseMVA = cp.Parameter(nonneg=True, name="hvdc_inv_baseMVA")
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
     return injection_expr, None, inv_baseMVA
 
@@ -319,7 +338,11 @@ def ac_operating_constraints(
     return dc_operating_constraints(links, p_in, p_out, p_min_t, p_max_t, step)
 
 
-def coupling_constraints(*args, **kwargs) -> list:
+def coupling_constraints(
+    links: list,
+    p_in_list: list,
+    p_out_list: list,
+) -> list:
     """HVDC links are memoryless under the current model."""
     return []
 

@@ -189,6 +189,20 @@ class TestSinglenodeDcStorageIntegration:
         assert r["status"] == "optimal"
         assert "b" in r
         assert "p_nd" in r
+        assert abs(r["p_net"]) < VAL_ATOL
+
+    def test_nd_on_nonfirst_source_bus_uses_collapsed_mapping(self):
+        nd = [
+            NondispatchableUnit(
+                bus=5,
+                p_available=40.0,
+                apparent_power_rating=50.0,
+                device_id="nd-5",
+            )
+        ]
+        _, r = _solve_singlenode(case9(), nondispatchable=nd)
+        assert r["status"] == "optimal"
+        assert r["p_nd"][0] == pytest.approx(40.0, abs=VAL_ATOL)
 
     def test_storage_and_nd_together_multistep(self):
         df_P = pd.DataFrame(np.full((3, 1), 100.0))
@@ -201,6 +215,24 @@ class TestSinglenodeDcStorageIntegration:
         assert r["status"] == "optimal"
         assert r["b"].shape == (3, 1)
         assert r["p_nd"].shape == (3, 1)
+        assert np.all(np.abs(r["p_net"]) < VAL_ATOL)
+
+    def test_multistep_nd_on_nonfirst_source_bus_uses_collapsed_mapping(self):
+        nd = [
+            NondispatchableUnit(
+                bus=5,
+                p_available=40.0,
+                apparent_power_rating=50.0,
+                device_id="nd-5",
+            )
+        ]
+        df_P, df_Q = _flat_load_dfs(case9, 2)
+        df_nd = pd.DataFrame({"nd-5": [40.0, 30.0]})
+        _, r = _solve_singlenode_multistep(
+            case9(), df_P, df_Q, 2, nondispatchable=nd, df_nd=df_nd
+        )
+        assert r["status"] == "optimal"
+        assert np.allclose(r["p_nd"][:, 0], [40.0, 30.0], atol=VAL_ATOL)
 
     def test_fully_charged_storage_cannot_charge(self):
         storage = [StorageUnitIdeal(bus=1, apparent_power_rating=50.0,

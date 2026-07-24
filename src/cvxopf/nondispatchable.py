@@ -53,6 +53,16 @@ def _validate_nondispatchable(units, ext_bus_ids):
         return
 
     for i, unit in enumerate(units):
+        numeric_fields = {
+            "p_available": unit.p_available,
+            "apparent_power_rating": unit.apparent_power_rating,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"NondispatchableUnit at index {i}: {name} must be finite, "
+                    f"got {value}"
+                )
         if unit.apparent_power_rating <= 0:
             raise ValueError(
                 f"NondispatchableUnit at index {i}: apparent_power_rating must be > 0, "
@@ -169,7 +179,7 @@ def ac_operating_constraints(
 ) -> list:
     """AC availability bounds and inverter apparent-power circles."""
     rating = _nd_static_data(units)["nd_apparent_power_rating"]
-    constraints = [p_nd <= p_available]
+    constraints = [p_nd >= 0, p_nd <= p_available]
     constraints += [
         cp.sum_squares(cp.vstack([p_nd[n], q_nd[n]])) <= rating[n] ** 2
         for n in range(len(units))
@@ -183,9 +193,13 @@ def dc_operating_constraints(
     p_available,
 ) -> list:
     """DC real-power availability bounds."""
-    return [p_nd <= p_available]
+    return [p_nd >= 0, p_nd <= p_available]
 
 
-def coupling_constraints(*args, **kwargs) -> list:
+def coupling_constraints(
+    units: list,
+    p_nd_list: list,
+    q_nd_list: list | None = None,
+) -> list:
     """ND units are memoryless under the current model."""
     return []

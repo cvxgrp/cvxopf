@@ -19,7 +19,7 @@ build_acopf_multistep(case, df_P, df_Q, *, T, options, coupling_constraints)
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,10 @@ import cvxpy as cp
 
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
-from cvxopf.nondispatchable import NondispatchableUnit
+from cvxopf.nondispatchable import (
+    NondispatchableUnit,
+    _parse_nd_timeseries,
+)
 from cvxopf.hvdc import (
     HVDCLink,
     _hvdc_static_box,
@@ -160,12 +163,15 @@ class OPFBuild:
     is_convex : bool
         True for convex formulations (lossy_dc, singlenode_dc); False for
         nonconvex (ac). Controls solver defaults in solve().
+    expressions : dict
+        Named modeled CVXPY expressions used for solved-value reporting.
     """
     prob:        cp.Problem
     variables:   dict
     data:        dict
     formulation: str
     is_convex:   bool
+    expressions: dict = field(default_factory=dict)
 
     def solve(self, **kwargs) -> None:
         """
@@ -397,26 +403,34 @@ def build_opf_multistep(
         coupling_constraints = []
 
     # Validate delta when storage is present
-    if storage is not None and delta <= 0:
+    if storage and delta <= 0:
         raise ValueError(f"delta must be > 0, got {delta}")
 
-    # Validate and handle df_nd tiling fallback
-    if nondispatchable is not None and df_nd is None:
+    # Normalize ND availability once at the public API boundary.
+    if nondispatchable:
+        if df_nd is None:
+            warnings.warn(
+                "df_nd not provided; tiling p_available from each "
+                "NondispatchableUnit across all T steps.",
+                UserWarning,
+                stacklevel=2,
+            )
+            nd_available = np.tile(
+                [unit.p_available for unit in nondispatchable], (T, 1)
+            )
+        else:
+            nd_available = _parse_nd_timeseries(df_nd, T, nondispatchable)
+        df_nd = pd.DataFrame(nd_available)
+    elif df_nd is not None:
         warnings.warn(
-            "df_nd not provided; tiling p_available from each NondispatchableUnit "
-            "across all T steps.",
+            "df_nd is ignored because no nondispatchable units were provided.",
             UserWarning,
             stacklevel=2,
         )
-    elif nondispatchable is None and df_nd is not None:
-        warnings.warn(
-            "df_nd is ignored because nondispatchable=None.",
-            UserWarning,
-            stacklevel=2,
-        )
+        df_nd = None
 
     # HVDC frame handling: tile static box or validate provided frames.
-    if hvdc is not None:
+    if hvdc and formulation != "singlenode_dc":
         if df_hvdc_min is None and df_hvdc_max is None:
             warnings.warn(
                 "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
@@ -449,6 +463,15 @@ def build_opf_multistep(
             aligned_ids = [link.device_id for link in hvdc]
             df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
             df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
+    elif not hvdc and (df_hvdc_min is not None or df_hvdc_max is not None):
+        warnings.warn(
+            "df_hvdc_min/df_hvdc_max are ignored because no HVDC links "
+            "were provided.",
+            UserWarning,
+            stacklevel=2,
+        )
+        df_hvdc_min = None
+        df_hvdc_max = None
 
     builders = _get_multistep_builders()
     if formulation not in builders:

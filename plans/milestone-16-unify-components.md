@@ -57,7 +57,11 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
    shape is uniform).
 7. **`coupling_constraints(...)`** — cross-step (temporal) constraints. Returns
    `[]` for memoryless components. **New in M16** (see §4).
-8. **`*_cost_expr(...)` where the component has a cost** — the component's
+8. **`ac_network_constraints(...)` / `dc_network_constraints(...)` where
+   device parameters constrain network variables.** Generator voltage
+   setpoint pinning lives here rather than in the AC builder; the DC hook is
+   empty. This is distinct from the device-local operating region.
+9. **`*_cost_expr(...)` where the component has a cost** — the component's
    collection-level contribution to the objective. ND intentionally has no
    cost method; absence is clearer than a ceremonial zero expression.
 
@@ -107,9 +111,16 @@ time-step loop, never inside the per-step builder.
   storage is a temporal device at all.
 - **Generator / ND / HVDC** — return `[]` today. The `coupling_constraints`
   slot is retained so future ramp limits (generators), min-up/min-down, or
-  HVDC ramp constraints have a defined home without re-architecting.
+  HVDC ramp constraints have a defined home without re-architecting. Every
+  multistep builder composes all three hooks today.
 
-### 3.4 Injection into nodal balance
+### 3.4 Device-to-network constraints
+Constraints coupling a device parameter to a network-owned variable remain
+device-owned but are separate from the local operating set. Generator voltage
+control lives in `generator.ac_network_constraints`; its DC counterpart is
+empty.
+
+### 3.5 Injection into nodal balance
 Each component contributes an addend to the single `p ==` / `q ==` (AC/DC) or
 scalar balance (singlenode). Section owns exactly one `p ==` and one `q ==`
 constraint; components supply addends, the constructor sums them. HVDC and ND
@@ -123,7 +134,9 @@ terminal control.
 
 External device time series use stable identity rather than position or bus.
 ND and HVDC expose optional `device_id`; supplying an external frame requires
-every relevant device to have a unique, nonempty string ID. Frame columns must
+every relevant device to have a unique, nonempty string ID. Alignment and
+validation occur once at the public `problem.py` boundary; formulation
+builders consume normalized numeric tables. Frame columns must
 match the ID set exactly and are reordered to device-list order. HVDC min/max
 frames are aligned independently. Static scalar/bound fallback requires no ID.
 This is an input-boundary distinction, not a physical device distinction:

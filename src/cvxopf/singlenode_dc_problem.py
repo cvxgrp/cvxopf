@@ -57,6 +57,7 @@ from cvxopf.generator import (
     dc_injections as generator_dc_injections,
     make_generator_incidence,
     dc_operating_constraints as generator_dc_operating_constraints,
+    coupling_constraints as generator_coupling_constraints,
     gen_cost_expr,
 )
 from cvxopf.storage import (
@@ -74,9 +75,9 @@ from cvxopf.nondispatchable import (
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
     _nd_static_data,
-    _parse_nd_timeseries,
     dc_injections as nd_dc_injections,
     dc_operating_constraints as nd_dc_operating_constraints,
+    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.network import BUS_I
 
@@ -231,7 +232,7 @@ def _parse_singlenode_dc_case(
     baseMVA = float(case["baseMVA"])
     bus = case["bus"]
 
-    nb = bus.shape[0]
+    source_nb = bus.shape[0]
     ng = len(generators)
 
     # Compute total load (scalar, not per-bus)
@@ -274,7 +275,8 @@ def _parse_singlenode_dc_case(
 
     return {
         "baseMVA": baseMVA,
-        "nb": nb,
+        "nb": 1,
+        "source_nb": source_nb,
         "ng": ng,
         "ext_to_int": ext_to_int,
         "ext_bus_ids": ext_bus_ids,
@@ -352,9 +354,9 @@ def _build_singlenode_dc_single(
     p_nd_t = None
     nd_inj = None
     if "nnd" in d:
-        p_nd_t = cp.Variable(d["nnd"], name="p_nd", nonneg=True)
+        p_nd_t = cp.Variable(d["nnd"], name="p_nd")
         nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
-            nondispatchable, p_nd_t, d["ext_to_int"], nb=1
+            nondispatchable, p_nd_t, d["collapsed_ext_to_int"], nb=1
         )
         assert nd_q_inj is None
         nd_scaling.value = 1.0 / d["baseMVA"]
@@ -392,8 +394,10 @@ def _build_singlenode_dc_single(
     cost = _make_singlenode_dc_step_cost(Pg, d["gencost"], d["baseMVA"])
 
     # Add storage aging cost if present
+    storage_cost = None
     if "ns" in d:
-        cost = cost + storage_cost_expr(storage, b_t)
+        storage_cost = storage_cost_expr(storage, b_t)
+        cost = cost + storage_cost
 
     # Add storage SoC constraints if present
     if "ns" in d:
@@ -417,6 +421,7 @@ def _build_singlenode_dc_single(
     data = {
         "baseMVA": d["baseMVA"],
         "nb": d["nb"],
+        "source_nb": d["source_nb"],
         "ng": d["ng"],
         "ext_to_int": d["ext_to_int"],
         "Pd_total": d["Pd_total"],
@@ -456,6 +461,9 @@ def _build_singlenode_dc_single(
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
+        expressions=(
+            {"storage_cost": storage_cost} if storage_cost is not None else {}
+        ),
     )
 
 
@@ -534,9 +542,10 @@ def _build_singlenode_dc_multistep(
     )
 
     # Validate df_P column count before summing
-    if df_P.shape[1] != d["nb"]:
+    if df_P.shape[1] != d["source_nb"]:
         raise ValueError(
-            f"df_P has {df_P.shape[1]} columns but case has {d['nb']} buses."
+            f"df_P has {df_P.shape[1]} columns but case has "
+            f"{d['source_nb']} source buses."
         )
 
     # Compute total load per step (scalar per step, not per-bus)
@@ -549,9 +558,7 @@ def _build_singlenode_dc_multistep(
     # Parse nondispatchable time series (if present)
     if "nnd" in d:
         if df_nd is not None:
-            d["nd_available"] = _parse_nd_timeseries(
-                df_nd, T, nondispatchable
-            )
+            d["nd_available"] = df_nd.to_numpy(dtype=float)
         else:
             d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
@@ -562,6 +569,7 @@ def _build_singlenode_dc_multistep(
     p_nd_list = []
     all_constr = []
     total_cost = 0
+    storage_cost = 0
 
     for t in range(T):
         # Declare per-step variables
@@ -589,9 +597,9 @@ def _build_singlenode_dc_multistep(
         p_nd_t = None
         nd_inj_t = None
         if "nnd" in d:
-            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}", nonneg=True)
+            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}")
             nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
-                nondispatchable, p_nd_t, d["ext_to_int"], nb=1
+                nondispatchable, p_nd_t, d["collapsed_ext_to_int"], nb=1
             )
             assert nd_q_inj_t is None
             nd_scaling_t.value = 1.0 / d["baseMVA"]
@@ -638,7 +646,9 @@ def _build_singlenode_dc_multistep(
         # Per-step cost
         step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
         if "ns" in d:
-            step_cost = step_cost + storage_cost_expr(storage, b_t)
+            step_storage_cost = storage_cost_expr(storage, b_t)
+            storage_cost = storage_cost + step_storage_cost
+            step_cost = step_cost + step_storage_cost
         total_cost = total_cost + step_cost
 
         # Accumulate variables
@@ -655,6 +665,9 @@ def _build_singlenode_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(soc_constr)
+    all_constr.extend(generator_coupling_constraints(d["generators"], Pg_list))
+    if "nnd" in d:
+        all_constr.extend(nd_coupling_constraints(nondispatchable, p_nd_list))
 
     # Append user coupling constraints unchanged
     all_constr.extend(coupling_constraints)
@@ -674,6 +687,7 @@ def _build_singlenode_dc_multistep(
     data = dict(
         baseMVA=d["baseMVA"],
         nb=d["nb"],
+        source_nb=d["source_nb"],
         ng=d["ng"],
         ext_to_int=d["ext_to_int"],
         Pgmin=d["Pgmin"],
@@ -715,4 +729,5 @@ def _build_singlenode_dc_multistep(
         data=data,
         formulation="singlenode_dc",
         is_convex=True,
+        expressions={"storage_cost": storage_cost} if "ns" in d else {},
     )

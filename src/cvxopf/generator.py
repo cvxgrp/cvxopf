@@ -139,6 +139,20 @@ def _validate_generators(gens: list, ext_bus_ids: set) -> None:
     if not gens:
         return
     for i, g in enumerate(gens):
+        numeric_fields = {
+            "p_min_mw": g.p_min_mw,
+            "p_max_mw": g.p_max_mw,
+            "q_min_mvar": g.q_min_mvar,
+            "q_max_mvar": g.q_max_mvar,
+            "startup": g.startup,
+            "shutdown": g.shutdown,
+            "vg": g.vg,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"Generator {i}: {name} must be finite, got {value}"
+                )
         if g.bus not in ext_bus_ids:
             raise ValueError(
                 f"Generator {i}: bus {g.bus} not in case bus table. "
@@ -163,6 +177,17 @@ def _validate_generators(gens: list, ext_bus_ids: set) -> None:
             coeffs = (0.0,) if g.cost_coeffs is None else tuple(g.cost_coeffs)
             if not coeffs:
                 raise ValueError(f"Generator {i}: cost_coeffs must not be empty")
+            if not np.all(np.isfinite(np.asarray(coeffs, dtype=float))):
+                raise ValueError(
+                    f"Generator {i}: cost_coeffs must contain only finite values"
+                )
+            if len(coeffs) > 3:
+                raise ValueError(
+                    f"Generator {i}: polynomial costs above degree 2 are not "
+                    "supported. Use a convex quadratic polynomial or "
+                    "cost_type='piecewise_linear' for a more general convex "
+                    "cost curve."
+                )
             if len(coeffs) == 3 and coeffs[2] < 0:
                 raise ValueError(
                     f"Generator {i}: cost_coeffs c2 must be >= 0 (convex "
@@ -184,7 +209,12 @@ def _validate_generators(gens: list, ext_bus_ids: set) -> None:
                     f"Generator {i}: each cost_points entry must be a "
                     "(power, cost) pair"
                 )
-            powers = np.asarray([point[0] for point in g.cost_points], dtype=float)
+            points = np.asarray(g.cost_points, dtype=float)
+            if not np.all(np.isfinite(points)):
+                raise ValueError(
+                    f"Generator {i}: cost_points must contain only finite values"
+                )
+            powers = points[:, 0]
             if np.any(np.diff(powers) <= 0):
                 raise ValueError(
                     f"Generator {i}: cost_points power coordinates must be "
@@ -380,7 +410,45 @@ def dc_operating_constraints(Pg: cp.Variable, Pgmin, Pgmax) -> list:
     return [Pg >= Pgmin, Pg <= Pgmax]
 
 
-def coupling_constraints(*args, **kwargs) -> list:
+def ac_network_constraints(
+    generators: list,
+    v: cp.Variable,
+    ext_to_int: dict,
+    controlled_buses,
+    *,
+    enforce_vset: bool,
+) -> list:
+    """
+    Couple active generator voltage setpoints to AC network voltage variables.
+
+    ``controlled_buses`` contains formulation-internal REF/PV bus indices.
+    When multiple active generators share a controlled bus, the first device
+    in list order supplies the setpoint, matching the historical builder rule.
+    """
+    if not enforce_vset:
+        return []
+
+    controlled = {int(bus) for bus in controlled_buses}
+    constraints = []
+    pinned = set()
+    for generator in generators:
+        bus = int(ext_to_int[generator.bus])
+        if generator.status == 1 and bus in controlled and bus not in pinned:
+            constraints.append(v[bus] == float(generator.vg))
+            pinned.add(bus)
+    return constraints
+
+
+def dc_network_constraints(*args, **kwargs) -> list:
+    """Generators have no additional network-variable constraints in DC."""
+    return []
+
+
+def coupling_constraints(
+    generators: list,
+    Pg_list: list,
+    Qg_list: list | None = None,
+) -> list:
     """
     Cross-step coupling constraints for generators. Empty today.
 

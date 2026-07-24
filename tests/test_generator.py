@@ -9,6 +9,7 @@ from cvxopf.generator import (
     DispatchableGenerator,
     _validate_generators,
     ac_injections,
+    ac_network_constraints,
     ac_operating_constraints,
     coupling_constraints,
     dc_operating_constraints,
@@ -17,6 +18,7 @@ from cvxopf.generator import (
     generator_bounds,
     generator_gencost,
     dc_injections,
+    dc_network_constraints,
     make_generator_incidence,
 )
 from cvxopf.ac_problem import _parse_case as _parse_ac_case
@@ -235,7 +237,52 @@ def test_generator_cost_is_dcp_and_memoryless():
     objective = gen_cost_expr(generator_gencost(generators), 100.0 * Pg)
 
     assert objective.is_dcp()
-    assert coupling_constraints([Pg]) == []
+    assert coupling_constraints(generators, [Pg]) == []
+
+
+def test_higher_order_polynomial_cost_recommends_pwl():
+    generator_unit = DispatchableGenerator(
+        bus=1,
+        p_max_mw=100,
+        cost_coeffs=(0.0, 1.0, 0.1, 0.01),
+    )
+    with pytest.raises(
+        ValueError,
+        match="above degree 2.*piecewise_linear",
+    ):
+        _validate_generators([generator_unit], {1})
+
+
+def test_generator_owns_voltage_setpoint_network_constraint():
+    generators = [
+        DispatchableGenerator(bus=10, p_max_mw=100, vg=1.03),
+        DispatchableGenerator(bus=20, p_max_mw=100, vg=1.01, status=0),
+    ]
+    v = cp.Variable((2, 1))
+    constraints = ac_network_constraints(
+        generators,
+        v,
+        {10: 0, 20: 1},
+        controlled_buses=[0, 1],
+        enforce_vset=True,
+    )
+    assert len(constraints) == 1
+    problem = cp.Problem(cp.Minimize(0), constraints)
+    problem.solve()
+    assert v.value[0, 0] == pytest.approx(1.03)
+
+
+def test_generator_network_constraints_are_empty_when_disabled_or_dc():
+    generator_unit = DispatchableGenerator(bus=1, p_max_mw=100, vg=1.02)
+    v = cp.Variable((1, 1))
+    assert ac_network_constraints(
+        [generator_unit],
+        v,
+        {1: 0},
+        controlled_buses=[0],
+        enforce_vset=False,
+    ) == []
+    assert dc_network_constraints([generator_unit]) == []
 
 
 def test_piecewise_linear_generator_cost_delegates_to_cost_module():

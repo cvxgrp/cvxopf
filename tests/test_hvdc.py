@@ -96,13 +96,11 @@ class TestHVDCValidation:
         with pytest.raises(ValueError, match="to_bus 99"):
             _validate_hvdc([_link(to_bus=99)], _EXT_BUS_IDS)
 
-    def test_p_max_zero_raises(self):
-        with pytest.raises(ValueError, match="p_max_mw must be > 0"):
-            _validate_hvdc([_link(p_max_mw=0.0)], _EXT_BUS_IDS)
+    def test_zero_pinned_box_allowed(self):
+        _validate_hvdc([_link(p_min_mw=0.0, p_max_mw=0.0)], _EXT_BUS_IDS)
 
-    def test_p_max_negative_raises(self):
-        with pytest.raises(ValueError, match="p_max_mw must be > 0"):
-            _validate_hvdc([_link(p_max_mw=-10.0)], _EXT_BUS_IDS)
+    def test_reverse_only_box_allowed(self):
+        _validate_hvdc([_link(p_min_mw=-100.0, p_max_mw=-10.0)], _EXT_BUS_IDS)
 
     def test_p_min_gt_p_max_raises(self):
         with pytest.raises(ValueError, match="p_min_mw"):
@@ -113,8 +111,12 @@ class TestHVDCValidation:
         _validate_hvdc([_link(p_min_mw=50.0, p_max_mw=50.0)], _EXT_BUS_IDS)
 
     def test_loss_negative_raises(self):
-        with pytest.raises(ValueError, match="loss_percent must be >= 0"):
+        with pytest.raises(ValueError, match="between 0 and 100"):
             _validate_hvdc([_link(loss_percent=-1.0)], _EXT_BUS_IDS)
+
+    def test_loss_above_100_raises(self):
+        with pytest.raises(ValueError, match="between 0 and 100"):
+            _validate_hvdc([_link(loss_percent=101.0)], _EXT_BUS_IDS)
 
     def test_c2_negative_raises(self):
         with pytest.raises(ValueError, match="c2 must be >= 0"):
@@ -648,10 +650,8 @@ class TestHVDCWiring:
             )
         assert "n_hvdc" not in build.data
 
-    def test_singlenode_multistep_no_hvdc_frames_emits_tile_warning(self):
-        # problem.py tile-fallback fires when hvdc is not None and frames absent.
-        # The singlenode builder still drops hvdc, but the warning from
-        # problem.py is expected and correct.
+    def test_singlenode_multistep_no_hvdc_frames_is_silent(self):
+        # Singlenode drops HVDC before formulation-specific normalization.
         case = self._case()
         T = 2
         df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
@@ -673,7 +673,7 @@ class TestHVDCWiring:
             for x in w
             if issubclass(x.category, UserWarning) and "hvdc" in str(x.message).lower()
         ]
-        assert len(tile_warns) == 1
+        assert len(tile_warns) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1222,6 +1222,15 @@ class TestHVDCResultExtraction:
         r = extract_results(build)
         assert "p_hvdc_in" in r and "p_hvdc_out" in r and "hvdc_loss" in r
         assert r["p_hvdc_in"].shape == (1,)
+        expected = (
+            build.data["Cg"] @ build.variables["Pg"].value
+            + build.data["Ch_from"] @ build.variables["p_hvdc_in"].value
+            / build.data["baseMVA"]
+            + build.data["Ch_to"] @ build.variables["p_hvdc_out"].value
+            / build.data["baseMVA"]
+            - build.data["Pd"]
+        ) * build.data["baseMVA"]
+        np.testing.assert_allclose(r["p_net"], expected, atol=1e-6)
 
     def test_hvdc_loss_nonneg(self):
         build = build_opf(

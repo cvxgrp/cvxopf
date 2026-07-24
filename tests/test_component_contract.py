@@ -1,6 +1,9 @@
 """Cross-device conformance tests for the Milestone 16 component contract."""
 
 import cvxpy as cp
+import numpy as np
+import pandas as pd
+import pytest
 
 from cvxopf import (
     DispatchableGenerator,
@@ -9,6 +12,9 @@ from cvxopf import (
     StorageUnitIdeal,
 )
 from cvxopf import generator, hvdc, nondispatchable, storage
+from cvxopf import ac_problem, dc_problem, singlenode_dc_problem
+from cvxopf.problem import build_opf_multistep
+from cvxopf.testcases import case9
 
 
 def test_all_components_expose_network_and_temporal_interface():
@@ -18,6 +24,8 @@ def test_all_components_expose_network_and_temporal_interface():
         assert callable(module.ac_operating_constraints)
         assert callable(module.dc_operating_constraints)
         assert callable(module.coupling_constraints)
+    assert callable(generator.ac_network_constraints)
+    assert callable(generator.dc_network_constraints)
 
 
 def test_all_component_injection_methods_return_fixed_three_tuple():
@@ -78,6 +86,39 @@ def test_all_component_injection_methods_return_fixed_three_tuple():
 
 
 def test_memoryless_components_have_empty_coupling_slot():
-    assert generator.coupling_constraints() == []
-    assert nondispatchable.coupling_constraints() == []
-    assert hvdc.coupling_constraints() == []
+    assert generator.coupling_constraints([], []) == []
+    assert nondispatchable.coupling_constraints([], []) == []
+    assert hvdc.coupling_constraints([], [], []) == []
+
+
+@pytest.mark.parametrize(
+    ("formulation", "builder_module"),
+    [
+        ("ac", ac_problem),
+        ("lossy_dc", dc_problem),
+        ("singlenode_dc", singlenode_dc_problem),
+    ],
+)
+def test_multistep_builders_compose_generator_coupling_hook(
+    formulation, builder_module, monkeypatch
+):
+    calls = []
+
+    def coupling_spy(generators, Pg_list, Qg_list=None):
+        calls.append((generators, Pg_list, Qg_list))
+        return []
+
+    monkeypatch.setattr(
+        builder_module, "generator_coupling_constraints", coupling_spy
+    )
+    case = case9()
+    T = 2
+    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+
+    build_opf_multistep(
+        case, df_P, df_Q, T=T, formulation=formulation
+    )
+
+    assert len(calls) == 1
+    assert len(calls[0][1]) == T

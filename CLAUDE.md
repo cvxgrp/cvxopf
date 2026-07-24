@@ -388,6 +388,12 @@ hvdc.py       →  data.py, cvxpy, numpy
 All four device modules now follow the M16 component pattern. See
 `plans/milestone-16-unify-components.md`.
 
+Generator polynomial costs are limited to degree two; use the shared
+piecewise-linear representation for more general convex cost curves. External
+device time-series identity alignment occurs once at the public `problem.py`
+boundary. `OPFBuild.expressions` carries modeled expressions needed by result
+reporting so objective terms are not reimplemented in `results.py`.
+
 ---
 
 ## Working with DCP in CVXPY

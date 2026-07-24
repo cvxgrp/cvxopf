@@ -121,7 +121,7 @@ class TestNondispatchableUnit:
         assert p_inj.shape == (1,)
         assert q_inj.shape == (1,)
         assert all(constraint.is_dcp() for constraint in constraints)
-        assert coupling_constraints() == []
+        assert coupling_constraints([unit], [p_nd], [q_nd]) == []
 
 
 class TestNondispatchableValidation:

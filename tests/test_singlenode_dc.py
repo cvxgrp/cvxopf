@@ -175,7 +175,8 @@ class TestParseSinglenodeDcCase:
 
     def test_nb_correct_from_case9(self):
         d = _parse_singlenode_dc_case(case9(), OPFOptions(), None, 1.0, None)
-        assert d["nb"] == 9
+        assert d["nb"] == 1
+        assert d["source_nb"] == 9
 
     def test_device_metadata_uses_collapsed_internal_bus(self):
         storage = StorageUnitIdeal(

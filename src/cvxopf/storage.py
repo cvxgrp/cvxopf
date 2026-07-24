@@ -112,6 +112,17 @@ def _validate_storage(
         return
     
     for i, unit in enumerate(storage_units):
+        numeric_fields = {
+            "apparent_power_rating": unit.apparent_power_rating,
+            "capacity": unit.capacity,
+            "initial_soc": unit.initial_soc,
+            "aging_weight": unit.aging_weight,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"Storage unit {i}: {name} must be finite, got {value}"
+                )
         # Check apparent_power_rating
         if unit.apparent_power_rating <= 0:
             raise ValueError(
