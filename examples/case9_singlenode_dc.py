@@ -49,7 +49,12 @@ storage = StorageUnitIdeal(
     bus=1, apparent_power_rating=50.0, capacity=100.0,
     initial_soc=50.0, aging_weight=1e-2,
 )
-nd_unit = NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)
+nd_unit = NondispatchableUnit(
+    bus=1,
+    p_available=80.0,
+    apparent_power_rating=100.0,
+    device_id="solar",
+)
 
 build = build_opf(case, formulation="singlenode_dc",
                   storage=[storage], nondispatchable=[nd_unit])
@@ -74,7 +79,7 @@ df_Q = pd.DataFrame(np.zeros((T, 1)))
 
 # Nondispatchable availability: daytime solar profile
 solar = np.clip(80.0 * np.sin(np.linspace(0, np.pi, T)), 0, None)
-df_nd = pd.DataFrame({1: solar})
+df_nd = pd.DataFrame({"solar": solar})
 
 build = build_opf_multistep(
     case, df_P, df_Q, T=T,

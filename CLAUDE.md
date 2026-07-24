@@ -344,12 +344,14 @@ global problem parameter passed to `build_opf` / `build_opf_multistep` (default 
 | `bus` | int | required | External (MATPOWER) bus ID |
 | `p_available` | float | required | Available real power (MW); >= 0. Used directly in single-step. In multistep, serves as a constant fallback if `df_nd` is not provided. |
 | `apparent_power_rating` | float | required | P_max (MVA); inverter nameplate rating. AC: radius of apparent power circle. DC: stored but not used as a constraint. Must be > 0. |
+| `device_id` | str or None | None | Stable external identity. Required only when `df_nd` is supplied. |
 
 `df_nd` (available power time series) is **not** a field on `NondispatchableUnit`.
 It is a separate parameter on `build_opf_multistep`, with shape `(T, nnd)` and
-column names equal to external bus IDs. If `nondispatchable` is not None but
-`df_nd` is None, `p_available` is tiled across all T steps and a `UserWarning`
-is emitted.
+columns that exactly match unique, nonempty unit `device_id` values. Column
+order is arbitrary and is aligned to device-list order. If `nondispatchable`
+is not None but `df_nd` is None, `p_available` is tiled across all T steps and
+a `UserWarning` is emitted; static fallback does not require IDs.
 
 ---
 
@@ -570,18 +572,18 @@ contract is `"ns" in build.data`.
 
 ### Nondispatchable units
 
-`NondispatchableUnit` lives in `nondispatchable.py`, which has zero imports
-from other cvxopf modules. Same circular-import reasoning as `storage.py`.
+`NondispatchableUnit` lives in `nondispatchable.py`, which imports the shared
+device-frame alignment helper from `data.py`.
 `NondispatchableUnit` is re-exported from `problem.py` for the public API.
 
 Nondispatchable units have no cost, no aging weight, no SoC dynamics, and
 no coupling constraints across time steps. The only cross-step structure is
 the time-varying available power `R_t[n]`, which is supplied via `df_nd`.
 
-In multistep, `df_nd` column names are external bus IDs (integers). This is
-an intentional asymmetry with `df_P`/`df_Q` (which use positional indices) —
-nondispatchable units are sparse across buses, so bus-ID-as-column is more
-natural. This convention may be revisited in a future API release.
+In multistep, `df_nd` columns are stable device IDs rather than bus IDs. This
+permits multiple colocated units and prevents an external table from silently
+changing meaning when the device list is reordered. The same identity contract
+is used independently by `df_hvdc_min` and `df_hvdc_max`.
 
 Nondispatchable keys are absent from `build.data` when `nondispatchable=None`;
 the detection contract is `"nnd" in build.data`.

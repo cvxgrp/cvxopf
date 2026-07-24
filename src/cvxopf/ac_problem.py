@@ -45,14 +45,17 @@ from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
+    _nd_static_data,
     _parse_nd_timeseries,
+    ac_injections as nd_ac_injections,
+    ac_operating_constraints as nd_ac_operating_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
     _validate_hvdc,
     _make_hvdc_incidence_matrices,
     _hvdc_static_box,
-    hvdc_injections,
+    ac_injections as hvdc_ac_injections,
     ac_operating_constraints as hvdc_ac_operating_constraints,
     hvdc_cost_expr,
 )
@@ -203,15 +206,11 @@ def _parse_case(
             ext_to_int[u.bus] if ext_to_int else u.bus
             for u in nondispatchable
         ], dtype=int)
-        nd_apparent_power_rating = np.array([u.apparent_power_rating for u in nondispatchable])
-        nd_p_available = np.array([u.p_available for u in nondispatchable])
-        
         nd_data = dict(
             nnd=len(nondispatchable),
             Cnd=Cnd,
             nd_bus=nd_bus,
-            nd_apparent_power_rating=nd_apparent_power_rating,
-            nd_p_available=nd_p_available,
+            **_nd_static_data(nondispatchable),
         )
 
     # Parse HVDC links if present
@@ -310,8 +309,9 @@ def _make_step_constraints(
     soc_t=None,
     # Nondispatchable — all None when nondispatchable=None
     nnd: int = 0,
-    Cnd=None,
-    nd_apparent_power_rating=None,
+    nd_units=None,
+    nd_injection_p=None,
+    nd_injection_q=None,
     nd_p_available_t=None,
     p_nd_t=None,
     q_nd_t=None,
@@ -412,8 +412,8 @@ def _make_step_constraints(
     # ------------------------------------------------------------------
     storage_injection_p = storage_injection_p if ns > 0 else 0
     storage_injection_q = storage_injection_q if ns > 0 else 0
-    nd_injection_p = (1.0 / baseMVA) * (Cnd @ p_nd_t) if nnd > 0 else 0
-    nd_injection_q = (1.0 / baseMVA) * (Cnd @ q_nd_t) if nnd > 0 else 0
+    nd_injection_p = nd_injection_p if nnd > 0 else 0
+    nd_injection_q = nd_injection_q if nnd > 0 else 0
     hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
 
     constr.append(
@@ -439,14 +439,9 @@ def _make_step_constraints(
     # Omitted entirely when nnd == 0.
     # ------------------------------------------------------------------
     if nnd > 0:
-        for n in range(nnd):
-            # Upper bound: available real power (time-varying), engineering units (MW)
-            constr.append(p_nd_t[n] <= float(nd_p_available_t[n]))
-            # Apparent power circle, engineering units (MW² + MVAr² ≤ MVA²)
-            constr.append(
-                cp.sum_squares(cp.vstack([p_nd_t[n], q_nd_t[n]])) <= float(nd_apparent_power_rating[n]) ** 2
-            )
-        # Lower bound already encoded via nonneg=True on p_nd_t variable declaration
+        constr += nd_ac_operating_constraints(
+            nd_units, p_nd_t, q_nd_t, nd_p_available_t
+        )
 
     # ------------------------------------------------------------------
     # Section 4c: HVDC operating constraints
@@ -525,11 +520,16 @@ def _build_ac_single(
 
     # Create nondispatchable variables if present
     p_nd_t = q_nd_t = None
+    nd_inj_p = nd_inj_q = None
     if "nnd" in d and d["nnd"] > 0:
         nnd = d["nnd"]
         # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
         p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
         q_nd_t = cp.Variable(nnd, name="q_nd")
+        nd_inj_p, nd_inj_q, nd_scaling = nd_ac_injections(
+            nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
+        )
+        nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Create HVDC variables if present
     p_in = p_out = None
@@ -538,7 +538,10 @@ def _build_ac_single(
         n_hvdc = d["n_hvdc"]
         p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
         p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
-        hvdc_inj_expr, inv_bMVA = hvdc_injections(hvdc, p_in, p_out, d["ext_to_int"])
+        hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_ac_injections(
+            hvdc, p_in, p_out, d["ext_to_int"]
+        )
+        assert hvdc_q_inj is None
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
@@ -565,8 +568,9 @@ def _build_ac_single(
         b_q_t=b_q_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
-        Cnd=d.get("Cnd"),
-        nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+        nd_units=nondispatchable,
+        nd_injection_p=nd_inj_p,
+        nd_injection_q=nd_inj_q,
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
         q_nd_t=q_nd_t,
@@ -705,9 +709,11 @@ def _build_ac_multistep(
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
     
     # Parse nondispatchable timeseries if present
-    if "nnd" in d and df_nd is not None:
-        nd_available = _parse_nd_timeseries(df_nd, T, d["ext_bus_ids"], d["ext_to_int"])
-        d["nd_available"] = nd_available
+    if "nnd" in d:
+        if df_nd is not None:
+            d["nd_available"] = _parse_nd_timeseries(df_nd, T, nondispatchable)
+        else:
+            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -755,10 +761,15 @@ def _build_ac_multistep(
 
         # Create nondispatchable variables if present
         p_nd_t = q_nd_t = None
+        nd_inj_p_t = nd_inj_q_t = None
         if "nnd" in d and d["nnd"] > 0:
             nnd = d["nnd"]
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
             q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
+            nd_inj_p_t, nd_inj_q_t, nd_scaling_t = nd_ac_injections(
+                nondispatchable, p_nd_t, q_nd_t, d["ext_to_int"]
+            )
+            nd_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create HVDC variables if present
         p_in_t = p_out_t = None
@@ -768,13 +779,22 @@ def _build_ac_multistep(
             n_hvdc = d["n_hvdc"]
             p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
             p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
-            hvdc_inj_expr_t, inv_bMVA_t = hvdc_injections(hvdc, p_in_t, p_out_t, d["ext_to_int"])
+            hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_ac_injections(
+                hvdc, p_in_t, p_out_t, d["ext_to_int"]
+            )
+            assert hvdc_q_inj_t is None
             inv_bMVA_t.value = 1.0 / d["baseMVA"]
             p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
             p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
 
         # Get available power for this time step
-        nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
+        if "nnd" in d:
+            nd_p_available_t = (
+                d["nd_available"][t, :]
+                if "nd_available" in d else d["nd_p_available"]
+            )
+        else:
+            nd_p_available_t = None
 
         generator_inj_expr_t, generator_scaling_t = generator_injections(
             d["generators"], Pg_t, d["ext_to_int"]
@@ -799,8 +819,9 @@ def _build_ac_multistep(
             b_q_t=b_q_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
-            Cnd=d.get("Cnd"),
-            nd_apparent_power_rating=d.get("nd_apparent_power_rating"),
+            nd_units=nondispatchable,
+            nd_injection_p=nd_inj_p_t,
+            nd_injection_q=nd_inj_q_t,
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
             q_nd_t=q_nd_t,

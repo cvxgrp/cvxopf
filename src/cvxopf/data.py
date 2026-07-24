@@ -163,3 +163,80 @@ def load_timeseries_from_dataframe(
     Pd_pu = df_P.to_numpy(dtype=float) / baseMVA
     Qd_pu = df_Q.to_numpy(dtype=float) / baseMVA
     return Pd_pu, Qd_pu
+
+
+def align_device_dataframe(
+    frame: pd.DataFrame,
+    devices: list,
+    T: int,
+    frame_name: str,
+    *,
+    nonnegative: bool = False,
+) -> np.ndarray:
+    """
+    Validate and align externally keyed device data to device-list order.
+
+    Devices must expose unique, nonempty string ``device_id`` values. Frame
+    columns must contain exactly the same IDs; arbitrary input column order is
+    accepted and reordered deterministically.
+    """
+    if frame.shape[0] != T:
+        raise ValueError(
+            f"{frame_name} has {frame.shape[0]} rows but T={T}. "
+            f"Expected {T} rows (one per time step)."
+        )
+
+    device_ids = [getattr(device, "device_id", None) for device in devices]
+    missing_ids = [i for i, device_id in enumerate(device_ids) if device_id is None]
+    if missing_ids:
+        raise ValueError(
+            f"{frame_name} requires device_id on every device; missing at "
+            f"indices {missing_ids}."
+        )
+    invalid_ids = [
+        (i, device_id)
+        for i, device_id in enumerate(device_ids)
+        if not isinstance(device_id, str) or not device_id.strip()
+    ]
+    if invalid_ids:
+        raise ValueError(
+            f"{frame_name} device_id values must be nonempty strings; "
+            f"invalid entries: {invalid_ids}."
+        )
+    duplicate_device_ids = sorted(
+        {device_id for device_id in device_ids if device_ids.count(device_id) > 1}
+    )
+    if duplicate_device_ids:
+        raise ValueError(
+            f"{frame_name} device_id values must be unique; duplicates: "
+            f"{duplicate_device_ids}."
+        )
+    if frame.columns.has_duplicates:
+        duplicates = frame.columns[frame.columns.duplicated()].unique().tolist()
+        raise ValueError(
+            f"{frame_name} columns must be unique; duplicates: {duplicates}."
+        )
+
+    columns = frame.columns.tolist()
+    missing_columns = sorted(set(device_ids) - set(columns), key=repr)
+    extra_columns = sorted(set(columns) - set(device_ids), key=repr)
+    if missing_columns or extra_columns:
+        raise ValueError(
+            f"{frame_name} columns must match device IDs exactly; "
+            f"missing={missing_columns}, extra={extra_columns}."
+        )
+
+    values = frame.loc[:, device_ids].to_numpy(dtype=float)
+    if not np.all(np.isfinite(values)):
+        bad = np.argwhere(~np.isfinite(values))[0]
+        raise ValueError(
+            f"{frame_name} contains a non-finite value at "
+            f"row {int(bad[0])}, device_id={device_ids[int(bad[1])]!r}."
+        )
+    if nonnegative and np.any(values < 0):
+        bad = np.argwhere(values < 0)[0]
+        raise ValueError(
+            f"{frame_name} contains a negative value at "
+            f"row {int(bad[0])}, device_id={device_ids[int(bad[1])]!r}."
+        )
+    return values

@@ -114,6 +114,18 @@ scalar balance (singlenode). Section owns exactly one `p ==` and one `q ==`
 constraint; components supply addends, the constructor sums them. HVDC and ND
 reactive terms: HVDC is unity-PF (real only); ND has `q_nd` in AC only.
 
+The AC/DC injection API has fixed arity:
+`(p_expression, q_expression_or_None, scaling_parameter_or_None)`. “AC” and
+“DC” name network channels, not device technology; future AC/SOCP network
+models use the AC method even for a DC transmission device with reactive
+terminal control.
+
+External device time series use stable identity rather than position or bus.
+ND and HVDC expose optional `device_id`; supplying an external frame requires
+every relevant device to have a unique, nonempty string ID. Frame columns must
+match the ID set exactly and are reordered to device-list order. HVDC min/max
+frames are aligned independently. Static scalar/bound fallback requires no ID.
+
 ### 3.5 Cost contribution
 - Generator: `poly_cost_expr` (DCP-critical monomial form — preserve verbatim).
 - Storage: L1 aging `Σ_t λ·|b_t|`.

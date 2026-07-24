@@ -314,10 +314,17 @@ class TestSinglenodeDcMultistepStorage:
 
 class TestSinglenodeDcMultistepNondispatchable:
 
-    ND = [NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)]
+    ND = [
+        NondispatchableUnit(
+            bus=1,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
+    ]
 
     def _df_nd(self, values):
-        return pd.DataFrame({1: values})
+        return pd.DataFrame({"nd": values})
 
     def test_nd_solves_optimal(self):
         df_P, df_Q = _singlenode_load_dfs(100.0, 3)

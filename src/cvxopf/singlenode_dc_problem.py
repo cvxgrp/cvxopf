@@ -73,7 +73,10 @@ from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
+    _nd_static_data,
     _parse_nd_timeseries,
+    dc_injections as nd_dc_injections,
+    dc_operating_constraints as nd_dc_operating_constraints,
 )
 from cvxopf.network import BUS_I
 
@@ -94,6 +97,8 @@ def _make_singlenode_dc_step_constraints(
     b_t=None,
     soc_t=None,
     nnd: int = 0,
+    nd_units=None,
+    nd_injection=None,
     nd_p_available_t=None,
     p_nd_t=None,
 ) -> list:
@@ -136,7 +141,7 @@ def _make_singlenode_dc_step_constraints(
 
     # Section 1: Power balance (exactly one equality constraint)
     storage_term = storage_injection[0] if ns > 0 else 0
-    nd_term = cp.multiply(1.0 / baseMVA, cp.sum(p_nd_t)) if nnd > 0 else 0
+    nd_term = nd_injection[0] if nnd > 0 else 0
     constr.append(generator_injection[0] + storage_term + nd_term == Pd_total_t)
 
     # Section 2: Generator bounds
@@ -148,8 +153,9 @@ def _make_singlenode_dc_step_constraints(
 
     # Section 3b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
-        constr.append(p_nd_t <= nd_p_available_t)
-        # p_nd_t >= 0 is enforced via nonneg=True on Variable declaration
+        constr += nd_dc_operating_constraints(
+            nd_units, p_nd_t, nd_p_available_t
+        )
 
     return constr
 
@@ -261,12 +267,7 @@ def _parse_singlenode_dc_case(
             "nnd": len(nondispatchable),
             "Cnd": _make_nd_incidence_matrix(nondispatchable, nb, ext_to_int),
             "nd_bus": np.array([unit.bus for unit in nondispatchable], dtype=int),
-            "nd_apparent_power_rating": np.array(
-                [unit.apparent_power_rating for unit in nondispatchable], dtype=float
-            ),
-            "nd_p_available": np.array(
-                [unit.p_available for unit in nondispatchable], dtype=float
-            ),
+            **_nd_static_data(nondispatchable),
         }
 
     return {
@@ -347,8 +348,14 @@ def _build_singlenode_dc_single(
 
     # Nondispatchable variables (if present)
     p_nd_t = None
+    nd_inj = None
     if "nnd" in d:
         p_nd_t = cp.Variable(d["nnd"], name="p_nd", nonneg=True)
+        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
+            nondispatchable, p_nd_t, d["ext_to_int"], nb=1
+        )
+        assert nd_q_inj is None
+        nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Build constraints
     generator_inj_expr, generator_scaling = generator_injections(
@@ -372,6 +379,8 @@ def _build_singlenode_dc_single(
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
+        nd_units=nondispatchable,
+        nd_injection=nd_inj,
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
     )
@@ -535,10 +544,13 @@ def _build_singlenode_dc_multistep(
         )
 
     # Parse nondispatchable time series (if present)
-    if "nnd" in d and df_nd is not None:
-        d["nd_available"] = _parse_nd_timeseries(
-            df_nd, T, d["ext_bus_ids"], d["ext_to_int"]
-        )
+    if "nnd" in d:
+        if df_nd is not None:
+            d["nd_available"] = _parse_nd_timeseries(
+                df_nd, T, nondispatchable
+            )
+        else:
+            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
     # Accumulators
     Pg_list = []
@@ -572,8 +584,14 @@ def _build_singlenode_dc_multistep(
             storage_scaling_t.value = 1.0 / d["baseMVA"]
 
         p_nd_t = None
+        nd_inj_t = None
         if "nnd" in d:
             p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}", nonneg=True)
+            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
+                nondispatchable, p_nd_t, d["ext_to_int"], nb=1
+            )
+            assert nd_q_inj_t is None
+            nd_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Determine available ND power for this step
         if "nnd" in d:
@@ -606,6 +624,8 @@ def _build_singlenode_dc_multistep(
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
+            nd_units=nondispatchable,
+            nd_injection=nd_inj_t,
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
         )

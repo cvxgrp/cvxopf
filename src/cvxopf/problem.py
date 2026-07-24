@@ -28,7 +28,11 @@ import cvxpy as cp
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.hvdc import HVDCLink, _hvdc_static_box
+from cvxopf.hvdc import (
+    HVDCLink,
+    _hvdc_static_box,
+    _parse_hvdc_timeseries,
+)
 from cvxopf.generator import DispatchableGenerator, _case_with_generators
 
 
@@ -374,7 +378,8 @@ def build_opf_multistep(
     df_nd : pd.DataFrame | None, optional
         Nondispatchable available power time series in MW.
         Shape (T, nnd) where nnd = len(nondispatchable).
-        Column names must be external bus IDs (integers).
+        Columns must exactly match the units' unique, nonempty ``device_id``
+        values; arbitrary input order is aligned to device-list order.
         If None and nondispatchable is not None, the p_available field
         from each NondispatchableUnit is tiled across all T steps.
     generators : list[DispatchableGenerator] | None, optional
@@ -403,10 +408,6 @@ def build_opf_multistep(
             UserWarning,
             stacklevel=2,
         )
-        # Create df_nd by tiling p_available from each unit
-        df_nd = pd.DataFrame(
-            {u.bus: [u.p_available] * T for u in nondispatchable}
-        )
     elif nondispatchable is None and df_nd is not None:
         warnings.warn(
             "df_nd is ignored because nondispatchable=None.",
@@ -416,19 +417,27 @@ def build_opf_multistep(
 
     # HVDC frame handling: tile static box or validate provided frames.
     if hvdc is not None:
-        if df_hvdc_min is None or df_hvdc_max is None:
+        if df_hvdc_min is None and df_hvdc_max is None:
             warnings.warn(
                 "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
-                "HVDCLink.mode fields across all T steps.",
+                "HVDCLink bounds across all T steps.",
                 UserWarning,
                 stacklevel=2,
             )
             p_min_static, p_max_static = _hvdc_static_box(hvdc)
             df_hvdc_min = pd.DataFrame(np.tile(p_min_static, (T, 1)))
             df_hvdc_max = pd.DataFrame(np.tile(p_max_static, (T, 1)))
+        elif df_hvdc_min is None or df_hvdc_max is None:
+            raise ValueError(
+                "df_hvdc_min and df_hvdc_max must be provided together."
+            )
         else:
-            mins = df_hvdc_min.values
-            maxs = df_hvdc_max.values
+            mins = _parse_hvdc_timeseries(
+                df_hvdc_min, hvdc, T, "df_hvdc_min"
+            )
+            maxs = _parse_hvdc_timeseries(
+                df_hvdc_max, hvdc, T, "df_hvdc_max"
+            )
             if np.any(mins > maxs):
                 bad = np.argwhere(mins > maxs)
                 t_bad, k_bad = bad[0]
@@ -437,6 +446,9 @@ def build_opf_multistep(
                     f"df_hvdc_max[{t_bad},{k_bad}] = {maxs[t_bad, k_bad]:.4g}; "
                     f"box invariant p_min <= p_max violated."
                 )
+            aligned_ids = [link.device_id for link in hvdc]
+            df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
+            df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
 
     builders = _get_multistep_builders()
     if formulation not in builders:

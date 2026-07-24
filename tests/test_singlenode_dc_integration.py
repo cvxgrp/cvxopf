@@ -174,7 +174,14 @@ class TestSinglenodeDcStorageIntegration:
     STORAGE = [StorageUnitIdeal(bus=1, apparent_power_rating=50.0,
                                 capacity=100.0, initial_soc=50.0,
                                 aging_weight=0.0)]
-    ND = [NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)]
+    ND = [
+        NondispatchableUnit(
+            bus=1,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
+    ]
 
     def test_storage_and_nd_together_single_step(self):
         _, r = _solve_singlenode(make_singlenode_case(100.0, SIMPLE_GENS),
@@ -186,7 +193,7 @@ class TestSinglenodeDcStorageIntegration:
     def test_storage_and_nd_together_multistep(self):
         df_P = pd.DataFrame(np.full((3, 1), 100.0))
         df_Q = pd.DataFrame(np.zeros((3, 1)))
-        df_nd = pd.DataFrame({1: [80.0, 80.0, 80.0]})
+        df_nd = pd.DataFrame({"nd": [80.0, 80.0, 80.0]})
         _, r = _solve_singlenode_multistep(
             make_singlenode_case(100.0, SIMPLE_GENS), df_P, df_Q, 3,
             storage=self.STORAGE, nondispatchable=self.ND, df_nd=df_nd,

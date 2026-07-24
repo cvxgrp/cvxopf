@@ -347,8 +347,9 @@ unit  = NondispatchableUnit(
     bus=5,
     p_available=100.0,            # MW — fallback for single-step
     apparent_power_rating=120.0,  # MVA — inverter nameplate
+    device_id="solar_5",          # stable key for external time series
 )
-df_nd = pd.DataFrame({5: [100.0, 75.0, 50.0]})  # MW available per step
+df_nd = pd.DataFrame({"solar_5": [100.0, 75.0, 50.0]})
 
 build = build_opf_multistep(
     ppc, df_P, df_Q, T=T, formulation="ac",

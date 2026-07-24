@@ -67,14 +67,17 @@ from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _validate_nondispatchable,
     _make_nd_incidence_matrix,
+    _nd_static_data,
     _parse_nd_timeseries,
+    dc_injections as nd_dc_injections,
+    dc_operating_constraints as nd_dc_operating_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
     _validate_hvdc,
     _make_hvdc_incidence_matrices,
     _hvdc_static_box,
-    hvdc_injections,
+    dc_injections as hvdc_dc_injections,
     dc_operating_constraints as hvdc_dc_operating_constraints,
     hvdc_cost_expr,
 )
@@ -189,15 +192,11 @@ def _parse_dc_case(
             ext_to_int[u.bus] if ext_to_int is not None else u.bus
             for u in nondispatchable
         ], dtype=int)
-        nd_apparent_power_rating = np.array([u.apparent_power_rating for u in nondispatchable])
-        nd_p_available = np.array([u.p_available for u in nondispatchable])
-        
         nd_data = dict(
             nnd=len(nondispatchable),
             Cnd=Cnd,
             nd_bus=nd_bus,
-            nd_apparent_power_rating=nd_apparent_power_rating,
-            nd_p_available=nd_p_available,
+            **_nd_static_data(nondispatchable),
         )
 
     # Parse HVDC links if present
@@ -239,7 +238,8 @@ def _make_dc_step_constraints(
     b_t=None,
     soc_t=None,
     nnd: int = 0,
-    Cnd=None,
+    nd_units=None,
+    nd_injection=None,
     nd_p_available_t=None,
     p_nd_t=None,
     n_hvdc: int = 0,
@@ -254,7 +254,7 @@ def _make_dc_step_constraints(
     """Build the list of CVXPY constraints for one DC time step."""
     # Section 1: Nodal real power balance
     storage_term = storage_injection if ns > 0 else 0
-    nd_term = cp.multiply((1.0 / baseMVA), Cnd @ p_nd_t) if nnd > 0 else 0
+    nd_term = nd_injection if nnd > 0 else 0
     hvdc_term = hvdc_injection_expr if n_hvdc > 0 else 0
     constr = [
         A @ p_flows + generator_injection
@@ -273,8 +273,9 @@ def _make_dc_step_constraints(
 
     # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
-        constr += [p_nd_t <= nd_p_available_t]
-        # p_nd_t >= 0 encoded via nonneg=True on variable declaration
+        constr += nd_dc_operating_constraints(
+            nd_units, p_nd_t, nd_p_available_t
+        )
 
     # Section 5c: HVDC operating constraints (omitted when n_hvdc == 0)
     if n_hvdc > 0:
@@ -344,9 +345,15 @@ def _build_lossy_dc_single(
 
     # Create nondispatchable variables if present
     p_nd_t = None
+    nd_inj = None
     if "nnd" in d and d["nnd"] > 0:
         nnd = d["nnd"]
         p_nd_t = cp.Variable(nnd, name="p_nd", nonneg=True)
+        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
+            nondispatchable, p_nd_t, d["ext_to_int"]
+        )
+        assert nd_q_inj is None
+        nd_scaling.value = 1.0 / d["baseMVA"]
 
     # Create HVDC variables if present
     p_in = p_out = None
@@ -355,7 +362,10 @@ def _build_lossy_dc_single(
         n_hvdc = d["n_hvdc"]
         p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
         p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
-        hvdc_inj_expr, inv_bMVA = hvdc_injections(hvdc, p_in, p_out, d["ext_to_int"])
+        hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_dc_injections(
+            hvdc, p_in, p_out, d["ext_to_int"]
+        )
+        assert hvdc_q_inj is None
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
@@ -375,7 +385,8 @@ def _build_lossy_dc_single(
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
-        Cnd=d.get("Cnd"),
+        nd_units=nondispatchable,
+        nd_injection=nd_inj,
         nd_p_available_t=d.get("nd_p_available"),
         p_nd_t=p_nd_t,
         n_hvdc=d.get("n_hvdc", 0),
@@ -524,9 +535,11 @@ def _build_lossy_dc_multistep(
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
     
     # Parse nondispatchable timeseries if present
-    if "nnd" in d and df_nd is not None:
-        nd_available = _parse_nd_timeseries(df_nd, T, d["ext_bus_ids"], d["ext_to_int"])
-        d["nd_available"] = nd_available
+    if "nnd" in d:
+        if df_nd is not None:
+            d["nd_available"] = _parse_nd_timeseries(df_nd, T, nondispatchable)
+        else:
+            d["nd_available"] = np.tile(d["nd_p_available"], (T, 1))
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -564,9 +577,15 @@ def _build_lossy_dc_multistep(
 
         # Create nondispatchable variables if present
         p_nd_t = None
+        nd_inj_t = None
         if "nnd" in d and d["nnd"] > 0:
             nnd = d["nnd"]
             p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}", nonneg=True)
+            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
+                nondispatchable, p_nd_t, d["ext_to_int"]
+            )
+            assert nd_q_inj_t is None
+            nd_scaling_t.value = 1.0 / d["baseMVA"]
 
         # Create HVDC variables if present
         p_in_t = p_out_t = None
@@ -576,13 +595,22 @@ def _build_lossy_dc_multistep(
             n_hvdc = d["n_hvdc"]
             p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
             p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
-            hvdc_inj_expr_t, inv_bMVA_t = hvdc_injections(hvdc, p_in_t, p_out_t, d["ext_to_int"])
+            hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_dc_injections(
+                hvdc, p_in_t, p_out_t, d["ext_to_int"]
+            )
+            assert hvdc_q_inj_t is None
             inv_bMVA_t.value = 1.0 / d["baseMVA"]
             p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
             p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
 
         # Get available power for this time step
-        nd_p_available_t = d.get("nd_available")[t, :] if "nnd" in d else None
+        if "nnd" in d:
+            nd_p_available_t = (
+                d["nd_available"][t, :]
+                if "nd_available" in d else d["nd_p_available"]
+            )
+        else:
+            nd_p_available_t = None
 
         generator_inj_expr_t, generator_scaling_t = generator_injections(
             d["generators"], Pg_t, d["ext_to_int"]
@@ -600,7 +628,8 @@ def _build_lossy_dc_multistep(
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
-            Cnd=d.get("Cnd"),
+            nd_units=nondispatchable,
+            nd_injection=nd_inj_t,
             nd_p_available_t=nd_p_available_t,
             p_nd_t=p_nd_t,
             n_hvdc=d.get("n_hvdc", 0),

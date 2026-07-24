@@ -28,7 +28,8 @@ from cvxopf.hvdc import (
     _validate_hvdc,
     _make_hvdc_incidence_matrices,
     _hvdc_static_box,
-    hvdc_injections,
+    _parse_hvdc_timeseries,
+    dc_injections,
     dc_operating_constraints,
     ac_operating_constraints,
     hvdc_cost_expr,
@@ -197,6 +198,39 @@ class TestHVDCStaticBox:
         assert p_max.shape == (0,)
 
 
+class TestHVDCTimeseriesIdentity:
+    def test_paired_frames_align_independently_to_link_order(self):
+        links = [
+            _link(from_bus=1, to_bus=2),
+            _link(from_bus=2, to_bus=3),
+        ]
+        links[0].device_id = "east"
+        links[1].device_id = "west"
+        mins = _parse_hvdc_timeseries(
+            pd.DataFrame({"west": [-20.0], "east": [-10.0]}),
+            links,
+            1,
+            "df_hvdc_min",
+        )
+        maxs = _parse_hvdc_timeseries(
+            pd.DataFrame({"east": [10.0], "west": [20.0]}),
+            links,
+            1,
+            "df_hvdc_max",
+        )
+        np.testing.assert_array_equal(mins, [[-10.0, -20.0]])
+        np.testing.assert_array_equal(maxs, [[10.0, 20.0]])
+
+    def test_external_frame_requires_link_device_ids(self):
+        with pytest.raises(ValueError, match="requires device_id"):
+            _parse_hvdc_timeseries(
+                pd.DataFrame({"hvdc": [0.0]}),
+                [_link()],
+                1,
+                "df_hvdc_min",
+            )
+
+
 class TestHVDCFromDcline:
     def _case_tables(self):
         ppc = case9_dcline()
@@ -341,7 +375,10 @@ class TestHVDCInjections:
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        inj, q_inj, inv_bMVA = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_inj is None
         assert isinstance(inv_bMVA, cp.Parameter)
         assert hasattr(inj, "is_affine")
 
@@ -349,14 +386,18 @@ class TestHVDCInjections:
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, _ = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        inj, q_inj, _ = dc_injections(links, p_in, p_out, _EXT_TO_INT)
+        assert q_inj is None
         assert hasattr(inj, "is_affine")
 
     def test_parameter_unset(self):
         links = [_link(from_bus=1, to_bus=2)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        _, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        _, q_inj, inv_bMVA = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_inj is None
         assert inv_bMVA.value is None
 
     def test_convention_b_sign_lossless(self):
@@ -367,7 +408,10 @@ class TestHVDCInjections:
         links = [_link(from_bus=1, to_bus=2, loss_percent=0.0)]
         p_in = cp.Variable((1,))
         p_out = cp.Variable((1,))
-        inj, inv_bMVA = hvdc_injections(links, p_in, p_out, _EXT_TO_INT)
+        inj, q_inj, inv_bMVA = dc_injections(
+            links, p_in, p_out, _EXT_TO_INT
+        )
+        assert q_inj is None
         inv_bMVA.value = 1.0 / baseMVA
 
         p_min_t = np.array([-100.0])
@@ -549,7 +593,13 @@ class TestHVDCWiring:
             bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)
         ),
     ]
-    _LINK = HVDCLink(from_bus=1, to_bus=2, p_min_mw=-50.0, p_max_mw=50.0)
+    _LINK = HVDCLink(
+        from_bus=1,
+        to_bus=2,
+        p_min_mw=-50.0,
+        p_max_mw=50.0,
+        device_id="hvdc",
+    )
 
     def _case(self):
         return make_singlenode_case(300.0, self._GENS)
@@ -572,8 +622,8 @@ class TestHVDCWiring:
         T = 3
         df_P = pd.DataFrame(np.tile([300.0], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, 1)))
-        df_min = pd.DataFrame(np.tile([-50.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([50.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-50.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([50.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -627,7 +677,13 @@ class TestHVDCLossyDCWiring:
     and build.variables with HVDC keys. Detection contract: "n_hvdc" in
     build.data. Variables: p_hvdc_in / p_hvdc_out."""
 
-    _LINK = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-100.0, p_max_mw=100.0)
+    _LINK = HVDCLink(
+        from_bus=4,
+        to_bus=9,
+        p_min_mw=-100.0,
+        p_max_mw=100.0,
+        device_id="hvdc",
+    )
 
     def test_single_step_data_key_present(self):
         build = build_opf(case9(), formulation="lossy_dc", hvdc=[self._LINK])
@@ -663,8 +719,8 @@ class TestHVDCLossyDCWiring:
         nb = case["bus"].shape[0]
         df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, nb)))
-        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([100.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([100.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -794,12 +850,13 @@ class TestHVDCLossyDCSolve:
             p_min_mw=-1000.0,
             p_max_mw=1000.0,
             loss_percent=loss_pct,
+            device_id="hvdc",
         )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
         # Pin step 0 to -60 MW (degenerate box)
-        df_min = pd.DataFrame([[-60.0]])
-        df_max = pd.DataFrame([[-60.0]])
+        df_min = pd.DataFrame([[-60.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[-60.0]], columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -842,11 +899,17 @@ class TestHVDCLossyDCSolve:
         # T=1 multistep must give the same optimal objective as single-step.
         case = self._CASE()
         nb = case["bus"].shape[0]
-        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-50.0, p_max_mw=50.0)
+        lnk = HVDCLink(
+            from_bus=4,
+            to_bus=9,
+            p_min_mw=-50.0,
+            p_max_mw=50.0,
+            device_id="hvdc",
+        )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
-        df_min = pd.DataFrame([[-50.0]])
-        df_max = pd.DataFrame([[50.0]])
+        df_min = pd.DataFrame([[-50.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[50.0]], columns=["hvdc"])
 
         build_s = build_opf(case, formulation="lossy_dc", hvdc=[lnk])
         build_s.solve()
@@ -880,7 +943,13 @@ class TestHVDCACWiring:
     and build.variables with HVDC keys. Detection contract: "n_hvdc" in
     build.data. Variables: p_hvdc_in / p_hvdc_out."""
 
-    _LINK = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-100.0, p_max_mw=100.0)
+    _LINK = HVDCLink(
+        from_bus=4,
+        to_bus=9,
+        p_min_mw=-100.0,
+        p_max_mw=100.0,
+        device_id="hvdc",
+    )
 
     def test_single_step_data_key_present(self):
         build = build_opf(case9(), formulation="ac", hvdc=[self._LINK])
@@ -916,8 +985,8 @@ class TestHVDCACWiring:
         nb = case["bus"].shape[0]
         df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
         df_Q = pd.DataFrame(np.zeros((T, nb)))
-        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)))
-        df_max = pd.DataFrame(np.tile([100.0], (T, 1)))
+        df_min = pd.DataFrame(np.tile([-100.0], (T, 1)), columns=["hvdc"])
+        df_max = pd.DataFrame(np.tile([100.0], (T, 1)), columns=["hvdc"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -1080,11 +1149,17 @@ class TestHVDCACSOlve:
         # T=1 multistep must give the same optimal objective as single-step.
         case = self._CASE()
         nb = case["bus"].shape[0]
-        lnk = HVDCLink(from_bus=4, to_bus=9, p_min_mw=-50.0, p_max_mw=50.0)
+        lnk = HVDCLink(
+            from_bus=4,
+            to_bus=9,
+            p_min_mw=-50.0,
+            p_max_mw=50.0,
+            device_id="hvdc",
+        )
         df_P = pd.DataFrame(np.tile(self._Pd_mw(case), (1, 1)))
         df_Q = pd.DataFrame(np.zeros((1, nb)))
-        df_min = pd.DataFrame([[-50.0]])
-        df_max = pd.DataFrame([[50.0]])
+        df_min = pd.DataFrame([[-50.0]], columns=["hvdc"])
+        df_max = pd.DataFrame([[50.0]], columns=["hvdc"])
 
         build_s = build_opf(case, formulation="ac", hvdc=[lnk])
         build_s.solve()

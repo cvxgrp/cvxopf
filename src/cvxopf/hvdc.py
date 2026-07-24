@@ -22,7 +22,7 @@ problem builder scope and passed into these methods — hvdc.py never
 instantiates cp.Variable itself.
 
 Import chain:
-  hvdc.py  →  cvxpy, numpy, warnings, dataclasses (no cvxopf imports)
+  hvdc.py  →  data.py, cvxpy, numpy, warnings, dataclasses
   ac_problem.py → hvdc.py
   dc_problem.py → hvdc.py
   problem.py    → hvdc.py  (re-exports HVDCLink, hvdc_from_dcline)
@@ -35,6 +35,8 @@ import warnings
 
 import numpy as np
 import cvxpy as cp
+
+from cvxopf.data import align_device_dataframe
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +72,9 @@ class HVDCLink:
     cost_coeffs : tuple of float
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
         transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. Default (0,0,0).
+    device_id : str or None
+        Stable external identity used to align time-series columns. Required
+        only when ``df_hvdc_min`` and ``df_hvdc_max`` are supplied.
     """
 
     from_bus: int
@@ -78,6 +83,7 @@ class HVDCLink:
     p_max_mw: float
     loss_percent: float = 0.0
     cost_coeffs: tuple = field(default_factory=lambda: (0.0, 0.0, 0.0))
+    device_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -181,28 +187,35 @@ def _hvdc_static_box(links: list) -> tuple:
     return p_min, p_max
 
 
+def _parse_hvdc_timeseries(frame, links: list, T: int, frame_name: str) -> np.ndarray:
+    """Align an externally keyed HVDC frame to link-list order."""
+    return align_device_dataframe(frame, links, T, frame_name)
+
+
 # ---------------------------------------------------------------------------
 # CVXPY component methods
 # ---------------------------------------------------------------------------
 
 
-def hvdc_injections(
+def dc_injections(
     links: list,
     p_in: cp.Variable,
     p_out: cp.Variable,
     ext_to_int: dict,
 ) -> tuple:
     """
-    Build the scaled nodal-balance addend for HVDC links.
+    Build the real nodal-balance addend for HVDC links in a DC network.
 
     p_in and p_out are created by the calling problem builder and passed in;
     this function does not instantiate any cp.Variable.
 
     Returns
     -------
-    injection_expr : cp.Expression
+    p_injection_expr : cp.Expression
         inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out). Both terminals
         enter with '+' (Convention B: positive = injection into grid).
+    q_injection_expr : None
+        HVDC has no reactive channel in the current model.
     inv_baseMVA : cp.Parameter
         Scalar parameter, unset. Caller must bind before solving:
           inv_baseMVA.value = 1.0 / baseMVA
@@ -211,7 +224,23 @@ def hvdc_injections(
     Ch_from, Ch_to = _make_hvdc_incidence_matrices(links, nb, ext_to_int)
     inv_baseMVA = cp.Parameter(name="hvdc_inv_baseMVA")
     injection_expr = inv_baseMVA * (Ch_from @ p_in + Ch_to @ p_out)
-    return injection_expr, inv_baseMVA
+    return injection_expr, None, inv_baseMVA
+
+
+def ac_injections(
+    links: list,
+    p_in: cp.Variable,
+    p_out: cp.Variable,
+    ext_to_int: dict,
+) -> tuple:
+    """
+    Build HVDC network injections for an AC network.
+
+    The current unity-power-factor model has no reactive terminal channel.
+    This separate AC entry point is retained for future reactive-control
+    models and for symmetry with the other device components.
+    """
+    return dc_injections(links, p_in, p_out, ext_to_int)
 
 
 def dc_operating_constraints(
@@ -288,6 +317,11 @@ def ac_operating_constraints(
     shape matches what storage/SOCP components need (where AC and DC diverge).
     """
     return dc_operating_constraints(links, p_in, p_out, p_min_t, p_max_t, step)
+
+
+def coupling_constraints(*args, **kwargs) -> list:
+    """HVDC links are memoryless under the current model."""
+    return []
 
 
 def hvdc_cost_expr(cost_coeffs: tuple, p_in: cp.Variable) -> cp.Expression:
