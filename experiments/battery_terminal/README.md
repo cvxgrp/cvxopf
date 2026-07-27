@@ -177,3 +177,87 @@ change the physical system along with the operating condition.
 
 The device factory does not select a terminal policy. Equality, shortfall, and
 soft-cost configurations must be passed explicitly for each controller run.
+
+## Meaning of `lossy_dc`
+
+The package name `lossy_dc` denotes a loss-penalized DC formulation. It does
+not withdraw resistive losses from the nodal real-power balances. Those
+balances retain the lossless DC conservation equation, so total modeled nodal
+injection sums to zero.
+
+Resistance enters through the objective term
+
+```text
+loss_weight * sum_e r_e * p_e^2
+```
+
+where `p_e` is branch real-power flow. This convex quadratic discourages flow
+on resistive branches and changes the economic dispatch, but it is not an
+energy sink. Consequently, quantities described as load, generation, storage
+energy, or curtailment in this experiment should not be interpreted as
+including physical transmission-energy withdrawal. AC feasibility and
+physical active-power losses require a formulation whose network equations
+represent them.
+
+## Reproducing the results
+
+The source CSV is intentionally local and ignored by Git. Place the Tracy data
+at:
+
+```text
+experiments/battery_terminal/data/9q9wtp_gen_and_load.csv
+```
+
+From the repository root, reproduce the complete lossy-DC experiment with:
+
+```bash
+uv run python -m experiments.battery_terminal.reproduce
+```
+
+The command writes these ignored artifacts under
+`experiments/battery_terminal/results/`:
+
+- `policy_sweep.csv`: seven terminal policies over the three representative
+  windows;
+- `terminal_value_sweep.csv`: terminal equality targets from 0 through
+  1,000 MWh in 50 MWh increments; and
+- `soft_weight_sweep.csv`: linear and quadratic soft-terminal response paths;
+- `horizon_study.csv`: no-policy, equality, and quadratic results over nested
+  12-, 24-, 48-, 72-, and 96-step horizons;
+- `horizon_locality.csv`: pairwise SoC divergence and common-boundary
+  diagnostics relative to the no-policy controller; and
+- `moderate_24_initial_soc.csv`: single-node and network-DC feasibility across
+  the fixed initial-SoC bracket;
+- `moderate_lookback.csv` and `moderate_prefix_capacity.csv`: feasibility as
+  preceding hours are added and the maximum entry SoC those prefixes can
+  create;
+- `low_breakpoint.csv`: a refined terminal-value grid around the low-window
+  upper-SoC active-set transition; and
+- `ac_study.csv` and `ac_locality.csv`: the cold-start, staged high-window AC
+  policy comparison and its SoC-boundary diagnostics;
+- `metadata.json`: source-file SHA-256 hash, package versions, formulation,
+  time-step duration, and every study grid.
+
+Both sweeps use the fixed representative windows, default scenario scaling,
+device specification, and lossy-DC formulation documented above. The runners
+retain their complete CVXPY builds and extracted trajectories when imported
+from Python; the CSV files contain the scalar results used for comparisons.
+Solver-infeasible terminal targets remain rows in the value-function table
+with their status and unavailable numerical fields left blank. Convex OPF
+builds use the project's CLARABEL default; the solver actually selected during
+the run is also recorded in `metadata.json`.
+
+The horizon study uses nested suffixes of each 96-hour representative window.
+Every suffix ends at the same timestamp within its window, while its initial
+SoC is reset to 500 MWh. This holds terminal operating conditions fixed as the
+horizon grows, but it is a sequence of finite-horizon planning problems rather
+than one trajectory revealed progressively through time.
+
+The AC study first solves the 12-hour no-policy, quadratic, and equality cases
+independently. It proceeds to the matching 24-hour cases only if all three
+12-hour solves return usable optima. AC builds use the project's IPOPT default
+without warm starts or experiment-specific solver settings. These are
+nonconvex local solutions, not global-optimality certificates. AC physical
+active-power loss is reported from nodal energy accounting and is distinct
+from the `lossy_dc` objective penalty described above. AC branch thermal limits
+are not yet implemented.
