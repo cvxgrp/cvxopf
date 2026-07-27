@@ -216,7 +216,9 @@ For AC, lossy DC, and single-node DC:
 - a reachable equality is attained within solver tolerance;
 - a reachable zero-shortfall constraint is met and permits a terminal state
   above target;
-- deliberately unreachable hard modes are infeasible;
+- deliberately unreachable hard modes are certified infeasible by the convex
+  formulations; AC must not report a feasible optimum, but IPOPT may terminate
+  with `user_limit` rather than an infeasibility certificate;
 - increasing a two-sided soft weight weakly reduces absolute deviation in a
   case with a genuine energy/cost tradeoff;
 - increasing a one-sided soft weight weakly reduces terminal shortfall;
@@ -342,5 +344,7 @@ interpret as a relaxation.
 - Added behavioral acceptance tests for terminal-weight tradeoffs, hard-policy
   infeasibility, reserve-floor surplus, no-policy compatibility, and
   exactly-once horizon-cost accounting across all three formulations.
+- Recorded that IPOPT may return `user_limit`, rather than certify
+  infeasibility, for an impossible AC model.
 - Documented hard-policy infeasibility and terminal-weight units/scaling.
 - Verified Ruff and the full test suite: 984 tests passed.

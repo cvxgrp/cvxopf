@@ -660,6 +660,11 @@ class TestStorageTerminalPolicy:
             terminal_soc=100.0,
             terminal_constraint=mode,
         )
+        max_reachable_soc = (
+            unit.initial_soc + unit.apparent_power_rating * 1.0
+        )
+        assert max_reachable_soc < unit.terminal_soc
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             build = build_opf(
@@ -670,7 +675,18 @@ class TestStorageTerminalPolicy:
             )
         build.solve()
 
-        assert build.prob.status == "infeasible"
+        if formulation == "ac":
+            # IPOPT is a local nonlinear solver, not an infeasibility
+            # certifier. Depending on platform, it either detects local
+            # infeasibility or reaches its iteration limit on this
+            # deliberately impossible model.
+            assert build.prob.status in {
+                cp.INFEASIBLE,
+                cp.INFEASIBLE_INACCURATE,
+                cp.USER_LIMIT,
+            }
+        else:
+            assert build.prob.status == cp.INFEASIBLE
 
     def test_multistep_terminal_uses_last_post_step_soc(self):
         unit = _default_unit(
