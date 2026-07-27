@@ -236,6 +236,45 @@ M16+ if central stage-cost assembly is expected to make the change smaller.
 
 ## 6. Work ordering
 
+### Integration policy
+
+The hardening tracks and M16+ should be **interleaved at deliberate dependency
+boundaries, but not combined into one branch or pull request**. Each change
+must remain independently reviewable:
+
+```text
+finite-delta fix
+        ↓
+M16+ characterization and typed contribution foundations
+        ↓
+unsuccessful-result schema fix
+        ↓
+M16+ component migration and shared-assembly completion
+        ↓
+objective-units decision and implementation
+        ↓
+Milestone 17
+```
+
+This ordering is coordinated because later work benefits from earlier
+contracts, but the scopes remain separate:
+
+- Track A is a standalone input-correctness change.
+- Early M16+ establishes characterization baselines and internal interfaces
+  without changing numerical behavior.
+- Track B is a standalone public result-contract change. It lands before M16+
+  removes the old orchestration so later equivalence tests target the final
+  intended result schema.
+- The remainder of M16+ retains a strict no-physics and no-numerical-behavior
+  change invariant.
+- Track C implementation follows shared stage-cost assembly so `delta` has one
+  authoritative insertion point. Its scientific decision study may begin
+  earlier, but its behavior change does not land inside the M16+ refactor.
+
+In particular, result-schema changes and objective scaling must not be hidden
+inside M16+. Combining them would weaken the refactor's numerical-equivalence
+gate and make regressions difficult to attribute.
+
 Recommended order:
 
 1. **Track A:** finite `delta` validation — small, isolated correctness fix.
