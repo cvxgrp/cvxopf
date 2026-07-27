@@ -1,0 +1,179 @@
+# Battery terminal-policy experiment
+
+This experiment compares storage-controller behavior under different terminal
+policies, with particular attention to high-load, low-renewable conditions.
+The network is an imagined nine-bus reduction centered on Tracy, California,
+and uses the electrical structure of `case9`.
+
+Place local input data in `data/`. The directory contents are ignored by Git
+so that source or restricted datasets cannot be committed accidentally.
+
+## Experimental network pattern
+
+The case9 generator terminals are interpreted as remote bulk-generation
+interconnections, not population centers. Dispatchable generators remain at
+buses 1, 2, and 3. Utility-scale renewable plants connect at those same remote
+terminals:
+
+| Resource | Spatial pattern |
+|---|---|
+| Dispatchable generation | Existing terminals at buses 1, 2, and 3 |
+| Utility solar | 20% at bus 1 and 80% at bus 2 |
+| Wind | 20% at bus 2 and 80% at bus 3 |
+| Distributed solar | Load-proportional at buses 5, 7, and 9 |
+| Load | Base-case load proportions at buses 5, 7, and 9 |
+
+The base load fractions are:
+
+| Bus | Fraction | Base power factor |
+|---:|---:|---:|
+| 5 | 28.57% | 0.949 |
+| 7 | 31.75% | 0.944 |
+| 9 | 39.68% | 0.928 |
+
+Reactive load preserves each loaded bus's base-case ratio
+`Qd_base / Pd_base`.
+
+Storage siting is a separate experimental axis. The first comparison should
+use one battery at bus 7 so that the effect of the terminal policy is not
+confounded with allocation among several storage devices. Later comparisons
+may use load-proportional storage at buses 5, 7, and 9, generation-colocated
+storage at buses 1, 2, and 3, or transmission-junction storage at buses 4, 6,
+and 8.
+
+Bus 1 retains its dispatchable slack-capable generator. Utility renewable
+units may share a terminal with a dispatchable generator; the bus represents
+an aggregated interconnection substation rather than a single plant.
+
+## Scenario construction
+
+All source power channels first receive one fixed source-to-case normalization:
+
+```text
+source_to_case_scale = 315 MW / 1138.762447 MW = 0.2766160763
+```
+
+Here 315 MW is the total base load in case9 and 1138.762447 MW is the mean of
+the 43,787 observed Tracy load values. The same factor is applied to load,
+utility solar, wind, and distributed solar. It is fixed across windows so
+seasonal and inter-window magnitude differences are preserved.
+
+The normalized trajectories may then be scaled to construct seasonally
+distinct low- and high-stress cases:
+
+```text
+load_scenario = source_to_case_scale * load_scale * load + load_shift_mw
+resource_scenario = source_to_case_scale * resource_scale * resource
+```
+
+Load, utility solar, wind, and distributed solar have independent scale
+factors. `load_shift_mw` is expressed in case-scale MW and is applied after
+normalization. A scenario uses a contiguous window with complete observations.
+
+Spatial multiplicative noise is optional and seeded. One perturbed set of
+spatial fractions is drawn per scenario and held fixed over time. Fractions are
+renormalized within each resource class, so noise changes spatial placement
+without changing the intended aggregate trajectory. `spatial_noise_std` is the
+standard deviation of the independent Gaussian perturbations applied in log
+space before renormalization.
+
+The scenario generator owns only time-series transformation and spatial
+allocation. It does not choose:
+
+- dispatchable-generator limits;
+- storage power, energy, or initial state of charge;
+- terminal-policy parameters; or
+- nondispatchable inverter ratings.
+
+Those choices determine adequacy and controller behavior and must remain
+explicit in each experiment specification.
+
+```python
+from experiments.battery_terminal.scenario import (
+    ScenarioConfig,
+    generate_scenario,
+    read_source_data,
+    select_complete_window,
+)
+
+source = read_source_data("experiments/battery_terminal/data/source.csv")
+window = select_complete_window(
+    source,
+    "2022-12-18 00:00:00-08:00",
+    "2022-12-21 23:00:00-08:00",
+)
+scenario = generate_scenario(
+    window,
+    ScenarioConfig(
+        load_scale=1.10,
+        solar_scale=0.60,
+        wind_scale=0.60,
+        dist_solar_scale=0.80,
+        spatial_noise_std=0.05,
+        random_seed=17,
+    ),
+)
+
+# OPF-ready time-series frames
+df_P = scenario.df_P       # active load at buses 1,...,9
+df_Q = scenario.df_Q       # reactive load at buses 1,...,9
+df_nd = scenario.df_nd     # availability keyed by renewable-site identity
+```
+
+The current nondispatchable identities are:
+
+```text
+utility_solar_bus_1
+utility_solar_bus_2
+wind_bus_2
+wind_bus_3
+dist_solar_bus_5
+dist_solar_bus_7
+dist_solar_bus_9
+```
+
+## Representative windows
+
+The initial study uses three complete, midnight-aligned 96-hour windows:
+
+| Name | Fixed-PST interval | Physical regime |
+|---|---|---|
+| `low` | 2022-03-19 through 2022-03-22 | Renewable surplus with short deficits |
+| `moderate` | 2019-02-04 through 2019-02-07 | Energy-balanced with a large peak deficit |
+| `high` | 2021-12-18 through 2021-12-21 | Sustained energy deficit |
+
+The moderate window has a higher instantaneous net-load peak than the high
+window. The high classification refers to sustained energy inadequacy, not
+peak power.
+
+```python
+from experiments.battery_terminal.scenario import (
+    select_representative_window,
+)
+
+window = select_representative_window(source, "moderate")
+```
+
+## Provisional device specification
+
+The first adequacy screen uses:
+
+| Device | Provisional specification |
+|---|---|
+| Generator 1, bus 1 | 10–105 MW; original case9 cost and reactive bounds |
+| Generator 2, bus 2 | 10–130 MW; original case9 cost and reactive bounds |
+| Generator 3, bus 3 | 10–115 MW; original case9 cost and reactive bounds |
+| Storage, bus 7 | 150 MVA, 1,000 MWh, 500 MWh initial SoC |
+
+Total dispatchable capacity is 350 MW. This level requires battery support in
+the moderate and high windows but not for aggregate adequacy in the low
+window.
+
+Renewable inverter ratings are fixed across all scenarios in a comparison at
+110% of each site's maximum available real power. The multiplier leaves
+reactive-power headroom at peak availability. Ratings must be computed jointly
+from every scenario being compared; sizing each scenario independently would
+change the physical system along with the operating condition.
+
+The device factory does not select a terminal policy. Equality, shortfall, and
+soft-cost configurations must be passed explicitly for each controller run.

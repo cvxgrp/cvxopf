@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "cvx-signal-decomposition": {
+      "source": "cvxgrp/cvx-sd-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0fa331acf14a176a0f7d423592d5f557925179c503109ad20f6b631cc905dd73"
+    }
+  }
+}
