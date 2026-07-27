@@ -319,6 +319,15 @@ print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
 
+Each storage unit may optionally configure one terminal policy. Hard policies
+use `terminal_constraint="equality"` to fix the final post-step SoC or
+`terminal_constraint="shortfall"` to enforce
+`soc[-1] >= terminal_soc`. Soft alternatives use
+`terminal_cost="linear"` or `"quadratic"` for two-sided deviation, and
+`"shortfall_linear"` or `"shortfall_quadratic"` to penalize only energy below
+the target. A hard constraint and terminal cost are alternatives for a given
+unit. See `examples/case9_storage_terminal.py` for a side-by-side comparison.
+
 ## Nondispatchable generator example
 
 Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
@@ -372,7 +381,10 @@ print(f"Curtailment (MW):     {results['curtailment']}")
 HVDC links are controllable point-to-point power transfers between two buses,
 modelled as signed nodal injections (Convention B: positive = injection into
 the grid) subject to capacity limits. On fixed-direction links the converter
-loss is proportional (`p_out = -(1 - loss_frac) * p_in`). Links can be built
+loss is proportional. With signed grid injections, negative `p_in` sends power
+from the from-bus and gives `p_out = -(1 - loss_frac) * p_in`; positive `p_in`
+receives power at the from-bus and gives
+`p_out = -p_in / (1 - loss_frac)`. Links can be built
 directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
 `hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
 loss (`loss0`, emitting a `UserWarning`); it applies to both the AC and lossy
@@ -492,7 +504,7 @@ package environment.
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model
-- [ ] Extend battery parameters: final SoC, penalty vs constraint
+- [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support

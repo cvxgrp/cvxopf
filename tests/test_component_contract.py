@@ -152,6 +152,8 @@ def test_device_metadata_publication_is_device_owned():
         "ns", "Cs", "storage_bus", "storage_apparent_power_rating",
         "storage_capacity", "storage_initial_soc", "storage_delta",
         "storage_aging_weight",
+        "storage_terminal_soc", "storage_terminal_constraint",
+        "storage_terminal_cost", "storage_terminal_weight",
     }
 
     nd_data = nondispatchable._prepare_data(
@@ -181,8 +183,8 @@ def test_device_owned_derived_result_values():
         [3.0, 0.0],
     )
     np.testing.assert_allclose(
-        hvdc._loss_values([10.0, -5.0], [-9.5, 4.8]),
-        [0.5, -0.2],
+        hvdc._loss_values([60.0, -60.0], [-60.0 / 0.95, 57.0]),
+        [60.0 / 0.95 - 60.0, 3.0],
     )
 
 

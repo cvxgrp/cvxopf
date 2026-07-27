@@ -111,12 +111,13 @@ class TestHVDCValidation:
         _validate_hvdc([_link(p_min_mw=50.0, p_max_mw=50.0)], _EXT_BUS_IDS)
 
     def test_loss_negative_raises(self):
-        with pytest.raises(ValueError, match="between 0 and 100"):
+        with pytest.raises(ValueError, match="0 <= loss_percent < 100"):
             _validate_hvdc([_link(loss_percent=-1.0)], _EXT_BUS_IDS)
 
-    def test_loss_above_100_raises(self):
-        with pytest.raises(ValueError, match="between 0 and 100"):
-            _validate_hvdc([_link(loss_percent=101.0)], _EXT_BUS_IDS)
+    @pytest.mark.parametrize("loss_percent", [100.0, 101.0])
+    def test_loss_at_or_above_100_raises(self, loss_percent):
+        with pytest.raises(ValueError, match="0 <= loss_percent < 100"):
+            _validate_hvdc([_link(loss_percent=loss_percent)], _EXT_BUS_IDS)
 
     def test_c2_negative_raises(self):
         with pytest.raises(ValueError, match="c2 must be >= 0"):
@@ -448,6 +449,40 @@ class TestHVDCInjections:
 
 
 class TestHVDCOperatingConstraints:
+    @pytest.mark.parametrize(
+        ("p_from", "expected_p_to"),
+        [
+            (60.0, -60.0 / 0.95),
+            (-60.0, 60.0 * 0.95),
+        ],
+    )
+    def test_lossy_link_is_net_load_under_grid_injection_convention(
+        self, p_from, expected_p_to
+    ):
+        """A passive lossy link must withdraw net power from the AC grid."""
+        links = [
+            _link(
+                from_bus=1,
+                to_bus=2,
+                p_min_mw=p_from,
+                p_max_mw=p_from,
+                loss_percent=5.0,
+            )
+        ]
+        p_in = cp.Variable((1,))
+        p_out = cp.Variable((1,))
+        pinned = np.array([p_from])
+        constraints = dc_operating_constraints(
+            links, p_in, p_out, pinned, pinned
+        )
+
+        problem = cp.Problem(cp.Minimize(0), constraints)
+        problem.solve(solver=cp.CLARABEL)
+
+        assert problem.status in ("optimal", "optimal_inaccurate")
+        assert p_out.value[0] == pytest.approx(expected_p_to, abs=1e-5)
+        assert p_in.value[0] + p_out.value[0] < 0.0
+
     def test_degenerate_box_no_extra_equality(self):
         # Degenerate box: p_min_t == p_max_t. Pin via coincident bounds only.
         links = [_link(from_bus=1, to_bus=2, p_min_mw=40.0, p_max_mw=40.0)]
@@ -466,7 +501,7 @@ class TestHVDCOperatingConstraints:
         assert isinstance(p_out, cp.Variable)
 
     def test_fixed_direction_positive_lossy_branch(self):
-        # p_min_t >= 0 -> from->to branch: coeff = -(1 - loss_frac)
+        # Positive from-bus grid injection means power flows to->from.
         loss_pct = 5.0
         links = [
             _link(
@@ -487,11 +522,11 @@ class TestHVDCOperatingConstraints:
         prob.solve(solver=cp.CLARABEL)
         assert prob.status in ("optimal", "optimal_inaccurate")
 
-        expected_p_out = -(1.0 - loss_pct / 100.0) * 80.0
+        expected_p_out = -80.0 / (1.0 - loss_pct / 100.0)
         assert p_out.value[0] == pytest.approx(expected_p_out, abs=1e-5)
 
     def test_fixed_direction_negative_lossy_branch(self):
-        # p_max_t <= 0 -> to->from branch: coeff = -(1 + loss_frac)
+        # Negative from-bus grid injection means power flows from->to.
         # Link has valid p_max_mw > 0; per-step box [p_min_t, p_max_t] is [-100, 0].
         loss_pct = 5.0
         links = [
@@ -513,7 +548,7 @@ class TestHVDCOperatingConstraints:
         prob.solve(solver=cp.CLARABEL)
         assert prob.status in ("optimal", "optimal_inaccurate")
 
-        expected_p_out = -(1.0 + loss_pct / 100.0) * (-80.0)  # positive
+        expected_p_out = -(1.0 - loss_pct / 100.0) * (-80.0)  # positive
         assert p_out.value[0] == pytest.approx(expected_p_out, abs=1e-5)
 
     def test_zero_straddling_lossless_and_warning(self):
@@ -583,8 +618,11 @@ class TestHVDCOperatingConstraints:
         assert prob.status in ("optimal", "optimal_inaccurate")
 
         loss_frac = 0.04
-        # link 0 fixed-direction (p_min_t>=0): coeff = -(1 - 0.04)
-        assert p_out.value[0] == pytest.approx(-(1 - loss_frac) * 50.0, abs=1e-5)
+        # Positive from-bus injection is received power, so the opposite
+        # terminal withdraws enough to cover both delivery and losses.
+        assert p_out.value[0] == pytest.approx(
+            -50.0 / (1 - loss_frac), abs=1e-5
+        )
         # link 1 straddling: coeff = -1 (lossless)
         assert p_out.value[1] == pytest.approx(-(-30.0), abs=1e-5)
 
@@ -787,7 +825,7 @@ class TestHVDCLossyDCSolve:
     Convention B sign convention (from hvdc.py):
       p_in > 0 at from_bus: from_bus injects into grid (receives from DC link)
       p_out < 0 at to_bus: to_bus withdraws from grid (sends into DC link)
-      For p_min_t >= 0 (from->to): p_out = -(1 - loss_frac) * p_in
+      For p_min_t >= 0 (to->from): p_out = -p_in / (1 - loss_frac)
     """
 
     _CASE = staticmethod(case9)
@@ -837,7 +875,8 @@ class TestHVDCLossyDCSolve:
         assert p_out == pytest.approx(-50.0, abs=1e-3)
 
     def test_pinned_lossy_fixed_positive_direction(self):
-        # p_min=p_max=60 MW, loss=5% -> p_out = -(1-0.05)*60 = -57
+        # Positive from-bus injection is received power: the to-bus terminal
+        # withdraws 60/(1-0.05) MW.
         loss_pct = 5.0
         lnk = HVDCLink(
             from_bus=4, to_bus=9, p_min_mw=60.0, p_max_mw=60.0, loss_percent=loss_pct
@@ -850,11 +889,11 @@ class TestHVDCLossyDCSolve:
         p_out = build.variables["p_hvdc_out"].value[0]
         loss_frac = loss_pct / 100.0
         assert p_in == pytest.approx(60.0, abs=1e-3)
-        assert p_out == pytest.approx(-(1.0 - loss_frac) * 60.0, abs=1e-3)
+        assert p_out == pytest.approx(-60.0 / (1.0 - loss_frac), abs=1e-3)
 
     def test_pinned_lossy_fixed_negative_direction_multistep(self):
-        # Multistep T=1, per-step box pins p_in at -60 MW (to->from direction).
-        # p_max_t=-60 <= 0 -> loss branch: p_out = -(1+loss_frac)*p_in = 63.
+        # Multistep T=1, per-step box pins the from-bus withdrawal at 60 MW.
+        # The to-bus terminal receives (1-loss_frac)*60 = 57 MW.
         case = self._CASE()
         nb = case["bus"].shape[0]
         loss_pct = 5.0
@@ -891,7 +930,7 @@ class TestHVDCLossyDCSolve:
         p_out = build.variables["p_hvdc_out"][0].value[0]
         loss_frac = loss_pct / 100.0
         assert p_in == pytest.approx(-60.0, abs=1e-3)
-        assert p_out == pytest.approx(-(1.0 + loss_frac) * (-60.0), abs=1e-3)
+        assert p_out == pytest.approx(-(1.0 - loss_frac) * (-60.0), abs=1e-3)
 
     def test_zero_straddling_emits_warning(self):
         # Box straddles zero with loss > 0 -> UserWarning for lossless fallback.
@@ -1054,7 +1093,7 @@ class TestHVDCACSOlve:
     Convention B sign convention:
       p_in > 0: from_bus injects into grid (receives from DC link)
       p_out < 0: to_bus withdraws from grid (sends into DC link)
-      For p_min_t >= 0: p_out = -(1 - loss_frac) * p_in
+      For p_min_t >= 0: p_out = -p_in / (1 - loss_frac)
     """
 
     _CASE = staticmethod(case9)
@@ -1128,7 +1167,8 @@ class TestHVDCACSOlve:
         assert p_out == pytest.approx(-50.0, abs=1e-3)
 
     def test_pinned_lossy_fixed_positive_direction(self):
-        # p_min=p_max=60 MW, loss=5% -> p_out = -(1-0.05)*60 = -57
+        # Positive from-bus injection is received power: the to-bus terminal
+        # withdraws 60/(1-0.05) MW.
         loss_pct = 5.0
         lnk = HVDCLink(
             from_bus=4, to_bus=9, p_min_mw=60.0, p_max_mw=60.0, loss_percent=loss_pct
@@ -1141,7 +1181,7 @@ class TestHVDCACSOlve:
         p_out = build.variables["p_hvdc_out"].value[0]
         loss_frac = loss_pct / 100.0
         assert p_in == pytest.approx(60.0, abs=1e-3)
-        assert p_out == pytest.approx(-(1.0 - loss_frac) * 60.0, abs=1e-3)
+        assert p_out == pytest.approx(-60.0 / (1.0 - loss_frac), abs=1e-3)
 
     def test_zero_straddling_emits_warning(self):
         # Box straddles zero with loss > 0 -> UserWarning for lossless fallback.
@@ -1207,7 +1247,7 @@ class TestHVDCResultExtraction:
     the derived hvdc_loss, for both ac and lossy_dc, single-step."""
 
     def _pinned_link(self, loss_pct=0.0):
-        # degenerate box pins p_in = 60 MW (positive/from->to direction)
+        # Degenerate box pins a positive from-bus grid injection of 60 MW.
         return HVDCLink(
             from_bus=4, to_bus=9, p_min_mw=60.0, p_max_mw=60.0, loss_percent=loss_pct
         )
@@ -1245,26 +1285,27 @@ class TestHVDCResultExtraction:
         r = extract_results(build)
         assert np.all(r["hvdc_loss"] >= -1e-6)
 
-    def test_hvdc_loss_equals_in_plus_out(self):
+    def test_hvdc_loss_equals_negative_sum_of_grid_injections(self):
         build = build_opf(
             case9(), formulation="ac", hvdc=[self._pinned_link(loss_pct=5.0)]
         )
         build.solve()
         r = extract_results(build)
         np.testing.assert_allclose(
-            r["hvdc_loss"], r["p_hvdc_in"] + r["p_hvdc_out"], atol=1e-6
+            r["hvdc_loss"], -(r["p_hvdc_in"] + r["p_hvdc_out"]), atol=1e-6
         )
 
     def test_loss_law_through_extracted_values(self):
-        # p_in pinned 60, loss 5% -> p_out = -(1-0.05)*60 = -57, loss = 3
+        # p_in pinned at 60 MW received; sending power and loss are therefore
+        # 60/(1-0.05) and 60/(1-0.05)-60 respectively.
         build = build_opf(
             case9(), formulation="ac", hvdc=[self._pinned_link(loss_pct=5.0)]
         )
         build.solve()
         r = extract_results(build)
         assert r["p_hvdc_in"][0] == pytest.approx(60.0, abs=1e-3)
-        assert r["p_hvdc_out"][0] == pytest.approx(-57.0, abs=1e-3)
-        assert r["hvdc_loss"][0] == pytest.approx(3.0, abs=1e-3)
+        assert r["p_hvdc_out"][0] == pytest.approx(-60.0 / 0.95, abs=1e-3)
+        assert r["hvdc_loss"][0] == pytest.approx(60.0 / 0.95 - 60.0, abs=1e-3)
 
     def test_keys_absent_without_hvdc(self):
         build = build_opf(case9(), formulation="ac")
@@ -1340,13 +1381,13 @@ class TestHVDCCase9DclineConsistency:
         np.testing.assert_allclose(p, Cg @ Pg - Pd + hvdc_inj, atol=1e-4)
 
     def test_loss_law_fixed_direction_links(self):
-        # all three imported links are fixed-direction (Pmin>=0): from->to.
+        # All three imported links have positive from-bus grid injection.
         build, links = self._build()
         r = extract_results(build)
         for k, lk in enumerate(links):
             frac = lk.loss_percent / 100.0
             assert r["p_hvdc_out"][k] == pytest.approx(
-                -(1.0 - frac) * r["p_hvdc_in"][k], abs=1e-3
+                -r["p_hvdc_in"][k] / (1.0 - frac), abs=1e-3
             )
 
     def test_hvdc_loss_nonneg(self):

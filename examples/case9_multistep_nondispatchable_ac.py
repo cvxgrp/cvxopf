@@ -34,13 +34,14 @@ def main():
     nd_unit = NondispatchableUnit(
         bus=5,
         p_available=80.0,  # MW - this will be overridden by df_nd
-        apparent_power_rating=100.0  # MVA
+        apparent_power_rating=100.0,  # MVA
+        device_id="wind_5",
     )
 
     # Create time-varying availability profile (ramping down)
-    # Column name must match the bus ID
+    # Column name must match the device's stable ID.
     df_nd = pd.DataFrame({
-        nd_unit.bus: [100.0, 75.0, 50.0]  # MW available at each time step
+        nd_unit.device_id: [100.0, 75.0, 50.0]  # MW available at each step
     })
 
     print(f"\nNondispatchable unit: {nd_unit}")
