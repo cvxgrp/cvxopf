@@ -339,4 +339,8 @@ interpret as a relaxation.
   through AC, lossy DC, and single-node DC, for single- and multistep builds.
 - Added signed terminal-deviation and aggregate terminal-cost results.
 - Added a runnable single-node/AC comparison example.
-- Verified Ruff and the full test suite: 961 tests passed.
+- Added behavioral acceptance tests for terminal-weight tradeoffs, hard-policy
+  infeasibility, reserve-floor surplus, no-policy compatibility, and
+  exactly-once horizon-cost accounting across all three formulations.
+- Documented hard-policy infeasibility and terminal-weight units/scaling.
+- Verified Ruff and the full test suite: 984 tests passed.

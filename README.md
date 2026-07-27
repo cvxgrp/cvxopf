@@ -326,7 +326,17 @@ use `terminal_constraint="equality"` to fix the final post-step SoC or
 `terminal_cost="linear"` or `"quadratic"` for two-sided deviation, and
 `"shortfall_linear"` or `"shortfall_quadratic"` to penalize only energy below
 the target. A hard constraint and terminal cost are alternatives for a given
-unit. See `examples/case9_storage_terminal.py` for a side-by-side comparison.
+unit. A hard terminal policy makes the problem infeasible when the target
+cannot be reached within the horizon; use a soft terminal cost when a
+controlled violation is preferable.
+
+Linear terminal weights have units of objective units/MWh, and quadratic
+weights have units of objective units/MWh². The terminal term is applied once
+at the horizon boundary and is not scaled by `delta`. As with the existing
+multistep stage costs, when `delta != 1` hour the weight is relative to the
+package's summed-stage objective rather than automatically representing a
+physical dollar coefficient. See `examples/case9_storage_terminal.py` for a
+side-by-side comparison.
 
 ## Nondispatchable generator example
 
