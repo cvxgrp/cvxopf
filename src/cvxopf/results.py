@@ -21,6 +21,10 @@ Singlenode DC (singlenode_dc) results keys:
     (p_flows, Vm, Va_deg, Qg, q_net absent — not modelled)
     (b, soc, storage_cost present when storage is not None)
     (p_nd, curtailment present when nondispatchable is not None)
+
+Storage terminal-policy results (all formulations, when configured):
+    storage_terminal_deviation (signed, MWh; negative means shortfall)
+    storage_terminal_cost (scalar, soft terminal policies only)
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import numpy as np
 from cvxopf.hvdc import _loss_values
 from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
+from cvxopf.storage import _terminal_deviation_values
 
 
 def _solved_expression_value(build: OPFBuild, name: str) -> float:
@@ -72,6 +77,18 @@ def _add_storage_results(results: dict, build: OPFBuild) -> None:
         results["b_q"] = _variable_values(build.variables["b_q"])
     results["soc"] = _variable_values(build.variables["soc"])
     results["storage_cost"] = _solved_expression_value(build, "storage_cost")
+    targets = build.data["storage_terminal_soc"]
+    if np.any(np.isfinite(targets)):
+        terminal_soc = (
+            results["soc"][-1] if "T" in build.data else results["soc"]
+        )
+        results["storage_terminal_deviation"] = _terminal_deviation_values(
+            targets, terminal_soc
+        )
+    if "storage_terminal_cost" in build.expressions:
+        results["storage_terminal_cost"] = _solved_expression_value(
+            build, "storage_terminal_cost"
+        )
 
 
 def _add_nd_results(results: dict, build: OPFBuild) -> None:

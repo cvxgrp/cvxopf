@@ -69,6 +69,7 @@ from cvxopf.storage import (
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
     storage_cost_expr,
+    terminal_cost_expr as storage_terminal_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -396,6 +397,12 @@ def _build_singlenode_dc_single(
         storage_cost = storage_cost_expr(storage, b_t)
         cost = cost + storage_cost
 
+    storage_terminal_cost = None
+    if "ns" in d:
+        storage_terminal_cost = storage_terminal_cost_expr(storage, soc_t)
+        if storage_terminal_cost is not None:
+            cost = cost + storage_terminal_cost
+
     # Add storage SoC constraints if present
     if "ns" in d:
         soc_constr = storage_coupling_constraints(
@@ -436,6 +443,8 @@ def _build_singlenode_dc_single(
     expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
         expressions["storage_cost"] = storage_cost
+    if storage_terminal_cost is not None:
+        expressions["storage_terminal_cost"] = storage_terminal_cost
 
     return OPFBuild(
         prob=prob,
@@ -667,6 +676,14 @@ def _build_singlenode_dc_multistep(
             )
         )
 
+    storage_terminal_cost = None
+    if "ns" in d:
+        storage_terminal_cost = storage_terminal_cost_expr(
+            storage, soc_list[-1]
+        )
+        if storage_terminal_cost is not None:
+            total_cost = total_cost + storage_terminal_cost
+
     # Append user coupling constraints unchanged
     all_constr.extend(coupling_constraints)
 
@@ -702,6 +719,8 @@ def _build_singlenode_dc_multistep(
     expressions = {"p_net": p_net_expr_list}
     if "ns" in d:
         expressions["storage_cost"] = storage_cost
+    if storage_terminal_cost is not None:
+        expressions["storage_terminal_cost"] = storage_terminal_cost
 
     return OPFBuild(
         prob=prob,

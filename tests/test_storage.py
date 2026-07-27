@@ -19,6 +19,7 @@ from cvxopf.storage import (
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
     storage_cost_expr,
+    terminal_cost_expr as storage_terminal_cost_expr,
 )
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ def _varying_load_dfs(case_fn, scales):
 
 
 def _default_unit(bus=1, S_max=50.0, capacity=100.0,
-                  initial_soc=50.0, aging_weight=0.0):
+                  initial_soc=50.0, aging_weight=0.0, **kwargs):
     """Return a StorageUnitIdeal with sensible defaults for testing."""
     return StorageUnitIdeal(
         bus=bus,
@@ -64,6 +65,7 @@ def _default_unit(bus=1, S_max=50.0, capacity=100.0,
         capacity=capacity,
         initial_soc=initial_soc,
         aging_weight=aging_weight,
+        **kwargs,
     )
 
 
@@ -160,6 +162,82 @@ class TestStorageComponentInterface:
         assert soc[0].value[0] == pytest.approx(45.0)
         assert soc[1].value[0] == pytest.approx(47.0)
 
+    @pytest.mark.parametrize(
+        ("mode", "expected_count"),
+        [("equality", 3), ("shortfall", 3)],
+    )
+    def test_hard_terminal_constraint_is_horizon_owned(
+        self, mode, expected_count
+    ):
+        units = [
+            _default_unit(
+                initial_soc=50.0,
+                terminal_soc=40.0,
+                terminal_constraint=mode,
+            )
+        ]
+        b = [cp.Variable(1), cp.Variable(1)]
+        soc = [cp.Variable(1), cp.Variable(1)]
+        constraints = storage_coupling_constraints(
+            units, b, soc, delta=1.0
+        )
+
+        assert len(constraints) == expected_count
+        assert all(constraint.is_dcp() for constraint in constraints)
+
+    @pytest.mark.parametrize(
+        ("mode", "terminal_value", "expected"),
+        [
+            ("linear", 45.0, 10.0),
+            ("linear", 55.0, 10.0),
+            ("quadratic", 45.0, 50.0),
+            ("quadratic", 55.0, 50.0),
+            ("shortfall_linear", 45.0, 10.0),
+            ("shortfall_linear", 55.0, 0.0),
+            ("shortfall_quadratic", 45.0, 50.0),
+            ("shortfall_quadratic", 55.0, 0.0),
+        ],
+    )
+    def test_terminal_cost_modes(self, mode, terminal_value, expected):
+        units = [
+            _default_unit(
+                terminal_soc=50.0,
+                terminal_cost=mode,
+                terminal_weight=2.0,
+            )
+        ]
+        soc = cp.Variable(1)
+        cost = storage_terminal_cost_expr(units, soc)
+        problem = cp.Problem(cp.Minimize(cost), [soc == terminal_value])
+        problem.solve()
+
+        assert cost.is_dcp()
+        assert cost.value == pytest.approx(expected)
+
+    def test_terminal_cost_is_collection_level(self):
+        units = [
+            _default_unit(
+                terminal_soc=50.0,
+                terminal_cost="linear",
+                terminal_weight=2.0,
+            ),
+            _default_unit(
+                terminal_soc=20.0,
+                terminal_cost="shortfall_quadratic",
+                terminal_weight=3.0,
+            ),
+        ]
+        soc = cp.Variable(2)
+        cost = storage_terminal_cost_expr(units, soc)
+        problem = cp.Problem(cp.Minimize(cost), [soc == [45.0, 18.0]])
+        problem.solve()
+
+        assert cost.value == pytest.approx(2.0 * 5.0 + 3.0 * 2.0**2)
+
+    def test_terminal_cost_is_none_when_inactive(self):
+        units = [_default_unit()]
+        assert storage_terminal_cost_expr(units, cp.Variable(1)) is None
+
 
 # ---------------------------------------------------------------------------
 # Test classes
@@ -176,6 +254,10 @@ class TestStorageUnitIdeal:
         assert hasattr(unit, "capacity")
         assert hasattr(unit, "initial_soc")
         assert hasattr(unit, "aging_weight")
+        assert hasattr(unit, "terminal_soc")
+        assert hasattr(unit, "terminal_constraint")
+        assert hasattr(unit, "terminal_cost")
+        assert hasattr(unit, "terminal_weight")
 
     def test_default_aging_weight_is_1e_2(self):
         unit = StorageUnitIdeal(bus=1, apparent_power_rating=50.0,
@@ -192,6 +274,13 @@ class TestStorageUnitIdeal:
                                  capacity=100.0, initial_soc=50.0,
                                  aging_weight=0.5)
         assert unit.aging_weight == pytest.approx(0.5)
+
+    def test_terminal_defaults_are_none(self):
+        unit = _default_unit()
+        assert unit.terminal_soc is None
+        assert unit.terminal_constraint is None
+        assert unit.terminal_cost is None
+        assert unit.terminal_weight is None
 
 
 class TestStorageValidation:
@@ -259,6 +348,86 @@ class TestStorageValidation:
         with pytest.raises(ValueError, match="bus"):
             build_opf(case9(), formulation="ac", storage=[unit])
 
+    @pytest.mark.parametrize("mode", ["invalid", "", "reserve_floor"])
+    def test_invalid_terminal_constraint_raises(self, mode):
+        unit = _default_unit(
+            terminal_soc=50.0,
+            terminal_constraint=mode,
+        )
+        with pytest.raises(ValueError, match="terminal_constraint"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize(
+        "mode",
+        ["invalid", "", "shortfall", "linear_shortfall"],
+    )
+    def test_invalid_terminal_cost_raises(self, mode):
+        unit = _default_unit(
+            terminal_soc=50.0,
+            terminal_cost=mode,
+            terminal_weight=1.0,
+        )
+        with pytest.raises(ValueError, match="terminal_cost"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize("mode", ["equality", "shortfall"])
+    def test_terminal_constraint_requires_target(self, mode):
+        unit = _default_unit(terminal_constraint=mode)
+        with pytest.raises(ValueError, match="terminal_soc"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize(
+        "mode",
+        ["linear", "quadratic", "shortfall_linear", "shortfall_quadratic"],
+    )
+    def test_terminal_cost_requires_target(self, mode):
+        unit = _default_unit(terminal_cost=mode, terminal_weight=1.0)
+        with pytest.raises(ValueError, match="terminal_soc"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize("target", [-1.0, 101.0, np.nan, np.inf])
+    def test_invalid_terminal_target_raises(self, target):
+        unit = _default_unit(
+            terminal_soc=target,
+            terminal_constraint="equality",
+        )
+        with pytest.raises(ValueError, match="terminal_soc"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize("weight", [None, 0.0, -1.0, np.nan, np.inf])
+    def test_invalid_terminal_weight_raises(self, weight):
+        unit = _default_unit(
+            terminal_soc=50.0,
+            terminal_cost="linear",
+            terminal_weight=weight,
+        )
+        with pytest.raises(ValueError, match="terminal_weight"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    def test_terminal_constraint_and_cost_are_alternatives(self):
+        unit = _default_unit(
+            terminal_soc=50.0,
+            terminal_constraint="equality",
+            terminal_cost="linear",
+            terminal_weight=1.0,
+        )
+        with pytest.raises(ValueError, match="alternatives"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    def test_inert_terminal_target_raises(self):
+        unit = _default_unit(terminal_soc=50.0)
+        with pytest.raises(ValueError, match="terminal_soc requires"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    def test_terminal_weight_without_cost_raises(self):
+        unit = _default_unit(
+            terminal_soc=50.0,
+            terminal_constraint="shortfall",
+            terminal_weight=1.0,
+        )
+        with pytest.raises(ValueError, match="terminal_weight requires"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
 
 class TestDeltaValidation:
     """Tests delta parameter validation."""
@@ -295,6 +464,155 @@ class TestDeltaValidation:
         unit  = _default_unit()
         build = build_opf(case9(), formulation="ac", storage=[unit], delta=0.25)
         assert build.data["storage_delta"] == pytest.approx(0.25)
+
+
+class TestStorageTerminalPolicy:
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_single_step_equality_composed_across_formulations(
+        self, formulation
+    ):
+        unit = _default_unit(
+            bus=1,
+            initial_soc=50.0,
+            terminal_soc=40.0,
+            terminal_constraint="equality",
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(), formulation=formulation, storage=[unit], delta=1.0
+            )
+        build.solve()
+        results = extract_results(build)
+
+        assert results["status"] in {"optimal", "optimal_inaccurate"}
+        assert results["soc"][0] == pytest.approx(40.0, abs=VAL_ATOL)
+        assert results["b"][0] == pytest.approx(10.0, abs=VAL_ATOL)
+        assert results["storage_terminal_deviation"][0] == pytest.approx(
+            0.0, abs=VAL_ATOL
+        )
+        assert "storage_terminal_cost" not in results
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_single_step_shortfall_composed_across_formulations(
+        self, formulation
+    ):
+        unit = _default_unit(
+            bus=1,
+            initial_soc=50.0,
+            terminal_soc=40.0,
+            terminal_constraint="shortfall",
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(), formulation=formulation, storage=[unit], delta=1.0
+            )
+        build.solve()
+        results = extract_results(build)
+
+        assert results["status"] == "optimal"
+        assert results["soc"][0] >= 40.0 - VAL_ATOL
+        assert results["storage_terminal_deviation"][0] >= -VAL_ATOL
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_soft_terminal_cost_composed_across_formulations(
+        self, formulation
+    ):
+        unit = _default_unit(
+            bus=1,
+            initial_soc=50.0,
+            terminal_soc=40.0,
+            terminal_cost="quadratic",
+            terminal_weight=1.0,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(), formulation=formulation, storage=[unit], delta=1.0
+            )
+        build.solve()
+        results = extract_results(build)
+
+        deviation = results["storage_terminal_deviation"][0]
+        assert results["status"] == "optimal"
+        assert results["storage_terminal_cost"] == pytest.approx(
+            deviation**2, abs=VAL_ATOL
+        )
+        assert "storage_terminal_cost" in build.expressions
+
+    def test_terminal_results_absent_without_policy(self):
+        _, results = _solve_dc_single(storage=[_default_unit()])
+        assert "storage_terminal_deviation" not in results
+        assert "storage_terminal_cost" not in results
+
+    def test_mixed_policy_deviation_uses_nan_for_inactive_unit(self):
+        units = [
+            _default_unit(
+                bus=1,
+                terminal_soc=40.0,
+                terminal_constraint="shortfall",
+            ),
+            _default_unit(bus=2),
+        ]
+        _, results = _solve_dc_single(storage=units)
+
+        assert results["storage_terminal_deviation"].shape == (2,)
+        assert np.isfinite(results["storage_terminal_deviation"][0])
+        assert np.isnan(results["storage_terminal_deviation"][1])
+
+    def test_unreachable_single_step_equality_is_infeasible(self):
+        unit = _default_unit(
+            bus=1,
+            S_max=10.0,
+            capacity=100.0,
+            initial_soc=0.0,
+            terminal_soc=100.0,
+            terminal_constraint="equality",
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(),
+                formulation="singlenode_dc",
+                storage=[unit],
+                delta=1.0,
+            )
+        build.solve()
+
+        assert build.prob.status == "infeasible"
+
+    def test_multistep_terminal_uses_last_post_step_soc(self):
+        unit = _default_unit(
+            bus=1,
+            initial_soc=50.0,
+            terminal_soc=35.0,
+            terminal_constraint="equality",
+        )
+        df_P, df_Q = _flat_load_dfs(case9, T=3)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case9(),
+                df_P,
+                df_Q,
+                T=3,
+                formulation="singlenode_dc",
+                storage=[unit],
+                delta=0.5,
+            )
+        build.solve()
+        results = extract_results(build)
+
+        assert results["soc"][-1, 0] == pytest.approx(35.0, abs=VAL_ATOL)
+        expected = 50.0 - 0.5 * np.sum(results["b"][:, 0])
+        assert results["soc"][-1, 0] == pytest.approx(expected, abs=SOC_ATOL)
 
 
 class TestStorageNoStorage:
