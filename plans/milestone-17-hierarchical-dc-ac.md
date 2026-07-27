@@ -31,6 +31,13 @@ Dependencies and rationale:
   DC and AC formulations should be built *after* the components compose
   uniformly (M16). Building it earlier would re-entrench per-formulation
   duplication.
+- **Depends on the M16+ and correctness-hardening decisions.** Shared typed
+  component assembly should be complete before the controller adds another
+  orchestration layer. Finite temporal-input validation and the
+  objective-time-units decision must also be complete so DC and AC windows
+  cannot silently assign different economic meaning to different temporal
+  resolutions. See `plans/milestone-16-plus-component-adapters.md` and
+  `plans/correctness-api-hardening.md`.
 - **Depends on M12** for the terminal-SoC hard-constraint-vs-soft-penalty
   machinery the AC window consumes.
 - **Depends on M4** for AC branch-flow limits. Without thermal limits, the
