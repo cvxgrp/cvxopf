@@ -188,7 +188,9 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 - Both are always `cp.Variable`s (even for a degenerate `p_min == p_max` box,
   which is pinned by coincident bounds, not a separate equality)
 - Operating set (per link): box bound `p_min_t <= p_in <= p_max_t`, plus the
-  proportional-loss coupling `p_out == -(1 - loss_frac) * p_in` on
+  passive proportional-loss coupling: `p_out == -(1 - loss_frac) * p_in`
+  for nonpositive `p_in`, and `p_out == -p_in / (1 - loss_frac)` for
+  nonnegative `p_in`, so the sum of signed grid injections is nonpositive, on
   fixed-direction links (affine branch selected pre-construction from the
   box's zero-crossing; lossless coupling `p_out == -p_in` on zero-straddling
   or lossless links). `loss_frac = loss_percent / 100`.
@@ -201,7 +203,7 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 
 | Formulation | Result keys |
 |---|---|
-| AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= p_hvdc_in + p_hvdc_out`, always >= 0) when `hvdc` is not None |
+| AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |
 | Lossy DC | `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None. `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 | Single‑node DC | `status`, `objective`, `Pg`, `p_net`. `p_flows`, `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 

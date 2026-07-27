@@ -381,7 +381,10 @@ print(f"Curtailment (MW):     {results['curtailment']}")
 HVDC links are controllable point-to-point power transfers between two buses,
 modelled as signed nodal injections (Convention B: positive = injection into
 the grid) subject to capacity limits. On fixed-direction links the converter
-loss is proportional (`p_out = -(1 - loss_frac) * p_in`). Links can be built
+loss is proportional. With signed grid injections, negative `p_in` sends power
+from the from-bus and gives `p_out = -(1 - loss_frac) * p_in`; positive `p_in`
+receives power at the from-bus and gives
+`p_out = -p_in / (1 - loss_frac)`. Links can be built
 directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
 `hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
 loss (`loss0`, emitting a `UserWarning`); it applies to both the AC and lossy

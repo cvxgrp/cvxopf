@@ -12,8 +12,8 @@ directly. There are no named modes — any upstream box-generating helpers
 for this module and would live in user code.
 
 Loss model: affine branch selected pre-construction from the box's zero-crossing:
-  p_min_t[k] >= 0  (from->to):  p_out[k] = -(1 - loss_frac[k]) * p_in[k]
-  p_max_t[k] <= 0  (to->from):  p_out[k] = -(1 + loss_frac[k]) * p_in[k]
+  p_min_t[k] >= 0  (to->from):  p_out[k] = -p_in[k] / (1 - loss_frac[k])
+  p_max_t[k] <= 0  (from->to):  p_out[k] = -(1 - loss_frac[k]) * p_in[k]
   zero-straddling:               p_out[k] = -p_in[k]  (lossless, UserWarning)
 
 Component-method interface: hvdc.py exposes named builder methods that
@@ -68,7 +68,8 @@ class HVDCLink:
         Upper bound on p_in (MW). Together with p_min_mw, may describe
         forward-only, reverse-only, bidirectional, or zero-pinned operation.
     loss_percent : float
-        Proportional loss as a percentage (0–100). loss_frac = loss_percent/100.
+        Proportional loss as a percentage in [0, 100).
+        loss_frac = loss_percent/100.
         Fixed converter loss (LOSS0) is not modelled; see Milestone 15.
     cost_coeffs : tuple of float
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
@@ -133,9 +134,9 @@ def _validate_hvdc(links: list, ext_bus_ids: set) -> None:
                 f"HVDC link {i}: p_min_mw ({lnk.p_min_mw}) must be <= "
                 f"p_max_mw ({lnk.p_max_mw})"
             )
-        if not 0 <= lnk.loss_percent <= 100:
+        if not 0 <= lnk.loss_percent < 100:
             raise ValueError(
-                f"HVDC link {i}: loss_percent must be between 0 and 100, "
+                f"HVDC link {i}: loss_percent must satisfy 0 <= loss_percent < 100, "
                 f"got {lnk.loss_percent}"
             )
         try:
@@ -228,7 +229,7 @@ def _build_metadata(prepared: dict) -> dict:
 
 def _loss_values(p_in, p_out):
     """Return total terminal loss under the signed-injection convention."""
-    return np.asarray(p_in) + np.asarray(p_out)
+    return -(np.asarray(p_in) + np.asarray(p_out))
 
 
 # ---------------------------------------------------------------------------
@@ -333,8 +334,8 @@ def dc_operating_constraints(
          coincident bounds — NOT a separate equality constraint.
       3. Loss-branch equality: p_out == coeff_vec * p_in
          coeff_vec[k] is selected per link from the box's zero-crossing:
-           p_min_t[k] >= 0: -(1 - loss_frac[k])   (from->to, lossy)
-           p_max_t[k] <= 0: -(1 + loss_frac[k])   (to->from, lossy)
+           p_min_t[k] >= 0: -1/(1-loss_frac[k])   (to->from, lossy)
+           p_max_t[k] <= 0: -(1-loss_frac[k])      (from->to, lossy)
            straddling:       -1                     (lossless, UserWarning)
 
     Parameters
@@ -350,9 +351,9 @@ def dc_operating_constraints(
     for k, lnk in enumerate(links):
         loss_frac = lnk.loss_percent / 100.0
         if p_min_t[k] >= 0:
-            coeff_vec[k] = -(1.0 - loss_frac)
+            coeff_vec[k] = -1.0 / (1.0 - loss_frac)
         elif p_max_t[k] <= 0:
-            coeff_vec[k] = -(1.0 + loss_frac)
+            coeff_vec[k] = -(1.0 - loss_frac)
         else:
             coeff_vec[k] = -1.0
             if loss_frac != 0.0:

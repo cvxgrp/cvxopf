@@ -13,7 +13,7 @@ DC (lossy_dc) results keys:
 
 HVDC results keys (AC and lossy_dc, present when "n_hvdc" in build.data):
     p_hvdc_in, p_hvdc_out (signed nodal injections, MW), hvdc_loss (derived,
-    = p_hvdc_in + p_hvdc_out, >= 0). Shapes (n_hvdc,) single / (T, n_hvdc)
+    = -(p_hvdc_in + p_hvdc_out), >= 0). Shapes (n_hvdc,) single / (T, n_hvdc)
     multi. Absent from singlenode_dc results (HVDC silently ignored there).
 
 Singlenode DC (singlenode_dc) results keys:

@@ -183,8 +183,8 @@ def test_device_owned_derived_result_values():
         [3.0, 0.0],
     )
     np.testing.assert_allclose(
-        hvdc._loss_values([10.0, -5.0], [-9.5, 4.8]),
-        [0.5, -0.2],
+        hvdc._loss_values([60.0, -60.0], [-60.0 / 0.95, 57.0]),
+        [60.0 / 0.95 - 60.0, 3.0],
     )
 
 
