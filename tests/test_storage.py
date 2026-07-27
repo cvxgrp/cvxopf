@@ -614,6 +614,42 @@ class TestStorageTerminalPolicy:
         expected = 50.0 - 0.5 * np.sum(results["b"][:, 0])
         assert results["soc"][-1, 0] == pytest.approx(expected, abs=SOC_ATOL)
 
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_multistep_soft_terminal_cost_composed_across_formulations(
+        self, formulation
+    ):
+        unit = _default_unit(
+            bus=1,
+            initial_soc=50.0,
+            terminal_soc=40.0,
+            terminal_cost="quadratic",
+            terminal_weight=1.0,
+        )
+        df_P, df_Q = _flat_load_dfs(case9, T=2)
+        reactive_load = df_Q if formulation == "ac" else None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf_multistep(
+                case9(),
+                df_P,
+                reactive_load,
+                T=2,
+                formulation=formulation,
+                storage=[unit],
+                delta=1.0,
+            )
+        build.solve()
+        results = extract_results(build)
+
+        deviation = results["storage_terminal_deviation"][0]
+        assert results["status"] == "optimal"
+        assert results["storage_terminal_cost"] == pytest.approx(
+            deviation**2, abs=VAL_ATOL
+        )
+        assert "storage_terminal_cost" in build.expressions
+
 
 class TestStorageNoStorage:
     """Confirms that storage=None leaves all existing behaviour exactly unchanged."""
