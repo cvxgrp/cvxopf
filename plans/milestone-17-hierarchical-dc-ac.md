@@ -33,6 +33,10 @@ Dependencies and rationale:
   duplication.
 - **Depends on M12** for the terminal-SoC hard-constraint-vs-soft-penalty
   machinery the AC window consumes.
+- **Depends on M4** for AC branch-flow limits. Without thermal limits, the
+  lower layer can check nonlinear power flow, voltage bounds, and device
+  feasibility, but cannot support the stronger claim that the DC plan is
+  executable on the transmission network.
 - **Subsumes the convex-tracks-AC validation study.** The open-loop
   special case (single AC window, no recession; replay the DC SoC plan through AC and
   measure the feasibility/correction gap) is the natural validation artifact of

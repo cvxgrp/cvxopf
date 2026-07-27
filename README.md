@@ -319,6 +319,15 @@ print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
 
+Each storage unit may optionally configure one terminal policy. Hard policies
+use `terminal_constraint="equality"` to fix the final post-step SoC or
+`terminal_constraint="shortfall"` to enforce
+`soc[-1] >= terminal_soc`. Soft alternatives use
+`terminal_cost="linear"` or `"quadratic"` for two-sided deviation, and
+`"shortfall_linear"` or `"shortfall_quadratic"` to penalize only energy below
+the target. A hard constraint and terminal cost are alternatives for a given
+unit. See `examples/case9_storage_terminal.py` for a side-by-side comparison.
+
 ## Nondispatchable generator example
 
 Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
@@ -492,7 +501,7 @@ package environment.
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model
-- [ ] Extend battery parameters: final SoC, penalty vs constraint
+- [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support

@@ -65,8 +65,11 @@ Each component module exposes, in this order (mirroring `hvdc.py`):
    per-step feasible region, forked by formulation. Pass-through delegation
    where the two coincide (HVDC does this; the fork exists so the interface
    shape is uniform).
-8. **`coupling_constraints(...)`** — cross-step (temporal) constraints. Returns
-   `[]` for memoryless components. **New in M16** (see §4).
+8. **`coupling_constraints(...)`** — horizon-level temporal constraints,
+   including cross-step transitions and temporal boundary conditions. Returns
+   `[]` for memoryless components. **New in M16** (see §4). M12 later clarified
+   this wording when terminal storage boundaries were added; implementations
+   keep dynamics and boundary conditions internally distinct.
 9. **`ac_network_constraints(...)` / `dc_network_constraints(...)` where
    device parameters constrain network variables.** Generator voltage
    setpoint pinning lives here rather than in the AC builder; the DC hook is
@@ -91,7 +94,7 @@ of per-step variables) in control of variable lifetime.
 
 This section is the heart of the plan. Every constraint a component contributes
 falls into exactly one of these categories, and the plan keeps them
-structurally distinct. **Conflating a cross-step coupling constraint with a
+structurally distinct. **Conflating a horizon-level temporal constraint with a
 per-step operating constraint is the primary anti-pattern this milestone guards
 against.**
 
@@ -111,9 +114,11 @@ The device's instantaneous feasible set at a single time step. Forked into
 - Nondispatchable **available-power bound** `p_nd≤R_t` — per-step,
   time-varying via `df_nd`, but **independent across steps** (NOT coupling).
 
-### 3.3 Cross-step coupling constraints (temporal) — **first-class in M16**
-Constraints that link variables at *different* time steps. Built after the
-time-step loop, never inside the per-step builder.
+### 3.3 Horizon-level temporal constraints — **first-class in M16**
+State transitions and temporal boundary conditions. Built after the time-step
+loop, never inside the per-step builder. M12 added optional terminal storage
+boundaries; those are not themselves cross-step equations, but they constrain
+the same device trajectory and compose through this horizon-level hook.
 
 - **Storage SoC dynamics** — the defining temporal constraint of storage:
   ```
@@ -181,8 +186,9 @@ availability table is introduced, and must then use this same contract.
 ## 4. Decisions locked with the user
 
 - **(A) Coupling as first-class interface method.** Every component exposes
-  `coupling_constraints(...)`; storage returns SoC dynamics, others return `[]`.
-  Makes the temporal-vs-per-step distinction structural. ✅ agreed.
+  `coupling_constraints(...)`; storage returns its horizon-level SoC
+  trajectory constraints, others return `[]`. Makes the temporal-vs-per-step
+  distinction structural. ✅ agreed.
 - **(B) Generator-bounds divergence.** Investigate, document, and raise the
   three different mechanisms; **prior inclination toward standardization**.
   Carry it as an explicit investigation step with a written finding, not a

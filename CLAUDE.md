@@ -412,10 +412,12 @@ equations in the full AC-OPF (the `cp.nlp.cos`/`cp.nlp.sin` trig relations in
 Section 2 of `_make_step_constraints` that link `P`/`Q` to `theta`/`v`). That
 is the sole place DNLP rules apply.
 
-Every device contribution — operating constraints, cross-step coupling
+Every device contribution — operating constraints, horizon-level temporal
 constraints, injection terms, and cost expressions for generators, storage,
 nondispatchable units, and HVDC — must pass the ordinary DCP rules on its own.
-No device model may rely on DNLP.
+No device model may rely on DNLP. Temporal constraints include state
+transitions and temporal boundary conditions; keep those categories distinct
+inside the device implementation.
 
 Why this invariant matters:
 
@@ -612,12 +614,12 @@ is present.
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
 | 11 — SOCP (convex) network model | 🔲 Future | |
-| 12 — Extend battery parameters: final SoC, penalty vs constraint | 🔲 Future | |
+| 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
 | 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
 | 14 — Vectorize time constraints | 🔲 Future | currently built with iterative loop |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
-| 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components) and M12 (terminal-SoC hard/soft machinery). See `plans/milestone-17-hierarchical-dc-ac.md`. |
+| 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components), M12 (terminal-SoC hard/soft machinery), and M4 (AC branch-flow limits for the network-executability claim). See `plans/milestone-17-hierarchical-dc-ac.md`. |
 
 ---
 
