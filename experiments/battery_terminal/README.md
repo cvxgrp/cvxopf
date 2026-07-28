@@ -347,7 +347,9 @@ uv run --extra notebook marimo edit \
 ```
 
 After reproducing the retained CSV results, regenerate the curated
-high-stress, terminal-equality figure used by the top-level README with:
+high-stress, terminal-equality figure used by the top-level README with the
+prepared load, utility-solar, distributed-solar, and wind inputs shown above
+the controller traces:
 
 ```bash
 uv run python -m experiments.battery_terminal.generate_readme_figure

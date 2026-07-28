@@ -105,7 +105,7 @@ The device's instantaneous feasible set at a single time step. Forked into
 | Component | AC | lossy_dc | singlenode_dc |
 |---|---|---|---|
 | Storage | apparent-power circle `b²+b_q²≤S²` | real-power box `\|b\|≤S` | real-power box `\|b\|≤S` |
-| Nondispatchable | circle `p_nd²+q_nd²≤P²` ∧ `0≤p_nd≤R` | `0≤p_nd≤R` only | `0≤p_nd≤R` only |
+| Nondispatchable | circle `p_nd²+q_nd²≤S²` ∧ `0≤p_nd≤R` | `0≤p_nd≤R` ∧ `p_nd≤S` | `0≤p_nd≤R` ∧ `p_nd≤S` |
 | Generator | bounds `Pgmin≤Pg≤Pgmax` | bounds `Pgmin≤Pg≤Pgmax` | bounds `Pgmin≤Pg≤Pgmax` |
 | HVDC | box + loss-branch equality | box + loss-branch equality | (dropped) |
 

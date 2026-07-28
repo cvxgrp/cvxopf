@@ -230,7 +230,7 @@ Constraints:
 
 Variables: `p_flows`, `Pg`
 
-**Device models in DC** – No reactive term (`b_q`, `q_nd` absent). Storage uses a real‑power bound `|b_t| ≤ S_max` (emits a `UserWarning`). Nondispatchable units have only the real‑power bound `0 ≤ p_nd_t ≤ R_t` (apparent rating stored but not enforced). HVDC model is identical to AC (box bounds plus proportional‑loss coupling). Results omit `Vm`, `Va_deg`, `Qg`, `q_net` (see the results-key table under `"ac"`).
+**Device models in DC** – No reactive term (`b_q`, `q_nd` absent). Storage uses a real‑power bound `|b_t| ≤ S_max` (emits a `UserWarning`). Nondispatchable units retain both explicit real-power bounds, `0 ≤ p_nd_t ≤ R_t` and `p_nd_t ≤ S_max`; whichever upper bound is smaller is active. HVDC model is identical to AC (box bounds plus proportional‑loss coupling). Results omit `Vm`, `Va_deg`, `Qg`, `q_net` (see the results-key table under `"ac"`).
 
 There is no Pypower oracle for DC validation. Correctness is verified via
 internal consistency checks: flow conservation, bound feasibility, T=1
@@ -345,7 +345,7 @@ global problem parameter passed to `build_opf` / `build_opf_multistep` (default 
 |---|---|---|---|
 | `bus` | int | required | External (MATPOWER) bus ID |
 | `p_available` | float | required | Available real power (MW); >= 0. Used directly in single-step. In multistep, serves as a constant fallback if `df_nd` is not provided. |
-| `apparent_power_rating` | float | required | P_max (MVA); inverter nameplate rating. AC: radius of apparent power circle. DC: stored but not used as a constraint. Must be > 0. |
+| `apparent_power_rating` | float | required | S_max (MVA); inverter nameplate rating. AC: radius of apparent-power circle. DC: explicit real-power upper bound, separate from availability. Must be > 0. |
 | `device_id` | str or None | None | Stable external identity. Required only when `df_nd` is supplied. |
 
 `df_nd` (available power time series) is **not** a field on `NondispatchableUnit`.
@@ -612,7 +612,7 @@ is present.
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep`. AC apparent-power circle, DC real-power box; SoC cross-step coupling; L1 aging cost. See `plans/milestone-5-storage.md`. |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match. `LOSS0`/reactive/voltage-control deferred to M15. See `plans/milestone-7-hvdc.md` (incl. the `dcline` column map and MVP-vs-M15 subtable) and `experiments/dnlp_vs_pypower/`. |
-| 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC real-power bound only; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
+| 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC retains separate availability and apparent-power-rating bounds; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
 | 11 — SOCP (convex) network model | 🔲 Future | |

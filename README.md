@@ -41,10 +41,13 @@ the controller can preserve energy for future scarcity.
 *High-stress 96-hour comparison with a 500 MWh terminal target. The
 experiment augments the 9-bus test case with nondispatchable generation and a
 single storage device, driven by time-series load and renewable-availability
-inputs. The network-constrained optimum anticipates future scarcity and
-enforces the terminal state; the causal greedy controllers are terminal-blind.
-Their lower dispatchable-energy totals are not improvements where they
-accompany unserved load.*
+inputs supplied through the native `df_P`, `df_Q`, and `df_nd` pandas
+interfaces. The top panel shows the active load together with the utility
+solar, distributed solar, and wind availability supplied to the model. The
+network-constrained optimum anticipates future scarcity and enforces the
+terminal state; the causal greedy controllers are terminal-blind. Their lower
+dispatchable-energy totals are not improvements where they accompany unserved
+load.*
 
 Because it is built on CVXPY, the problem structure is transparent and
 composable. Researchers can modify objectives, add contingency constraints,
@@ -80,6 +83,12 @@ solvable, long-horizon convex layer determines intertemporal energy decisions
 and passes device states, especially battery state of charge, to a
 short-horizon AC layer. The AC layer verifies and corrects for full network
 physics without needing to reproduce the approximate dispatch trajectory.
+
+Nondispatchable resources are likewise first-class devices rather than generic
+generator boxes: time-varying real-power availability is coupled to a convex
+inverter apparent-power region in AC and to separate availability and rating
+bounds in DC. This preserves the converter-capacity limit without adding
+nonconvexity.
 
 ### Formulations
 
@@ -379,9 +388,11 @@ Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
 produce up to a time-varying available power `R_t` determined by ambient
 conditions. The OPF can curtail freely; there is no cost for generation or
 curtailment. In AC, the inverter also provides reactive power support within
-its apparent power rating. Passing a multi-day solar availability profile
-via `df_nd` lets the optimizer account for sustained generation shortfalls
-across the full planning horizon.
+its apparent power rating. In DC, reactive power is absent, but the
+availability and apparent-power rating remain as separate real-power upper
+bounds. Passing a multi-day solar availability profile via `df_nd` lets the
+optimizer account for sustained generation shortfalls across the full
+planning horizon.
 
 ```python
 import numpy as np

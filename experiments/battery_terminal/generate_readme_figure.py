@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from experiments.battery_terminal.greedy_controllers import (
@@ -76,10 +77,43 @@ def main() -> None:
         "battery priority": ("tab:orange", ":"),
     }
 
-    figure, axes = plt.subplots(4, 1, figsize=(10.5, 8.5), sharex=True)
+    figure, axes = plt.subplots(
+        5,
+        1,
+        figsize=(10.5, 10.5),
+        sharex=True,
+        height_ratios=(1.15, 1.0, 1.0, 1.0, 1.0),
+    )
+    plot_steps = np.arange(97)
+    resource_inputs = [
+        np.append(inputs[column].to_numpy(), inputs[column].iloc[-1])
+        for column in (
+            "utility_solar_available_mw",
+            "dist_solar_available_mw",
+            "wind_available_mw",
+        )
+    ]
+    axes[0].stackplot(
+        plot_steps,
+        *resource_inputs,
+        labels=("Utility solar", "Distributed solar", "Wind"),
+        colors=("gold", "tab:orange", "tab:blue"),
+        alpha=0.65,
+        step="post",
+    )
+    axes[0].stairs(
+        inputs["load_mw"],
+        plot_steps,
+        color="black",
+        linewidth=1.4,
+        label="Active load",
+    )
+    axes[0].set_ylabel("Input power\n(MW)")
+    axes[0].legend(ncols=4, fontsize=8)
+
     for name, values in controllers.items():
         color, linestyle = styles[name]
-        axes[0].plot(
+        axes[1].plot(
             range(97),
             values["soc"],
             color=color,
@@ -88,7 +122,7 @@ def main() -> None:
             label=name,
         )
         for axis, key in zip(
-            axes[1:],
+            axes[2:],
             ("battery", "dispatchable", "shedding"),
             strict=True,
         ):
@@ -101,21 +135,21 @@ def main() -> None:
                 label=name,
             )
 
-    axes[0].axhline(
+    axes[1].axhline(
         TERMINAL_TARGET_MWH,
         color="tab:red",
         linestyle="-.",
         linewidth=1.0,
         label="terminal target",
     )
-    axes[0].set_ylabel("SoC\n(MWh)")
-    axes[1].set_ylabel("Battery\n(MW)")
-    axes[2].set_ylabel("Dispatchable\npower (MW)")
-    axes[3].set(xlabel="Dispatch interval", ylabel="Load shedding\n(MW)")
-    axes[1].axhline(0.0, color="gray", linewidth=0.6)
+    axes[1].set_ylabel("SoC\n(MWh)")
+    axes[2].set_ylabel("Battery\n(MW)")
+    axes[3].set_ylabel("Dispatchable\npower (MW)")
+    axes[4].set(xlabel="Dispatch interval", ylabel="Load shedding\n(MW)")
+    axes[2].axhline(0.0, color="gray", linewidth=0.6)
     for axis in axes:
         axis.grid(alpha=0.2)
-    axes[0].legend(ncols=2, fontsize=8)
+    axes[1].legend(ncols=2, fontsize=8)
     figure.suptitle(
         "High-stress 96-hour window: intertemporal and greedy control"
     )

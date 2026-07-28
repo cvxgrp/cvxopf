@@ -143,6 +143,35 @@ class TestNondispatchableUnit:
         assert all(constraint.is_dcp() for constraint in constraints)
         assert coupling_constraints([unit], [p_nd], [q_nd]) == []
 
+    def test_dc_constraints_keep_availability_and_rating_bounds_explicit(self):
+        from cvxopf.nondispatchable import dc_operating_constraints
+
+        units = [
+            _default_nd_unit(
+                p_available=80.0,
+                apparent_power_rating=50.0,
+                device_id="rating_binds",
+            ),
+            _default_nd_unit(
+                p_available=60.0,
+                apparent_power_rating=100.0,
+                device_id="availability_binds",
+            ),
+        ]
+        p_nd = cp.Variable(2)
+        constraints = dc_operating_constraints(
+            units, p_nd, np.array([80.0, 60.0])
+        )
+
+        assert len(constraints) == 3
+        assert all(constraint.is_dcp() for constraint in constraints)
+
+        problem = cp.Problem(cp.Maximize(cp.sum(p_nd)), constraints)
+        problem.solve(solver="CLARABEL")
+
+        assert problem.status == "optimal"
+        assert np.allclose(p_nd.value, [50.0, 60.0], atol=VAL_ATOL)
+
 
 class TestNondispatchableValidation:
     """Test validation and error cases."""
@@ -460,6 +489,29 @@ class TestNondispatchableDCSingle:
         _, results = _solve_dc_single_nd(nondispatchable=[unit])
         assert results["p_nd"][0] <= unit.p_available + VAL_ATOL
 
+    @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+    @pytest.mark.parametrize(
+        ("p_available", "rating", "expected"),
+        [(25.0, 40.0, 25.0), (120.0, 40.0, 40.0)],
+    )
+    def test_smaller_of_availability_and_rating_binds(
+        self, formulation, p_available, rating, expected
+    ):
+        unit = _default_nd_unit(
+            p_available=p_available,
+            apparent_power_rating=rating,
+        )
+        build = build_opf(
+            case9(),
+            formulation=formulation,
+            nondispatchable=[unit],
+        )
+        build.solve()
+        results = extract_results(build)
+
+        assert results["status"] == "optimal"
+        assert results["p_nd"][0] == pytest.approx(expected, abs=VAL_ATOL)
+
     def test_curtailment_nonneg(self):
         unit = _default_nd_unit()
         _, results = _solve_dc_single_nd(nondispatchable=[unit])
@@ -638,6 +690,34 @@ class TestNondispatchableDCMultistep:
         df_Q = pd.DataFrame(np.ones((T, 9)) * 30)
         _, results = _solve_dc_multistep_nd(T, df_P, df_Q, nondispatchable=[unit])
         assert np.all(results["curtailment"] >= -VAL_ATOL)
+
+    @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+    def test_each_step_uses_smaller_of_availability_and_rating(
+        self, formulation
+    ):
+        unit = _default_nd_unit(
+            p_available=100.0,
+            apparent_power_rating=40.0,
+        )
+        T = 3
+        df_P, df_Q = _flat_load_dfs(case9, T)
+        df_nd = pd.DataFrame({unit.device_id: [20.0, 60.0, 100.0]})
+        build = build_opf_multistep(
+            case9(),
+            df_P,
+            df_Q,
+            T=T,
+            formulation=formulation,
+            nondispatchable=[unit],
+            df_nd=df_nd,
+        )
+        build.solve()
+        results = extract_results(build)
+
+        assert results["status"] == "optimal"
+        assert np.allclose(
+            results["p_nd"][:, 0], [20.0, 40.0, 40.0], atol=VAL_ATOL
+        )
 
     def test_T1_matches_single_step_objective(self):
         unit = _default_nd_unit()

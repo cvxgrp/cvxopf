@@ -64,6 +64,13 @@ def _scenario_input_table(policy_sweep) -> pd.DataFrame:
         retained_scenarios.add(scenario_name)
         load = run.scenario.df_P.sum(axis=1)
         renewable = run.scenario.df_nd.sum(axis=1)
+        utility_solar = run.scenario.df_nd.filter(
+            like="utility_solar_bus_"
+        ).sum(axis=1)
+        wind = run.scenario.df_nd.filter(like="wind_bus_").sum(axis=1)
+        dist_solar = run.scenario.df_nd.filter(
+            like="dist_solar_bus_"
+        ).sum(axis=1)
         frames.append(
             pd.DataFrame(
                 {
@@ -71,6 +78,9 @@ def _scenario_input_table(policy_sweep) -> pd.DataFrame:
                     "time": run.scenario.df_P.index.astype(str),
                     "step": range(len(run.scenario.df_P)),
                     "load_mw": load.to_numpy(),
+                    "utility_solar_available_mw": utility_solar.to_numpy(),
+                    "wind_available_mw": wind.to_numpy(),
+                    "dist_solar_available_mw": dist_solar.to_numpy(),
                     "renewable_available_mw": renewable.to_numpy(),
                     "net_load_mw": (load - renewable).to_numpy(),
                 }
