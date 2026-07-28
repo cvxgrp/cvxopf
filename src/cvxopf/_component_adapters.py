@@ -1,4 +1,9 @@
-"""Typed adapters over the existing generator and ND component functions."""
+"""Typed adapters over the existing generator and ND component functions.
+
+This module binds device-owned modeling functions to the generic contracts in
+``_component_adapter``. The bindings normalize how builders invoke components
+without duplicating their physics, feasible sets, or cost models.
+"""
 
 from __future__ import annotations
 

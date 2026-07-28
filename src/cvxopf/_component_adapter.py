@@ -1,4 +1,9 @@
-"""Private typed contracts for component contributions and assembly."""
+"""Private typed contracts for component contributions and assembly.
+
+This module defines the formulation-independent vocabulary and invariants used
+by every component adapter. It contains no device-specific physics; concrete
+bindings over the authoritative device modules live in ``_component_adapters``.
+"""
 
 from __future__ import annotations
 
