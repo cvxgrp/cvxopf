@@ -421,9 +421,10 @@ change smaller and gives `delta` one authoritative insertion point.
 
 ### Integration policy
 
-The hardening tracks and M16+ should be **interleaved at deliberate dependency
-boundaries, but not combined into one branch or pull request**. Each change
-must remain independently reviewable:
+The hardening tracks and M16+ are **interleaved at deliberate dependency
+boundaries**. By project-owner decision on 2026-07-28, the work may remain on
+the shared `critical-path` branch rather than using a separate branch and pull
+request for each scope. Clean commit boundaries preserve independent review:
 
 ```text
 finite-delta fix

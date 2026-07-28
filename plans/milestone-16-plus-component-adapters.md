@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** planned
+**Status:** in progress — Stage 0 characterization underway
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -194,6 +194,10 @@ construct OPFBuild
 
 ### Stage 0 — Characterization and API lock
 
+The supported typing target is Python 3.11, matching `requires-python` and the
+Ruff target. The stale Python 3.10 package classifier is removed rather than
+advertising a version excluded by package metadata.
+
 - Record the exact current `OPFBuild.variables`, `.data`, and `.expressions`
   schemas for every formulation, single/multistep, and component combination.
 - Add numerical equivalence fixtures for mixed-component builds.
@@ -332,4 +336,3 @@ For single- and multistep AC, lossy DC, and single-node DC:
 7. `docs: document component and formulation extension paths`
 
 Every commit after the protocol introduction must leave the full suite green.
-
