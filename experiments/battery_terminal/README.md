@@ -219,6 +219,8 @@ The command writes these ignored artifacts under
 
 - `policy_sweep.csv`: seven terminal policies over the three representative
   windows;
+- `policy_trajectories.csv`: stepwise SoC, battery power, generation, and
+  curtailment for the policy sweep;
 - `terminal_value_sweep.csv`: terminal equality targets from 0 through
   1,000 MWh in 50 MWh increments; and
 - `soft_weight_sweep.csv`: linear and quadratic soft-terminal response paths;
@@ -235,6 +237,13 @@ The command writes these ignored artifacts under
   upper-SoC active-set transition; and
 - `ac_study.csv` and `ac_locality.csv`: the cold-start, staged high-window AC
   policy comparison and its SoC-boundary diagnostics;
+- `subset_study.csv`, `subset_comparison.csv`, and `subset_additivity.csv`:
+  endpoint-fixed DC reconstruction and AC realization of equal-length
+  subsections that do and do not cross an internal SoC boundary;
+- `resolution_study.csv`, `resolution_comparison.csv`, and
+  `resolution_energy_validation.csv`: current-objective behavior when the same
+  high-window 24-hour trajectory is represented at 1-hour, 30-minute, and
+  15-minute resolution;
 - `metadata.json`: source-file SHA-256 hash, package versions, formulation,
   time-step duration, and every study grid.
 
@@ -261,3 +270,50 @@ nonconvex local solutions, not global-optimality certificates. AC physical
 active-power loss is reported from nodal energy accounting and is distinct
 from the `lossy_dc` objective penalty described above. AC branch thermal limits
 are not yet implemented.
+
+The subset study takes state intervals `[32, 50]` and `[60, 78]` from the
+96-hour high-window `lossy_dc` equality solution. Both contain 18 dispatch
+steps. The first contains the full-SoC state 41; the second contains no
+internal empty or full state. Each short problem inherits its initial and
+terminal SoCs from the long solution. DC acceptance is based on restricted
+feasibility and objective equality, not solely on pointwise trajectory
+equality under possible nonuniqueness. AC uses the same inherited endpoint
+states as an operational comparison; AC and DC objectives are not equated.
+
+The resolution study uses zero-order hold, so refining the time grid does not
+change source or load energy. Storage dynamics use the matching `delta`.
+Reported generation, curtailment, and storage-throughput energies explicitly
+include `delta`. The optimized objective is left unchanged and therefore
+retains the package's current convention: stage terms are summed once per step
+without multiplication by `delta`, while terminal cost is added once per
+horizon.
+
+## Executable report
+
+`report.py` is a marimo notebook that combines the final narrative, MathJax
+formulation, result tables, and figures. It reads the ignored tables generated
+by the reproduction command; it does not rerun optimization reactively.
+
+Validate every notebook cell in script mode:
+
+```bash
+uv run experiments/battery_terminal/report.py
+```
+
+Open the interactive notebook editor:
+
+```bash
+uv run --extra notebook marimo edit \
+    experiments/battery_terminal/report.py
+```
+
+Export a static HTML report:
+
+```bash
+uv run --extra notebook marimo export html \
+    experiments/battery_terminal/report.py \
+    -o experiments/battery_terminal/results/report.html
+```
+
+The exported report is generated output and remains ignored with the other
+result artifacts.

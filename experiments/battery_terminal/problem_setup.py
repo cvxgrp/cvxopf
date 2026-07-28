@@ -60,6 +60,8 @@ def build_lossy_dc(
     prepared: PreparedExperiment,
     scenario: ScenarioData,
     storage,
+    *,
+    delta: float = 1.0,
 ) -> OPFBuild:
     """Build one lossy-DC study case using the fixed experiment devices."""
     with warnings.catch_warnings():
@@ -74,7 +76,7 @@ def build_lossy_dc(
             nondispatchable=prepared.nondispatchable,
             df_nd=scenario.df_nd,
             generators=prepared.generators,
-            delta=1.0,
+            delta=delta,
         )
 
 

@@ -2,6 +2,10 @@
 
 ## Status and scope
 
+**Completed on 2026-07-27.** The Convention A experiment satisfies the stop
+condition below. Convention B remains a separate package-level design
+decision.
+
 This is an optional, small extension to the battery terminal-policy
 experiment. It is **not** the main purpose of the study.
 
@@ -54,9 +58,18 @@ representations at multiple time steps:
 | Half-hour | 0.5 h | 48 |
 | Quarter-hour | 0.25 h | 96 |
 
-The preferred initial horizon is the final 24 hours of the existing
-`moderate` representative window. It has meaningful storage use and avoids
-turning the extension into another large scenario cross-product.
+Use the final 24 hours of the existing `high` representative window. The
+original proposal selected the final 24 hours of the `moderate` window, but
+the subsequent horizon study established that interval is infeasible with
+500 MWh initial SoC under all three policies, including no terminal policy.
+It therefore cannot support a controlled resolution comparison.
+
+The high-window suffix is feasible under all three policies, has meaningful
+storage use, and has already been characterized under both DC and AC
+formulations. In particular, its terminal-policy trajectories have a
+14-step affected suffix after a common empty-SoC boundary. This makes it a
+better controlled baseline without expanding the extension into another large
+scenario cross-product.
 
 The comparison should answer:
 
@@ -317,9 +330,16 @@ may be added after the study design and outputs are accepted.
 
 ## Stop condition
 
-The extension is complete when it can state, for the selected 24-hour
-moderate window, whether the principal terminal-policy observations are
-robust to a change in numerical time resolution.
+**Met on 2026-07-27.** For the selected 24-hour high window, the no-policy and
+hard-equality solutions are robust to numerical time resolution at common
+hourly boundaries. The fixed-weight soft quadratic policy is not:
+its effective hourly terminal weight is `delta * w`, and its terminal SoC
+decreases from 350.122 MWh to 215.718 MWh to approximately zero as `delta`
+decreases from 1 hour to 0.5 hour to 0.25 hour.
+
+This resolves the experimental question under the current objective
+convention. It does not select or implement the package-level objective-units
+convention.
 
 It should not grow into:
 
@@ -328,4 +348,3 @@ It should not grow into:
 - a full AC cross-product;
 - a redesign of storage physics; or
 - the package-level objective-units implementation.
-

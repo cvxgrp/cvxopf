@@ -28,7 +28,7 @@ Every moderate-to-low finding from the M12/M16 review has an explicit owner:
 |---|---:|---|---|
 | Non-finite `delta` accepted | Moderate | Fix and add boundary tests | Hardening Track A |
 | Single-node silently drops HVDC | Moderate in review | Confirmed as the correct null model; make the null capability explicit and test it | M16+ §4 and Gate 4 |
-| Stage objectives are not time-scaled | Moderate scientific debt | Run units decision study, then implement the selected convention | Hardening Track C |
+| Stage objectives are not time-scaled | Moderate scientific debt | Resolution experiment complete; lock the units convention, then implement it | Hardening Track C |
 | Infeasible results omit configured-device keys | Low–moderate | Adopt and test a stable build-dependent schema | Hardening Track B |
 | Component interface is conventional rather than substitutable | Low–moderate architecture debt | Add typed adapters/protocols and a shared assembler | M16+ §§3–6 |
 | Single-step builders skip memoryless coupling hooks | Low | Invoke every applicable horizon hook through the common one-element horizon path | M16+ §3.4 and Gate 2 |
@@ -213,6 +213,78 @@ signals. Compare:
 Under the selected physical convention, refining the grid should converge
 rather than multiply the relative stage weight.
 
+### Resolution-experiment result (2026-07-27)
+
+The required diagnostic experiment is complete. It used the final 24 hours of
+the high-stress battery-terminal window at `delta = 1`, `0.5`, and `0.25`
+hours, with 24, 48, and 96 steps respectively. Subhourly load and
+nondispatchable availability were constructed by zero-order hold, device
+ratings and policy coefficients were held fixed, and storage dynamics used
+the matching `delta`. The maximum per-channel source-energy discrepancy was
+`4.55e-13` MWh, so differences cannot be attributed to changed physical
+inputs.
+
+The experiment retained the current objective convention,
+
+```text
+sum_t stage_cost_t + terminal_cost.
+```
+
+The principal results were:
+
+| Policy | Terminal SoC, 1 h | Terminal SoC, 0.5 h | Terminal SoC, 0.25 h |
+|---|---:|---:|---:|
+| None | 0.000 MWh | 0.000 MWh | approximately 0 MWh |
+| Equality at 500 MWh | 500.000 MWh | 500.000 MWh | 500.000 MWh |
+| Quadratic, `w = 0.05` | 350.122 MWh | 215.718 MWh | approximately 0 MWh |
+
+For the no-policy and equality cases, hourly-aggregated active-power
+trajectories and common-boundary SoCs agreed to approximately `4.3e-6` or
+better. Their operating objectives multiplied by approximately two and four
+under refinement because the same stage-rate values were counted two or four
+times. Equality remained operationally invariant because it fixes the
+endpoint independently of objective scaling.
+
+The soft quadratic policy changed materially. If `V(q_T)` denotes the hourly
+operating value function, zero-order-hold refinement under the current
+convention gives
+
+```text
+(1 / delta) * V(q_T) + w * (q_T - target)^2.
+```
+
+Multiplying the complete objective by the positive scalar `delta` shows that
+the optimizer is equivalently determined by
+
+```text
+V(q_T) + (delta * w) * (q_T - target)^2.
+```
+
+Thus a fixed package terminal weight behaves like the hourly-equivalent weight
+`delta * w`. The 0.5-hour endpoint exactly reproduced the earlier hourly
+soft-weight result at `w = 0.025`; at 0.25 hours the effective weight was
+`0.0125`, too small to move the optimum away from zero SoC. This is a
+controlled demonstration that the present convention changes the relative
+economic meaning of a once-per-horizon terminal penalty when numerical time
+resolution changes.
+
+This evidence strengthens the recommendation for the discretized-integral
+convention,
+
+```text
+delta * sum_t stage_rate_t + terminal_cost,
+```
+
+but does not itself lock that API decision. In particular, the units and
+compatibility questions below remain open. The `lossy_dc` term must also be
+described precisely during that decision: `r*p^2` is an objective penalty,
+not a physical loss withdrawal from nodal balance.
+
+Reproducible implementation, tests, tables, and interpretation are in
+`experiments/battery_terminal/resolution_study.py`,
+`tests/test_battery_terminal_resolution_study.py`, and the executable
+`experiments/battery_terminal/report.py`.
+
 ### Implementation stages after decision
 
 1. Retain separate named expressions for each objective contribution.
@@ -281,7 +353,8 @@ Recommended order:
 2. **M16+ Stages 0–2:** characterize and introduce typed contributions.
 3. **Track B:** unsuccessful result schema — independent public-contract fix.
 4. **M16+ Stages 3–6:** complete shared assembly and null capabilities.
-5. **Track C decision study:** lock objective units before M17.
+5. **Track C units decision:** use the completed resolution study to lock
+   objective units before M17.
 6. **Track C implementation:** preferably on top of centralized M16+ stage
    contribution assembly.
 
