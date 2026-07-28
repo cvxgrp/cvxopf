@@ -47,16 +47,17 @@ data.
 
 ### Contract
 
-When any active component uses `delta`, it must be:
+`delta` must be:
 
 - a real scalar;
 - finite;
 - strictly positive.
 
-When no active component has a temporal model, retain the current decision
-that `delta` is irrelevant and need not constrain otherwise valid static
-builds. Revisit that permissiveness only if the public API is later simplified
-to validate all supplied arguments unconditionally.
+This applies to every single- and multistep build. Track C locks the
+time-integrated objective convention, so `delta` scales every stage-cost rate
+even when no storage or other temporally coupled device is present. The former
+behavior in which zero or negative `delta` was ignored without storage is not
+retained.
 
 Validation belongs at the public problem boundary before any CVXPY expression
 is created. Component coupling methods may defensively validate direct calls,
@@ -67,17 +68,17 @@ but the public boundary is authoritative.
 1. Add characterization tests for `NaN`, positive/negative infinity,
    nonnumeric values, NumPy scalars, and booleans.
 2. Implement a narrow finite-positive scalar validator with clear messages.
-3. Use it from both `build_opf` and `build_opf_multistep`.
+3. Use it unconditionally from both `build_opf` and
+   `build_opf_multistep`.
 4. Confirm valid `float`, integer, and NumPy real scalar values preserve stored
    `storage_delta`.
 
 ### Acceptance gates
 
-- Invalid active-storage `delta` values raise `ValueError` or `TypeError`
-  before builder dispatch.
+- Invalid `delta` values raise `ValueError` or `TypeError` before builder
+  dispatch, regardless of active components.
 - No CVXPY problem can be built with a non-finite storage transition
   coefficient through the public API.
-- Existing no-storage behavior remains unchanged.
 - Single- and multistep paths use the same validator.
 
 This track should land before M16+ so the refactor inherits the corrected
@@ -172,30 +173,97 @@ Before implementation, classify every objective coefficient by units:
 | Terminal linear | `rho * abs(q_T-target)` | objective units |
 | Terminal quadratic | `rho * square(q_T-target)` | objective units |
 
-The study must decide whether the package objective is:
+The study considered whether the package objective should be:
 
 1. a discretized integral over physical time, in which all stage rates are
    multiplied by `delta`; or
 2. a sum of per-interval costs, in which user coefficients already incorporate
    interval duration.
 
-The recommended scientific default is the discretized-integral convention,
-but compatibility consequences require an explicit user decision.
+### Approved units and compatibility decision (2026-07-28)
+
+Adopt the discretized-integral convention:
+
+```text
+total objective
+    = delta * sum_t stage_rate_t
+    + horizon_boundary_terms.
+```
+
+This is an immediate correction when Track C implementation begins:
+
+- do not add a compatibility option;
+- do not preserve the old unscaled behavior for `delta != 1`;
+- document the behavior change in release notes and objective docstrings;
+- retain numerical compatibility at `delta = 1`; and
+- do not mix the implementation into M16+ numerical-equivalence commits.
+
+Use an abstract objective unit `U`, normally currency:
+
+- stage contributions have units `U/hour`;
+- multiplying by `delta` gives `U` for one interval;
+- the multistep objective has units `U` over the modeled horizon;
+- horizon-boundary terms, including terminal penalties, already have units
+  `U` and are not multiplied by `delta`; and
+- a single-step objective is the total `U` over its interval, not a rate.
+
+Consequently, `delta` is meaningful in every build, not only when a temporal
+device is active, and must always be finite and strictly positive.
+
+### Objective-term units contract
+
+| Contribution | Stage-rate expression | Coefficient units | Integrated contribution |
+|---|---|---|---|
+| Generator polynomial/PWL cost | `g(Pg_MW)` | chosen so `g` is `U/hour`; MATPOWER costs are conventionally currency/hour | `delta * g(Pg_MW)` in `U` |
+| Storage cycling | `aging_weight * abs(b_MW)` | `aging_weight`: `U/MWh` of one-way throughput | `delta * aging_weight * abs(b_MW)` in `U` |
+| HVDC polynomial cost | `h(abs(p_in_MW))` | polynomial coefficients chosen so `h` is `U/hour` | `delta * h(abs(p_in_MW))` in `U` |
+| DC flow-loss regularizer | `loss_weight * sum(r_pu * p_flow_pu^2)` | `loss_weight`: `(U/hour)` per numerical unit of the per-unit loss proxy | `delta * loss_weight * L` in `U` |
+| Future load shedding | `value_of_lost_load * p_shed_MW` | `value_of_lost_load`: `U/MWh` | `delta * VOLL * p_shed_MW` in `U` |
+| Terminal linear | `rho_1 * abs(q_T-target)` | `rho_1`: `U/MWh` | once-per-horizon `U` |
+| Terminal quadratic | `rho_2 * square(q_T-target)` | `rho_2`: `U/MWh^2` | once-per-horizon `U` |
+
+For a degree-`k` generator or HVDC monomial `c_k P^k`, `c_k` has units
+`(U/hour)/MW^k`. In particular, a linear coefficient can equivalently be
+written `U/MWh`.
+
+The DC regularizer needs special care:
+
+```text
+L = sum_e r_e,p.u. * p_e,p.u.^2
+```
+
+is a dimensionless numerical proxy for instantaneous resistive loss on the
+system base. It is not debited from nodal balance and is not automatically a
+currency rate. `loss_weight` supplies both its objective scaling and its
+`U/hour` interpretation. If a user wants to approximate an economic loss rate
+using marginal energy value `kappa` in `U/MWh`, the base-aware scaling is
+approximately:
+
+```text
+loss_weight = kappa * baseMVA,
+```
+
+so `loss_weight * L` is in `U/hour`. The existing default `loss_weight=1.0`
+remains a unit-normalized regularization default, not a claim of calibrated
+physical loss cost.
 
 ### Design questions
 
-- Should `delta` scale all stage costs automatically?
-- Is `loss_weight` a monetary conversion, a dimensionless regularizer, or a
-  formulation-specific tuning parameter?
-- Should storage cycling cost be based on energy throughput
-  `aging_weight * delta * abs(b_t)`?
-- Must the future M19 value-of-lost-load term be
-  `delta * value_of_lost_load * p_shed_t` so its coefficient retains
-  currency/MWh units?
-- Are MATPOWER `gencost` values treated as hourly rates?
-- Does single-step `objective` retain its existing `$ / hour` interpretation,
-  while multistep becomes total currency over the horizon?
-- Is a compatibility option needed, and if so, what is its deprecation path?
+The following are resolved:
+
+- `delta` scales every stage contribution automatically.
+- storage cycling is charged on energy throughput,
+  `aging_weight * delta * abs(b_t)`;
+- future M19 load shedding uses
+  `delta * value_of_lost_load * p_shed_t`;
+- MATPOWER `gencost` output is treated as a stage cost rate;
+- single- and multistep objectives both report total objective units over
+  their modeled interval/horizon; and
+- no compatibility option is introduced.
+
+One policy question remains outside the time-units correction: whether the
+default numerical value of `loss_weight` should ever become economically
+calibrated. Track C documents its units but does not change that default.
 
 ### Required experiment
 
@@ -272,17 +340,14 @@ controlled demonstration that the present convention changes the relative
 economic meaning of a once-per-horizon terminal penalty when numerical time
 resolution changes.
 
-This evidence strengthens the recommendation for the discretized-integral
-convention,
+This evidence supports the approved discretized-integral convention,
 
 ```text
 delta * sum_t stage_rate_t + terminal_cost,
 ```
 
-but does not itself lock that API decision. In particular, the units and
-compatibility questions below remain open. The `lossy_dc` term must also be
-described precisely during that decision: `r*p^2` is an objective penalty,
-not a physical loss withdrawal from nodal balance.
+The `lossy_dc` term remains an objective penalty, not a physical loss
+withdrawal from nodal balance.
 
 Reproducible implementation, tests, tables, and interpretation are in
 `experiments/battery_terminal/resolution_study.py`,
@@ -300,6 +365,13 @@ Reproducible implementation, tests, tables, and interpretation are in
 7. Preserve a typed stage-cost path for future M19 load-shedding
    contributions; do not require a formulation builder to splice an emergency
    penalty directly into the total objective.
+8. Rename experiment metadata `time_step_hours` to
+   `base_time_step_hours`, while retaining the explicit resolution grid.
+9. Add a source-independent synthetic regression test for effective terminal
+   weight equivalence under the old convention, then update its expected
+   result to resolution invariance when Track C lands.
+10. Keep the value-function refinement argument explicitly scoped to
+    stage-separable models with ideal storage and zero-order-held inputs.
 
 ### Acceptance gates
 
@@ -308,7 +380,9 @@ Reproducible implementation, tests, tables, and interpretation are in
 - Terminal penalties remain once-per-horizon and unscaled by `delta`.
 - `T=1, delta=1` preserves the current baseline.
 - Cross-resolution experiments behave according to the selected convention.
-- Any compatibility mode is explicit and tested, never inferred from `T`.
+- Single-step `delta != 1` scales the interval cost and is tested.
+- Invalid `delta` is rejected even without storage.
+- No compatibility mode preserves the unscaled convention.
 
 ### Future application: Milestone 19 load shedding
 
@@ -332,8 +406,9 @@ without implementing M19 here:
 Do not add an anonymous feasibility slack during hardening. Absence of an
 explicit M19 device must continue to mean that load shedding is unavailable.
 
-This track should be decided before Milestone 17. Implementation may follow
-M16+ if central stage-cost assembly is expected to make the change smaller.
+This track is decided and must be implemented before Milestone 17.
+Implementation may follow M16+ because central stage-cost assembly makes the
+change smaller and gives `delta` one authoritative insertion point.
 
 ## 6. Work ordering
 
@@ -352,7 +427,7 @@ unsuccessful-result schema fix
         ↓
 M16+ component migration and shared-assembly completion
         ↓
-objective-units decision and implementation
+objective-units implementation
         ↓
 Milestone 17
 ```
@@ -369,8 +444,8 @@ contracts, but the scopes remain separate:
 - The remainder of M16+ retains a strict no-physics and no-numerical-behavior
   change invariant.
 - Track C implementation follows shared stage-cost assembly so `delta` has one
-  authoritative insertion point. Its scientific decision study may begin
-  earlier, but its behavior change does not land inside the M16+ refactor.
+  authoritative insertion point. Its approved behavior change does not land
+  inside the M16+ refactor.
 
 In particular, result-schema changes and objective scaling must not be hidden
 inside M16+. Combining them would weaken the refactor's numerical-equivalence
@@ -382,10 +457,8 @@ Recommended order:
 2. **M16+ Stages 0–2:** characterize and introduce typed contributions.
 3. **Track B:** unsuccessful result schema — independent public-contract fix.
 4. **M16+ Stages 3–6:** complete shared assembly and null capabilities.
-5. **Track C units decision:** use the completed resolution study to lock
-   objective units before M17.
-6. **Track C implementation:** preferably on top of centralized M16+ stage
-   contribution assembly.
+5. **Track C implementation:** apply the approved objective-units contract on
+   top of centralized M16+ stage contribution assembly, before M17.
 
 Track A and the M16+ characterization tests can be developed independently.
 Track C must not be smuggled into the M16+ numerical-equivalence refactor.
@@ -412,4 +485,4 @@ in M16+, not a warning, rejection, aggregate-loss term, or correctness fix.
 - No storage efficiency or degradation-state model.
 - No general CVXPY parameterization seam.
 - No component adapter implementation in this plan.
-- No objective scaling change before the Track C units decision is recorded.
+- No objective scaling change outside the dedicated Track C implementation.
