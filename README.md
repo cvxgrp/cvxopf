@@ -65,6 +65,22 @@ with appropriate solvers. It is designed to:
 - Model nondispatchable generators (wind, solar, run-of-river hydro) with
   curtailable output and reactive power support
 
+### Methodology
+
+Many individual capabilities exposed by `cvxopf`, including multi-period OPF
+and intertemporal storage, also appear in other power-system optimization
+packages. The central contribution here is their organization within a
+[disciplined convex programming (DCP)](https://www.cvxpy.org/tutorial/dcp/) and [disciplined nonlinear programming
+(DNLP)](https://www.cvxpy.org/tutorial/dnlp/index.html) methodology: device dynamics, costs, and operating sets remain convex
+wherever the model permits, while the nonconvexity of the full AC formulation
+is confined to the network-flow physics.
+
+This separation supports an explicit hierarchical solve structure. A globally
+solvable, long-horizon convex layer determines intertemporal energy decisions
+and passes device states, especially battery state of charge, to a
+short-horizon AC layer. The AC layer verifies and corrects for full network
+physics without needing to reproduce the approximate dispatch trajectory.
+
 ### Formulations
 
 | Key | Description | Convex | Solver |
