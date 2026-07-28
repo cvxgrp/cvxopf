@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stage 0 complete; Stage 1 foundations underway
+**Status:** in progress — Stages 0–1 complete; Stage 2 next
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -203,12 +203,19 @@ the private adapter contract module and expands with the typed assembly
 surface; this avoids claiming that the legacy formulation builders are already
 fully typed.
 
-The injection boundary is fixed in engineering units: components return
-bus-scattered nodal real-power expressions in MW and, where applicable,
-reactive-power expressions in MVAr, with positive sign denoting network
-injection. Components do not create or bind scaling parameters. The shared
-assembler alone applies one builder-owned `1 / baseMVA` parameter when
-constructing per-unit nodal balances.
+The injection boundary is fixed in per-unit network units. Components return
+bus-scattered nodal real-power and, where applicable, reactive-power
+expressions, with positive sign denoting network injection. A component whose
+decision variables use engineering units creates an unbound `1 / baseMVA`
+`cp.Parameter` inside its coordinated injection expression and returns that
+parameter with the expression. Components whose variables are already per
+unit return no scaling parameter. The shared assembler owns the network base
+and binds every returned parameter exactly once; components never bind it.
+
+Prepared data is structurally read-only assembly input. Its mapping structure
+is defensively copied and cannot be modified through the adapter interface.
+Contained numerical arrays and CVXPY objects retain their native mutability
+but must not be mutated after preparation.
 
 - Record the exact current `OPFBuild.variables`, `.data`, and `.expressions`
   schemas for every formulation, single/multistep, and component combination.
@@ -219,9 +226,14 @@ constructing per-unit nodal balances.
 
 ### Stage 1 — Contribution value objects
 
+**Status:** complete — typed values, centralized scale binding, and
+generator/ND adapter bindings are in place; formulation builders are unchanged
+
 - Add typed injection, step, and horizon contribution containers.
-- Adapt the existing component functions behind adapters without changing the
-  three formulation builders.
+- Introduce adapters incrementally over the existing component functions
+  without changing the three formulation builders. Generator and ND bindings
+  establish the contract here; storage and HVDC bindings follow in their
+  dedicated migration stages.
 - Centralize binding of engineering-unit scaling parameters.
 - Prove DCP status and expression units are unchanged.
 

@@ -17,10 +17,11 @@ from cvxopf._component_adapter import (
     StepContribution,
     StepContext,
     VariableSpec,
+    bind_injection_scale,
 )
 
 
-def _prepare(units, context):
+def _prepare(units, inputs, context):
     return {"count": len(units), "base_mva": context.base_mva}
 
 
@@ -84,7 +85,7 @@ def test_adapter_preserves_builder_variable_ownership():
         horizon_steps=1,
         delta=1.0,
     )
-    data = adapter.prepare((object(),), context)
+    data = adapter.prepare((object(),), None, context)
     prepared = PreparedComponent(adapter, (object(),), data)
     step_context = StepContext(
         "ac",
@@ -105,9 +106,9 @@ def test_adapter_preserves_builder_variable_ownership():
     injection = binding.injections(
         prepared.units, prepared.data, variables, step_context
     )
-    assert injection.p is variables["p"]
-    assert injection.q is None
-    assert not hasattr(injection, "engineering_scale")
+    assert injection.p_pu is variables["p"]
+    assert injection.q_pu is None
+    assert injection.inv_base_mva is None
 
 
 def test_active_binding_requires_core_hooks():
@@ -162,6 +163,35 @@ def test_step_and_horizon_contexts_keep_temporal_roles_separate():
     assert step.step == 2
     assert horizon.horizon_steps == 4
     assert horizon.delta == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize(
+    ("formulation", "network_state", "message"),
+    [
+        ("ac", DCNetworkState(), "requires ACNetworkState"),
+        (
+            "lossy_dc",
+            ACNetworkState(cp.Variable(1), (), False),
+            "requires DCNetworkState",
+        ),
+        (
+            "singlenode_dc",
+            ACNetworkState(cp.Variable(1), (), False),
+            "requires DCNetworkState",
+        ),
+    ],
+)
+def test_step_context_rejects_inconsistent_network_state(
+    formulation, network_state, message
+):
+    with pytest.raises(ValueError, match=message):
+        StepContext(
+            formulation,
+            step=0,
+            base_mva=100.0,
+            ext_to_int={1: 0},
+            network_state=network_state,
+        )
 
 
 def test_prepared_data_and_formulation_registry_are_read_only_copies():
@@ -223,3 +253,27 @@ def test_context_and_contribution_mappings_are_read_only_copies():
     assert set(contribution.expressions) == {"reported_p"}
     with pytest.raises(TypeError):
         spec.attributes["nonneg"] = False
+
+
+def test_assembler_binds_component_created_scaling_parameter_once():
+    inv_base_mva = cp.Parameter(nonneg=True)
+    p_mw = cp.Variable(1)
+    contribution = InjectionContribution(
+        p_pu=cp.multiply(inv_base_mva, p_mw),
+        q_pu=None,
+        inv_base_mva=inv_base_mva,
+    )
+    bind_injection_scale(contribution, 100.0)
+    p_mw.value = [25.0]
+
+    assert inv_base_mva.value == pytest.approx(0.01)
+    assert contribution.p_pu.value[0] == pytest.approx(0.25)
+    with pytest.raises(ValueError, match="already bound"):
+        bind_injection_scale(contribution, 100.0)
+
+
+@pytest.mark.parametrize("base_mva", [0.0, -1.0, float("nan"), float("inf")])
+def test_assembler_rejects_invalid_network_base(base_mva):
+    contribution = InjectionContribution(cp.Constant([0.0]), None)
+    with pytest.raises(ValueError, match="base_mva"):
+        bind_injection_scale(contribution, base_mva)

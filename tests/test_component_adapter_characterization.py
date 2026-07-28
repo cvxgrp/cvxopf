@@ -342,7 +342,14 @@ def test_variable_ownership_gate_recognizes_cvxpy_import_styles(source):
 
 @pytest.mark.parametrize(
     "module_name",
-    ["generator", "storage", "nondispatchable", "hvdc", "_component_adapter"],
+    [
+        "generator",
+        "storage",
+        "nondispatchable",
+        "hvdc",
+        "_component_adapter",
+        "_component_adapters",
+    ],
 )
 def test_component_modules_do_not_create_cvxpy_variables(module_name):
     module_path = (

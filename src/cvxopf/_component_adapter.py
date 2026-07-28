@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import math
 from types import MappingProxyType
 from typing import (
     Generic,
@@ -20,6 +21,8 @@ import cvxpy as cp
 Formulation = Literal["ac", "lossy_dc", "singlenode_dc"]
 UnitT = TypeVar("UnitT")
 UnitT_contra = TypeVar("UnitT_contra", contravariant=True)
+InputT = TypeVar("InputT")
+InputT_contra = TypeVar("InputT_contra", contravariant=True)
 KeyT = TypeVar("KeyT")
 ValueT = TypeVar("ValueT")
 
@@ -82,6 +85,15 @@ class StepContext:
     network_state: NetworkState
 
     def __post_init__(self) -> None:
+        if self.formulation == "ac":
+            if not isinstance(self.network_state, ACNetworkState):
+                raise ValueError(
+                    "formulation='ac' requires ACNetworkState"
+                )
+        elif not isinstance(self.network_state, DCNetworkState):
+            raise ValueError(
+                f"formulation={self.formulation!r} requires DCNetworkState"
+            )
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -108,17 +120,34 @@ class VariableSpec:
 
 @dataclass(frozen=True)
 class InjectionContribution:
-    """Bus-scattered nodal injection channels in engineering units.
+    """Bus-scattered nodal injection channels in per-unit network units.
 
-    ``p`` is an ``(nb,)`` expression in MW and ``q``, when present, is an
-    ``(nb,)`` expression in MVAr. Positive values inject power into the
-    network. Components do not apply per-unit scaling. The shared assembler
-    alone creates and binds one ``1 / baseMVA`` parameter and converts these
-    expressions before the formulation constructs its nodal balance.
+    ``p_pu`` and ``q_pu`` have shape ``(nb,)`` and use positive sign for
+    injection into the network. A component whose decision variables use
+    engineering units constructs these expressions with an unbound
+    ``inv_base_mva`` parameter and returns it here. Components whose variables
+    already use per-unit quantities return ``None``. The shared assembler,
+    which owns the network base, binds every returned parameter exactly once.
     """
 
-    p: cp.Expression | None
-    q: cp.Expression | None
+    p_pu: cp.Expression | None
+    q_pu: cp.Expression | None
+    inv_base_mva: cp.Parameter | None = None
+
+
+def bind_injection_scale(
+    contribution: InjectionContribution,
+    base_mva: float,
+) -> None:
+    """Bind one component-created inverse-base parameter in assembler scope."""
+    if not math.isfinite(base_mva) or base_mva <= 0:
+        raise ValueError(f"base_mva must be finite and > 0, got {base_mva}")
+    parameter = contribution.inv_base_mva
+    if parameter is None:
+        return
+    if parameter.value is not None:
+        raise ValueError("injection scaling parameter is already bound")
+    parameter.value = 1.0 / base_mva
 
 
 @dataclass(frozen=True)
@@ -149,12 +178,13 @@ class HorizonContribution:
         object.__setattr__(self, "expressions", _readonly(self.expressions))
 
 
-class PrepareHook(Protocol[UnitT_contra]):
+class PrepareHook(Protocol[UnitT_contra, InputT_contra]):
     """Validate and vectorize one component collection."""
 
     def __call__(
         self,
         units: Sequence[UnitT_contra],
+        inputs: InputT_contra,
         context: PreparationContext,
     ) -> Mapping[str, object]: ...
 
@@ -267,11 +297,11 @@ class FormulationAdapter(Generic[UnitT]):
 
 
 @dataclass(frozen=True)
-class ComponentAdapter(Generic[UnitT]):
+class ComponentAdapter(Generic[UnitT, InputT]):
     """Typed internal contract for one component family."""
 
     name: str
-    prepare: PrepareHook[UnitT]
+    prepare: PrepareHook[UnitT, InputT]
     metadata: MetadataHook
     formulations: Mapping[Formulation, FormulationAdapter[UnitT]]
 
@@ -290,10 +320,10 @@ class ComponentAdapter(Generic[UnitT]):
 
 
 @dataclass(frozen=True)
-class PreparedComponent(Generic[UnitT]):
+class PreparedComponent(Generic[UnitT, InputT]):
     """Validated component collection with read-only mapping structure."""
 
-    adapter: ComponentAdapter[UnitT]
+    adapter: ComponentAdapter[UnitT, InputT]
     units: tuple[UnitT, ...]
     data: Mapping[str, object]
 
