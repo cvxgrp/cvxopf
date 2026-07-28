@@ -28,6 +28,24 @@ studying how battery controllers should behave under adverse multi-day
 conditions, how much temporal foresight matters, and how well convex
 approximations track AC feasibility across extended horizons.
 
+Storage is treated as an intertemporal network device, not as a sequence of
+independent power injections. A multi-step solve co-optimizes the complete
+dispatch and state-of-charge trajectories, including power and energy limits
+and configurable terminal constraints or costs. This temporal coupling changes
+both the feasible set and the economics of the OPF: stored energy acquires an
+opportunity value, strongly convex generation costs induce levelization, and
+the controller can preserve energy for future scarcity.
+
+![High-stress intertemporal and greedy battery-control comparison](experiments/battery_terminal/readme_intertemporal_storage.png)
+
+*High-stress 96-hour comparison with a 500 MWh terminal target. The
+experiment augments the 9-bus test case with nondispatchable generation and a
+single storage device, driven by time-series load and renewable-availability
+inputs. The network-constrained optimum anticipates future scarcity and
+enforces the terminal state; the causal greedy controllers are terminal-blind.
+Their lower dispatchable-energy totals are not improvements where they
+accompany unserved load.*
+
 Because it is built on CVXPY, the problem structure is transparent and
 composable. Researchers can modify objectives, add contingency constraints,
 or experiment with formulations — including multi-forecast Model Predictive
@@ -42,7 +60,8 @@ with appropriate solvers. It is designed to:
 - Support multiple OPF formulations from a single entry point
 - Support single-shot optimization over multiple time steps
 - Accept time-varying nodal load as pandas DataFrames
-- Model energy storage with state-of-charge dynamics
+- Model storage as a first-class intertemporal device with state-of-charge
+  coupling and configurable terminal policies
 - Model nondispatchable generators (wind, solar, run-of-river hydro) with
   curtailable output and reactive power support
 
@@ -519,4 +538,6 @@ package environment.
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
+- [ ] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
+- [ ] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
