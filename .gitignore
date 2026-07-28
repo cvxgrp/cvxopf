@@ -279,3 +279,4 @@ experiments/dnlp_vs_pypower/*.synctex.gz
 
 # Local agent skills and configuration
 .agents/
+skills-lock.json
