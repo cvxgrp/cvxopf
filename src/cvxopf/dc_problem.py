@@ -46,13 +46,18 @@ from cvxopf.data import validate_case, load_timeseries_from_dataframe
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
-    _prepare_data as generator_prepare_data,
-    _build_metadata as generator_build_metadata,
-    dc_injections as generator_dc_injections,
-    dc_operating_constraints as generator_dc_operating_constraints,
-    dc_network_constraints as generator_dc_network_constraints,
-    coupling_constraints as generator_coupling_constraints,
-    gen_cost_expr,
+)
+from cvxopf._component_adapter import (
+    DCNetworkState,
+    HorizonContext,
+    PreparationContext,
+    StepContext,
+    bind_injection_scale,
+)
+from cvxopf._component_adapters import (
+    GENERATOR_ADAPTER,
+    NONDISPATCHABLE_ADAPTER,
+    NondispatchableInputs,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
@@ -66,11 +71,6 @@ from cvxopf.storage import (
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _prepare_data as nd_prepare_data,
-    _build_metadata as nd_build_metadata,
-    dc_injections as nd_dc_injections,
-    dc_operating_constraints as nd_dc_operating_constraints,
-    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
@@ -108,6 +108,9 @@ def _parse_dc_case(
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    horizon_steps: int = 1,
+    nd_available_mw: np.ndarray | None = None,
+    is_multistep: bool = False,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
@@ -153,8 +156,17 @@ def _parse_dc_case(
     # numbering) rather than the already-reindexed bus table.
     ext_bus_ids = set(ext_to_int.keys())
 
-    generator_data = generator_prepare_data(
-        generators, baseMVA, nb, ext_to_int, ext_bus_ids
+    preparation = PreparationContext(
+        base_mva=baseMVA,
+        nb=nb,
+        ext_to_int=ext_to_int,
+        ext_bus_ids=frozenset(ext_bus_ids),
+        horizon_steps=horizon_steps,
+        delta=delta,
+        is_multistep=is_multistep,
+    )
+    generator_data = GENERATOR_ADAPTER.prepare(
+        generators, None, preparation
     )
     
     # Parse storage if present
@@ -168,8 +180,15 @@ def _parse_dc_case(
     # Parse nondispatchable if present
     nd_data = {}
     if nondispatchable:
-        nd_data = nd_prepare_data(
-            nondispatchable, nb, ext_to_int, ext_bus_ids
+        if nd_available_mw is None:
+            nd_available_mw = np.array(
+                [[unit.p_available for unit in nondispatchable]],
+                dtype=float,
+            )
+        nd_data = NONDISPATCHABLE_ADAPTER.prepare(
+            nondispatchable,
+            NondispatchableInputs(nd_available_mw),
+            preparation,
         )
 
     # Parse HVDC links if present
@@ -197,17 +216,15 @@ def _parse_dc_case(
 
 def _make_dc_step_constraints(
     p_flows, Pg, generator_injection,
-    A, Pd, f_max, Pgmin, Pgmax,
+    A, Pd, f_max, generator_operating_constraints,
     ns: int = 0,
     storage_units=None,
     storage_injection=None,
     b_t=None,
     soc_t=None,
     nnd: int = 0,
-    nd_units=None,
     nd_injection=None,
-    nd_p_available_t=None,
-    p_nd_t=None,
+    nd_operating_constraints=(),
     n_hvdc: int = 0,
     hvdc_injection_expr=None,
     links=None,
@@ -231,7 +248,7 @@ def _make_dc_step_constraints(
     constr.append(cp.abs(p_flows) <= f_max)
 
     # Section 3: Generator bounds
-    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
+    constr += list(generator_operating_constraints)
 
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
@@ -239,9 +256,7 @@ def _make_dc_step_constraints(
 
     # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
-        constr += nd_dc_operating_constraints(
-            nd_units, p_nd_t, nd_p_available_t
-        )
+        constr += list(nd_operating_constraints)
 
     # Section 5c: HVDC operating constraints (omitted when n_hvdc == 0)
     if n_hvdc > 0:
@@ -253,13 +268,12 @@ def _make_dc_step_constraints(
 
 
 def _make_dc_step_cost(
-    Pg, gencost, baseMVA,
+    generator_cost,
     r, p_flows, loss_weight,
 ) -> cp.Expression:
     """Build the per-step DC cost expression."""
-    G     = gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
     L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
-    return G + cp.multiply(loss_weight, L)
+    return generator_cost + cp.multiply(loss_weight, L)
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +308,20 @@ def _build_lossy_dc_single(
     )
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
-    Pg = cp.Variable(d["ng"], name="Pg")
+    step_context = StepContext(
+        "lossy_dc", 0, d["baseMVA"], d["ext_to_int"], DCNetworkState()
+    )
+    generator_binding = GENERATOR_ADAPTER.formulations["lossy_dc"]
+    assert generator_binding.variable_specs is not None
+    generator_variables = {
+        spec.name: cp.Variable(
+            spec.shape, name=spec.name, **spec.attributes
+        )
+        for spec in generator_binding.variable_specs(
+            d["generators"], d, step_context
+        )
+    }
+    Pg = generator_variables["Pg"]
 
     # Create storage variables if present
     b_t = soc_t = None
@@ -313,16 +340,26 @@ def _build_lossy_dc_single(
     p_nd_t = None
     nd_inj = None
     if "nnd" in d:
-        nnd = d["nnd"]
-        p_nd_t = cp.Variable(nnd, name="p_nd")
-        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
+        nd_binding = NONDISPATCHABLE_ADAPTER.formulations["lossy_dc"]
+        assert nd_binding.variable_specs is not None
+        assert nd_binding.injections is not None
+        nd_variables = {
+            spec.name: cp.Variable(
+                spec.shape, name=spec.name, **spec.attributes
+            )
+            for spec in nd_binding.variable_specs(
+                nondispatchable, d, step_context
+            )
+        }
+        p_nd_t = nd_variables["p_nd"]
+        nd_injection = nd_binding.injections(
             nondispatchable,
-            p_nd_t,
-            d["ext_to_int"],
-            incidence=d["Cnd"],
+            d,
+            nd_variables,
+            step_context,
         )
-        assert nd_q_inj is None
-        nd_scaling.value = 1.0 / d["baseMVA"]
+        bind_injection_scale(nd_injection, d["baseMVA"])
+        nd_inj = nd_injection.p_pu
 
     # Create HVDC variables if present
     p_in = p_out = None
@@ -342,26 +379,36 @@ def _build_lossy_dc_single(
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
-    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
-        d["generators"], Pg, d["ext_to_int"], incidence=d["Cg"]
+    assert generator_binding.injections is not None
+    assert generator_binding.operating_constraints is not None
+    assert generator_binding.network_constraints is not None
+    assert generator_binding.step_cost is not None
+    generator_injection = generator_binding.injections(
+        d["generators"], d, generator_variables, step_context
     )
-    assert generator_q_inj is None
-    assert generator_scaling is None
+    bind_injection_scale(generator_injection, d["baseMVA"])
+    generator_operating = generator_binding.operating_constraints(
+        d["generators"], d, generator_variables, step_context
+    )
+    nd_operating = ()
+    if "nnd" in d:
+        assert nd_binding.operating_constraints is not None
+        nd_operating = nd_binding.operating_constraints(
+            nondispatchable, d, nd_variables, step_context
+        )
 
     constr, p_net_expr = _make_dc_step_constraints(
-        p_flows, Pg, generator_inj_expr,
+        p_flows, Pg, generator_injection.p_pu,
         d["A"], d["Pd"], d["f_max"],
-        d["Pgmin"], d["Pgmax"],
+        generator_operating,
         ns=d.get("ns", 0),
         storage_units=storage,
         storage_injection=storage_inj,
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
-        nd_units=nondispatchable,
         nd_injection=nd_inj,
-        nd_p_available_t=d.get("nd_p_available"),
-        p_nd_t=p_nd_t,
+        nd_operating_constraints=nd_operating,
         n_hvdc=d.get("n_hvdc", 0),
         hvdc_injection_expr=hvdc_inj_expr,
         links=hvdc,
@@ -372,17 +419,16 @@ def _build_lossy_dc_single(
         step=0,
     )
     constr.extend(
-        generator_dc_network_constraints(
-            d["generators"],
-            p_flows,
-            d["ext_to_int"],
-            controlled_buses=(),
-            enforce_vset=False,
+        generator_binding.network_constraints(
+            d["generators"], d, generator_variables, step_context
         )
     )
 
+    generator_cost = generator_binding.step_cost(
+        d["generators"], d, generator_variables, step_context
+    )
     cost = _make_dc_step_cost(
-        Pg, d["gencost"], d["baseMVA"],
+        generator_cost,
         d["r"], p_flows, d["loss_weight"],
     )
 
@@ -408,6 +454,25 @@ def _build_lossy_dc_single(
             storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(storage_coupling)
+    assert generator_binding.horizon is not None
+    constr.extend(
+        generator_binding.horizon(
+            d["generators"],
+            d,
+            {"Pg": [Pg]},
+            HorizonContext("lossy_dc", 1, delta),
+        ).constraints
+    )
+    if "nnd" in d:
+        assert nd_binding.horizon is not None
+        constr.extend(
+            nd_binding.horizon(
+                nondispatchable,
+                d,
+                {"p_nd": [p_nd_t]},
+                HorizonContext("lossy_dc", 1, delta),
+            ).constraints
+        )
 
     prob      = cp.Problem(cp.Minimize(cost), constr)
     variables = dict(p_flows=p_flows, Pg=Pg)
@@ -434,7 +499,7 @@ def _build_lossy_dc_single(
         Pd=d["Pd"],
         loss_weight=d["loss_weight"],
     )
-    data.update(generator_build_metadata(d, reactive=False))
+    data.update(GENERATOR_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add storage data if present
     if "ns" in d:
@@ -442,8 +507,7 @@ def _build_lossy_dc_single(
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_p_available"] = d["nd_p_available"]
+        data.update(NONDISPATCHABLE_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add HVDC data if present
     if "n_hvdc" in d:
@@ -507,13 +571,20 @@ def _build_lossy_dc_multistep(
     )
 
     d = _parse_dc_case(
-        case, options, storage, delta, nondispatchable, hvdc, generators
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        hvdc,
+        generators,
+        horizon_steps=T,
+        nd_available_mw=(
+            None if df_nd is None else df_nd.to_numpy(dtype=float)
+        ),
+        is_multistep=True,
     )
     Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
-    
-    # The public builder guarantees a normalized ND time series when ND is active.
-    if "nnd" in d:
-        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -534,7 +605,26 @@ def _build_lossy_dc_multistep(
 
     for t in range(T):
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
-        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
+        step_context = StepContext(
+            "lossy_dc",
+            t,
+            d["baseMVA"],
+            d["ext_to_int"],
+            DCNetworkState(),
+        )
+        generator_binding = GENERATOR_ADAPTER.formulations["lossy_dc"]
+        assert generator_binding.variable_specs is not None
+        generator_variables_t = {
+            spec.name: cp.Variable(
+                spec.shape,
+                name=f"{spec.name}_{t}",
+                **spec.attributes,
+            )
+            for spec in generator_binding.variable_specs(
+                d["generators"], d, step_context
+            )
+        }
+        Pg_t = generator_variables_t["Pg"]
 
         # Create storage variables if present
         b_t = soc_t = None
@@ -557,16 +647,28 @@ def _build_lossy_dc_multistep(
         p_nd_t = None
         nd_inj_t = None
         if "nnd" in d:
-            nnd = d["nnd"]
-            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
-            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
+            nd_binding = NONDISPATCHABLE_ADAPTER.formulations["lossy_dc"]
+            assert nd_binding.variable_specs is not None
+            assert nd_binding.injections is not None
+            nd_variables_t = {
+                spec.name: cp.Variable(
+                    spec.shape,
+                    name=f"{spec.name}_{t}",
+                    **spec.attributes,
+                )
+                for spec in nd_binding.variable_specs(
+                    nondispatchable, d, step_context
+                )
+            }
+            p_nd_t = nd_variables_t["p_nd"]
+            nd_injection_t = nd_binding.injections(
                 nondispatchable,
-                p_nd_t,
-                d["ext_to_int"],
-                incidence=d["Cnd"],
+                d,
+                nd_variables_t,
+                step_context,
             )
-            assert nd_q_inj_t is None
-            nd_scaling_t.value = 1.0 / d["baseMVA"]
+            bind_injection_scale(nd_injection_t, d["baseMVA"])
+            nd_inj_t = nd_injection_t.p_pu
 
         # Create HVDC variables if present
         p_in_t = p_out_t = None
@@ -588,32 +690,36 @@ def _build_lossy_dc_multistep(
             p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
             p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
 
-        # Get available power for this time step
-        if "nnd" in d:
-            nd_p_available_t = d["nd_available"][t, :]
-        else:
-            nd_p_available_t = None
-
-        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
-            d["generators"], Pg_t, d["ext_to_int"], incidence=d["Cg"]
+        assert generator_binding.injections is not None
+        assert generator_binding.operating_constraints is not None
+        assert generator_binding.network_constraints is not None
+        assert generator_binding.step_cost is not None
+        generator_injection_t = generator_binding.injections(
+            d["generators"], d, generator_variables_t, step_context
         )
-        assert generator_q_inj_t is None
-        assert generator_scaling_t is None
+        bind_injection_scale(generator_injection_t, d["baseMVA"])
+        generator_operating_t = generator_binding.operating_constraints(
+            d["generators"], d, generator_variables_t, step_context
+        )
+        nd_operating_t = ()
+        if "nnd" in d:
+            assert nd_binding.operating_constraints is not None
+            nd_operating_t = nd_binding.operating_constraints(
+                nondispatchable, d, nd_variables_t, step_context
+            )
 
         step_constr, p_net_expr_t = _make_dc_step_constraints(
-            p_flows_t, Pg_t, generator_inj_expr_t,
+            p_flows_t, Pg_t, generator_injection_t.p_pu,
             d["A"], Pd_series[t], d["f_max"],
-            d["Pgmin"], d["Pgmax"],
+            generator_operating_t,
             ns=d.get("ns", 0),
             storage_units=storage,
             storage_injection=storage_inj_t,
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
-            nd_units=nondispatchable,
             nd_injection=nd_inj_t,
-            nd_p_available_t=nd_p_available_t,
-            p_nd_t=p_nd_t,
+            nd_operating_constraints=nd_operating_t,
             n_hvdc=d.get("n_hvdc", 0),
             hvdc_injection_expr=hvdc_inj_expr_t,
             links=hvdc,
@@ -624,16 +730,15 @@ def _build_lossy_dc_multistep(
             step=t,
         )
         step_constr.extend(
-            generator_dc_network_constraints(
-                d["generators"],
-                p_flows_t,
-                d["ext_to_int"],
-                controlled_buses=(),
-                enforce_vset=False,
+            generator_binding.network_constraints(
+                d["generators"], d, generator_variables_t, step_context
             )
         )
+        generator_cost_t = generator_binding.step_cost(
+            d["generators"], d, generator_variables_t, step_context
+        )
         step_cost = _make_dc_step_cost(
-            Pg_t, d["gencost"], d["baseMVA"],
+            generator_cost_t,
             d["r"], p_flows_t, d["loss_weight"],
         )
 
@@ -673,16 +778,24 @@ def _build_lossy_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(storage_coupling)
+    assert generator_binding.horizon is not None
     all_constr.extend(
-        generator_coupling_constraints(
-            d["generators"], Pg_list, delta=delta
-        )
+        generator_binding.horizon(
+            d["generators"],
+            d,
+            {"Pg": Pg_list},
+            HorizonContext("lossy_dc", T, delta),
+        ).constraints
     )
     if "nnd" in d:
+        assert nd_binding.horizon is not None
         all_constr.extend(
-            nd_coupling_constraints(
-                nondispatchable, p_nd_list, delta=delta
-            )
+            nd_binding.horizon(
+                nondispatchable,
+                d,
+                {"p_nd": p_nd_list},
+                HorizonContext("lossy_dc", T, delta),
+            ).constraints
         )
     if "n_hvdc" in d:
         all_constr.extend(
@@ -727,7 +840,7 @@ def _build_lossy_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
-    data.update(generator_build_metadata(d, reactive=False))
+    data.update(GENERATOR_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add storage data if present
     if "ns" in d:
@@ -735,8 +848,7 @@ def _build_lossy_dc_multistep(
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_available"] = d["nd_available"]
+        data.update(NONDISPATCHABLE_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add HVDC data if present
     if "n_hvdc" in d:

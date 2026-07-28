@@ -22,7 +22,7 @@ from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.testcases import case9
 
 
-def _case_context(horizon_steps=1):
+def _case_context(horizon_steps=1, is_multistep=None):
     case = case9()
     ext_bus_ids = frozenset(case["bus"][:, 0].astype(int))
     ext_to_int = {
@@ -35,6 +35,7 @@ def _case_context(horizon_steps=1):
         ext_bus_ids=ext_bus_ids,
         horizon_steps=horizon_steps,
         delta=1.0,
+        is_multistep=is_multistep,
     )
 
 
@@ -220,6 +221,20 @@ def test_nd_adapter_publishes_horizon_appropriate_availability_key():
     multi_metadata = NONDISPATCHABLE_ADAPTER.metadata(multi, "lossy_dc")
     assert "nd_available" in multi_metadata
     assert "nd_p_available" not in multi_metadata
+
+    _, one_step_multi_context = _case_context(
+        horizon_steps=1, is_multistep=True
+    )
+    one_step_multi = NONDISPATCHABLE_ADAPTER.prepare(
+        (unit,),
+        NondispatchableInputs(np.array([[20.0]])),
+        one_step_multi_context,
+    )
+    one_step_multi_metadata = NONDISPATCHABLE_ADAPTER.metadata(
+        one_step_multi, "lossy_dc"
+    )
+    assert "nd_available" in one_step_multi_metadata
+    assert "nd_p_available" not in one_step_multi_metadata
 
 
 @pytest.mark.parametrize(

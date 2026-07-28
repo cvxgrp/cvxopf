@@ -52,9 +52,14 @@ class PreparationContext:
     ext_bus_ids: frozenset[int]
     horizon_steps: int
     delta: float
+    is_multistep: bool | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
+        if self.is_multistep is None:
+            object.__setattr__(
+                self, "is_multistep", self.horizon_steps > 1
+            )
 
 
 @dataclass(frozen=True)

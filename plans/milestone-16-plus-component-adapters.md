@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stages 0–1 complete; Stage 2 next
+**Status:** in progress — Stages 0–2 complete; Stage 3 next
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -238,6 +238,10 @@ generator/ND adapter bindings are in place; formulation builders are unchanged
 - Prove DCP status and expression units are unchanged.
 
 ### Stage 2 — Generators and nondispatchable pilot
+
+**Status:** complete — all six formulation/horizon builder paths use the
+generator and nondispatchable adapters for preparation, variable
+specification, per-step contributions, horizon hooks, and metadata
 
 - Migrate generators first because they exercise real/reactive injections,
   operating constraints, network constraints, and cost delegation.

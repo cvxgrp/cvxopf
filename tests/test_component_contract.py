@@ -14,7 +14,7 @@ from cvxopf import (
     StorageUnitIdeal,
 )
 from cvxopf import generator, hvdc, nondispatchable, storage
-from cvxopf import ac_problem, dc_problem, singlenode_dc_problem
+from cvxopf import ac_problem, dc_problem
 from cvxopf.problem import build_opf, build_opf_multistep
 from cvxopf.results import extract_results
 from cvxopf.testcases import case9
@@ -240,16 +240,9 @@ def test_memoryless_components_have_empty_coupling_slot():
     assert hvdc.coupling_constraints([], [], []) == []
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("ac", ac_problem),
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
 def test_multistep_builders_compose_generator_coupling_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -257,9 +250,7 @@ def test_multistep_builders_compose_generator_coupling_hook(
         calls.append((generators, Pg_list, Qg_list, delta))
         return []
 
-    monkeypatch.setattr(
-        builder_module, "generator_coupling_constraints", coupling_spy
-    )
+    monkeypatch.setattr(generator, "coupling_constraints", coupling_spy)
     case = case9()
     T = 2
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
@@ -276,16 +267,9 @@ def test_multistep_builders_compose_generator_coupling_hook(
     assert calls[0][3] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("ac", ac_problem),
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
 def test_multistep_builders_compose_nd_coupling_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -293,7 +277,9 @@ def test_multistep_builders_compose_nd_coupling_hook(
         calls.append((units, p_nd_list, q_nd_list, delta))
         return []
 
-    monkeypatch.setattr(builder_module, "nd_coupling_constraints", coupling_spy)
+    monkeypatch.setattr(
+        nondispatchable, "coupling_constraints", coupling_spy
+    )
     case = case9()
     T = 2
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
@@ -362,15 +348,9 @@ def test_multistep_builders_compose_hvdc_coupling_hook(
     assert calls[0][3] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
 def test_dc_builders_compose_generator_network_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -385,9 +365,7 @@ def test_dc_builders_compose_generator_network_hook(
         calls.append((generators, network_state, ext_to_int))
         return []
 
-    monkeypatch.setattr(
-        builder_module, "generator_dc_network_constraints", network_spy
-    )
+    monkeypatch.setattr(generator, "dc_network_constraints", network_spy)
     case = case9()
     build_opf(case, formulation=formulation)
     assert len(calls) == 1

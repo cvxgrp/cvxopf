@@ -238,6 +238,7 @@ def _nd_prepare(
     )
     prepared["nd_available_mw"] = np.array(available, copy=True)
     prepared["horizon_steps"] = context.horizon_steps
+    prepared["is_multistep"] = context.is_multistep
     return prepared
 
 
@@ -247,10 +248,10 @@ def _nd_metadata(
 ) -> Mapping[str, object]:
     metadata = dict(nondispatchable._build_metadata(dict(prepared)))
     available = _array(prepared, "nd_available_mw")
-    if cast(int, prepared["horizon_steps"]) == 1:
-        metadata["nd_p_available"] = available[0]
-    else:
+    if cast(bool, prepared["is_multistep"]):
         metadata["nd_available"] = available
+    else:
+        metadata["nd_p_available"] = available[0]
     return metadata
 
 

@@ -54,13 +54,18 @@ from cvxopf.network import reindex_case_to_consecutive
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
-    _prepare_data as generator_prepare_data,
-    _build_metadata as generator_build_metadata,
-    dc_injections as generator_dc_injections,
-    dc_operating_constraints as generator_dc_operating_constraints,
-    dc_network_constraints as generator_dc_network_constraints,
-    coupling_constraints as generator_coupling_constraints,
-    gen_cost_expr,
+)
+from cvxopf._component_adapter import (
+    DCNetworkState,
+    HorizonContext,
+    PreparationContext,
+    StepContext,
+    bind_injection_scale,
+)
+from cvxopf._component_adapters import (
+    GENERATOR_ADAPTER,
+    NONDISPATCHABLE_ADAPTER,
+    NondispatchableInputs,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
@@ -74,11 +79,6 @@ from cvxopf.storage import (
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _prepare_data as nd_prepare_data,
-    _build_metadata as nd_build_metadata,
-    dc_injections as nd_dc_injections,
-    dc_operating_constraints as nd_dc_operating_constraints,
-    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.network import BUS_I
 
@@ -93,18 +93,15 @@ def _make_singlenode_dc_step_constraints(
     Pg,
     generator_injection,
     Pd_total_t: float,
-    Pgmin,
-    Pgmax,
+    generator_operating_constraints,
     ns: int = 0,
     storage_units=None,
     storage_injection=None,
     b_t=None,
     soc_t=None,
     nnd: int = 0,
-    nd_units=None,
     nd_injection=None,
-    nd_p_available_t=None,
-    p_nd_t=None,
+    nd_operating_constraints=(),
 ) -> tuple[list, cp.Expression]:
     """
     Build constraints for a single time step of the single-node DC formulation.
@@ -150,7 +147,7 @@ def _make_singlenode_dc_step_constraints(
     constr.append(p_net == 0)
 
     # Section 2: Generator bounds
-    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
+    constr += list(generator_operating_constraints)
 
     # Section 3: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
@@ -158,14 +155,14 @@ def _make_singlenode_dc_step_constraints(
 
     # Section 3b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
-        constr += nd_dc_operating_constraints(
-            nd_units, p_nd_t, nd_p_available_t
-        )
+        constr += list(nd_operating_constraints)
 
     return constr, p_net
 
 
-def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
+def _make_singlenode_dc_step_cost(
+    generator_cost: cp.Expression,
+) -> cp.Expression:
     """
     Build the cost expression for a single time step.
 
@@ -183,7 +180,7 @@ def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
     cp.Expression
         Total generation cost expression.
     """
-    return gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
+    return generator_cost
 
 
 def _parse_singlenode_dc_case(
@@ -193,6 +190,9 @@ def _parse_singlenode_dc_case(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    horizon_steps: int = 1,
+    nd_available_mw: np.ndarray | None = None,
+    is_multistep: bool = False,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -241,12 +241,19 @@ def _parse_singlenode_dc_case(
     Pd_total = float(np.sum(bus[:, PD]) / baseMVA)
 
     collapsed_ext_to_int = {bus_id: 0 for bus_id in ext_bus_ids}
-    generator_data = generator_prepare_data(
-        generators,
-        baseMVA,
+    preparation = PreparationContext(
+        base_mva=baseMVA,
         nb=1,
         ext_to_int=collapsed_ext_to_int,
-        ext_bus_ids=ext_bus_ids,
+        ext_bus_ids=frozenset(ext_bus_ids),
+        horizon_steps=horizon_steps,
+        delta=delta,
+        is_multistep=is_multistep,
+    )
+    generator_data = GENERATOR_ADAPTER.prepare(
+        generators,
+        None,
+        preparation,
     )
 
     # Storage data (if present)
@@ -260,8 +267,15 @@ def _parse_singlenode_dc_case(
     # Nondispatchable data (if present)
     nd_data = {}
     if nondispatchable:
-        nd_data = nd_prepare_data(
-            nondispatchable, 1, collapsed_ext_to_int, ext_bus_ids
+        if nd_available_mw is None:
+            nd_available_mw = np.array(
+                [[unit.p_available for unit in nondispatchable]],
+                dtype=float,
+            )
+        nd_data = NONDISPATCHABLE_ADAPTER.prepare(
+            nondispatchable,
+            NondispatchableInputs(nd_available_mw),
+            preparation,
         )
 
     return {
@@ -316,8 +330,24 @@ def _build_singlenode_dc_single(
         case, options, storage, delta, nondispatchable, generators
     )
 
-    # Declare variables
-    Pg = cp.Variable(d["ng"], name="Pg")
+    step_context = StepContext(
+        "singlenode_dc",
+        0,
+        d["baseMVA"],
+        d["collapsed_ext_to_int"],
+        DCNetworkState(),
+    )
+    generator_binding = GENERATOR_ADAPTER.formulations["singlenode_dc"]
+    assert generator_binding.variable_specs is not None
+    generator_variables = {
+        spec.name: cp.Variable(
+            spec.shape, name=spec.name, **spec.attributes
+        )
+        for spec in generator_binding.variable_specs(
+            d["generators"], d, step_context
+        )
+    }
+    Pg = generator_variables["Pg"]
 
     # Storage variables (if present)
     b_t = None
@@ -340,57 +370,69 @@ def _build_singlenode_dc_single(
     p_nd_t = None
     nd_inj = None
     if "nnd" in d:
-        p_nd_t = cp.Variable(d["nnd"], name="p_nd")
-        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
-            nondispatchable,
-            p_nd_t,
-            d["collapsed_ext_to_int"],
-            nb=1,
-            incidence=d["Cnd"],
+        nd_binding = NONDISPATCHABLE_ADAPTER.formulations["singlenode_dc"]
+        assert nd_binding.variable_specs is not None
+        assert nd_binding.injections is not None
+        nd_variables = {
+            spec.name: cp.Variable(
+                spec.shape, name=spec.name, **spec.attributes
+            )
+            for spec in nd_binding.variable_specs(
+                nondispatchable, d, step_context
+            )
+        }
+        p_nd_t = nd_variables["p_nd"]
+        nd_injection = nd_binding.injections(
+            nondispatchable, d, nd_variables, step_context
         )
-        assert nd_q_inj is None
-        nd_scaling.value = 1.0 / d["baseMVA"]
+        bind_injection_scale(nd_injection, d["baseMVA"])
+        nd_inj = nd_injection.p_pu
 
     # Build constraints
-    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
-        d["generators"],
-        Pg,
-        d["collapsed_ext_to_int"],
-        nb=1,
-        incidence=d["Cg"],
+    assert generator_binding.injections is not None
+    assert generator_binding.operating_constraints is not None
+    assert generator_binding.network_constraints is not None
+    assert generator_binding.step_cost is not None
+    generator_injection = generator_binding.injections(
+        d["generators"], d, generator_variables, step_context
     )
-    assert generator_q_inj is None
-    assert generator_scaling is None
+    bind_injection_scale(generator_injection, d["baseMVA"])
+    generator_operating = generator_binding.operating_constraints(
+        d["generators"], d, generator_variables, step_context
+    )
+    nd_operating = ()
+    if "nnd" in d:
+        assert nd_binding.operating_constraints is not None
+        nd_operating = nd_binding.operating_constraints(
+            nondispatchable, d, nd_variables, step_context
+        )
 
     constr, p_net_expr = _make_singlenode_dc_step_constraints(
         Pg=Pg,
-        generator_injection=generator_inj_expr,
+        generator_injection=generator_injection.p_pu,
         Pd_total_t=d["Pd_total"],
-        Pgmin=d["Pgmin"],
-        Pgmax=d["Pgmax"],
+        generator_operating_constraints=generator_operating,
         ns=d.get("ns", 0),
         storage_units=storage,
         storage_injection=storage_inj,
         b_t=b_t,
         soc_t=soc_t,
         nnd=d.get("nnd", 0),
-        nd_units=nondispatchable,
         nd_injection=nd_inj,
-        nd_p_available_t=d.get("nd_p_available"),
-        p_nd_t=p_nd_t,
+        nd_operating_constraints=nd_operating,
     )
     constr.extend(
-        generator_dc_network_constraints(
-            d["generators"],
-            None,
-            d["collapsed_ext_to_int"],
-            controlled_buses=(),
-            enforce_vset=False,
+        generator_binding.network_constraints(
+            d["generators"], d, generator_variables, step_context
         )
     )
 
     # Build cost
-    cost = _make_singlenode_dc_step_cost(Pg, d["gencost"], d["baseMVA"])
+    cost = _make_singlenode_dc_step_cost(
+        generator_binding.step_cost(
+            d["generators"], d, generator_variables, step_context
+        )
+    )
 
     # Add storage aging cost if present
     storage_cost = None
@@ -410,6 +452,25 @@ def _build_singlenode_dc_single(
             storage, [b_t], [soc_t], d["storage_delta"]
         )
         constr.extend(soc_constr)
+    assert generator_binding.horizon is not None
+    constr.extend(
+        generator_binding.horizon(
+            d["generators"],
+            d,
+            {"Pg": [Pg]},
+            HorizonContext("singlenode_dc", 1, delta),
+        ).constraints
+    )
+    if "nnd" in d:
+        assert nd_binding.horizon is not None
+        constr.extend(
+            nd_binding.horizon(
+                nondispatchable,
+                d,
+                {"p_nd": [p_nd_t]},
+                HorizonContext("singlenode_dc", 1, delta),
+            ).constraints
+        )
 
     # Build the problem
     prob = cp.Problem(cp.Minimize(cost), constr)
@@ -430,7 +491,7 @@ def _build_singlenode_dc_single(
         "ext_to_int": d["ext_to_int"],
         "Pd_total": d["Pd_total"],
     }
-    data.update(generator_build_metadata(d, reactive=False))
+    data.update(GENERATOR_ADAPTER.metadata(d, "singlenode_dc"))
 
     # Add storage data if present
     if "ns" in d:
@@ -438,8 +499,7 @@ def _build_singlenode_dc_single(
 
     # Add nondispatchable data if present
     if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_p_available"] = d["nd_p_available"]
+        data.update(NONDISPATCHABLE_ADAPTER.metadata(d, "singlenode_dc"))
 
     expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
@@ -528,7 +588,17 @@ def _build_singlenode_dc_multistep(
 
     # Parse the case
     d = _parse_singlenode_dc_case(
-        case, options, storage, delta, nondispatchable, generators
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        generators,
+        horizon_steps=T,
+        nd_available_mw=(
+            None if df_nd is None else df_nd.to_numpy(dtype=float)
+        ),
+        is_multistep=True,
     )
 
     # Validate df_P column count before summing
@@ -545,10 +615,6 @@ def _build_singlenode_dc_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
-    # The public builder guarantees a normalized ND time series when ND is active.
-    if "nnd" in d:
-        d["nd_available"] = df_nd.to_numpy(dtype=float)
-
     # Accumulators
     Pg_list = []
     b_list = []
@@ -560,8 +626,26 @@ def _build_singlenode_dc_multistep(
     storage_cost = 0
 
     for t in range(T):
-        # Declare per-step variables
-        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
+        step_context = StepContext(
+            "singlenode_dc",
+            t,
+            d["baseMVA"],
+            d["collapsed_ext_to_int"],
+            DCNetworkState(),
+        )
+        generator_binding = GENERATOR_ADAPTER.formulations["singlenode_dc"]
+        assert generator_binding.variable_specs is not None
+        generator_variables_t = {
+            spec.name: cp.Variable(
+                spec.shape,
+                name=f"{spec.name}_{t}",
+                **spec.attributes,
+            )
+            for spec in generator_binding.variable_specs(
+                d["generators"], d, step_context
+            )
+        }
+        Pg_t = generator_variables_t["Pg"]
 
         b_t = None
         soc_t = None
@@ -586,64 +670,74 @@ def _build_singlenode_dc_multistep(
         p_nd_t = None
         nd_inj_t = None
         if "nnd" in d:
-            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}")
-            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
-                nondispatchable,
-                p_nd_t,
-                d["collapsed_ext_to_int"],
-                nb=1,
-                incidence=d["Cnd"],
+            nd_binding = NONDISPATCHABLE_ADAPTER.formulations[
+                "singlenode_dc"
+            ]
+            assert nd_binding.variable_specs is not None
+            assert nd_binding.injections is not None
+            nd_variables_t = {
+                spec.name: cp.Variable(
+                    spec.shape,
+                    name=f"{spec.name}_{t}",
+                    **spec.attributes,
+                )
+                for spec in nd_binding.variable_specs(
+                    nondispatchable, d, step_context
+                )
+            }
+            p_nd_t = nd_variables_t["p_nd"]
+            nd_injection_t = nd_binding.injections(
+                nondispatchable, d, nd_variables_t, step_context
             )
-            assert nd_q_inj_t is None
-            nd_scaling_t.value = 1.0 / d["baseMVA"]
-
-        # Determine available ND power for this step
-        if "nnd" in d:
-            nd_p_available_t = d["nd_available"][t, :]
-        else:
-            nd_p_available_t = None
+            bind_injection_scale(nd_injection_t, d["baseMVA"])
+            nd_inj_t = nd_injection_t.p_pu
 
         # Per-step constraints
-        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
-            d["generators"],
-            Pg_t,
-            d["collapsed_ext_to_int"],
-            nb=1,
-            incidence=d["Cg"],
+        assert generator_binding.injections is not None
+        assert generator_binding.operating_constraints is not None
+        assert generator_binding.network_constraints is not None
+        assert generator_binding.step_cost is not None
+        generator_injection_t = generator_binding.injections(
+            d["generators"], d, generator_variables_t, step_context
         )
-        assert generator_q_inj_t is None
-        assert generator_scaling_t is None
+        bind_injection_scale(generator_injection_t, d["baseMVA"])
+        generator_operating_t = generator_binding.operating_constraints(
+            d["generators"], d, generator_variables_t, step_context
+        )
+        nd_operating_t = ()
+        if "nnd" in d:
+            assert nd_binding.operating_constraints is not None
+            nd_operating_t = nd_binding.operating_constraints(
+                nondispatchable, d, nd_variables_t, step_context
+            )
 
         step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
             Pg=Pg_t,
-            generator_injection=generator_inj_expr_t,
+            generator_injection=generator_injection_t.p_pu,
             Pd_total_t=float(Pd_series[t]),
-            Pgmin=d["Pgmin"],
-            Pgmax=d["Pgmax"],
+            generator_operating_constraints=generator_operating_t,
             ns=d.get("ns", 0),
             storage_units=storage,
             storage_injection=storage_inj_t,
             b_t=b_t,
             soc_t=soc_t,
             nnd=d.get("nnd", 0),
-            nd_units=nondispatchable,
             nd_injection=nd_inj_t,
-            nd_p_available_t=nd_p_available_t,
-            p_nd_t=p_nd_t,
+            nd_operating_constraints=nd_operating_t,
         )
         step_constr.extend(
-            generator_dc_network_constraints(
-                d["generators"],
-                None,
-                d["collapsed_ext_to_int"],
-                controlled_buses=(),
-                enforce_vset=False,
+            generator_binding.network_constraints(
+                d["generators"], d, generator_variables_t, step_context
             )
         )
         all_constr.extend(step_constr)
 
         # Per-step cost
-        step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
+        step_cost = _make_singlenode_dc_step_cost(
+            generator_binding.step_cost(
+                d["generators"], d, generator_variables_t, step_context
+            )
+        )
         if "ns" in d:
             step_storage_cost = storage_cost_expr(storage, b_t)
             storage_cost = storage_cost + step_storage_cost
@@ -665,16 +759,24 @@ def _build_singlenode_dc_multistep(
             storage, b_list, soc_list, d["storage_delta"]
         )
         all_constr.extend(soc_constr)
+    assert generator_binding.horizon is not None
     all_constr.extend(
-        generator_coupling_constraints(
-            d["generators"], Pg_list, delta=delta
-        )
+        generator_binding.horizon(
+            d["generators"],
+            d,
+            {"Pg": Pg_list},
+            HorizonContext("singlenode_dc", T, delta),
+        ).constraints
     )
     if "nnd" in d:
+        assert nd_binding.horizon is not None
         all_constr.extend(
-            nd_coupling_constraints(
-                nondispatchable, p_nd_list, delta=delta
-            )
+            nd_binding.horizon(
+                nondispatchable,
+                d,
+                {"p_nd": p_nd_list},
+                HorizonContext("singlenode_dc", T, delta),
+            ).constraints
         )
 
     storage_terminal_cost = None
@@ -708,14 +810,13 @@ def _build_singlenode_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
-    data.update(generator_build_metadata(d, reactive=False))
+    data.update(GENERATOR_ADAPTER.metadata(d, "singlenode_dc"))
 
     if "ns" in d:
         data.update(storage_build_metadata(d))
 
     if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_available"] = d["nd_available"]
+        data.update(NONDISPATCHABLE_ADAPTER.metadata(d, "singlenode_dc"))
 
     expressions = {"p_net": p_net_expr_list}
     if "ns" in d:
