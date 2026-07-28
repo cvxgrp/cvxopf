@@ -37,6 +37,10 @@ jobs:
         if: matrix.python-version == '3.11'
         run: ruff check .
 
+      - name: Run mypy
+        if: matrix.python-version == '3.11'
+        run: mypy
+
       - name: Run tests
         run: pytest --cov=cvxopf --cov-branch --cov-report=xml
 

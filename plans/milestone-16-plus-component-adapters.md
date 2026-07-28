@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stage 0 characterization underway
+**Status:** in progress — Stage 0 complete; Stage 1 foundations underway
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -197,6 +197,18 @@ construct OPFBuild
 The supported typing target is Python 3.11, matching `requires-python` and the
 Ruff target. The stale Python 3.10 package classifier is removed rather than
 advertising a version excluded by package metadata.
+
+Mypy is the project type checker. During migration, strict checking begins at
+the private adapter contract module and expands with the typed assembly
+surface; this avoids claiming that the legacy formulation builders are already
+fully typed.
+
+The injection boundary is fixed in engineering units: components return
+bus-scattered nodal real-power expressions in MW and, where applicable,
+reactive-power expressions in MVAr, with positive sign denoting network
+injection. Components do not create or bind scaling parameters. The shared
+assembler alone applies one builder-owned `1 / baseMVA` parameter when
+constructing per-unit nodal balances.
 
 - Record the exact current `OPFBuild.variables`, `.data`, and `.expressions`
   schemas for every formulation, single/multistep, and component combination.
