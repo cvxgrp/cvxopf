@@ -41,10 +41,13 @@ the controller can preserve energy for future scarcity.
 *High-stress 96-hour comparison with a 500 MWh terminal target. The
 experiment augments the 9-bus test case with nondispatchable generation and a
 single storage device, driven by time-series load and renewable-availability
-inputs. The network-constrained optimum anticipates future scarcity and
-enforces the terminal state; the causal greedy controllers are terminal-blind.
-Their lower dispatchable-energy totals are not improvements where they
-accompany unserved load.*
+inputs supplied through the native `df_P`, `df_Q`, and `df_nd` pandas
+interfaces. The top panel shows the active load together with the utility
+solar, distributed solar, and wind availability supplied to the model. The
+network-constrained optimum anticipates future scarcity and enforces the
+terminal state; the causal greedy controllers are terminal-blind. Their lower
+dispatchable-energy totals are not improvements where they accompany unserved
+load.*
 
 Because it is built on CVXPY, the problem structure is transparent and
 composable. Researchers can modify objectives, add contingency constraints,

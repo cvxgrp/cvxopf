@@ -34,7 +34,11 @@ def test_scenario_input_table_retains_each_scenario_once():
     scenario = SimpleNamespace(
         df_P=pd.DataFrame({1: [10.0, 20.0], 2: [1.0, 2.0]}, index=index),
         df_nd=pd.DataFrame(
-            {"solar": [4.0, 5.0], "wind": [2.0, 3.0]},
+            {
+                "utility_solar_bus_1": [3.0, 4.0],
+                "dist_solar_bus_5": [1.0, 1.0],
+                "wind_bus_2": [2.0, 3.0],
+            },
             index=index,
         ),
     )
@@ -51,6 +55,9 @@ def test_scenario_input_table_retains_each_scenario_once():
     assert table["scenario"].tolist() == ["low", "low"]
     assert table["load_mw"].tolist() == [11.0, 22.0]
     assert table["renewable_available_mw"].tolist() == [6.0, 8.0]
+    assert table["utility_solar_available_mw"].tolist() == [3.0, 4.0]
+    assert table["dist_solar_available_mw"].tolist() == [1.0, 1.0]
+    assert table["wind_available_mw"].tolist() == [2.0, 3.0]
     assert table["net_load_mw"].tolist() == [5.0, 14.0]
 
 
