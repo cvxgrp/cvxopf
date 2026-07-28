@@ -24,13 +24,15 @@ class NondispatchableUnit:
     Attributes:
         bus: External (MATPOWER) bus ID where the unit is connected.
         p_available: Available real power (MW) for single-step. Must be >= 0.
-        apparent_power_rating: Inverter nameplate rating P_max (MVA). Must be > 0.
+        apparent_power_rating: Inverter nameplate rating S_max (MVA). Must be > 0.
         device_id: Stable external identity used to align time-series columns.
             Required only when ``df_nd`` is supplied.
 
-    In single-step (`build_opf`), `p_available` is used directly as the available
+    In single-step (`build_opf`), `p_available` is used directly as one real
     power bound. In multi-step (`build_opf_multistep`), `p_available` serves as
-    a constant fallback if `df_nd` is not provided.
+    a constant fallback if `df_nd` is not provided. AC constrains the joint
+    real/reactive injection to the apparent-power circle; DC retains both the
+    availability and apparent-power rating as explicit real-power bounds.
     """
     bus: int
     p_available: float
@@ -231,8 +233,9 @@ def dc_operating_constraints(
     p_nd: cp.Variable,
     p_available,
 ) -> list:
-    """DC real-power availability bounds."""
-    return [p_nd >= 0, p_nd <= p_available]
+    """DC real-power availability and apparent-power-rating bounds."""
+    rating = _nd_static_data(units)["nd_apparent_power_rating"]
+    return [p_nd >= 0, p_nd <= p_available, p_nd <= rating]
 
 
 def coupling_constraints(

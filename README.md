@@ -81,6 +81,12 @@ and passes device states, especially battery state of charge, to a
 short-horizon AC layer. The AC layer verifies and corrects for full network
 physics without needing to reproduce the approximate dispatch trajectory.
 
+Nondispatchable resources are likewise first-class devices rather than generic
+generator boxes: time-varying real-power availability is coupled to a convex
+inverter apparent-power region in AC and to separate availability and rating
+bounds in DC. This preserves the converter-capacity limit without adding
+nonconvexity.
+
 ### Formulations
 
 | Key | Description | Convex | Solver |
@@ -379,9 +385,11 @@ Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
 produce up to a time-varying available power `R_t` determined by ambient
 conditions. The OPF can curtail freely; there is no cost for generation or
 curtailment. In AC, the inverter also provides reactive power support within
-its apparent power rating. Passing a multi-day solar availability profile
-via `df_nd` lets the optimizer account for sustained generation shortfalls
-across the full planning horizon.
+its apparent power rating. In DC, reactive power is absent, but the
+availability and apparent-power rating remain as separate real-power upper
+bounds. Passing a multi-day solar availability profile via `df_nd` lets the
+optimizer account for sustained generation shortfalls across the full
+planning horizon.
 
 ```python
 import numpy as np

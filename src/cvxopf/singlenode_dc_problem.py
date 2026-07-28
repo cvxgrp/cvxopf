@@ -32,7 +32,8 @@ Constraints:
     -S_max[s] <= b[s] <= S_max[s]           (storage power bounds)
     0 <= soc[s] <= capacity[s]              (storage SoC bounds)
     soc dynamics across time steps          (storage coupling)
-    0 <= p_nd[n] <= R_t[n]                  (nondispatchable bounds)
+    0 <= p_nd[n] <= R_t[n]                  (ND availability bound)
+    p_nd[n] <= S_max[n]                     (ND converter rating)
 
 where Pd_total = sum(bus[:, PD]) / baseMVA  (scalar, all buses summed).
 
