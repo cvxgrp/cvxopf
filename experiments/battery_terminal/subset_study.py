@@ -61,6 +61,7 @@ class SubsetStudy:
     summary: pd.DataFrame
     comparison: pd.DataFrame
     additivity: pd.DataFrame
+    trajectories: pd.DataFrame
     runs: dict[tuple[str, str], SubsetRun]
     reference_build: OPFBuild
     reference_results: dict
@@ -295,6 +296,47 @@ def _trajectory_comparison(
     }
 
 
+def _trajectory_table(
+    runs: dict[tuple[str, str], SubsetRun],
+) -> pd.DataFrame:
+    """Return per-battery DC and AC trajectories in tidy form."""
+    frames = []
+    for (case_name, formulation), run in runs.items():
+        soc = np.asarray(run.results["soc"], dtype=float)
+        battery = np.asarray(run.results["b"], dtype=float)
+        initial_soc = np.asarray(
+            run.build.data["storage_initial_soc"],
+            dtype=float,
+        )
+        storage_buses = np.asarray(
+            run.build.data["storage_bus"],
+            dtype=int,
+        )
+        for battery_index in range(soc.shape[1]):
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "case": case_name,
+                        "formulation": formulation,
+                        "battery_index": battery_index,
+                        "battery_bus": storage_buses[battery_index] + 1,
+                        "local_step": np.arange(len(soc)),
+                        "global_step": (
+                            run.start_state + np.arange(len(soc))
+                        ),
+                        "post_step_state": np.arange(1, len(soc) + 1),
+                        "global_post_step_state": (
+                            run.start_state + np.arange(1, len(soc) + 1)
+                        ),
+                        "initial_soc_mwh": initial_soc[battery_index],
+                        "soc_mwh": soc[:, battery_index],
+                        "battery_mw": battery[:, battery_index],
+                    }
+                )
+            )
+    return pd.concat(frames, ignore_index=True)
+
+
 def run_subset_study(
     source: pd.DataFrame,
     *,
@@ -447,6 +489,7 @@ def run_subset_study(
         summary=pd.DataFrame(rows).set_index(["case", "formulation"]),
         comparison=comparison,
         additivity=pd.DataFrame(additivity_rows).set_index("component"),
+        trajectories=_trajectory_table(runs),
         runs=runs,
         reference_build=reference_build,
         reference_results=reference_results,

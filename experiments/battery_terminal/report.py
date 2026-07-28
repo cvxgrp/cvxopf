@@ -131,6 +131,7 @@ def _(Path, pd):
     report_dir = Path(__file__).resolve().parent
     results_dir = report_dir / "results"
     table_files = {
+        "scenario_inputs": "scenario_inputs.csv",
         "trajectories": "policy_trajectories.csv",
         "value": "terminal_value_sweep.csv",
         "weights": "soft_weight_sweep.csv",
@@ -139,6 +140,7 @@ def _(Path, pd):
         "subset": "subset_study.csv",
         "subset_comparison": "subset_comparison.csv",
         "subset_additivity": "subset_additivity.csv",
+        "subset_trajectories": "subset_trajectories.csv",
         "resolution": "resolution_study.csv",
         "energy_validation": "resolution_energy_validation.csv",
     }
@@ -205,7 +207,7 @@ def _(mo):
     but the results in this report use unity secondary scale factors, zero
     load shift, and zero spatial noise.
 
-    The initial study evaluated complete 96-hour candidates and retained three
+    The study evaluated complete 96-hour candidates and retained three
     midnight-aligned windows representing renewable surplus, approximate
     energy balance with a high peak deficit, and sustained energy deficit.
     These are the low, moderate, and high windows used below. The labels refer
@@ -234,22 +236,92 @@ def _(mo):
 
 
 @app.cell
+def _(mo, tables):
+    scenario_input_data = tables["scenario_inputs"].copy()
+    scenario_viewer_selector = mo.ui.dropdown(
+        options=scenario_input_data["scenario"].drop_duplicates().tolist(),
+        value="high",
+        label="Representative window",
+    )
+    scenario_viewer_text = mo.md(r"""
+    ## Prepared scenario inputs
+
+    Select a representative 96-hour window to inspect the exogenous active
+    load and total renewable availability supplied to the OPF models.
+    Renewable availability is a physical upper bound, not necessarily the
+    dispatched renewable power; the optimizer may curtail it.
+    """)
+    mo.vstack([scenario_viewer_text, scenario_viewer_selector])
+    return scenario_input_data, scenario_viewer_selector
+
+
+@app.cell
+def _(plt, scenario_input_data, scenario_viewer_selector):
+    scenario_plot_inputs = scenario_input_data[
+        scenario_input_data["scenario"] == scenario_viewer_selector.value
+    ].sort_values("step")
+    if len(scenario_plot_inputs) != 96:
+        raise ValueError("Selected scenario input trace must contain 96 steps")
+
+    scenario_fig, scenario_ax = plt.subplots(figsize=(10.0, 4.6))
+    scenario_ax.stairs(
+        scenario_plot_inputs["load_mw"],
+        range(97),
+        label="Total active load",
+        color="black",
+    )
+    scenario_ax.stairs(
+        scenario_plot_inputs["renewable_available_mw"],
+        range(97),
+        label="Total renewable availability",
+        color="tab:green",
+    )
+    scenario_ax.set(
+        xlabel="Dispatch interval",
+        ylabel="Power (MW)",
+        title=f"{scenario_viewer_selector.value} 96-hour input window",
+    )
+    scenario_ax.grid(alpha=0.2)
+    scenario_ax.legend()
+    scenario_fig.tight_layout()
+    scenario_fig
+    return
+
+
+@app.cell
+def _(mo, scenario_input_data, scenario_viewer_selector):
+    scenario_summary_inputs = scenario_input_data[
+        scenario_input_data["scenario"] == scenario_viewer_selector.value
+    ]
+    load_energy = scenario_summary_inputs["load_mw"].sum()
+    renewable_energy = scenario_summary_inputs[
+        "renewable_available_mw"
+    ].sum()
+    balance = renewable_energy - load_energy
+    mo.md(
+        f"""
+        Over the selected window, total load energy is
+        **{load_energy:,.1f} MWh**, available renewable energy is
+        **{renewable_energy:,.1f} MWh**, and renewable-minus-load energy is
+        **{balance:,.1f} MWh**. Positive balance indicates aggregate renewable
+        surplus over the full window; it does not guarantee feasibility at
+        every hour or location.
+        """
+    )
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
-    ## Experimental system
+    ## Network and controller specification
 
-    The study uses three complete 96-hour windows on an imagined case9
-    network centered on Tracy, California:
-
-    - **low:** renewable-energy surplus with short deficits;
-    - **moderate:** approximately energy-balanced with a large peak
-      deficit; and
-    - **high:** sustained energy deficit.
-
-    The fixed device set contains 350 MW of dispatchable generation and
-    one ideal battery at bus 7 rated 150 MVA / 1,000 MWh, initialized at
-    500 MWh. Renewable site ratings and spatial allocations are fixed
-    across comparisons.
+    Every prepared input window is applied to the same imagined case9 network
+    centered on Tracy, California. The fixed device fleet contains 350 MW of
+    dispatchable generation and one ideal battery at bus 7 rated
+    150 MVA / 1,000 MWh and initialized at 500 MWh. The spatial allocations
+    and jointly sized renewable inverters defined above are unchanged across
+    all scenario and terminal-policy comparisons.
 
     The primary terminal target is 500 MWh. The nominal soft weights are
     25 objective units/MWh for linear deviation and 0.05 objective
@@ -266,6 +338,7 @@ def _(tables):
     horizon_data = tables["horizon"].copy()
     ac_data = tables["ac"].copy()
     subset_data = tables["subset"].copy()
+    subset_trajectory_data = tables["subset_trajectories"].copy()
     subset_comparison_data = tables["subset_comparison"].copy()
     subset_additivity_data = tables["subset_additivity"].copy()
     resolution_data = tables["resolution"].copy()
@@ -278,6 +351,7 @@ def _(tables):
         subset_additivity_data,
         subset_comparison_data,
         subset_data,
+        subset_trajectory_data,
         trajectory_data,
         value_data,
         weight_data,
@@ -539,6 +613,118 @@ def _(mo):
 
 
 @app.cell
+def _(mo, trajectory_data):
+    available_windows = trajectory_data["scenario"].drop_duplicates().tolist()
+    available_policies = trajectory_data["policy"].drop_duplicates().tolist()
+    window_selector = mo.ui.dropdown(
+        options=available_windows,
+        value="high",
+        label="96-hour window",
+    )
+    policy_selector = mo.ui.dropdown(
+        options=available_policies,
+        value="equality",
+        label="Terminal policy",
+    )
+    trace_controls_text = mo.md(r"""
+    ### 96-hour outer-layer trace explorer
+
+    Select any of the three representative windows and any terminal policy
+    from the complete loss-penalized DC sweep. Every selection represents a
+    full 96-hour solve. The figure reports post-step battery SoC, battery
+    injection, and aggregate dispatchable-generator power.
+    """)
+    mo.vstack(
+        [
+            trace_controls_text,
+            mo.hstack([window_selector, policy_selector]),
+        ]
+    )
+    return policy_selector, window_selector
+
+
+@app.cell
+def _(
+    plt,
+    policy_selector,
+    trajectory_data,
+    window_selector,
+):
+    selected_trace = trajectory_data[
+        (trajectory_data["scenario"] == window_selector.value)
+        & (trajectory_data["policy"] == policy_selector.value)
+    ].sort_values("step")
+    if len(selected_trace) != 96:
+        raise ValueError("Selected outer-layer trace must contain 96 steps")
+
+    outer_trace_fig, outer_trace_axes = plt.subplots(
+        3,
+        1,
+        figsize=(10.0, 7.2),
+        sharex=True,
+    )
+    outer_state_axis = [0, *(selected_trace["step"] + 1).tolist()]
+    outer_state_values = [
+        float(selected_trace["initial_soc_mwh"].iloc[0]),
+        *selected_trace["soc_mwh"].tolist(),
+    ]
+    outer_trace_axes[0].plot(
+        outer_state_axis,
+        outer_state_values,
+        color="tab:blue",
+    )
+    outer_trace_axes[1].stairs(
+        selected_trace["battery_mw"],
+        range(97),
+        color="tab:orange",
+    )
+    outer_trace_axes[2].stairs(
+        selected_trace["generation_mw"],
+        range(97),
+        color="tab:green",
+    )
+    outer_trace_axes[0].set_ylabel("SoC (MWh)")
+    outer_trace_axes[1].set_ylabel("Battery (MW)")
+    outer_trace_axes[2].set(
+        xlabel="Dispatch interval",
+        ylabel="Dispatchable\npower (MW)",
+    )
+    outer_trace_axes[0].axhline(0, color="black", linewidth=0.7)
+    outer_trace_axes[0].axhline(1000, color="black", linewidth=0.7)
+    outer_trace_axes[1].axhline(0, color="black", linewidth=0.7)
+    for outer_axis in outer_trace_axes:
+        outer_axis.grid(alpha=0.2)
+    outer_trace_fig.suptitle(
+        f"{window_selector.value} window — "
+        f"{policy_selector.value.replace('_', ' ')} policy"
+    )
+    outer_trace_fig.tight_layout()
+    outer_trace_fig
+    return
+
+
+@app.cell
+def _(mo, policy_selector, window_selector):
+    mo.md(
+        f"""
+        The selected **{window_selector.value}** trace under the
+        **{policy_selector.value.replace("_", " ")}** policy is one complete
+        outer-layer plan. Positive battery power denotes discharge and
+        negative power denotes charge. Dispatchable power is summed over all
+        three generators; battery power and SoC are both individual and
+        network-aggregate quantities because this experiment has one storage
+        device.
+
+        Comparing the panels shows when generator dispatch is displaced by
+        battery discharge, when charging increases contemporaneous supply
+        requirements, and how those power decisions accumulate into the
+        battery energy trajectory.
+        """
+    )
+    return
+
+
+@app.cell
 def _(mo, subset_additivity_data, subset_comparison_data):
     subset_gap = float(
         subset_additivity_data.loc[
@@ -611,8 +797,10 @@ def _(
     ac_data,
     format_report_table,
     mo,
+    plt,
     subset_comparison_data,
     subset_data,
+    subset_trajectory_data,
 ):
     subset_ac = subset_data.loc[
         subset_data["formulation"] == "ac",
@@ -681,6 +869,100 @@ def _(
         label="AC realization of DC-derived energy boundaries",
         selection=None,
     )
+    battery_ids = subset_trajectory_data[
+        ["battery_index", "battery_bus"]
+    ].drop_duplicates()
+    if len(battery_ids) != 1:
+        raise ValueError(
+            "Section 5 trace layout expects the report's one-battery system"
+        )
+    battery_bus = int(battery_ids["battery_bus"].iloc[0])
+    trace_cases = ("crosses_boundary", "no_boundary")
+    trace_formulations = (
+        ("lossy_dc", "loss-penalized DC"),
+        ("ac", "AC"),
+    )
+    trace_fig, trace_axes = plt.subplots(
+        2,
+        2,
+        figsize=(10.5, 6.2),
+        sharex="col",
+        sharey="row",
+    )
+    for trace_column, trace_case in enumerate(trace_cases):
+        for trace_formulation, trace_label in trace_formulations:
+            trace = subset_trajectory_data[
+                (subset_trajectory_data["case"] == trace_case)
+                & (
+                    subset_trajectory_data["formulation"]
+                    == trace_formulation
+                )
+            ].sort_values("local_step")
+            state_axis = [0, *trace["post_step_state"].tolist()]
+            state_values = [
+                float(trace["initial_soc_mwh"].iloc[0]),
+                *trace["soc_mwh"].tolist(),
+            ]
+            trace_axes[0, trace_column].plot(
+                state_axis,
+                state_values,
+                marker="o",
+                markersize=3,
+                label=trace_label,
+            )
+            trace_axes[1, trace_column].stairs(
+                trace["battery_mw"],
+                range(len(trace) + 1),
+                label=trace_label,
+            )
+        trace_axes[0, trace_column].set_title(
+            trace_case.replace("_", " ")
+        )
+        trace_axes[0, trace_column].axhline(
+            0,
+            color="black",
+            linewidth=0.7,
+        )
+        trace_axes[0, trace_column].axhline(
+            1000,
+            color="black",
+            linewidth=0.7,
+        )
+        trace_axes[1, trace_column].axhline(
+            0,
+            color="black",
+            linewidth=0.7,
+        )
+        trace_axes[1, trace_column].set_xlabel(
+            "Local state / dispatch interval"
+        )
+        for trace_row in range(2):
+            trace_axes[trace_row, trace_column].grid(alpha=0.2)
+    trace_axes[0, 0].set_ylabel("SoC (MWh)")
+    trace_axes[1, 0].set_ylabel("Battery injection (MW)")
+    trace_axes[0, 0].legend()
+    trace_fig.suptitle(
+        f"Bus {battery_bus} battery: individual and network-aggregate traces"
+    )
+    trace_fig.tight_layout()
+    trace_explanation = mo.md(
+        rf"""
+        The upper panels include the inherited initial state and every
+        post-step SoC; the lower panels show interval power, with positive
+        injection denoting discharge and negative injection denoting charge.
+        This experiment contains one battery, at bus {battery_bus}, so its
+        individual trace is also the network-wide aggregate trace. A separate
+        aggregate curve would be identical and is intentionally not
+        duplicated.
+
+        Both formulations satisfy the same endpoint energy states while
+        choosing visibly different interior power schedules. In the crossing
+        window they also agree on the physically important full-SoC
+        saturation event. This makes the hierarchical point directly visible:
+        endpoint energy states coordinate the layers without fixing the AC
+        dispatch trajectory.
+        """
+    )
     staged_ac_text = mo.md(
         r"""
         ### Staged AC terminal-policy study
@@ -703,6 +985,8 @@ def _(
         [
             ac_handoff_text,
             subset_ac_table,
+            trace_fig,
+            trace_explanation,
             staged_ac_text,
             ac_section_table,
         ]

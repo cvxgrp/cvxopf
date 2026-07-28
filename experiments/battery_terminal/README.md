@@ -221,6 +221,8 @@ The command writes these ignored artifacts under
   windows;
 - `policy_trajectories.csv`: stepwise SoC, battery power, generation, and
   curtailment for the policy sweep;
+- `scenario_inputs.csv`: total active load, available renewable power, and
+  net load for each prepared 96-hour representative window;
 - `terminal_value_sweep.csv`: terminal equality targets from 0 through
   1,000 MWh in 50 MWh increments; and
 - `soft_weight_sweep.csv`: linear and quadratic soft-terminal response paths;
@@ -237,9 +239,10 @@ The command writes these ignored artifacts under
   upper-SoC active-set transition; and
 - `ac_study.csv` and `ac_locality.csv`: the cold-start, staged high-window AC
   policy comparison and its SoC-boundary diagnostics;
-- `subset_study.csv`, `subset_comparison.csv`, and `subset_additivity.csv`:
-  endpoint-fixed DC reconstruction and AC realization of equal-length
-  subsections that do and do not cross an internal SoC boundary;
+- `subset_study.csv`, `subset_comparison.csv`, `subset_additivity.csv`, and
+  `subset_trajectories.csv`: endpoint-fixed DC reconstruction, per-battery
+  DC/AC power and SoC traces, and AC realization of equal-length subsections
+  that do and do not cross an internal SoC boundary;
 - `resolution_study.csv`, `resolution_comparison.csv`, and
   `resolution_energy_validation.csv`: current-objective behavior when the same
   high-window 24-hour trajectory is represented at 1-hour, 30-minute, and

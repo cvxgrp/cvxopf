@@ -1,9 +1,12 @@
 """Tests for terminal-weight and nested-horizon experiment studies."""
 
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
 from experiments.battery_terminal.horizon_study import run_horizon_study
+from experiments.battery_terminal.reproduce import _scenario_input_table
 from experiments.battery_terminal.scenario import REPRESENTATIVE_WINDOWS
 from experiments.battery_terminal.soft_weights import run_soft_weight_sweep
 
@@ -24,6 +27,31 @@ def _representative_source():
             )
         )
     return pd.concat(frames).sort_index()
+
+
+def test_scenario_input_table_retains_each_scenario_once():
+    index = pd.date_range("2024-01-01", periods=2, freq="h")
+    scenario = SimpleNamespace(
+        df_P=pd.DataFrame({1: [10.0, 20.0], 2: [1.0, 2.0]}, index=index),
+        df_nd=pd.DataFrame(
+            {"solar": [4.0, 5.0], "wind": [2.0, 3.0]},
+            index=index,
+        ),
+    )
+    sweep = SimpleNamespace(
+        runs={
+            ("low", "none"): SimpleNamespace(scenario=scenario),
+            ("low", "equality"): SimpleNamespace(scenario=scenario),
+        }
+    )
+
+    table = _scenario_input_table(sweep)
+
+    assert len(table) == 2
+    assert table["scenario"].tolist() == ["low", "low"]
+    assert table["load_mw"].tolist() == [11.0, 22.0]
+    assert table["renewable_available_mw"].tolist() == [6.0, 8.0]
+    assert table["net_load_mw"].tolist() == [5.0, 14.0]
 
 
 def test_larger_soft_weight_reduces_terminal_deviation():
