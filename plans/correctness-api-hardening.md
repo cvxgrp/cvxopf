@@ -168,6 +168,7 @@ Before implementation, classify every objective coefficient by units:
 | DC line loss term | `loss_weight * r*p_t^2` | weighted power loss, not inherently currency/hour |
 | Storage cycling | `aging_weight * abs(b_t)` | currently objective units/MW per interval |
 | HVDC cost | polynomial in `abs(p_in_t)` | coefficient-dependent, conventionally currency/hour |
+| Future load shedding (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
 | Terminal linear | `rho * abs(q_T-target)` | objective units |
 | Terminal quadratic | `rho * square(q_T-target)` | objective units |
 
@@ -188,6 +189,9 @@ but compatibility consequences require an explicit user decision.
   formulation-specific tuning parameter?
 - Should storage cycling cost be based on energy throughput
   `aging_weight * delta * abs(b_t)`?
+- Must the future M19 value-of-lost-load term be
+  `delta * value_of_lost_load * p_shed_t` so its coefficient retains
+  currency/MWh units?
 - Are MATPOWER `gencost` values treated as hourly rates?
 - Does single-step `objective` retain its existing `$ / hour` interpretation,
   while multistep becomes total currency over the horizon?
@@ -293,6 +297,9 @@ Reproducible implementation, tests, tables, and interpretation are in
 4. Publish or expose enough contribution values to audit units.
 5. Update all objective docstrings, examples, and tests.
 6. Add cross-resolution invariance/convergence tests.
+7. Preserve a typed stage-cost path for future M19 load-shedding
+   contributions; do not require a formulation builder to splice an emergency
+   penalty directly into the total objective.
 
 ### Acceptance gates
 
@@ -302,6 +309,28 @@ Reproducible implementation, tests, tables, and interpretation are in
 - `T=1, delta=1` preserves the current baseline.
 - Cross-resolution experiments behave according to the selected convention.
 - Any compatibility mode is explicit and tested, never inferred from `T`.
+
+### Future application: Milestone 19 load shedding
+
+The objective-units decision is a prerequisite for
+`milestone-19-load-shedding.md`. Load shedding will be an explicit
+generator-like positive injection with a high linear value-of-lost-load cost
+and a per-step cap derived from nodal load. Its coefficient should have a
+stable physical interpretation across time resolutions.
+
+The hardening work should keep the following future requirements possible
+without implementing M19 here:
+
+- component-owned positive active and reactive balance contributions;
+- a named, typed per-stage load-shedding cost contribution;
+- conditional result keys for configured shedding devices in both successful
+  and no-primal outcomes;
+- energy-not-served accounting using `delta`; and
+- exact-penalty studies in which the finite shedding coefficient crosses the
+  relevant marginal service-cost threshold.
+
+Do not add an anonymous feasibility slack during hardening. Absence of an
+explicit M19 device must continue to mean that load shedding is unavailable.
 
 This track should be decided before Milestone 17. Implementation may follow
 M16+ if central stage-cost assembly is expected to make the change smaller.
