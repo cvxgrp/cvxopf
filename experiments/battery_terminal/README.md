@@ -320,3 +320,35 @@ uv run --extra notebook marimo export html \
 
 The exported report is generated output and remains ignored with the other
 result artifacts.
+
+## Greedy-controller comparison
+
+`greedy_controller_comparison.py` is a standalone marimo notebook comparing
+the optimal 96-hour solution with causal dispatchable-generation-priority and
+battery-priority copper-plate controllers. It uses the same prepared low,
+moderate, and high inputs and the experiment's actual battery and aggregate
+generation limits.
+The interactive optimal-policy control selects no terminal policy, terminal
+equality, or a quadratic terminal cost at the fixed 500 MWh target. Its final
+figure overlays SoC, battery power, dispatchable power, curtailment, and load
+shedding.
+
+Run it as a script:
+
+```bash
+uv run experiments/battery_terminal/greedy_controller_comparison.py
+```
+
+Open it interactively:
+
+```bash
+uv run --extra notebook marimo edit \
+    experiments/battery_terminal/greedy_controller_comparison.py
+```
+
+After reproducing the retained CSV results, regenerate the curated
+high-stress, terminal-equality figure used by the top-level README with:
+
+```bash
+uv run python -m experiments.battery_terminal.generate_readme_figure
+```

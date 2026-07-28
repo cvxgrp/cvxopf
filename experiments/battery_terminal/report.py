@@ -719,6 +719,13 @@ def _(mo, policy_selector, window_selector):
         battery discharge, when charging increases contemporaneous supply
         requirements, and how those power decisions accumulate into the
         battery energy trajectory.
+
+        A separate
+        [greedy-controller comparison](greedy_controller_comparison.py)
+        compares this optimal no-terminal-policy trajectory with causal
+        dispatchable-priority and battery-priority baselines. That notebook
+        keeps the behavioral benchmark distinct from the terminal-policy study
+        and ends with overlaid controller traces.
         """
     )
     return
