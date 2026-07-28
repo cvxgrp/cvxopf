@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
+from numbers import Real
 
 import numpy as np
 import pandas as pd
@@ -246,9 +247,16 @@ def _get_multistep_builders():
     }
 
 
-def _validate_temporal_delta(delta: float, *, storage) -> None:
-    """Validate the time step when an active device has temporal constraints."""
-    if storage and delta <= 0:
+def _validate_temporal_delta(delta: float) -> None:
+    """Validate the global time-step duration at the public API boundary."""
+    if isinstance(delta, (bool, np.bool_)) or not isinstance(delta, Real):
+        raise TypeError(
+            "delta must be a real scalar time-step duration in hours, "
+            f"got {type(delta).__name__}"
+        )
+    if not np.isfinite(delta):
+        raise ValueError(f"delta must be finite, got {delta}")
+    if delta <= 0:
         raise ValueError(f"delta must be > 0, got {delta}")
 
 
@@ -296,8 +304,8 @@ def build_opf(
         Each unit is a StorageUnitIdeal dataclass instance.
     delta : float, optional
         Time step duration in hours (default 1.0). Passed to every component's
-        temporal coupling hook and used by storage SoC dynamics. Must be > 0
-        when an active device has temporal constraints.
+        temporal coupling hook and used by storage SoC dynamics. Must be a
+        finite, strictly positive real scalar.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
@@ -321,7 +329,7 @@ def build_opf(
             "use generators=None to load generators from the case."
         )
 
-    _validate_temporal_delta(delta, storage=storage)
+    _validate_temporal_delta(delta)
 
     builders = _get_single_builders()
     if formulation not in builders:
@@ -387,9 +395,9 @@ def build_opf_multistep(
         Each unit is a StorageUnitIdeal dataclass instance. Storage SoC
         dynamics are automatically added as coupling constraints.
     delta : float, optional
-        Time step duration in hours (default 1.0). Used by active temporal
-        devices; currently, storage SoC dynamics. Ignored when no active
-        device has temporal constraints and otherwise must be > 0.
+        Time step duration in hours (default 1.0). Passed to every component's
+        temporal coupling hook and used by storage SoC dynamics. Must be a
+        finite, strictly positive real scalar.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
@@ -420,7 +428,7 @@ def build_opf_multistep(
             "use generators=None to load generators from the case."
         )
 
-    _validate_temporal_delta(delta, storage=storage)
+    _validate_temporal_delta(delta)
 
     # Normalize ND availability once at the public API boundary.
     if nondispatchable:

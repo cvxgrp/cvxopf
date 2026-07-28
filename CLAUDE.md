@@ -312,9 +312,11 @@ Both emit `DeprecationWarning` when called.
 | `sparse_pq` | bool | True | AC only |
 
 `delta` is not an `OPFOptions` field. It is a separate parameter on
-`build_opf` and `build_opf_multistep`, only meaningful when `storage` is
-not None. Validated (`delta > 0`) only when storage is present; silently
-ignored otherwise.
+`build_opf` and `build_opf_multistep`. It must always be a finite, strictly
+positive real scalar, regardless of whether a temporal device is present.
+Booleans are not accepted as numeric time-step durations. Storage uses
+`delta` in its SoC dynamics; the package-wide stage-cost convention is
+specified separately in the correctness and API hardening plan.
 
 ### `OPFBuild` fields
 
@@ -552,7 +554,8 @@ would risk a cycle) and is re-exported from `problem.py` for the public API.
 
 `delta` (time step duration, hours) is a global problem parameter on
 `build_opf` / `build_opf_multistep`, not a field on `StorageUnitIdeal`.
-It applies uniformly to all storage units in a given problem.
+It applies uniformly to all storage units in a given problem and is validated
+at the public problem boundary before formulation dispatch.
 
 The aging cost uses `cp.multiply(aging_weight, cp.abs(b_t))` — never
 `numpy_array * cp.abs(cp_var)` or `np.multiply(...)`. NumPy intercepts `*`

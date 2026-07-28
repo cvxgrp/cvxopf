@@ -1,6 +1,6 @@
 # Correctness and API hardening after Milestones 12 and 16
 
-**Status:** planned
+**Status:** in progress — Track A implemented; Tracks B and C remain
 **Relationship to M16+:** independent except where noted
 **Nature of work:** small correctness fixes, one result-contract decision, and
 one package-wide scientific-units decision
@@ -37,6 +37,8 @@ No review finding is deferred without either a planned implementation or an
 explicitly accepted model decision.
 
 ## 3. Track A — finite temporal-input validation
+
+**Status:** implemented and verified on `critical-path`
 
 ### Problem
 
@@ -80,6 +82,11 @@ but the public boundary is authoritative.
 - No CVXPY problem can be built with a non-finite storage transition
   coefficient through the public API.
 - Single- and multistep paths use the same validator.
+
+All Track A acceptance gates are covered by public-entry-point tests,
+including non-finite and nonnumeric inputs, booleans, NumPy real scalars,
+storage-free builds across all formulations, and explicit pre-dispatch
+failure checks.
 
 This track should land before M16+ so the refactor inherits the corrected
 boundary.

@@ -432,27 +432,40 @@ class TestStorageValidation:
 class TestDeltaValidation:
     """Tests delta parameter validation."""
 
-    def test_delta_zero_with_storage_raises(self):
+    @pytest.mark.parametrize("delta", [0.0, -1.0, np.float64(0.0)])
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_nonpositive_delta_rejected_without_storage(
+        self, formulation, delta
+    ):
+        with pytest.raises(ValueError, match="delta must be > 0"):
+            build_opf(case9(), formulation=formulation, delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta", [np.nan, np.inf, -np.inf, np.float64(np.nan)]
+    )
+    def test_nonfinite_delta_rejected(self, delta):
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf(case9(), formulation="ac", delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta",
+        [None, "1.0", [1.0], 1.0 + 0.0j, True, np.bool_(False)],
+    )
+    def test_nonreal_scalar_delta_rejected(self, delta):
+        with pytest.raises(TypeError, match="delta must be a real scalar"):
+            build_opf(case9(), formulation="ac", delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta", [1, 0.25, np.int64(2), np.float32(0.5), np.float64(0.75)]
+    )
+    def test_real_scalar_delta_is_stored(self, delta):
         unit = _default_unit()
-        with pytest.raises(ValueError, match="delta"):
-            build_opf(case9(), formulation="ac", storage=[unit], delta=0.0)
-
-    def test_delta_negative_with_storage_raises(self):
-        unit = _default_unit()
-        with pytest.raises(ValueError, match="delta"):
-            build_opf(case9(), formulation="ac", storage=[unit], delta=-1.0)
-
-    def test_delta_zero_without_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=None, delta=0.0)
-        assert isinstance(build, OPFBuild)
-
-    def test_delta_negative_without_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=None, delta=-1.0)
-        assert isinstance(build, OPFBuild)
-
-    def test_delta_negative_with_empty_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=[], delta=-1.0)
-        assert isinstance(build, OPFBuild)
+        build = build_opf(
+            case9(), formulation="ac", storage=[unit], delta=delta
+        )
+        assert build.data["storage_delta"] == pytest.approx(float(delta))
 
     def test_delta_default_is_one(self):
         # build.data["storage_delta"] should be 1.0 by default

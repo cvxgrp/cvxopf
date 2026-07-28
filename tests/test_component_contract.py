@@ -404,14 +404,41 @@ def test_dc_builders_compose_generator_network_hook(
     assert len(calls) == T
 
 
-def test_multistep_delta_is_ignored_without_temporal_devices():
+@pytest.mark.parametrize("delta", [0.0, -1.0, np.nan, np.inf, -np.inf])
+def test_multistep_invalid_delta_is_rejected_without_temporal_devices(delta):
     case = case9()
     df_P = pd.DataFrame([case["bus"][:, 2]])
     df_Q = pd.DataFrame([case["bus"][:, 3]])
-    build = build_opf_multistep(
-        case, df_P, df_Q, T=1, formulation="ac", delta=0.0
-    )
-    assert build.data["T"] == 1
+    with pytest.raises(ValueError, match="delta"):
+        build_opf_multistep(
+            case, df_P, df_Q, T=1, formulation="ac", delta=delta
+        )
+
+
+@pytest.mark.parametrize("multistep", [False, True])
+def test_invalid_delta_is_rejected_before_builder_dispatch(
+    monkeypatch, multistep
+):
+    def fail_if_dispatched():
+        raise AssertionError("formulation builder dispatch was reached")
+
+    case = case9()
+    if multistep:
+        monkeypatch.setattr(
+            "cvxopf.problem._get_multistep_builders", fail_if_dispatched
+        )
+        df_P = pd.DataFrame([case["bus"][:, 2]])
+        df_Q = pd.DataFrame([case["bus"][:, 3]])
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf_multistep(
+                case, df_P, df_Q, T=1, formulation="ac", delta=np.nan
+            )
+    else:
+        monkeypatch.setattr(
+            "cvxopf.problem._get_single_builders", fail_if_dispatched
+        )
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf(case, formulation="ac", delta=np.nan)
 
 
 @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
