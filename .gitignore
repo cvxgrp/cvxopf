@@ -276,3 +276,7 @@ experiments/dnlp_vs_pypower/*.toc
 experiments/dnlp_vs_pypower/*.fls
 experiments/dnlp_vs_pypower/*.fdb_latexmk
 experiments/dnlp_vs_pypower/*.synctex.gz
+
+# Local agent skills and configuration
+.agents/
+skills-lock.json

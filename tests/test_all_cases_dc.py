@@ -85,13 +85,14 @@ class TestAllCasesDC:
 
     @pytest.mark.parametrize("name,case_fn,nb,ng,nl", ALL_CASES)
     def test_flow_conservation(self, name, case_fn, nb, ng, nl):
-        """A @ p_flows + p_gen == Pd at every bus (p.u.)."""
+        """A @ p_flows + Cg @ Pg == Pd at every bus (p.u.)."""
         build, _ = _build_and_solve(case_fn)
         A       = build.data["A"]
+        Cg      = build.data["Cg"]
         Pd      = build.data["Pd"]
-        p_gen   = build.variables["p_gen"].value
+        Pg      = build.variables["Pg"].value
         p_flows = build.variables["p_flows"].value
-        residual = A @ p_flows + p_gen - Pd
+        residual = A @ p_flows + Cg @ Pg - Pd
         assert np.allclose(residual, 0.0, atol=1e-4), \
             f"{name}: flow conservation violated; " \
             f"max residual={np.abs(residual).max():.2e}"

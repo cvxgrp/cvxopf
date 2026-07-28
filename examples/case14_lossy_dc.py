@@ -71,7 +71,7 @@ def main():
     print(f"Branches       : {nl}")
     print(f"Base load      : {Pd_base.sum():.1f} MW")
     print(f"Total Pmax     : {ppc['gen'][:, 8].sum():.1f} MW (2x MATPOWER)")
-    print(f"Branch limit   : 175 MW (all branches, per reference)")
+    print("Branch limit   : 175 MW (all branches, per reference)")
 
     # ------------------------------------------------------------------
     # 1. Solve at base load (alpha=1.0)
@@ -89,14 +89,14 @@ def main():
     print(f"Status    : {r_base['status']}")
     print(f"Objective : {r_base['objective']:.4f} $/hr")
 
-    print(f"\nGenerator dispatch:")
+    print("\nGenerator dispatch:")
     print(f"  {'Gen':>4}  {'Pg (MW)':>10}  {'Pmax (MW)':>10}")
     print(f"  {'-'*4}  {'-'*10}  {'-'*10}")
     Pgmax = build_base.data["Pgmax"] * baseMVA
     for k in range(build_base.data["ng"]):
         print(f"  {k:>4}  {r_base['Pg'][k]:>10.3f}  {Pgmax[k]:>10.3f}")
 
-    print(f"\nBranch flows (MW):")
+    print("\nBranch flows (MW):")
     f_max_MW = build_base.data["f_max"] * baseMVA
     print(f"  {'Branch':>6}  {'Flow (MW)':>10}  {'Limit (MW)':>10}  {'At limit':>8}")
     print(f"  {'-'*6}  {'-'*10}  {'-'*10}  {'-'*8}")
@@ -140,7 +140,7 @@ def main():
             break
 
     print(f"\n  alpha_max = {alpha_max:.2f}  (reference: ~4.66)")
-    print(f"  Note: step size 0.1 brackets the reference value")
+    print("  Note: step size 0.1 brackets the reference value")
 
     # ------------------------------------------------------------------
     # 3. Solution at alpha=4.6
@@ -165,7 +165,7 @@ def main():
     print(f"Total load: {Pd_base.sum() * alpha_demo:.1f} MW")
     print(f"Total Pg  : {r_46['Pg'].sum():.1f} MW")
 
-    print(f"\nGenerator dispatch:")
+    print("\nGenerator dispatch:")
     print(f"  {'Gen':>4}  {'Pg (MW)':>10}  {'Pmax (MW)':>10}  {'At max':>6}")
     print(f"  {'-'*4}  {'-'*10}  {'-'*10}  {'-'*6}")
     Pgmax_46 = build_46.data["Pgmax"] * baseMVA
@@ -175,7 +175,7 @@ def main():
         print(f"  {k:>4}  {r_46['Pg'][k]:>10.3f}  "
               f"{Pgmax_46[k]:>10.3f}{marker}")
 
-    print(f"\nConstrained branches (|flow| >= 99% of limit):")
+    print("\nConstrained branches (|flow| >= 99% of limit):")
     f_max_46   = build_46.data["f_max"] * baseMVA
     branch     = ppc["branch"]
     any_found  = False

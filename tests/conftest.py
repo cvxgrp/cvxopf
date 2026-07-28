@@ -52,7 +52,6 @@ def case9_multistep_load():
     Row 2: 120% of base load.
     """
     case = case9()
-    baseMVA = case["baseMVA"]
     Pd_base = case["bus"][:, 2]   # MW
     Qd_base = case["bus"][:, 3]   # MVAr
 

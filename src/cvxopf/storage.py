@@ -11,20 +11,19 @@ Storage devices are bus-connected inverters with:
 - L1 aging penalty on real power cycling in the objective
 
 Import chain:
-  storage.py  →  (no cvxopf imports)
+  storage.py  →  cvxpy, numpy, stdlib (no cvxopf imports)
   problem.py  →  storage.py   (imports StorageUnitIdeal, re-exports for public API)
   ac_problem.py → storage.py  (imports StorageUnitIdeal, _validate_storage,
                               _make_storage_incidence_matrix)
   dc_problem.py → storage.py  (imports StorageUnitIdeal, _validate_storage,
                               _make_storage_incidence_matrix)
 
-No circularity. storage.py imports only numpy and standard library.
+No circularity.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import warnings
 
 import numpy as np
 import cvxpy as cp
@@ -72,12 +71,34 @@ class StorageUnitIdeal:
         Default 1e-2. Set to 0.0 for zero-cost storage.
         Reference: Nnorom et al., "Aging-Aware Battery Control via Convex
         Optimization," Optimization and Engineering, 27:1303-1326, 2026.
+    terminal_soc : float | None
+        Optional terminal state-of-charge target in MWh. Required when either
+        ``terminal_constraint`` or ``terminal_cost`` is configured; otherwise
+        must be None. Must lie in [0, capacity].
+    terminal_constraint : {None, "equality", "shortfall"}
+        Optional hard terminal policy. ``"equality"`` enforces
+        ``soc[-1] == terminal_soc``. ``"shortfall"`` enforces zero terminal
+        shortfall, equivalently ``soc[-1] >= terminal_soc``.
+    terminal_cost : {None, "linear", "quadratic", "shortfall_linear",
+        "shortfall_quadratic"}
+        Optional soft terminal policy. Linear and quadratic modes penalize
+        two-sided deviation from ``terminal_soc``. Shortfall modes penalize
+        only ``cp.neg(soc[-1] - terminal_soc)``. Mutually exclusive with
+        ``terminal_constraint``.
+    terminal_weight : float | None
+        Positive terminal-cost weight. Required exactly when
+        ``terminal_cost`` is configured. Linear weights have objective
+        units/MWh; quadratic weights have objective units/MWh^2.
     """
     bus:                   int
     apparent_power_rating: float
     capacity:              float
     initial_soc:           float
     aging_weight:          float = 1e-2
+    terminal_soc:          float | None = None
+    terminal_constraint:   str | None = None
+    terminal_cost:         str | None = None
+    terminal_weight:       float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,12 +128,24 @@ def _validate_storage(
     - capacity > 0
     - 0 <= initial_soc <= capacity
     - aging_weight >= 0
+    - terminal policy fields form one valid hard or soft configuration
     - bus ID present in ext_bus_ids
     """
     if storage_units is None or len(storage_units) == 0:
         return
     
     for i, unit in enumerate(storage_units):
+        numeric_fields = {
+            "apparent_power_rating": unit.apparent_power_rating,
+            "capacity": unit.capacity,
+            "initial_soc": unit.initial_soc,
+            "aging_weight": unit.aging_weight,
+        }
+        for name, value in numeric_fields.items():
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"Storage unit {i}: {name} must be finite, got {value}"
+                )
         # Check apparent_power_rating
         if unit.apparent_power_rating <= 0:
             raise ValueError(
@@ -141,6 +174,71 @@ def _validate_storage(
         if unit.aging_weight < 0:
             raise ValueError(
                 f"Storage unit {i}: aging_weight must be >= 0, got {unit.aging_weight}"
+            )
+
+        valid_constraints = {None, "equality", "shortfall"}
+        valid_costs = {
+            None,
+            "linear",
+            "quadratic",
+            "shortfall_linear",
+            "shortfall_quadratic",
+        }
+        if unit.terminal_constraint not in valid_constraints:
+            raise ValueError(
+                f"Storage unit {i}: terminal_constraint must be one of "
+                f"{sorted(value for value in valid_constraints if value is not None)} "
+                f"or None, got {unit.terminal_constraint!r}"
+            )
+        if unit.terminal_cost not in valid_costs:
+            raise ValueError(
+                f"Storage unit {i}: terminal_cost must be one of "
+                f"{sorted(value for value in valid_costs if value is not None)} "
+                f"or None, got {unit.terminal_cost!r}"
+            )
+        if (
+            unit.terminal_constraint is not None
+            and unit.terminal_cost is not None
+        ):
+            raise ValueError(
+                f"Storage unit {i}: terminal_constraint and terminal_cost "
+                "are alternatives and cannot both be configured"
+            )
+
+        terminal_active = (
+            unit.terminal_constraint is not None
+            or unit.terminal_cost is not None
+        )
+        if terminal_active:
+            if unit.terminal_soc is None or not np.isfinite(unit.terminal_soc):
+                raise ValueError(
+                    f"Storage unit {i}: terminal_soc must be finite when a "
+                    "terminal policy is configured"
+                )
+            if not 0 <= unit.terminal_soc <= unit.capacity:
+                raise ValueError(
+                    f"Storage unit {i}: terminal_soc must satisfy "
+                    f"0 <= terminal_soc <= capacity, got {unit.terminal_soc}"
+                )
+        elif unit.terminal_soc is not None:
+            raise ValueError(
+                f"Storage unit {i}: terminal_soc requires "
+                "terminal_constraint or terminal_cost"
+            )
+
+        if unit.terminal_cost is not None:
+            if (
+                unit.terminal_weight is None
+                or not np.isfinite(unit.terminal_weight)
+                or unit.terminal_weight <= 0
+            ):
+                raise ValueError(
+                    f"Storage unit {i}: terminal_weight must be finite and > 0 "
+                    "when terminal_cost is configured"
+                )
+        elif unit.terminal_weight is not None:
+            raise ValueError(
+                f"Storage unit {i}: terminal_weight requires terminal_cost"
             )
         
         # Check bus ID
@@ -196,49 +294,250 @@ def _make_storage_incidence_matrix(
     return Cs
 
 
-# ---------------------------------------------------------------------------
-# SoC dynamics constraint generation
-# ---------------------------------------------------------------------------
+def _storage_static_data(storage_units: list) -> dict:
+    """Vectorize static storage fields into numpy arrays."""
+    return {
+        "storage_apparent_power_rating": np.array(
+            [unit.apparent_power_rating for unit in storage_units], dtype=float
+        ),
+        "storage_capacity": np.array(
+            [unit.capacity for unit in storage_units], dtype=float
+        ),
+        "storage_initial_soc": np.array(
+            [unit.initial_soc for unit in storage_units], dtype=float
+        ),
+        "storage_aging_weight": np.array(
+            [unit.aging_weight for unit in storage_units], dtype=float
+        ),
+        "storage_terminal_soc": np.array(
+            [
+                np.nan if unit.terminal_soc is None else unit.terminal_soc
+                for unit in storage_units
+            ],
+            dtype=float,
+        ),
+        "storage_terminal_constraint": np.array(
+            [unit.terminal_constraint for unit in storage_units], dtype=object
+        ),
+        "storage_terminal_cost": np.array(
+            [unit.terminal_cost for unit in storage_units], dtype=object
+        ),
+        "storage_terminal_weight": np.array(
+            [
+                np.nan if unit.terminal_weight is None else unit.terminal_weight
+                for unit in storage_units
+            ],
+            dtype=float,
+        ),
+    }
 
-def _make_storage_soc_constraints(
+
+def _prepare_data(
+    storage_units: list,
+    nb: int,
+    ext_to_int: dict,
+    ext_bus_ids: set,
+) -> dict:
+    """Validate and prepare formulation-independent storage data."""
+    _validate_storage(storage_units, ext_bus_ids)
+    return {
+        "ns": len(storage_units),
+        "Cs": _make_storage_incidence_matrix(
+            storage_units, nb, ext_to_int
+        ),
+        "storage_bus": np.array(
+            [ext_to_int[unit.bus] for unit in storage_units], dtype=int
+        ),
+        **_storage_static_data(storage_units),
+    }
+
+
+def _build_metadata(prepared: dict) -> dict:
+    """Select storage-owned fields published through ``OPFBuild.data``."""
+    keys = (
+        "ns",
+        "Cs",
+        "storage_bus",
+        "storage_apparent_power_rating",
+        "storage_capacity",
+        "storage_initial_soc",
+        "storage_delta",
+        "storage_aging_weight",
+        "storage_terminal_soc",
+        "storage_terminal_constraint",
+        "storage_terminal_cost",
+        "storage_terminal_weight",
+    )
+    return {key: prepared[key] for key in keys}
+
+
+def ac_injections(
+    storage_units: list,
+    b: cp.Variable,
+    b_q: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+    incidence: np.ndarray | None = None,
+) -> tuple:
+    """Return coordinated real/reactive storage injections for an AC network."""
+    if nb is None:
+        nb = len(ext_to_int)
+    Cs = (
+        _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
+    inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
+    return (
+        cp.multiply(inv_baseMVA, Cs @ b),
+        cp.multiply(inv_baseMVA, Cs @ b_q),
+        inv_baseMVA,
+    )
+
+
+def dc_injections(
+    storage_units: list,
+    b: cp.Variable,
+    ext_to_int: dict,
+    *,
+    nb: int | None = None,
+    incidence: np.ndarray | None = None,
+) -> tuple:
+    """Return real storage injection and no reactive channel for a DC network."""
+    if nb is None:
+        nb = len(ext_to_int)
+    Cs = (
+        _make_storage_incidence_matrix(storage_units, nb, ext_to_int)
+        if incidence is None
+        else incidence
+    )
+    inv_baseMVA = cp.Parameter(nonneg=True, name="storage_inv_baseMVA")
+    return cp.multiply(inv_baseMVA, Cs @ b), None, inv_baseMVA
+
+
+def ac_operating_constraints(
+    storage_units: list,
+    b: cp.Variable,
+    b_q: cp.Variable,
+    soc: cp.Variable,
+) -> list:
+    """AC inverter circle and per-step state-of-charge bounds."""
+    data = _storage_static_data(storage_units)
+    constraints = [
+        cp.sum_squares(cp.vstack([b[s], b_q[s]]))
+        <= data["storage_apparent_power_rating"][s] ** 2
+        for s in range(len(storage_units))
+    ]
+    constraints += [
+        soc >= 0.0,
+        soc <= data["storage_capacity"],
+    ]
+    return constraints
+
+
+def dc_operating_constraints(
+    storage_units: list,
+    b: cp.Variable,
+    soc: cp.Variable,
+) -> list:
+    """DC real-power box and per-step state-of-charge bounds."""
+    data = _storage_static_data(storage_units)
+    rating = data["storage_apparent_power_rating"]
+    return [
+        b >= -rating,
+        b <= rating,
+        soc >= 0.0,
+        soc <= data["storage_capacity"],
+    ]
+
+
+def _soc_dynamics_constraints(
+    storage_units: list,
     b_list: list,
     soc_list: list,
-    storage_initial_soc: np.ndarray,
-    storage_delta: float,
-    T: int,
-    ns: int,
+    delta: float,
 ) -> list:
-    """
-    Generate SoC dynamics constraints linking adjacent time steps.
-
-    Returns a list of CVXPY equality constraints:
-      soc[0][s] == initial_soc[s] - b[0][s] * delta   for each s
-      soc[t][s] == soc[t-1][s] - b[t][s] * delta      for t>=1, each s
-
-    These are cross-step constraints and belong in the coupling
-    constraints block, not in per-step constraints.
-
-    Parameters
-    ----------
-    b_list : list of cp.Variable, length T, each shape (ns,)
-    soc_list : list of cp.Variable, length T, each shape (ns,)
-    storage_initial_soc : np.ndarray, shape (ns,)
-    storage_delta : float
-        Time step duration in hours (scalar, same for all units)
-    T : int
-    ns : int
-
-    Returns
-    -------
-    list of cp.Constraint
-    """
-    constr = []
-    for s in range(ns):
-        constr.append(
-            soc_list[0][s] == storage_initial_soc[s] - b_list[0][s] * storage_delta
+    """Initial transition and cross-step ideal-storage SoC dynamics."""
+    initial_soc = _storage_static_data(storage_units)["storage_initial_soc"]
+    constraints = []
+    for s in range(len(storage_units)):
+        constraints.append(
+            soc_list[0][s] == initial_soc[s] - b_list[0][s] * float(delta)
         )
-        for t in range(1, T):
-            constr.append(
-                soc_list[t][s] == soc_list[t - 1][s] - b_list[t][s] * storage_delta
+        for t in range(1, len(b_list)):
+            constraints.append(
+                soc_list[t][s]
+                == soc_list[t - 1][s] - b_list[t][s] * float(delta)
             )
-    return constr
+    return constraints
+
+
+def _terminal_soc_constraints(
+    storage_units: list,
+    terminal_soc: cp.Variable,
+) -> list:
+    """Hard terminal boundary conditions for the configured storage units."""
+    constraints = []
+    for s, unit in enumerate(storage_units):
+        if unit.terminal_constraint == "equality":
+            constraints.append(terminal_soc[s] == unit.terminal_soc)
+        elif unit.terminal_constraint == "shortfall":
+            constraints.append(terminal_soc[s] >= unit.terminal_soc)
+    return constraints
+
+
+def coupling_constraints(
+    storage_units: list,
+    b_list: list,
+    soc_list: list,
+    delta: float,
+) -> list:
+    """Storage horizon constraints: SoC dynamics and terminal boundaries."""
+    constraints = _soc_dynamics_constraints(
+        storage_units, b_list, soc_list, delta
+    )
+    constraints += _terminal_soc_constraints(storage_units, soc_list[-1])
+    return constraints
+
+
+def storage_cost_expr(storage_units: list, b: cp.Variable) -> cp.Expression:
+    """Per-step L1 cycling cost; reactive power is intentionally unpenalized."""
+    weights = _storage_static_data(storage_units)["storage_aging_weight"]
+    return cp.sum(cp.multiply(weights, cp.abs(b)))
+
+
+def terminal_cost_expr(
+    storage_units: list,
+    terminal_soc: cp.Variable,
+) -> cp.Expression | None:
+    """Collection-level soft terminal cost, or None when no cost is active."""
+    terms = []
+    for s, unit in enumerate(storage_units):
+        if unit.terminal_cost is None:
+            continue
+        deviation = terminal_soc[s] - unit.terminal_soc
+        if unit.terminal_cost == "linear":
+            penalty = cp.abs(deviation)
+        elif unit.terminal_cost == "quadratic":
+            penalty = cp.square(deviation)
+        elif unit.terminal_cost == "shortfall_linear":
+            penalty = cp.neg(deviation)
+        else:
+            penalty = cp.square(cp.neg(deviation))
+        terms.append(unit.terminal_weight * penalty)
+    return cp.sum(terms) if terms else None
+
+
+def _terminal_deviation_values(
+    targets: np.ndarray,
+    terminal_soc: np.ndarray,
+) -> np.ndarray:
+    """Return signed terminal deviations, with NaN for inactive policies."""
+    targets = np.asarray(targets, dtype=float)
+    terminal_soc = np.asarray(terminal_soc, dtype=float)
+    return np.where(
+        np.isfinite(targets),
+        terminal_soc - targets,
+        np.nan,
+    )

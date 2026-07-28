@@ -15,6 +15,7 @@ import ast
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -23,46 +24,84 @@ EXAMPLES_DIR = PROJECT_ROOT / "examples"
 README_PATH = EXAMPLES_DIR / "README.md"
 TIMEOUT = 60  # seconds per script
 
-# Order in which groups appear in the README
-GROUP_ORDER = [
-    "Single Step AC",
-    "Single Step DC",
-    "Multi Step AC",
-    "Multi Step DC",
-    "Storage AC",
-    "Storage DC",
-    "Sparse vs Dense AC",
-    "Other",
-]
+# Ordered semantic manifest. Classification is deliberately explicit: many
+# examples span formulations or horizons, so their primary teaching purpose
+# cannot be inferred reliably from a filename.
+EXAMPLE_GROUPS = {
+    "Core Formulations": [
+        "case9_single_step.py",
+        "case14_single_step.py",
+        "case14_lossy_dc.py",
+        "case9_singlenode_dc.py",
+    ],
+    "Formulation Comparisons": [
+        "case14_ac_vs_dc.py",
+        "case14_formulation_comparison.py",
+    ],
+    "Multistep Problems": [
+        "case9_multistep_flat_load.py",
+    ],
+    "Storage": [
+        "case9_storage_ac.py",
+        "case9_storage_dc.py",
+        "case9_storage_ac_24h.py",
+        "case9_storage_dc_24h.py",
+        "case9_storage_terminal.py",
+    ],
+    "Nondispatchable Generation": [
+        "case9_multistep_nondispatchable_ac.py",
+        "case9_nondispatchable_dc.py",
+    ],
+    "HVDC Transmission": [
+        "case9_hvdc_ac.py",
+        "case9_hvdc_dc.py",
+    ],
+    "Generator Costs": [
+        "case30pwl_ac.py",
+    ],
+    "Performance and Representation": [
+        "case57_sparse_vs_dense_ac.py",
+        "case118_sparse_vs_dense_ac.py",
+    ],
+}
 
-# Patterns matched against filename (lowercase). First match wins.
-GROUP_PATTERNS = [
-    (r"storage.*ac|ac.*storage",   "Storage AC"),
-    (r"storage.*dc|dc.*storage",   "Storage DC"),
-    (r"sparse.*ac|ac.*sparse",     "Sparse vs Dense AC"),
-    (r"multistep.*ac|ac.*multistep|multistep(?!.*dc)", "Multi Step AC"),
-    (r"multistep.*dc|dc.*multistep","Multi Step DC"),
-    (r"ac_vs_dc|lossy_dc|single_step.*dc|dc.*single_step", "Single Step DC"),
-    (r"single_step|ac",            "Single Step AC"),
-]
 
-# Extract case size (number after "case") for sorting within a group
-CASE_SIZE_RE = re.compile(r"case(\d+)")
+def _validated_groups(examples_dir: Path) -> dict[str, list[Path]]:
+    """Resolve the manifest and reject missing, duplicate, or unknown files."""
+    actual = {
+        path.name: path
+        for path in examples_dir.glob("*.py")
+        if path.name != "__init__.py"
+    }
+    listed = [
+        filename
+        for filenames in EXAMPLE_GROUPS.values()
+        for filename in filenames
+    ]
+    duplicates = sorted(
+        filename
+        for filename, count in Counter(listed).items()
+        if count > 1
+    )
+    nonexistent = sorted(set(listed) - set(actual))
+    unclassified = sorted(set(actual) - set(listed))
 
+    problems = []
+    if duplicates:
+        problems.append(f"listed more than once: {duplicates}")
+    if nonexistent:
+        problems.append(f"listed but not found: {nonexistent}")
+    if unclassified:
+        problems.append(f"not classified: {unclassified}")
+    if problems:
+        raise ValueError(
+            "Invalid EXAMPLE_GROUPS manifest; " + "; ".join(problems)
+        )
 
-def classify_script(filepath: Path) -> str:
-    """Assign a script to a group based on its filename."""
-    name = filepath.stem.lower()
-    for pattern, group in GROUP_PATTERNS:
-        if re.search(pattern, name):
-            return group
-    return "Other"
-
-
-def case_size(filepath: Path) -> int:
-    """Return the numeric case size for sorting, or 0 if not found."""
-    match = CASE_SIZE_RE.search(filepath.stem)
-    return int(match.group(1)) if match else 0
+    return {
+        group: [actual[filename] for filename in filenames]
+        for group, filenames in EXAMPLE_GROUPS.items()
+    }
 
 
 def extract_docstring(filepath: Path) -> str:
@@ -111,30 +150,17 @@ def script_anchor(name: str) -> str:
 
 
 def generate_readme(examples_dir: Path, readme_path: Path) -> None:
-    scripts = sorted(examples_dir.glob("*.py"))
-    scripts = [s for s in scripts if s.name != "__init__.py"]
-
-    if not scripts:
+    groups = _validated_groups(examples_dir)
+    if not any(groups.values()):
         print("No example scripts found.")
         return
-
-    # --- Group and sort scripts ---
-    groups: dict[str, list[Path]] = {g: [] for g in GROUP_ORDER}
-    for script in scripts:
-        group = classify_script(script)
-        groups.setdefault(group, []).append(script)
-
-    for group in groups:
-        groups[group].sort(key=case_size)
 
     # --- Collect output up front so we can build TOC ---
     # structure: [(group, [(script, docstring, output), ...]), ...]
     sections: list[tuple[str, list[tuple[Path, str, str]]]] = []
-    for group in GROUP_ORDER:
-        if not groups.get(group):
-            continue
+    for group, scripts in groups.items():
         entries = []
-        for script in groups[group]:
+        for script in scripts:
             print(f"Processing {script.name}  [{group}]")
             docstring = extract_docstring(script)
             output = run_script(script)

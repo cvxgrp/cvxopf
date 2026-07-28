@@ -34,13 +34,14 @@ def main():
     nd_unit = NondispatchableUnit(
         bus=5,
         p_available=80.0,  # MW - this will be overridden by df_nd
-        apparent_power_rating=100.0  # MVA
+        apparent_power_rating=100.0,  # MVA
+        device_id="wind_5",
     )
 
     # Create time-varying availability profile (ramping down)
-    # Column name must match the bus ID
+    # Column name must match the device's stable ID.
     df_nd = pd.DataFrame({
-        nd_unit.bus: [100.0, 75.0, 50.0]  # MW available at each time step
+        nd_unit.device_id: [100.0, 75.0, 50.0]  # MW available at each step
     })
 
     print(f"\nNondispatchable unit: {nd_unit}")
@@ -68,7 +69,7 @@ def main():
     print(f"Total objective: {results['objective']:.2f} $")
 
     # Display results by time step
-    print(f"\nResults by time step:")
+    print("\nResults by time step:")
     print("-" * 60)
     
     for t in range(T):
@@ -90,7 +91,7 @@ def main():
         print(f"  Conventional generation (Pg): {results['Pg'][t, :]}")
 
     # Verify that p_nd respects the available power bounds
-    print(f"\nVerification:")
+    print("\nVerification:")
     print("-" * 60)
     
     # Check that p_nd <= available power at each step
@@ -111,7 +112,7 @@ def main():
     apr_ok = np.all(apparent_power <= nd_unit.apparent_power_rating + 1e-4)
     print(f"apparent power constraints: {apr_ok}")
 
-    print(f"\nExample completed successfully!")
+    print("\nExample completed successfully!")
 
 
 if __name__ == "__main__":

@@ -35,7 +35,6 @@ import importlib
 from pathlib import Path
 
 import numpy as np
-import textwrap
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -136,7 +135,6 @@ def _fmt_array(arr: np.ndarray, indent: int = 8) -> str:
 
 def _fmt_1d_array(arr: np.ndarray, indent: int = 8) -> str:
     """Format a 1D numpy array as a single-line literal."""
-    pad = " " * indent
     return "[" + ", ".join(_fmt_float(v) for v in arr) + "]"
 
 
@@ -185,22 +183,22 @@ def _generate_source(name: str, ppc: dict) -> str:
     nl = branch.shape[0]
 
     lines = []
-    lines.append(f'"""')
+    lines.append('"""')
     lines.append(f"Power flow data for {name} test case.")
     lines.append(f"Adapted from pypower implementation: {_pypower_source_url(name)}")
-    lines.append(f'"""')
-    lines.append(f"")
-    lines.append(f"import numpy as np")
-    lines.append(f"")
-    lines.append(f"")
+    lines.append('"""')
+    lines.append("")
+    lines.append("import numpy as np")
+    lines.append("")
+    lines.append("")
     lines.append(f"def {name}() -> dict:")
-    lines.append(f'    """')
+    lines.append('    """')
     lines.append(f"    Return power flow data for the {name} test case.")
-    lines.append(f"")
-    lines.append(f"    Returns")
-    lines.append(f"    -------")
-    lines.append(f"    ppc : dict")
-    lines.append(f"        MATPOWER-format case dict with keys:")
+    lines.append("")
+    lines.append("    Returns")
+    lines.append("    -------")
+    lines.append("    ppc : dict")
+    lines.append("        MATPOWER-format case dict with keys:")
     key_list = "version, baseMVA, bus, gen, branch"
     if has_areas:
         key_list += ", areas"
@@ -208,50 +206,50 @@ def _generate_source(name: str, ppc: dict) -> str:
     if has_dcline:
         key_list += ", dcline, dclinecost"
     lines.append(f"        {key_list}.")
-    lines.append(f"")
-    lines.append(f"    Network summary")
-    lines.append(f"    ---------------")
+    lines.append("")
+    lines.append("    Network summary")
+    lines.append("    ---------------")
     lines.append(f"    Buses      : {nb}")
     lines.append(f"    Generators : {ng}")
     lines.append(f"    Branches   : {nl}")
-    lines.append(f'    """')
-    lines.append(f'    ppc = {{"version": "2"}}')
-    lines.append(f"")
+    lines.append('    """')
+    lines.append('    ppc = {"version": "2"}')
+    lines.append("")
     lines.append(f'    ppc["baseMVA"] = {_fmt_float(float(ppc["baseMVA"]))}')
-    lines.append(f"")
+    lines.append("")
     lines.append(f"    {bus_comment}")
     lines.append(f'    ppc["bus"] = np.array({_fmt_array(bus)})')
-    lines.append(f"")
+    lines.append("")
     lines.append(f"    {gen_comment}")
     lines.append(f'    ppc["gen"] = np.array({_fmt_array(gen)})')
-    lines.append(f"")
+    lines.append("")
     lines.append(f"    {branch_comment}")
     lines.append(f'    ppc["branch"] = np.array({_fmt_array(branch)})')
-    lines.append(f"")
+    lines.append("")
 
     if has_areas:
         areas = np.asarray(ppc["areas"], dtype=float)
         if areas.ndim == 1:
             areas = areas.reshape(1, -1)
         lines.append(f'    ppc["areas"] = np.array({_fmt_array(areas)})')
-        lines.append(f"")
+        lines.append("")
 
     lines.append(f"    {gencost_comment}")
     lines.append(f'    ppc["gencost"] = np.array({_fmt_array(gencost)})')
-    lines.append(f"")
+    lines.append("")
 
     if has_dcline:
         dcline = np.asarray(ppc["dcline"], dtype=float)
         dclinecost = np.asarray(ppc["dclinecost"], dtype=float)
         lines.append(f"    {dcline_comment}")
         lines.append(f'    ppc["dcline"] = np.array({_fmt_array(dcline)})')
-        lines.append(f"")
+        lines.append("")
         lines.append(f"    {dclinecost_comment}")
         lines.append(f'    ppc["dclinecost"] = np.array({_fmt_array(dclinecost)})')
-        lines.append(f"")
+        lines.append("")
 
-    lines.append(f"    return ppc")
-    lines.append(f"")
+    lines.append("    return ppc")
+    lines.append("")
 
     return "\n".join(lines)
 
@@ -356,8 +354,8 @@ def main() -> int:
                 if answer == "y":
                     _write(dest, source)
                     print(f"  Note: if {name}.py was overwritten, review and")
-                    print(f"  update tests/test_network.py and")
-                    print(f"  tests/test_vs_pypower_reference.py accordingly.")
+                    print("  update tests/test_network.py and")
+                    print("  tests/test_vs_pypower_reference.py accordingly.")
                 else:
                     print(f"  Keeping existing {dest.name}.")
             else:

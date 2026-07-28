@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild, OPFOptions
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild
 from cvxopf.results import extract_results
 
 
@@ -102,7 +102,7 @@ class TestReturnType:
             build = build_opf_multistep(
                 case9(), df_P, df_Q, T=T, formulation="lossy_dc"
             )
-        for key in ("p_flows", "p_gen"):
+        for key in ("p_flows", "Pg"):
             assert isinstance(build.variables[key], list)
             assert len(build.variables[key]) == T, \
                 f"variables['{key}'] should have length T={T}"

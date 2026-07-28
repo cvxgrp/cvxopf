@@ -27,7 +27,7 @@ def main():
     print(f"\nNondispatchable unit: {nd_unit}")
 
     # Build and solve the DC OPF
-    print(f"\nBuilding lossy DC-OPF with nondispatchable generator...")
+    print("\nBuilding lossy DC-OPF with nondispatchable generator...")
     build = build_opf(
         case=case9(),
         formulation="lossy_dc",
@@ -44,7 +44,7 @@ def main():
     print(f"Total objective: {results['objective']:.2f} $")
 
     # Display results
-    print(f"\nNondispatchable generator results:")
+    print("\nNondispatchable generator results:")
     print("-" * 60)
     print(f"P_nd: {results['p_nd'][0]:.2f} MW")
     print(f"Curtailment: {results['curtailment'][0]:.2f} MW")
@@ -52,12 +52,12 @@ def main():
     print(f"Utilization: {results['p_nd'][0] / nd_unit.p_available * 100:.1f}%")
 
     # Show conventional generation
-    print(f"\nConventional generation (Pg):")
+    print("\nConventional generation (Pg):")
     for i, pg_val in enumerate(results['Pg']):
         print(f"  Generator {i+1}: {pg_val:.2f} MW")
 
     # Verify results
-    print(f"\nVerification:")
+    print("\nVerification:")
     print("-" * 60)
     
     # Check that p_nd <= available power
@@ -78,7 +78,7 @@ def main():
     print(f"q_nd absent from DC results: {q_nd_absent}")
     
     # Compare with case without nondispatchable
-    print(f"\nImpact analysis:")
+    print("\nImpact analysis:")
     print("-" * 60)
     
     # Solve without nondispatchable
@@ -96,7 +96,7 @@ def main():
     print(f"ND injection: {results['p_nd'][0]:.2f} MW")
     print(f"Accounting matches: {abs(reduction - results['p_nd'][0]) < 1.0}")
 
-    print(f"\nExample completed successfully!")
+    print("\nExample completed successfully!")
 
 
 if __name__ == "__main__":

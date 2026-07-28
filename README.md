@@ -28,6 +28,27 @@ studying how battery controllers should behave under adverse multi-day
 conditions, how much temporal foresight matters, and how well convex
 approximations track AC feasibility across extended horizons.
 
+Storage is treated as an intertemporal network device, not as a sequence of
+independent power injections. A multi-step solve co-optimizes the complete
+dispatch and state-of-charge trajectories, including power and energy limits
+and configurable terminal constraints or costs. This temporal coupling changes
+both the feasible set and the economics of the OPF: stored energy acquires an
+opportunity value, strongly convex generation costs induce levelization, and
+the controller can preserve energy for future scarcity.
+
+![High-stress intertemporal and greedy battery-control comparison](experiments/battery_terminal/readme_intertemporal_storage.png)
+
+*High-stress 96-hour comparison with a 500 MWh terminal target. The
+experiment augments the 9-bus test case with nondispatchable generation and a
+single storage device, driven by time-series load and renewable-availability
+inputs supplied through the native `df_P`, `df_Q`, and `df_nd` pandas
+interfaces. The top panel shows the active load together with the utility
+solar, distributed solar, and wind availability supplied to the model. The
+network-constrained optimum anticipates future scarcity and enforces the
+terminal state; the causal greedy controllers are terminal-blind. Their lower
+dispatchable-energy totals are not improvements where they accompany unserved
+load.*
+
 Because it is built on CVXPY, the problem structure is transparent and
 composable. Researchers can modify objectives, add contingency constraints,
 or experiment with formulations — including multi-forecast Model Predictive
@@ -42,9 +63,32 @@ with appropriate solvers. It is designed to:
 - Support multiple OPF formulations from a single entry point
 - Support single-shot optimization over multiple time steps
 - Accept time-varying nodal load as pandas DataFrames
-- Model energy storage with state-of-charge dynamics
+- Model storage as a first-class intertemporal device with state-of-charge
+  coupling and configurable terminal policies
 - Model nondispatchable generators (wind, solar, run-of-river hydro) with
   curtailable output and reactive power support
+
+### Methodology
+
+Many individual capabilities exposed by `cvxopf`, including multi-period OPF
+and intertemporal storage, also appear in other power-system optimization
+packages. The central contribution here is their organization within a
+[disciplined convex programming (DCP)](https://www.cvxpy.org/tutorial/dcp/) and [disciplined nonlinear programming
+(DNLP)](https://www.cvxpy.org/tutorial/dnlp/index.html) methodology: device dynamics, costs, and operating sets remain convex
+wherever the model permits, while the nonconvexity of the full AC formulation
+is confined to the network-flow physics.
+
+This separation supports an explicit hierarchical solve structure. A globally
+solvable, long-horizon convex layer determines intertemporal energy decisions
+and passes device states, especially battery state of charge, to a
+short-horizon AC layer. The AC layer verifies and corrects for full network
+physics without needing to reproduce the approximate dispatch trajectory.
+
+Nondispatchable resources are likewise first-class devices rather than generic
+generator boxes: time-varying real-power availability is coupled to a convex
+inverter apparent-power region in AC and to separate availability and rating
+bounds in DC. This preserves the converter-capacity limit without adding
+nonconvexity.
 
 ### Formulations
 
@@ -161,13 +205,18 @@ economic-dispatch problem without a full network:
 ```python
 from cvxopf.testcases import make_singlenode_case
 from cvxopf.problem import build_opf
+from cvxopf.generator import DispatchableGenerator
 from cvxopf.results import extract_results
 
 case = make_singlenode_case(
     P_load_MW=250.0,
     generators=[
-        {"P_max_MW": 200.0, "cost_coeffs": (0.0, 10.0, 0.05)},  # (c0, c1, c2)
-        {"P_max_MW": 150.0, "cost_coeffs": (0.0, 15.0, 0.08)},
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
     ],
 )
 
@@ -182,6 +231,39 @@ The `examples/case14_formulation_comparison.py` script solves the IEEE
 14-bus case with all three formulations side by side and contrasts their
 dispatch and implied losses.
 
+### First-class dispatchable generators
+
+Pass `DispatchableGenerator` objects to define generator locations, operating
+bounds, and costs directly. Polynomial costs use lowest-power-first
+coefficients and are limited to degree two; piecewise-linear costs use
+explicit `(power_MW, cost)`
+breakpoints. All cost expressions are evaluated by the shared implementation
+in `cost.py`.
+
+```python
+from cvxopf import DispatchableGenerator, build_opf
+
+generators = [
+    DispatchableGenerator(
+        bus=1,
+        p_min_mw=10.0,
+        p_max_mw=250.0,
+        q_min_mvar=-300.0,
+        q_max_mvar=300.0,
+        cost_type="piecewise_linear",
+        cost_points=((0.0, 0.0), (100.0, 2500.0), (250.0, 7250.0)),
+    ),
+]
+
+# network_case needs bus, branch, and baseMVA, but may omit gen/gencost.
+build = build_opf(network_case, formulation="ac", generators=generators)
+```
+
+For backward compatibility, omitting `generators=` converts the case's
+MATPOWER `gen` and `gencost` tables to the same component representation at
+build time. Supplying `generators=` overrides those tables; they may be absent,
+and the input case dict is not mutated.
+
 ## Interactive notebooks
 
 We recommend using `uv` (https://docs.astral.sh/uv/) to run the notebooks.
@@ -192,8 +274,11 @@ uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 ```
 
 Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
-adjust generator limits, branch flow limits, and load scale interactively.
-Results update automatically after each solve.
+and adjust generator limits, branch-flow reference values, and load scale
+interactively. The lossy DC formulation enforces the selected branch limits.
+The AC formulation currently uses them only as visualization thresholds; AC
+branch-limit constraints are not yet implemented. Results update automatically
+after each solve.
 
 ```bash
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
@@ -231,7 +316,7 @@ df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
 build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac")
 build.solve()
 results = extract_results(build)
-print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
@@ -273,10 +358,29 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Total objective: {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
+
+Each storage unit may optionally configure one terminal policy. Hard policies
+use `terminal_constraint="equality"` to fix the final post-step SoC or
+`terminal_constraint="shortfall"` to enforce
+`soc[-1] >= terminal_soc`. Soft alternatives use
+`terminal_cost="linear"` or `"quadratic"` for two-sided deviation, and
+`"shortfall_linear"` or `"shortfall_quadratic"` to penalize only energy below
+the target. A hard constraint and terminal cost are alternatives for a given
+unit. A hard terminal policy makes the problem infeasible when the target
+cannot be reached within the horizon; use a soft terminal cost when a
+controlled violation is preferable.
+
+Linear terminal weights have units of objective units/MWh, and quadratic
+weights have units of objective units/MWh². The terminal term is applied once
+at the horizon boundary and is not scaled by `delta`. As with the existing
+multistep stage costs, when `delta != 1` hour the weight is relative to the
+package's summed-stage objective rather than automatically representing a
+physical dollar coefficient. See `examples/case9_storage_terminal.py` for a
+side-by-side comparison.
 
 ## Nondispatchable generator example
 
@@ -284,9 +388,11 @@ Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
 produce up to a time-varying available power `R_t` determined by ambient
 conditions. The OPF can curtail freely; there is no cost for generation or
 curtailment. In AC, the inverter also provides reactive power support within
-its apparent power rating. Passing a multi-day solar availability profile
-via `df_nd` lets the optimizer account for sustained generation shortfalls
-across the full planning horizon.
+its apparent power rating. In DC, reactive power is absent, but the
+availability and apparent-power rating remain as separate real-power upper
+bounds. Passing a multi-day solar availability profile via `df_nd` lets the
+optimizer account for sustained generation shortfalls across the full
+planning horizon.
 
 ```python
 import numpy as np
@@ -310,8 +416,9 @@ unit  = NondispatchableUnit(
     bus=5,
     p_available=100.0,            # MW — fallback for single-step
     apparent_power_rating=120.0,  # MVA — inverter nameplate
+    device_id="solar_5",          # stable key for external time series
 )
-df_nd = pd.DataFrame({5: [100.0, 75.0, 50.0]})  # MW available per step
+df_nd = pd.DataFrame({"solar_5": [100.0, 75.0, 50.0]})
 
 build = build_opf_multistep(
     ppc, df_P, df_Q, T=T, formulation="ac",
@@ -319,7 +426,7 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Total objective:      {results['objective']:.2f} $/hr")
+print(f"Summed per-step objective: {results['objective']:.2f}")
 print(f"ND real power (MW):   {results['p_nd']}")
 print(f"ND reactive (MVAr):   {results['q_nd']}")
 print(f"Curtailment (MW):     {results['curtailment']}")
@@ -330,7 +437,10 @@ print(f"Curtailment (MW):     {results['curtailment']}")
 HVDC links are controllable point-to-point power transfers between two buses,
 modelled as signed nodal injections (Convention B: positive = injection into
 the grid) subject to capacity limits. On fixed-direction links the converter
-loss is proportional (`p_out = -(1 - loss_frac) * p_in`). Links can be built
+loss is proportional. With signed grid injections, negative `p_in` sends power
+from the from-bus and gives `p_out = -(1 - loss_frac) * p_in`; positive `p_in`
+receives power at the from-bus and gives
+`p_out = -p_in / (1 - loss_frac)`. Links can be built
 directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
 `hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
 loss (`loss0`, emitting a `UserWarning`); it applies to both the AC and lossy
@@ -364,10 +474,12 @@ src/cvxopf/           Core package
   singlenode_dc_problem.py  Single-node DC dispatch helpers (convex QP)
   network.py          Ybus, incidence matrices, reindexing
   cost.py             Generator cost expression builders
+  generator.py        DispatchableGenerator component and MATPOWER conversion
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
-  storage.py          StorageUnitIdeal dataclass and helpers
-  nondispatchable.py  NondispatchableUnit dataclass and helpers
+  storage.py          Storage component: data, injections, constraints, cost
+  nondispatchable.py  ND component: data, injections, and constraints
+  hvdc.py             HVDC component and MATPOWER dcline conversion
   testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)
@@ -413,6 +525,17 @@ uv run --extra dev pytest tests/ -v
 pytest tests/ -v
 ```
 
+Run the project lint policy with:
+
+```bash
+uv run --extra dev ruff check .
+```
+
+The routine lint gate covers the package, tests, examples, and maintenance
+scripts. Exploratory `experiments/` code and interactive `notebooks/` are
+excluded; they are reviewed in the context of the study or notebook rather
+than held to the library policy.
+
 To regenerate the Pypower reference fixtures (requires `uv`):
 
 ```bash
@@ -432,15 +555,18 @@ package environment.
 - [ ] Branch flow limits (AC)
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
-- [x] HVDC transmission links (lossless + fixed-direction proportional loss)
-- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split)
+- [x] HVDC transmission links (lossless + fixed-direction proportional loss, unity power factor)
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model
-- [ ] Extend battery parameters: final SoC, penalty vs constraint
+- [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Implement cvxpy parameters for problem data
 - [ ] Vectorize time constraints (currently built with iterative loop)
-- [ ] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
-- [ ] Full lossy HVDC (sign-switching converter losses) with reactive power suppport
-- [ ] Unify grid component model patterns matching HVDC pattern
+- [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
+- [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
+- [ ] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
+- [ ] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
+- [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
+- [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
+- [ ] Explicit nodal load shedding with value-of-lost-load costs and energy-not-served reporting (see `plans/milestone-19-load-shedding.md`)

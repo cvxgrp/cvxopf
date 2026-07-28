@@ -24,7 +24,6 @@ Run from the repository root:
 
 import warnings
 
-import numpy as np
 
 from cvxopf.testcases import case14
 from cvxopf.problem import build_opf
@@ -45,7 +44,6 @@ def _solve(formulation, case):
 
 def main():
     ppc      = case14()
-    baseMVA  = ppc["baseMVA"]
     gen_bus  = ppc["gen"][:, 0].astype(int)     # external bus IDs
     ng       = ppc["gen"].shape[0]
     total_ld = ppc["bus"][:, 2].sum()

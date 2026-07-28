@@ -9,16 +9,16 @@ import pytest
 
 from cvxopf.testcases import case9, make_singlenode_case
 from cvxopf.problem import (
-    build_opf, build_opf_multistep, OPFBuild, OPFOptions,
-    StorageUnitIdeal,
+    build_opf, build_opf_multistep, OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.results import extract_results
+from cvxopf.generator import DispatchableGenerator
 
 
 SIMPLE_GENS = [
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 1.0, 0.01)},
-    {"P_max_MW": 200.0, "cost_coeffs": (0.0, 2.0, 0.02)},
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 1.0, 0.01)),
+    DispatchableGenerator(bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 2.0, 0.02)),
 ]
 
 OBJ_RTOL = 1e-4
@@ -313,10 +313,17 @@ class TestSinglenodeDcMultistepStorage:
 
 class TestSinglenodeDcMultistepNondispatchable:
 
-    ND = [NondispatchableUnit(bus=1, p_available=80.0, apparent_power_rating=100.0)]
+    ND = [
+        NondispatchableUnit(
+            bus=1,
+            p_available=80.0,
+            apparent_power_rating=100.0,
+            device_id="nd",
+        )
+    ]
 
     def _df_nd(self, values):
-        return pd.DataFrame({1: values})
+        return pd.DataFrame({"nd": values})
 
     def test_nd_solves_optimal(self):
         df_P, df_Q = _singlenode_load_dfs(100.0, 3)
