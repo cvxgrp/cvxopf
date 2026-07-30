@@ -11,7 +11,6 @@ composition, and ``OPFBuild`` construction.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence, cast
 
@@ -28,6 +27,7 @@ from cvxopf._component_adapter import (
     PreparedComponent,
     StepContext,
     StepContribution,
+    _validate_positive_real,
     bind_injection_scale,
 )
 
@@ -537,8 +537,7 @@ def integrate_stage_cost_rates(
     delta: float,
 ) -> cp.Expression:
     """Integrate scalar stage-cost rates over equal-duration intervals."""
-    if not math.isfinite(delta) or delta <= 0:
-        raise ValueError("delta must be finite and > 0")
+    _validate_positive_real("delta", delta)
     if not stage_cost_rates:
         raise ValueError("stage-cost integration requires at least one rate")
     for index, rate in enumerate(stage_cost_rates):

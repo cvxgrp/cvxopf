@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 import math
+from numbers import Real
 from types import MappingProxyType
 from typing import (
     Generic,
@@ -39,6 +40,14 @@ def _readonly(
     return MappingProxyType(dict(values))
 
 
+def _validate_positive_real(name: str, value: object) -> None:
+    """Require a finite, strictly positive real scalar."""
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError(f"{name} must be a real scalar")
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and > 0")
+
+
 class FormulationCapability(Enum):
     """A component's relationship to one formulation."""
 
@@ -60,8 +69,7 @@ class PreparationContext:
     is_multistep: bool | None = None
 
     def __post_init__(self) -> None:
-        if not math.isfinite(self.base_mva) or self.base_mva <= 0:
-            raise ValueError("base_mva must be finite and > 0")
+        _validate_positive_real("base_mva", self.base_mva)
         if (
             not isinstance(self.nb, int)
             or isinstance(self.nb, bool)
@@ -74,8 +82,7 @@ class PreparationContext:
             or self.horizon_steps <= 0
         ):
             raise ValueError("horizon_steps must be a positive integer")
-        if not math.isfinite(self.delta) or self.delta <= 0:
-            raise ValueError("delta must be finite and > 0")
+        _validate_positive_real("delta", self.delta)
         if self.horizon_steps > 1 and self.is_multistep is False:
             raise ValueError(
                 "is_multistep must be True when horizon_steps > 1"
@@ -124,8 +131,7 @@ class StepContext:
             raise ValueError("step must be a nonnegative integer")
         if self.step < 0:
             raise ValueError("step must be a nonnegative integer")
-        if not math.isfinite(self.base_mva) or self.base_mva <= 0:
-            raise ValueError("base_mva must be finite and > 0")
+        _validate_positive_real("base_mva", self.base_mva)
         if self.formulation == "ac":
             if not isinstance(self.network_state, ACNetworkState):
                 raise ValueError(
@@ -153,8 +159,7 @@ class HorizonContext:
             or self.horizon_steps <= 0
         ):
             raise ValueError("horizon_steps must be a positive integer")
-        if not math.isfinite(self.delta) or self.delta <= 0:
-            raise ValueError("delta must be finite and > 0")
+        _validate_positive_real("delta", self.delta)
 
 
 @dataclass(frozen=True)

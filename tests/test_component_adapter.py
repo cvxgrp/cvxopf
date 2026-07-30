@@ -182,6 +182,61 @@ def test_step_and_horizon_contexts_keep_temporal_roles_separate():
     assert horizon.delta == pytest.approx(0.25)
 
 
+@pytest.mark.parametrize("step", [True, -1, 0.5])
+def test_step_context_rejects_invalid_step(step):
+    with pytest.raises(ValueError, match="step must be a nonnegative integer"):
+        StepContext(
+            "lossy_dc",
+            step,
+            100.0,
+            {1: 0},
+            DCNetworkState(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("base_mva", "error"),
+    [
+        (True, TypeError),
+        ("100", TypeError),
+        (0.0, ValueError),
+        (float("nan"), ValueError),
+    ],
+)
+def test_step_context_rejects_invalid_base_mva(base_mva, error):
+    with pytest.raises(error, match="base_mva must be"):
+        StepContext(
+            "lossy_dc",
+            0,
+            base_mva,
+            {1: 0},
+            DCNetworkState(),
+        )
+
+
+@pytest.mark.parametrize("horizon_steps", [True, 0, 1.5])
+def test_horizon_context_rejects_invalid_step_count(horizon_steps):
+    with pytest.raises(
+        ValueError, match="horizon_steps must be a positive integer"
+    ):
+        HorizonContext("lossy_dc", horizon_steps, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("delta", "error"),
+    [
+        (True, TypeError),
+        ("1", TypeError),
+        (0.0, ValueError),
+        (float("inf"), ValueError),
+        (float("nan"), ValueError),
+    ],
+)
+def test_horizon_context_rejects_invalid_delta(delta, error):
+    with pytest.raises(error, match="delta must be"):
+        HorizonContext("lossy_dc", 1, delta)
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

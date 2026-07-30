@@ -24,6 +24,7 @@ from cvxopf._component_adapter import (
     HorizonContribution,
     InjectionContribution,
     PreparationContext,
+    PreparedComponent,
     StepContribution,
     StepContext,
     VariableSpec,
@@ -36,6 +37,7 @@ from cvxopf._component_adapters import (
 )
 from cvxopf._component_assembly import (
     ComponentRequest,
+    PreparedComponents,
     aggregate_horizon_contributions,
     aggregate_step_contributions,
     assemble_component_horizon,
@@ -638,6 +640,25 @@ def test_step_expression_aggregation_rejects_duplicate_flat_names():
         aggregate_step_contributions({"first": first, "second": second})
 
 
+def test_step_aggregation_rejects_duplicate_variable_names():
+    first_variable = cp.Variable(1)
+    second_variable = cp.Variable(1)
+    first = StepContribution(
+        variables={"shared": first_variable},
+        injection=InjectionContribution(None, None),
+    )
+    second = StepContribution(
+        variables={"shared": second_variable},
+        injection=InjectionContribution(None, None),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"component 'second' published duplicate variables: \['shared'\]",
+    ):
+        aggregate_step_contributions({"first": first, "second": second})
+
+
 def test_step_expression_aggregation_rejects_empty_name():
     contribution = StepContribution(
         variables={},
@@ -722,6 +743,36 @@ def test_stage_cost_rates_are_integrated_once_by_delta():
     assert integrated.value == pytest.approx(2.0)
 
 
+@pytest.mark.parametrize(
+    ("delta", "error"),
+    [
+        (True, TypeError),
+        (False, TypeError),
+        ("1", TypeError),
+        (0.0, ValueError),
+        (-1.0, ValueError),
+        (float("inf"), ValueError),
+        (float("nan"), ValueError),
+    ],
+)
+def test_stage_cost_integration_rejects_invalid_delta(delta, error):
+    with pytest.raises(error, match="delta must be"):
+        integrate_stage_cost_rates((cp.Constant(1.0),), delta)
+
+
+def test_stage_cost_integration_requires_at_least_one_rate():
+    with pytest.raises(ValueError, match="requires at least one rate"):
+        integrate_stage_cost_rates((), 1.0)
+
+
+def test_stage_cost_integration_rejects_nonscalar_rate():
+    with pytest.raises(
+        ValueError,
+        match="stage cost rate at index 0 must be a scalar cp.Expression",
+    ):
+        integrate_stage_cost_rates((cp.Constant([1.0, 2.0]),), 1.0)
+
+
 def test_named_component_costs_are_integrated_across_steps():
     first = {
         "generator": StepContribution(
@@ -750,6 +801,46 @@ def test_named_component_costs_are_integrated_across_steps():
 
     assert tuple(costs) == ("generator_cost",)
     assert costs["generator_cost"].value == pytest.approx(5.0)
+
+
+def test_named_component_costs_require_at_least_one_step():
+    with pytest.raises(ValueError, match="at least one step contribution"):
+        integrate_component_stage_costs((), 1.0)
+
+
+def test_named_component_costs_require_stable_component_keys():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+    )
+
+    with pytest.raises(ValueError, match="inconsistent component keys"):
+        integrate_component_stage_costs(
+            ({"first": contribution}, {"second": contribution}),
+            1.0,
+        )
+
+
+def test_named_component_costs_require_stable_cost_availability():
+    with_cost = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+    )
+    without_cost = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="component 'toy' has inconsistent step-cost availability",
+    ):
+        integrate_component_stage_costs(
+            ({"toy": with_cost}, {"toy": without_cost}),
+            1.0,
+        )
 
 
 def test_expression_publication_rejects_inconsistent_multistep_keys():
@@ -1130,6 +1221,74 @@ def test_component_request_units_are_normalized_to_a_tuple():
     assert isinstance(request.units, tuple)
 
 
+def test_preparation_rejects_duplicate_component_adapters():
+    request = ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),))
+
+    with pytest.raises(ValueError, match="duplicate component adapter 'toy'"):
+        prepare_components(
+            (request, request),
+            "lossy_dc",
+            _preparation(),
+        )
+
+
+def test_preparation_rejects_unsupported_component():
+    formulations = dict(TOY_ADAPTER.formulations)
+    formulations["lossy_dc"] = FormulationAdapter(
+        capability=FormulationCapability.UNSUPPORTED
+    )
+    adapter = replace(TOY_ADAPTER, formulations=formulations)
+
+    with pytest.raises(ValueError, match="does not support formulation"):
+        prepare_components(
+            (ComponentRequest(adapter, (_ToyUnit(2, 20.0),)),),
+            "lossy_dc",
+            _preparation(),
+        )
+
+
+def test_preparation_rejects_duplicate_flat_data_keys():
+    other_adapter = replace(TOY_ADAPTER, name="other")
+
+    with pytest.raises(ValueError, match="prepared duplicate data keys"):
+        prepare_components(
+            (
+                ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),
+                ComponentRequest(other_adapter, (_ToyUnit(2, 20.0),)),
+            ),
+            "lossy_dc",
+            _preparation(),
+        )
+
+
+def test_step_assembly_rejects_nonactive_prepared_component():
+    formulations = dict(TOY_ADAPTER.formulations)
+    formulations["lossy_dc"] = FormulationAdapter(
+        capability=FormulationCapability.UNSUPPORTED
+    )
+    adapter = replace(TOY_ADAPTER, formulations=formulations)
+    prepared = PreparedComponents(
+        "lossy_dc",
+        _preparation(),
+        {
+            "toy": PreparedComponent(
+                adapter,
+                (_ToyUnit(2, 20.0),),
+                {},
+            )
+        },
+        {},
+    )
+
+    with pytest.raises(ValueError, match="component 'toy' is not active"):
+        assemble_component_step(
+            prepared,
+            StepContext(
+                "lossy_dc", 0, 100.0, {1: 0, 2: 1}, DCNetworkState()
+            ),
+        )
+
+
 def test_shared_assembly_rejects_formulation_and_horizon_mismatches():
     generator = DispatchableGenerator(
         bus=1, p_max_mw=100.0, cost_coeffs=(0.0, 1.0, 0.0)
@@ -1171,6 +1330,63 @@ def test_shared_assembly_rejects_formulation_and_horizon_mismatches():
     np.testing.assert_equal(
         step["generator"].variables["Pg"].shape, (1,)
     )
+
+
+def test_horizon_assembly_rejects_formulation_mismatch():
+    prepared = prepare_components(
+        (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(),
+    )
+
+    with pytest.raises(ValueError, match="horizon formulation"):
+        assemble_component_horizon(
+            prepared,
+            (),
+            HorizonContext("singlenode_dc", 1, 0.5),
+        )
+
+
+def test_horizon_assembly_rejects_step_count_mismatch():
+    prepared = prepare_components(
+        (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(horizon_steps=2),
+    )
+    step = assemble_component_step(
+        prepared,
+        StepContext(
+            "lossy_dc", 0, 100.0, {1: 0, 2: 1}, DCNetworkState()
+        ),
+    )
+
+    with pytest.raises(ValueError, match="step contribution count"):
+        assemble_component_horizon(
+            prepared,
+            (step,),
+            HorizonContext("lossy_dc", 2, 0.5),
+        )
+
+
+def test_horizon_assembly_rejects_unregistered_step_component():
+    prepared = prepare_components(
+        (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(),
+    )
+    wrong_step = {
+        "other": StepContribution(
+            variables={},
+            injection=InjectionContribution(None, None),
+        )
+    }
+
+    with pytest.raises(ValueError, match="step 0 component keys"):
+        assemble_component_horizon(
+            prepared,
+            (wrong_step,),
+            HorizonContext("lossy_dc", 1, 0.5),
+        )
 
 
 @pytest.mark.parametrize(

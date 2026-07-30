@@ -464,3 +464,37 @@ def test_hvdc_adapter_derives_static_box_and_declares_singlenode_null():
     assert null_binding.operating_constraints is None
     assert null_binding.step_cost is None
     assert null_binding.horizon is None
+
+
+@pytest.mark.parametrize(
+    ("p_min", "p_max", "message"),
+    [
+        (
+            np.zeros((1, 1)),
+            np.zeros((1, 1)),
+            "HVDC bounds must both have shape",
+        ),
+        (
+            np.array([[np.nan], [0.0]]),
+            np.zeros((2, 1)),
+            "HVDC bounds must contain only finite values",
+        ),
+        (
+            np.ones((2, 1)),
+            np.zeros((2, 1)),
+            "HVDC bounds must satisfy",
+        ),
+    ],
+)
+def test_hvdc_adapter_rejects_invalid_external_bounds(
+    p_min, p_max, message
+):
+    _, preparation = _case_context(horizon_steps=2)
+    units = (HVDCLink(4, 9, -10.0, 15.0),)
+
+    with pytest.raises(ValueError, match=message):
+        HVDC_ADAPTER.prepare(
+            units,
+            HVDCInputs(p_min_mw=p_min, p_max_mw=p_max),
+            preparation,
+        )
