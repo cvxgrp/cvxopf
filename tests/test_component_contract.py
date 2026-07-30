@@ -305,6 +305,67 @@ def test_multistep_builders_compose_nd_coupling_hook(
     assert calls[0][3] == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
+@pytest.mark.parametrize(
+    ("horizon_mode", "T"),
+    [("single", 1), ("multistep_t1", 1), ("multistep", 2)],
+)
+def test_builders_compose_storage_horizon_hooks_once(
+    formulation, horizon_mode, T, monkeypatch
+):
+    coupling_calls = []
+    terminal_cost_calls = []
+
+    def coupling_spy(units, b_list, soc_list, delta=1.0):
+        coupling_calls.append((units, b_list, soc_list, delta))
+        return []
+
+    def terminal_cost_spy(units, terminal_soc):
+        terminal_cost_calls.append((units, terminal_soc))
+        return cp.Constant(0.0)
+
+    monkeypatch.setattr(storage, "coupling_constraints", coupling_spy)
+    monkeypatch.setattr(storage, "terminal_cost_expr", terminal_cost_spy)
+
+    case = case9()
+    units = [
+        StorageUnitIdeal(
+            bus=5,
+            apparent_power_rating=10.0,
+            capacity=20.0,
+            initial_soc=10.0,
+        )
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        if horizon_mode == "single":
+            build_opf(
+                case,
+                formulation=formulation,
+                storage=units,
+                delta=0.5,
+            )
+        else:
+            df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+            df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+            build_opf_multistep(
+                case,
+                df_P,
+                df_Q,
+                T=T,
+                formulation=formulation,
+                storage=units,
+                delta=0.5,
+            )
+
+    assert len(coupling_calls) == 1
+    assert len(coupling_calls[0][1]) == T
+    assert len(coupling_calls[0][2]) == T
+    assert coupling_calls[0][3] == pytest.approx(0.5)
+    assert len(terminal_cost_calls) == 1
+    assert terminal_cost_calls[0][1] is coupling_calls[0][2][-1]
+
+
 @pytest.mark.parametrize(
     ("formulation", "builder_module"),
     [("ac", ac_problem), ("lossy_dc", dc_problem)],

@@ -57,17 +57,11 @@ from cvxopf._component_adapter import (
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
+    STORAGE_ADAPTER,
     NondispatchableInputs,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _prepare_data as storage_prepare_data,
-    _build_metadata as storage_build_metadata,
-    dc_injections as storage_dc_injections,
-    dc_operating_constraints as storage_dc_operating_constraints,
-    coupling_constraints as storage_coupling_constraints,
-    storage_cost_expr,
-    terminal_cost_expr as storage_terminal_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -172,10 +166,9 @@ def _parse_dc_case(
     # Parse storage if present
     storage_data = {}
     if storage:
-        storage_data = storage_prepare_data(
-            storage, nb, ext_to_int, ext_bus_ids
+        storage_data = STORAGE_ADAPTER.prepare(
+            storage, None, preparation
         )
-        storage_data["storage_delta"] = float(delta)
 
     # Parse nondispatchable if present
     nd_data = {}
@@ -218,10 +211,8 @@ def _make_dc_step_constraints(
     p_flows, Pg, generator_injection,
     A, Pd, f_max, generator_operating_constraints,
     ns: int = 0,
-    storage_units=None,
     storage_injection=None,
-    b_t=None,
-    soc_t=None,
+    storage_operating_constraints=(),
     nnd: int = 0,
     nd_injection=None,
     nd_operating_constraints=(),
@@ -252,7 +243,7 @@ def _make_dc_step_constraints(
 
     # Section 5: Storage real power bounds (omitted when ns == 0)
     if ns > 0:
-        constr += storage_dc_operating_constraints(storage_units, b_t, soc_t)
+        constr += list(storage_operating_constraints)
 
     # Section 5b: Nondispatchable real power bounds (omitted when nnd == 0)
     if nnd > 0:
@@ -327,14 +318,24 @@ def _build_lossy_dc_single(
     b_t = soc_t = None
     storage_inj = None
     if "ns" in d:
-        ns = d["ns"]
-        b_t = cp.Variable(ns, name="b")
-        soc_t = cp.Variable(ns, name="soc")
-        storage_inj, storage_q_inj, storage_scaling = storage_dc_injections(
-            storage, b_t, d["ext_to_int"], incidence=d["Cs"]
+        storage_binding = STORAGE_ADAPTER.formulations["lossy_dc"]
+        assert storage_binding.variable_specs is not None
+        assert storage_binding.injections is not None
+        storage_variables = {
+            spec.name: cp.Variable(
+                spec.shape, name=spec.name, **spec.attributes
+            )
+            for spec in storage_binding.variable_specs(
+                storage, d, step_context
+            )
+        }
+        b_t = storage_variables["b"]
+        soc_t = storage_variables["soc"]
+        storage_injection = storage_binding.injections(
+            storage, d, storage_variables, step_context
         )
-        assert storage_q_inj is None
-        storage_scaling.value = 1.0 / d["baseMVA"]
+        bind_injection_scale(storage_injection, d["baseMVA"])
+        storage_inj = storage_injection.p_pu
 
     # Create nondispatchable variables if present
     p_nd_t = None
@@ -396,16 +397,20 @@ def _build_lossy_dc_single(
         nd_operating = nd_binding.operating_constraints(
             nondispatchable, d, nd_variables, step_context
         )
+    storage_operating = ()
+    if "ns" in d:
+        assert storage_binding.operating_constraints is not None
+        storage_operating = storage_binding.operating_constraints(
+            storage, d, storage_variables, step_context
+        )
 
     constr, p_net_expr = _make_dc_step_constraints(
         p_flows, Pg, generator_injection.p_pu,
         d["A"], d["Pd"], d["f_max"],
         generator_operating,
         ns=d.get("ns", 0),
-        storage_units=storage,
         storage_injection=storage_inj,
-        b_t=b_t,
-        soc_t=soc_t,
+        storage_operating_constraints=storage_operating,
         nnd=d.get("nnd", 0),
         nd_injection=nd_inj,
         nd_operating_constraints=nd_operating,
@@ -435,7 +440,10 @@ def _build_lossy_dc_single(
     # Add storage aging cost if present
     storage_cost = None
     if "ns" in d:
-        storage_cost = storage_cost_expr(storage, b_t)
+        assert storage_binding.step_cost is not None
+        storage_cost = storage_binding.step_cost(
+            storage, d, storage_variables, step_context
+        )
         cost = cost + storage_cost
 
     # Add HVDC cost if present
@@ -444,16 +452,17 @@ def _build_lossy_dc_single(
 
     storage_terminal_cost = None
     if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(storage, soc_t)
+        assert storage_binding.horizon is not None
+        storage_horizon = storage_binding.horizon(
+            storage,
+            d,
+            {"b": [b_t], "soc": [soc_t]},
+            HorizonContext("lossy_dc", 1, delta),
+        )
+        storage_terminal_cost = storage_horizon.terminal_cost
         if storage_terminal_cost is not None:
             cost = cost + storage_terminal_cost
-
-    # Add storage SoC dynamics constraints if present
-    if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, [b_t], [soc_t], d["storage_delta"]
-        )
-        constr.extend(storage_coupling)
+        constr.extend(storage_horizon.constraints)
     assert generator_binding.horizon is not None
     constr.extend(
         generator_binding.horizon(
@@ -503,7 +512,7 @@ def _build_lossy_dc_single(
 
     # Add storage data if present
     if "ns" in d:
-        data.update(storage_build_metadata(d))
+        data.update(STORAGE_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add nondispatchable data if present
     if "nnd" in d:
@@ -630,18 +639,26 @@ def _build_lossy_dc_multistep(
         b_t = soc_t = None
         storage_inj_t = None
         if "ns" in d:
-            ns = d["ns"]
-            b_t = cp.Variable(ns, name=f"b_{t}")
-            soc_t = cp.Variable(ns, name=f"soc_{t}")
-            (
-                storage_inj_t,
-                storage_q_inj_t,
-                storage_scaling_t,
-            ) = storage_dc_injections(
-                storage, b_t, d["ext_to_int"], incidence=d["Cs"]
+            storage_binding = STORAGE_ADAPTER.formulations["lossy_dc"]
+            assert storage_binding.variable_specs is not None
+            assert storage_binding.injections is not None
+            storage_variables_t = {
+                spec.name: cp.Variable(
+                    spec.shape,
+                    name=f"{spec.name}_{t}",
+                    **spec.attributes,
+                )
+                for spec in storage_binding.variable_specs(
+                    storage, d, step_context
+                )
+            }
+            b_t = storage_variables_t["b"]
+            soc_t = storage_variables_t["soc"]
+            storage_injection_t = storage_binding.injections(
+                storage, d, storage_variables_t, step_context
             )
-            assert storage_q_inj_t is None
-            storage_scaling_t.value = 1.0 / d["baseMVA"]
+            bind_injection_scale(storage_injection_t, d["baseMVA"])
+            storage_inj_t = storage_injection_t.p_pu
 
         # Create nondispatchable variables if present
         p_nd_t = None
@@ -707,16 +724,20 @@ def _build_lossy_dc_multistep(
             nd_operating_t = nd_binding.operating_constraints(
                 nondispatchable, d, nd_variables_t, step_context
             )
+        storage_operating_t = ()
+        if "ns" in d:
+            assert storage_binding.operating_constraints is not None
+            storage_operating_t = storage_binding.operating_constraints(
+                storage, d, storage_variables_t, step_context
+            )
 
         step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t, Pg_t, generator_injection_t.p_pu,
             d["A"], Pd_series[t], d["f_max"],
             generator_operating_t,
             ns=d.get("ns", 0),
-            storage_units=storage,
             storage_injection=storage_inj_t,
-            b_t=b_t,
-            soc_t=soc_t,
+            storage_operating_constraints=storage_operating_t,
             nnd=d.get("nnd", 0),
             nd_injection=nd_inj_t,
             nd_operating_constraints=nd_operating_t,
@@ -744,7 +765,10 @@ def _build_lossy_dc_multistep(
 
         # Add storage aging cost if present
         if "ns" in d:
-            step_storage_cost = storage_cost_expr(storage, b_t)
+            assert storage_binding.step_cost is not None
+            step_storage_cost = storage_binding.step_cost(
+                storage, d, storage_variables_t, step_context
+            )
             storage_cost = storage_cost + step_storage_cost
             step_cost = step_cost + step_storage_cost
 
@@ -772,12 +796,17 @@ def _build_lossy_dc_multistep(
             p_hvdc_in_list.append(p_in_t)
             p_hvdc_out_list.append(p_out_t)
 
-    # Add storage SoC dynamics constraints if present
+    storage_terminal_cost = None
     if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, b_list, soc_list, d["storage_delta"]
+        assert storage_binding.horizon is not None
+        storage_horizon = storage_binding.horizon(
+            storage,
+            d,
+            {"b": b_list, "soc": soc_list},
+            HorizonContext("lossy_dc", T, delta),
         )
-        all_constr.extend(storage_coupling)
+        all_constr.extend(storage_horizon.constraints)
+        storage_terminal_cost = storage_horizon.terminal_cost
     assert generator_binding.horizon is not None
     all_constr.extend(
         generator_binding.horizon(
@@ -804,13 +833,8 @@ def _build_lossy_dc_multistep(
             )
         )
 
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(
-            storage, soc_list[-1]
-        )
-        if storage_terminal_cost is not None:
-            total_cost = total_cost + storage_terminal_cost
+    if storage_terminal_cost is not None:
+        total_cost = total_cost + storage_terminal_cost
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -844,7 +868,7 @@ def _build_lossy_dc_multistep(
 
     # Add storage data if present
     if "ns" in d:
-        data.update(storage_build_metadata(d))
+        data.update(STORAGE_ADAPTER.metadata(d, "lossy_dc"))
 
     # Add nondispatchable data if present
     if "nnd" in d:

@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stages 0–2 complete; Stage 3 next
+**Status:** in progress — Stages 0–3 complete; Stage 4 next
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -251,6 +251,11 @@ specification, per-step contributions, horizon hooks, and metadata
   builders migrate.
 
 ### Stage 3 — Storage horizon path
+
+**Status:** complete — all six formulation/horizon builder paths use the
+storage adapter for preparation, variable specification, injections,
+operating constraints, cycling cost, horizon constraints, terminal cost, and
+metadata
 
 - Migrate storage operating constraints, injections, cycling cost, SoC
   coupling, hard terminal boundary, and soft terminal cost.

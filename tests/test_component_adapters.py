@@ -16,9 +16,11 @@ from cvxopf._component_adapter import (
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
+    STORAGE_ADAPTER,
     NondispatchableInputs,
 )
 from cvxopf.nondispatchable import NondispatchableUnit
+from cvxopf.storage import StorageUnitIdeal
 from cvxopf.testcases import case9
 
 
@@ -252,3 +254,124 @@ def test_nd_adapter_rejects_invalid_normalized_availability(available):
         NONDISPATCHABLE_ADAPTER.prepare(
             (unit,), NondispatchableInputs(available), context
         )
+
+
+@pytest.mark.parametrize(
+    ("formulation", "expected_variables"),
+    [
+        ("ac", {"b", "b_q", "soc"}),
+        ("lossy_dc", {"b", "soc"}),
+        ("singlenode_dc", {"b", "soc"}),
+    ],
+)
+def test_storage_adapter_preserves_step_and_horizon_contributions(
+    formulation, expected_variables
+):
+    _, preparation = _case_context(horizon_steps=2)
+    unit = StorageUnitIdeal(
+        bus=1,
+        apparent_power_rating=20.0,
+        capacity=50.0,
+        initial_soc=25.0,
+        aging_weight=0.1,
+        terminal_soc=30.0,
+        terminal_cost="quadratic",
+        terminal_weight=2.0,
+    )
+    units = (unit,)
+    prepared = STORAGE_ADAPTER.prepare(units, None, preparation)
+    metadata = STORAGE_ADAPTER.metadata(prepared, formulation)
+    assert metadata["storage_delta"] == pytest.approx(1.0)
+
+    step = StepContext(
+        formulation,
+        step=0,
+        base_mva=preparation.base_mva,
+        ext_to_int=preparation.ext_to_int,
+        network_state=(
+            ACNetworkState(cp.Variable(preparation.nb), (), False)
+            if formulation == "ac"
+            else DCNetworkState()
+        ),
+    )
+    binding = STORAGE_ADAPTER.formulations[formulation]
+    assert binding.variable_specs is not None
+    assert binding.injections is not None
+    assert binding.operating_constraints is not None
+    assert binding.step_cost is not None
+    assert binding.horizon is not None
+    assert binding.network_constraints is None
+
+    variables_0 = _variables(
+        binding.variable_specs(units, prepared, step)
+    )
+    variables_1 = _variables(
+        binding.variable_specs(units, prepared, step)
+    )
+    assert set(variables_0) == expected_variables
+    injection = binding.injections(
+        units, prepared, variables_0, step
+    )
+    assert injection.inv_base_mva is not None
+    assert injection.inv_base_mva.value is None
+    bind_injection_scale(injection, preparation.base_mva)
+    assert injection.p_pu is not None
+    assert (injection.q_pu is not None) is (formulation == "ac")
+    constraints = binding.operating_constraints(
+        units, prepared, variables_0, step
+    )
+    assert all(constraint.is_dcp() for constraint in constraints)
+    assert binding.step_cost(
+        units, prepared, variables_0, step
+    ).is_dcp()
+
+    horizon = binding.horizon(
+        units,
+        prepared,
+        {
+            "b": [variables_0["b"], variables_1["b"]],
+            "soc": [variables_0["soc"], variables_1["soc"]],
+        },
+        HorizonContext(formulation, 2, 1.0),
+    )
+    assert len(horizon.constraints) == 2
+    assert all(constraint.is_dcp() for constraint in horizon.constraints)
+    assert horizon.terminal_cost is not None
+    assert horizon.terminal_cost.is_dcp()
+
+
+def test_storage_adapter_t1_hard_terminal_policy_has_no_terminal_cost():
+    _, preparation = _case_context(horizon_steps=1)
+    unit = StorageUnitIdeal(
+        bus=1,
+        apparent_power_rating=20.0,
+        capacity=50.0,
+        initial_soc=25.0,
+        terminal_soc=30.0,
+        terminal_constraint="shortfall",
+    )
+    units = (unit,)
+    prepared = STORAGE_ADAPTER.prepare(units, None, preparation)
+    step = StepContext(
+        "lossy_dc",
+        step=0,
+        base_mva=preparation.base_mva,
+        ext_to_int=preparation.ext_to_int,
+        network_state=DCNetworkState(),
+    )
+    binding = STORAGE_ADAPTER.formulations["lossy_dc"]
+    assert binding.variable_specs is not None
+    assert binding.horizon is not None
+    variables = _variables(
+        binding.variable_specs(units, prepared, step)
+    )
+
+    horizon = binding.horizon(
+        units,
+        prepared,
+        {"b": [variables["b"]], "soc": [variables["soc"]]},
+        HorizonContext("lossy_dc", 1, 1.0),
+    )
+
+    assert len(horizon.constraints) == 2
+    assert horizon.terminal_cost is None

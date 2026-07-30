@@ -1,4 +1,4 @@
-"""Typed adapters over the existing generator and ND component functions.
+"""Typed adapters over the existing device-component functions.
 
 This module binds device-owned modeling functions to the generic contracts in
 ``_component_adapter``. The bindings normalize how builders invoke components
@@ -13,7 +13,7 @@ from typing import Mapping, Sequence, cast
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import generator, nondispatchable
+from cvxopf import generator, nondispatchable, storage
 from cvxopf._component_adapter import (
     ACNetworkState,
     ComponentAdapter,
@@ -29,6 +29,7 @@ from cvxopf._component_adapter import (
 )
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.nondispatchable import NondispatchableUnit
+from cvxopf.storage import StorageUnitIdeal
 
 
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
@@ -359,5 +360,143 @@ NONDISPATCHABLE_ADAPTER = ComponentAdapter[
         "ac": ND_AC,
         "lossy_dc": ND_DC,
         "singlenode_dc": ND_DC,
+    },
+)
+
+
+def _storage_prepare(
+    units: Sequence[StorageUnitIdeal],
+    inputs: None,
+    context: PreparationContext,
+) -> Mapping[str, object]:
+    prepared = storage._prepare_data(
+        list(units),
+        context.nb,
+        dict(context.ext_to_int),
+        set(context.ext_bus_ids),
+    )
+    prepared["storage_delta"] = context.delta
+    return prepared
+
+
+def _storage_metadata(
+    prepared: Mapping[str, object],
+    formulation: Formulation,
+) -> Mapping[str, object]:
+    return storage._build_metadata(dict(prepared))
+
+
+def _storage_variable_specs(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    context: StepContext,
+) -> tuple[VariableSpec, ...]:
+    shape = (cast(int, prepared["ns"]),)
+    specs = [VariableSpec("b", shape)]
+    if context.formulation == "ac":
+        specs.append(VariableSpec("b_q", shape))
+    specs.append(VariableSpec("soc", shape))
+    return tuple(specs)
+
+
+def _storage_injections(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> InjectionContribution:
+    if context.formulation == "ac":
+        p_pu, q_pu, inv_base_mva = storage.ac_injections(
+            list(units),
+            variables["b"],
+            variables["b_q"],
+            dict(context.ext_to_int),
+            incidence=_array(prepared, "Cs"),
+        )
+    else:
+        p_pu, q_pu, inv_base_mva = storage.dc_injections(
+            list(units),
+            variables["b"],
+            dict(context.ext_to_int),
+            incidence=_array(prepared, "Cs"),
+        )
+    return InjectionContribution(p_pu, q_pu, inv_base_mva)
+
+
+def _storage_operating_constraints(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> tuple[cp.Constraint, ...]:
+    if context.formulation == "ac":
+        constraints = storage.ac_operating_constraints(
+            list(units),
+            variables["b"],
+            variables["b_q"],
+            variables["soc"],
+        )
+    else:
+        constraints = storage.dc_operating_constraints(
+            list(units),
+            variables["b"],
+            variables["soc"],
+        )
+    return tuple(constraints)
+
+
+def _storage_step_cost(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> cp.Expression:
+    return storage.storage_cost_expr(list(units), variables["b"])
+
+
+def _storage_horizon(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    variable_history: Mapping[str, Sequence[cp.Variable]],
+    context: HorizonContext,
+) -> HorizonContribution:
+    b_history = list(variable_history["b"])
+    soc_history = list(variable_history["soc"])
+    constraints = storage.coupling_constraints(
+        list(units), b_history, soc_history, context.delta
+    )
+    terminal_cost = storage.terminal_cost_expr(
+        list(units), soc_history[-1]
+    )
+    return HorizonContribution(
+        constraints=tuple(constraints),
+        terminal_cost=terminal_cost,
+    )
+
+
+STORAGE_AC = FormulationAdapter[StorageUnitIdeal](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_storage_variable_specs,
+    injections=_storage_injections,
+    operating_constraints=_storage_operating_constraints,
+    step_cost=_storage_step_cost,
+    horizon=_storage_horizon,
+)
+STORAGE_DC = FormulationAdapter[StorageUnitIdeal](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_storage_variable_specs,
+    injections=_storage_injections,
+    operating_constraints=_storage_operating_constraints,
+    step_cost=_storage_step_cost,
+    horizon=_storage_horizon,
+)
+STORAGE_ADAPTER = ComponentAdapter[StorageUnitIdeal, None](
+    name="storage",
+    prepare=_storage_prepare,
+    metadata=_storage_metadata,
+    formulations={
+        "ac": STORAGE_AC,
+        "lossy_dc": STORAGE_DC,
+        "singlenode_dc": STORAGE_DC,
     },
 )

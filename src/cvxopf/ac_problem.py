@@ -36,17 +36,11 @@ from cvxopf._component_adapter import (
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
+    STORAGE_ADAPTER,
     NondispatchableInputs,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _prepare_data as storage_prepare_data,
-    _build_metadata as storage_build_metadata,
-    ac_injections as storage_ac_injections,
-    ac_operating_constraints as storage_ac_operating_constraints,
-    coupling_constraints as storage_coupling_constraints,
-    storage_cost_expr,
-    terminal_cost_expr as storage_terminal_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
@@ -179,10 +173,9 @@ def _parse_case(
     # Parse storage if present
     storage_data = {}
     if storage:
-        storage_data = storage_prepare_data(
-            storage, nb, ext_to_int, ext_bus_ids
+        storage_data = STORAGE_ADAPTER.prepare(
+            storage, None, preparation
         )
-        storage_data["storage_delta"] = float(delta)
 
     # Parse nondispatchable if present
     nd_data = {}
@@ -304,12 +297,9 @@ def _make_step_constraints(
     sparse_pq: bool,
     # Storage — all None when storage=None
     ns: int = 0,
-    storage_units=None,
     storage_injection_p=None,
     storage_injection_q=None,
-    b_t=None,
-    b_q_t=None,
-    soc_t=None,
+    storage_operating_constraints=(),
     # Nondispatchable — all None when nondispatchable=None
     nnd: int = 0,
     nd_injection_p=None,
@@ -432,9 +422,7 @@ def _make_step_constraints(
     # Omitted entirely when ns == 0.
     # ------------------------------------------------------------------
     if ns > 0:
-        constr += storage_ac_operating_constraints(
-            storage_units, b_t, b_q_t, soc_t
-        )
+        constr += list(storage_operating_constraints)
 
     # ------------------------------------------------------------------
     # Section 4b: Nondispatchable operating constraints
@@ -505,20 +493,40 @@ def _build_ac_single(
         controlled_buses=tuple(np.r_[[d["ref"]], d["pv"]]),
         enforce_vset=options.enforce_vset,
     )
+    step_context = StepContext(
+        formulation="ac",
+        step=0,
+        base_mva=d["baseMVA"],
+        ext_to_int=d["ext_to_int"],
+        network_state=ACNetworkState(
+            v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
+        ),
+    )
 
     # Create storage variables if present
     b_t = b_q_t = soc_t = None
     storage_inj_p = storage_inj_q = None
     if "ns" in d:
-        ns = d["ns"]
-        # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
-        b_t = cp.Variable(ns, name="b")
-        b_q_t = cp.Variable(ns, name="b_q")
-        soc_t = cp.Variable(ns, name="soc")
-        storage_inj_p, storage_inj_q, storage_scaling = storage_ac_injections(
-            storage, b_t, b_q_t, d["ext_to_int"], incidence=d["Cs"]
+        storage_binding = STORAGE_ADAPTER.formulations["ac"]
+        assert storage_binding.variable_specs is not None
+        assert storage_binding.injections is not None
+        storage_variables = {
+            spec.name: cp.Variable(
+                spec.shape, name=spec.name, **spec.attributes
+            )
+            for spec in storage_binding.variable_specs(
+                storage, d, step_context
+            )
+        }
+        b_t = storage_variables["b"]
+        b_q_t = storage_variables["b_q"]
+        soc_t = storage_variables["soc"]
+        storage_injection = storage_binding.injections(
+            storage, d, storage_variables, step_context
         )
-        storage_scaling.value = 1.0 / d["baseMVA"]
+        bind_injection_scale(storage_injection, d["baseMVA"])
+        storage_inj_p = storage_injection.p_pu
+        storage_inj_q = storage_injection.q_pu
 
     # Create nondispatchable variables if present
     p_nd_t = q_nd_t = None
@@ -574,15 +582,6 @@ def _build_ac_single(
         inv_bMVA.value = 1.0 / d["baseMVA"]
         p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
 
-    step_context = StepContext(
-        formulation="ac",
-        step=0,
-        base_mva=d["baseMVA"],
-        ext_to_int=d["ext_to_int"],
-        network_state=ACNetworkState(
-            v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
-        ),
-    )
     generator_binding = GENERATOR_ADAPTER.formulations["ac"]
     assert generator_binding.injections is not None
     assert generator_binding.operating_constraints is not None
@@ -609,6 +608,12 @@ def _build_ac_single(
             {"p_nd": p_nd_t, "q_nd": q_nd_t},
             step_context,
         )
+    storage_operating = ()
+    if "ns" in d:
+        assert storage_binding.operating_constraints is not None
+        storage_operating = storage_binding.operating_constraints(
+            storage, d, storage_variables, step_context
+        )
 
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
@@ -619,12 +624,9 @@ def _build_ac_single(
         generator_operating, generator_network,
         sparse_pq=options.sparse_pq,
         ns=d.get("ns", 0),
-        storage_units=storage,
         storage_injection_p=storage_inj_p,
         storage_injection_q=storage_inj_q,
-        b_t=b_t,
-        b_q_t=b_q_t,
-        soc_t=soc_t,
+        storage_operating_constraints=storage_operating,
         nnd=d.get("nnd", 0),
         nd_injection_p=nd_inj_p,
         nd_injection_q=nd_inj_q,
@@ -645,7 +647,10 @@ def _build_ac_single(
     )
     storage_cost = None
     if "ns" in d:
-        storage_cost = storage_cost_expr(storage, b_t)
+        assert storage_binding.step_cost is not None
+        storage_cost = storage_binding.step_cost(
+            storage, d, storage_variables, step_context
+        )
         total_cost = gen_cost + storage_cost
     else:
         total_cost = gen_cost
@@ -654,16 +659,17 @@ def _build_ac_single(
 
     storage_terminal_cost = None
     if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(storage, soc_t)
+        assert storage_binding.horizon is not None
+        storage_horizon = storage_binding.horizon(
+            storage,
+            d,
+            {"b": [b_t], "soc": [soc_t]},
+            HorizonContext("ac", 1, delta),
+        )
+        storage_terminal_cost = storage_horizon.terminal_cost
         if storage_terminal_cost is not None:
             total_cost = total_cost + storage_terminal_cost
-    
-    # Add storage SoC dynamics constraints if present
-    if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, [b_t], [soc_t], d["storage_delta"]
-        )
-        constr.extend(storage_coupling)
+        constr.extend(storage_horizon.constraints)
     assert generator_binding.horizon is not None
     constr.extend(
         generator_binding.horizon(
@@ -723,7 +729,7 @@ def _build_ac_single(
 
     # Add storage data if present
     if "ns" in d:
-        data.update(storage_build_metadata(d))
+        data.update(STORAGE_ADAPTER.metadata(d, "ac"))
 
     # Add nondispatchable data if present
     if "nnd" in d:
@@ -821,27 +827,44 @@ def _build_ac_multistep(
                 controlled_buses=tuple(np.r_[[d["ref"]], d["pv"]]),
                 enforce_vset=options.enforce_vset,
             )
+        step_context = StepContext(
+            formulation="ac",
+            step=t,
+            base_mva=d["baseMVA"],
+            ext_to_int=d["ext_to_int"],
+            network_state=ACNetworkState(
+                v_t,
+                tuple(np.r_[[d["ref"]], d["pv"]]),
+                options.enforce_vset,
+            ),
+        )
 
         # Create storage variables if present
         b_t = b_q_t = soc_t = None
         storage_inj_p_t = storage_inj_q_t = None
         if "ns" in d:
-            ns = d["ns"]
-            b_t = cp.Variable(ns, name=f"b_{t}")
-            b_q_t = cp.Variable(ns, name=f"b_q_{t}")
-            soc_t = cp.Variable(ns, name=f"soc_{t}")
-            (
-                storage_inj_p_t,
-                storage_inj_q_t,
-                storage_scaling_t,
-            ) = storage_ac_injections(
-                storage,
-                b_t,
-                b_q_t,
-                d["ext_to_int"],
-                incidence=d["Cs"],
+            storage_binding = STORAGE_ADAPTER.formulations["ac"]
+            assert storage_binding.variable_specs is not None
+            assert storage_binding.injections is not None
+            storage_variables_t = {
+                spec.name: cp.Variable(
+                    spec.shape,
+                    name=f"{spec.name}_{t}",
+                    **spec.attributes,
+                )
+                for spec in storage_binding.variable_specs(
+                    storage, d, step_context
+                )
+            }
+            b_t = storage_variables_t["b"]
+            b_q_t = storage_variables_t["b_q"]
+            soc_t = storage_variables_t["soc"]
+            storage_injection_t = storage_binding.injections(
+                storage, d, storage_variables_t, step_context
             )
-            storage_scaling_t.value = 1.0 / d["baseMVA"]
+            bind_injection_scale(storage_injection_t, d["baseMVA"])
+            storage_inj_p_t = storage_injection_t.p_pu
+            storage_inj_q_t = storage_injection_t.q_pu
 
         # Create nondispatchable variables if present
         p_nd_t = q_nd_t = None
@@ -903,17 +926,6 @@ def _build_ac_multistep(
             p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
             p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
 
-        step_context = StepContext(
-            formulation="ac",
-            step=t,
-            base_mva=d["baseMVA"],
-            ext_to_int=d["ext_to_int"],
-            network_state=ACNetworkState(
-                v_t,
-                tuple(np.r_[[d["ref"]], d["pv"]]),
-                options.enforce_vset,
-            ),
-        )
         generator_binding = GENERATOR_ADAPTER.formulations["ac"]
         assert generator_binding.injections is not None
         assert generator_binding.operating_constraints is not None
@@ -943,6 +955,12 @@ def _build_ac_multistep(
                 {"p_nd": p_nd_t, "q_nd": q_nd_t},
                 step_context,
             )
+        storage_operating_t = ()
+        if "ns" in d:
+            assert storage_binding.operating_constraints is not None
+            storage_operating_t = storage_binding.operating_constraints(
+                storage, d, storage_variables_t, step_context
+            )
 
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
@@ -953,12 +971,9 @@ def _build_ac_multistep(
             generator_operating_t, generator_network_t,
             sparse_pq=options.sparse_pq,
             ns=d.get("ns", 0),
-            storage_units=storage,
             storage_injection_p=storage_inj_p_t,
             storage_injection_q=storage_inj_q_t,
-            b_t=b_t,
-            b_q_t=b_q_t,
-            soc_t=soc_t,
+            storage_operating_constraints=storage_operating_t,
             nnd=d.get("nnd", 0),
             nd_injection_p=nd_inj_p_t,
             nd_injection_q=nd_inj_q_t,
@@ -1014,16 +1029,40 @@ def _build_ac_multistep(
     # Add storage aging cost if present
     if "ns" in d:
         for t in range(T):
-            step_storage_cost = storage_cost_expr(storage, b_list[t])
+            assert storage_binding.step_cost is not None
+            storage_variables_t = {
+                "b": b_list[t],
+                "b_q": b_q_list[t],
+                "soc": soc_list[t],
+            }
+            storage_context_t = StepContext(
+                "ac",
+                t,
+                d["baseMVA"],
+                d["ext_to_int"],
+                ACNetworkState(
+                    v_list[t],
+                    tuple(np.r_[[d["ref"]], d["pv"]]),
+                    options.enforce_vset,
+                ),
+            )
+            step_storage_cost = storage_binding.step_cost(
+                storage, d, storage_variables_t, storage_context_t
+            )
             storage_cost = storage_cost + step_storage_cost
             total_cost = total_cost + step_storage_cost
 
-    # Add storage SoC dynamics constraints if present
+    storage_terminal_cost = None
     if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, b_list, soc_list, d["storage_delta"]
+        assert storage_binding.horizon is not None
+        storage_horizon = storage_binding.horizon(
+            storage,
+            d,
+            {"b": b_list, "soc": soc_list},
+            HorizonContext("ac", T, delta),
         )
-        all_constr.extend(storage_coupling)
+        all_constr.extend(storage_horizon.constraints)
+        storage_terminal_cost = storage_horizon.terminal_cost
     assert generator_binding.horizon is not None
     all_constr.extend(
         generator_binding.horizon(
@@ -1050,13 +1089,8 @@ def _build_ac_multistep(
             )
         )
 
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(
-            storage, soc_list[-1]
-        )
-        if storage_terminal_cost is not None:
-            total_cost = total_cost + storage_terminal_cost
+    if storage_terminal_cost is not None:
+        total_cost = total_cost + storage_terminal_cost
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -1106,7 +1140,7 @@ def _build_ac_multistep(
     
     # Add storage data if present
     if "ns" in d:
-        data.update(storage_build_metadata(d))
+        data.update(STORAGE_ADAPTER.metadata(d, "ac"))
 
     # Add nondispatchable data if present
     if "nnd" in d:
