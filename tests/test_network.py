@@ -330,6 +330,15 @@ class TestMakeYbus:
         np.testing.assert_allclose(Y[t, t], admittance.ytt.sum())
         assert np.count_nonzero(Y) == 4
 
+    def test_precomputed_branch_admittance_matches_default_path(self):
+        c = _reindexed(case14)
+        admittance = make_branch_admittance(c)
+
+        expected = make_ybus_matpower(c)
+        actual = make_ybus_matpower(c, branch_admittance=admittance)
+
+        np.testing.assert_array_equal(actual, expected)
+
 
 # ---------------------------------------------------------------------------
 # make_incidence_matrix

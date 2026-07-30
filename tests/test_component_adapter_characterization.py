@@ -25,15 +25,32 @@ CORE_VARIABLES = {
     "singlenode_dc": {"Pg"},
 }
 CORE_EXPRESSIONS = {
-    "ac": {"p_net", "q_net", "generator_cost"},
+    "ac": {
+        "p_net", "q_net", "generator_cost",
+        "branch_p_from_pu", "branch_q_from_pu",
+        "branch_p_to_pu", "branch_q_to_pu",
+    },
     "lossy_dc": {"p_net", "generator_cost", "dc_loss_cost"},
     "singlenode_dc": {"p_net", "generator_cost"},
 }
+PER_STEP_EXPRESSIONS = {
+    "p_net",
+    "q_net",
+    "branch_p_from_pu",
+    "branch_q_from_pu",
+    "branch_p_to_pu",
+    "branch_q_to_pu",
+}
 CORE_DATA = {
     "ac": {
-        "baseMVA", "nb", "ng", "ref", "pv", "ext_to_int", "Ybus", "G", "B",
-        "E", "Z", "Cg", "gen_bus", "Pgmin", "Pgmax", "Qgmin", "Qgmax",
-        "gencost", "rows", "cols", "G_vec", "B_vec", "Rp",
+        "baseMVA", "nb", "ng", "nl", "ref", "pv", "ext_to_int",
+        "Ybus", "G", "B", "E", "Z", "Cg", "gen_bus",
+        "Pgmin", "Pgmax", "Qgmin", "Qgmax", "gencost",
+        "rows", "cols", "G_vec", "B_vec", "Rp",
+        "branch_from_bus_internal", "branch_to_bus_internal",
+        "branch_from_bus_external", "branch_to_bus_external",
+        "branch_status", "branch_rate_a_mva",
+        "constrained_branch_indices",
     },
     "lossy_dc": {
         "baseMVA", "nb", "ng", "nl", "ext_to_int", "A", "Cg", "r",
@@ -276,7 +293,7 @@ def test_build_schema_is_additive_by_component(
         else:
             assert isinstance(variable, cp.Variable)
     for name, expression in build.expressions.items():
-        if multistep and name in {"p_net", "q_net"}:
+        if multistep and name in PER_STEP_EXPRESSIONS:
             assert isinstance(expression, list)
             assert len(expression) == 2
             assert all(isinstance(item, cp.Expression) for item in expression)

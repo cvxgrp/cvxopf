@@ -713,7 +713,12 @@ class TestStorageTerminalPolicy:
             "storage_terminal_deviation",
         }
         if formulation == "ac":
-            expected |= {"Qg", "Vm", "Va_deg", "q_net", "b_q"}
+            expected |= {
+                "Qg", "Vm", "Va_deg", "q_net", "b_q",
+                "branch_p_from", "branch_q_from",
+                "branch_p_to", "branch_q_to",
+                "branch_s_from", "branch_s_to",
+            }
         elif formulation == "lossy_dc":
             expected.add("p_flows")
         assert set(results) == expected

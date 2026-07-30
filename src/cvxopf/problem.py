@@ -145,9 +145,11 @@ class OPFBuild:
     data : dict
         Pre-computed numpy arrays and metadata.
 
-        AC keys: baseMVA, nb, ng, ref, pv, ext_to_int,
+        AC keys: baseMVA, nb, ng, nl, ref, pv, ext_to_int,
                  Ybus, G, B, E, Z, Pd, Qd, Cg,
                  Pgmin, Pgmax, Qgmin, Qgmax
+                 and branch endpoint, status, rateA, and constrained-index
+                 metadata in original branch-table row order
         DC keys: baseMVA, nb, ng, nl, ext_to_int,
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
@@ -174,6 +176,8 @@ class OPFBuild:
         Named modeled CVXPY expressions used for solved-value reporting.
         Per-step reporting expressions are stored as one expression for a
         single-step build and lists of length T for a multistep build.
+        AC branch-terminal real and reactive powers are retained in per unit
+        as ``branch_{p,q}_{from,to}_pu``.
         Integrated stage costs (``generator_cost``, conditional
         ``storage_cost`` and ``hvdc_cost``, and lossy-DC ``dc_loss_cost``)
         are scalar horizon totals in both modes. Horizon-boundary expressions,

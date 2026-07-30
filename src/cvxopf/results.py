@@ -5,7 +5,9 @@ Operates on OPFBuild objects after prob.solve() has been called.
 Dispatches on build.formulation to return the appropriate result schema.
 
 AC results keys:
-    status, objective, Pg, Qg, Vm, Va_deg, p_net, q_net
+    status, objective, Pg, Qg, Vm, Va_deg, p_net, q_net,
+    branch_p_from, branch_q_from, branch_p_to, branch_q_to,
+    branch_s_from, branch_s_to
 
 DC (lossy_dc) results keys:
     status, objective, Pg, p_flows, p_net
@@ -75,7 +77,12 @@ def _objective_value(build: OPFBuild) -> float:
 def _initialize_results(build: OPFBuild) -> dict:
     """Initialize the public schema from the built model, before values."""
     core_fields = {
-        "ac": ("Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"),
+        "ac": (
+            "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net",
+            "branch_p_from", "branch_q_from",
+            "branch_p_to", "branch_q_to",
+            "branch_s_from", "branch_s_to",
+        ),
         "lossy_dc": ("Pg", "p_flows", "p_net"),
         "singlenode_dc": ("Pg", "p_net"),
     }[build.formulation]
@@ -191,6 +198,40 @@ def _add_device_results(results: dict, build: OPFBuild) -> None:
     _add_hvdc_results(results, build)
 
 
+def _add_ac_branch_results(results: dict, build: OPFBuild) -> None:
+    """Add signed AC branch-terminal powers and derived magnitudes."""
+    base_mva = float(build.data["baseMVA"])
+    signed = {
+        "branch_p_from": _scaled_values(
+            _solved_expression_values(build, "branch_p_from_pu"),
+            base_mva,
+        ),
+        "branch_q_from": _scaled_values(
+            _solved_expression_values(build, "branch_q_from_pu"),
+            base_mva,
+        ),
+        "branch_p_to": _scaled_values(
+            _solved_expression_values(build, "branch_p_to_pu"),
+            base_mva,
+        ),
+        "branch_q_to": _scaled_values(
+            _solved_expression_values(build, "branch_q_to_pu"),
+            base_mva,
+        ),
+    }
+    results.update(signed)
+    if any(value is None for value in signed.values()):
+        results["branch_s_from"] = None
+        results["branch_s_to"] = None
+        return
+    results["branch_s_from"] = np.hypot(
+        signed["branch_p_from"], signed["branch_q_from"]
+    )
+    results["branch_s_to"] = np.hypot(
+        signed["branch_p_to"], signed["branch_q_to"]
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -220,9 +261,17 @@ def extract_results(build: OPFBuild) -> dict:
             Va_deg      np.ndarray   (nb,)  Bus voltage angles, degrees
             p_net       np.ndarray   (nb,)  Net real bus injection, MW
             q_net       np.ndarray   (nb,)  Net reactive bus injection, MVAr
+            branch_p_from, branch_p_to
+                         np.ndarray   (nl,)  Signed terminal real power, MW
+            branch_q_from, branch_q_to
+                         np.ndarray   (nl,)  Signed terminal reactive power,
+                                            MVAr
+            branch_s_from, branch_s_to
+                         np.ndarray   (nl,)  Terminal apparent power, MVA
 
         AC multi-step: same keys; Pg, Qg are (T, ng); Vm, Va_deg, p_net,
-        q_net are (T, nb). objective is total integrated horizon cost.
+        q_net are (T, nb), and branch fields are (T, nl). objective is total
+        integrated horizon cost.
 
         DC single-step keys:
             status      str          CVXPY solve status
@@ -358,6 +407,8 @@ def _extract_ac_results(build: OPFBuild) -> dict:
             ),
         )
         
+        if voltage is not None and angle is not None:
+            _add_ac_branch_results(results, build)
         _add_device_results(results, build)
         return results
 
@@ -386,6 +437,8 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         ),
     )
     
+    if voltage is not None and angle is not None:
+        _add_ac_branch_results(results, build)
     _add_device_results(results, build)
     return results
 

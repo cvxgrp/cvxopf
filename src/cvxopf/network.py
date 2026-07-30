@@ -211,7 +211,11 @@ def reindex_case_to_consecutive(case: dict) -> tuple[dict, dict | None]:
     return {**case, "bus": bus, "branch": branch, "gen": gen}, ext_to_int
 
 
-def make_ybus_matpower(case: dict) -> np.ndarray:
+def make_ybus_matpower(
+    case: dict,
+    *,
+    branch_admittance: BranchAdmittance | None = None,
+) -> np.ndarray:
     """
     Build the complex nodal admittance matrix using MATPOWER conventions.
 
@@ -222,6 +226,9 @@ def make_ybus_matpower(case: dict) -> np.ndarray:
     ----------
     case : dict
         MATPOWER-format case dict with 0-based consecutive bus IDs.
+    branch_admittance : BranchAdmittance, optional
+        Precomputed branch-terminal primitive for ``case``. When omitted, it
+        is constructed internally.
 
     Returns
     -------
@@ -237,7 +244,11 @@ def make_ybus_matpower(case: dict) -> np.ndarray:
     bus     = case["bus"]
     nb      = bus.shape[0]
     Y       = np.zeros((nb, nb), dtype=np.complex128)
-    admittance = make_branch_admittance(case)
+    admittance = (
+        make_branch_admittance(case)
+        if branch_admittance is None
+        else branch_admittance
+    )
 
     np.add.at(Y, (admittance.from_bus, admittance.from_bus), admittance.yff)
     np.add.at(Y, (admittance.from_bus, admittance.to_bus), admittance.yft)

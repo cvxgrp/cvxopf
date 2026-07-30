@@ -497,7 +497,7 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 1 — Authoritative numerical branch primitive
 
-**Status:** implemented and verified; awaiting review and checkpoint commit.
+**Status:** complete — committed as `5cb61b1`.
 
 1. Add named MATPOWER branch column constants to `network.py`, including
    `RATE_A`.
@@ -523,6 +523,8 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
    review if the Stage 0 audit finds a legitimate nonbinary case.
 
 ### Stage 2 — AC terminal-flow expressions and reporting
+
+**Status:** complete.
 
 1. Copy external branch endpoint arrays from the original case before calling
    `reindex_case_to_consecutive()`, then parse the internal endpoints, status,
