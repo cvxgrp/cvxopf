@@ -27,6 +27,7 @@ from cvxopf._component_adapter import (
     StepContext,
     VariableSpec,
 )
+from cvxopf._component_assembly import ComponentRequest
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.hvdc import HVDCLink
 from cvxopf.nondispatchable import NondispatchableUnit
@@ -662,3 +663,45 @@ HVDC_ADAPTER = ComponentAdapter[HVDCLink, HVDCInputs | None](
         "singlenode_dc": HVDC_NULL,
     },
 )
+
+
+def component_requests(
+    formulation: Formulation,
+    *,
+    generators: Sequence[DispatchableGenerator],
+    storage_units: Sequence[StorageUnitIdeal] = (),
+    nondispatchable_units: Sequence[NondispatchableUnit] = (),
+    nondispatchable_inputs: NondispatchableInputs | None = None,
+    hvdc_links: Sequence[HVDCLink] = (),
+    hvdc_inputs: HVDCInputs | None = None,
+) -> tuple[ComponentRequest, ...]:
+    """Return the common ordered registry for one formulation build."""
+    hvdc_capability = (
+        FormulationCapability.NULL
+        if formulation == "singlenode_dc"
+        else FormulationCapability.ACTIVE
+    )
+    return (
+        ComponentRequest(
+            GENERATOR_ADAPTER,
+            tuple(generators),
+            required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            STORAGE_ADAPTER,
+            tuple(storage_units),
+            required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            NONDISPATCHABLE_ADAPTER,
+            tuple(nondispatchable_units),
+            nondispatchable_inputs,
+            required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            HVDC_ADAPTER,
+            tuple(hvdc_links),
+            hvdc_inputs,
+            required_capability=hvdc_capability,
+        ),
+    )

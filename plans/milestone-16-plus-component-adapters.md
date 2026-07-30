@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stages 0–4 complete; Stage 5 next
+**Status:** in progress — Stages 0–5 complete; Stage 6 next
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -278,6 +278,12 @@ single-node builders require the explicitly registered null capability
   refactor.
 
 ### Stage 5 — Shared orchestration
+
+**Status:** complete — all six builders use common ordered registration,
+shared preparation and step/horizon execution, generic contribution
+aggregation, and shared variable/metadata publication; formulation modules
+retain their network variables, equations, loss terms, balance construction,
+named reporting expressions, and result construction
 
 - Replace repeated per-component blocks in all three builders with the common
   assembler.

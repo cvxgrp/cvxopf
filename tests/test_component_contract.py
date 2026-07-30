@@ -15,7 +15,7 @@ from cvxopf import (
     StorageUnitIdeal,
 )
 from cvxopf import generator, hvdc, nondispatchable, storage
-from cvxopf import singlenode_dc_problem
+from cvxopf import _component_adapters as component_adapters
 from cvxopf._component_adapters import HVDC_ADAPTER
 from cvxopf.problem import build_opf, build_opf_multistep
 from cvxopf.results import extract_results
@@ -474,7 +474,7 @@ def test_singlenode_builders_require_null_capability_only_for_supplied_hvdc(
     formulations = dict(HVDC_ADAPTER.formulations)
     formulations["singlenode_dc"] = formulations["lossy_dc"]
     monkeypatch.setattr(
-        singlenode_dc_problem,
+        component_adapters,
         "HVDC_ADAPTER",
         replace(HVDC_ADAPTER, formulations=formulations),
     )

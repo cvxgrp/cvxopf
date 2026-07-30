@@ -1099,6 +1099,48 @@ class TestStorageACMultistep:
         assert isinstance(r["storage_cost"], float)
 
 
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+def test_dc_t1_objective_counts_forced_storage_cycling_cost_once(
+    formulation,
+):
+    unit = _default_unit(
+        initial_soc=50.0,
+        aging_weight=7.0,
+        terminal_soc=30.0,
+        terminal_constraint="equality",
+    )
+    df_P, df_Q = _flat_load_dfs(case9, T=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        single = build_opf(
+            case9(),
+            formulation=formulation,
+            storage=[unit],
+            delta=1.0,
+        )
+        multi = build_opf_multistep(
+            case9(),
+            df_P,
+            df_Q,
+            T=1,
+            formulation=formulation,
+            storage=[unit],
+            delta=1.0,
+        )
+    single.solve()
+    multi.solve()
+    single_results = extract_results(single)
+    multi_results = extract_results(multi)
+
+    assert single_results["b"][0] == pytest.approx(20.0, abs=VAL_ATOL)
+    assert multi_results["b"][0, 0] == pytest.approx(20.0, abs=VAL_ATOL)
+    assert single_results["storage_cost"] == pytest.approx(140.0)
+    assert multi_results["storage_cost"] == pytest.approx(140.0)
+    assert single_results["objective"] == pytest.approx(
+        multi_results["objective"], rel=OBJ_RTOL
+    )
+
+
 class TestStorageDCSingle:
     """Single time-step DC-OPF with one storage unit."""
 
