@@ -37,7 +37,57 @@ fixture also verified:
 - analytically reversed terminal orientation;
 - exact zero coefficients for an inactive zero-impedance row; and
 - `(0,)` direct and published expression shapes for an empty branch table,
-  with no lifted variables or defining equalities.
+  with no lifted variables or defining equalities. This remains a defensive
+  private-helper result; post-review hardening rejects public branchless AC
+  builds because the current DNLP/IPOPT path cannot solve them safely.
+
+The direct and lifted representations use the same physical terminal-power
+functions. Let
+
+$$
+\widehat P_{f,e}(\theta,v),\quad
+\widehat Q_{f,e}(\theta,v),\quad
+\widehat P_{t,e}(\theta,v),\quad
+\widehat Q_{t,e}(\theta,v)
+$$
+
+denote the real-valued expressions obtained from
+$S_f=V_f\overline{I_f}$ and $S_t=V_t\overline{I_t}$. The direct formulation
+places these composed nonlinear expressions inside the thermal inequalities,
+for example
+
+$$
+\left(\frac{\widehat P_{f,e}(\theta,v)}{S_{\max,e}}\right)^2
++
+\left(\frac{\widehat Q_{f,e}(\theta,v)}{S_{\max,e}}\right)^2
+\leq 1.
+$$
+
+The lifted formulation instead introduces auxiliary variables
+$p_{f,e},q_{f,e},p_{t,e},q_{t,e}$, imposes the defining equalities
+
+$$
+p_{f,e}=\widehat P_{f,e}(\theta,v),\qquad
+q_{f,e}=\widehat Q_{f,e}(\theta,v),
+$$
+
+with the analogous two equalities at the to terminal, and applies the same
+normalized inequality to the lifted variables:
+
+$$
+\left(\frac{p_{f,e}}{S_{\max,e}}\right)^2
++
+\left(\frac{q_{f,e}}{S_{\max,e}}\right)^2
+\leq 1.
+$$
+
+The two formulations therefore define the same feasible set after eliminating
+the auxiliary variables. Their difference is computational: lifting separates
+the nonlinear voltage equations from the quadratic thermal inequalities,
+giving CVXPY DNLP and IPOPT a substantially simpler derivative-expression
+structure. The published branch-flow quantities are the lifted variables tied
+to the authoritative direct equations, so reporting and enforcement refer to
+the same modeled values.
 
 ## Direct versus lifted DNLP structure
 
