@@ -392,6 +392,10 @@ hvdc.py       →  data.py, cvxpy, numpy
 All four device modules now follow the M16 component pattern. See
 `plans/milestone-16-unify-components.md`.
 
+See [`PROJECT_FLOWCHART.md`](PROJECT_FLOWCHART.md) for the as-built
+problem-construction architecture, component lifecycle, ownership boundaries,
+and Milestone 17 scope boundary.
+
 ### Extending components and formulations
 
 The adapter layer is a private, closed-world repository architecture, not a
