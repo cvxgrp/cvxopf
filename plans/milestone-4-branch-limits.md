@@ -497,6 +497,8 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 1 — Authoritative numerical branch primitive
 
+**Status:** implemented and verified; awaiting review and checkpoint commit.
+
 1. Add named MATPOWER branch column constants to `network.py`, including
    `RATE_A`.
 2. Add the branch-terminal admittance helper.

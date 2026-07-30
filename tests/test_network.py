@@ -7,6 +7,7 @@ import pytest
 
 from cvxopf.network import (
     reindex_case_to_consecutive,
+    make_branch_admittance,
     make_ybus_matpower,
     make_incidence_matrix,
     make_ybus_sparsity_mask,
@@ -124,6 +125,122 @@ class TestReindex:
 
 
 # ---------------------------------------------------------------------------
+# make_branch_admittance
+# ---------------------------------------------------------------------------
+
+class TestMakeBranchAdmittance:
+
+    def test_row_order_endpoints_status_and_ratings(self):
+        c = _reindexed(case9)
+        c["branch"][2, 10] = 0
+
+        admittance = make_branch_admittance(c)
+
+        np.testing.assert_array_equal(
+            admittance.from_bus, c["branch"][:, 0].astype(int)
+        )
+        np.testing.assert_array_equal(
+            admittance.to_bus, c["branch"][:, 1].astype(int)
+        )
+        np.testing.assert_array_equal(
+            admittance.status, c["branch"][:, 10].astype(bool)
+        )
+        np.testing.assert_array_equal(
+            admittance.rate_a_mva, c["branch"][:, 5]
+        )
+
+    def test_transformer_tap_shift_and_charging_coefficients(self):
+        c = _reindexed(case9)
+        c["branch"] = c["branch"][[0]].copy()
+        c["branch"][0, 2:5] = [0.02, 0.18, 0.06]
+        c["branch"][0, 8:10] = [1.07, 13.0]
+
+        admittance = make_branch_admittance(c)
+
+        y = 1 / (0.02 + 0.18j)
+        ysh = 0.03j
+        tau = 1.07 * np.exp(1j * np.deg2rad(13.0))
+        np.testing.assert_allclose(
+            admittance.yff[0], (y + ysh) / (tau * np.conj(tau))
+        )
+        np.testing.assert_allclose(
+            admittance.yft[0], -y / np.conj(tau)
+        )
+        np.testing.assert_allclose(admittance.ytf[0], -y / tau)
+        np.testing.assert_allclose(admittance.ytt[0], y + ysh)
+
+    def test_inactive_zero_impedance_row_is_exactly_zero(self):
+        c = _reindexed(case9)
+        c["branch"] = c["branch"][[0]].copy()
+        c["branch"][0, 2:4] = 0.0
+        c["branch"][0, 10] = 0
+
+        admittance = make_branch_admittance(c)
+
+        np.testing.assert_array_equal(
+            [
+                admittance.yff[0],
+                admittance.yft[0],
+                admittance.ytf[0],
+                admittance.ytt[0],
+            ],
+            np.zeros(4, dtype=complex),
+        )
+
+    def test_reversed_phase_shifter_swaps_terminal_coefficients(self):
+        c = _reindexed(case9)
+        c["branch"] = c["branch"][[0]].copy()
+        c["branch"][0, 2:5] = [0.01, 0.12, 0.04]
+        c["branch"][0, 8:10] = [1.0, 17.0]
+
+        reversed_c = {**c, "branch": c["branch"].copy()}
+        reversed_c["branch"][0, 0:2] = c["branch"][0, [1, 0]]
+        reversed_c["branch"][0, 9] = -c["branch"][0, 9]
+
+        forward = make_branch_admittance(c)
+        reverse = make_branch_admittance(reversed_c)
+
+        np.testing.assert_allclose(reverse.yff, forward.ytt)
+        np.testing.assert_allclose(reverse.yft, forward.ytf)
+        np.testing.assert_allclose(reverse.ytf, forward.yft)
+        np.testing.assert_allclose(reverse.ytt, forward.yff)
+
+    def test_empty_branch_table_returns_empty_arrays(self):
+        c = _reindexed(case9)
+        c["branch"] = np.empty((0, c["branch"].shape[1]))
+
+        admittance = make_branch_admittance(c)
+
+        for value in (
+            admittance.from_bus,
+            admittance.to_bus,
+            admittance.status,
+            admittance.rate_a_mva,
+            admittance.yff,
+            admittance.yft,
+            admittance.ytf,
+            admittance.ytt,
+        ):
+            assert value.shape == (0,)
+
+    def test_bus_shunts_do_not_enter_branch_admittances(self):
+        without_shunts = _reindexed(case9)
+        with_shunts = _reindexed(case9)
+        with_shunts["bus"][:, 4] = np.arange(with_shunts["bus"].shape[0])
+        with_shunts["bus"][:, 5] = -2 * np.arange(
+            with_shunts["bus"].shape[0]
+        )
+
+        first = make_branch_admittance(without_shunts)
+        second = make_branch_admittance(with_shunts)
+
+        for name in ("yff", "yft", "ytf", "ytt"):
+            np.testing.assert_array_equal(
+                getattr(first, name), getattr(second, name)
+            )
+
+
+# ---------------------------------------------------------------------------
 # make_ybus_matpower
 # ---------------------------------------------------------------------------
 
@@ -190,6 +307,28 @@ class TestMakeYbus:
         Y_off = make_ybus_matpower(c_off)
         assert not np.allclose(Y_on, Y_off), \
             "Disabling a branch should change the Ybus"
+
+    def test_parallel_branches_accumulate_all_four_positions(self):
+        c = _reindexed(case9)
+        first = c["branch"][0].copy()
+        second = first.copy()
+        first[2:5] = [0.01, 0.10, 0.02]
+        first[8:10] = [1.04, 8.0]
+        second[2:5] = [0.03, 0.21, 0.08]
+        second[8:10] = [0.96, -11.0]
+        c["branch"] = np.vstack([first, second])
+        c["bus"][:, 4:6] = 0.0
+
+        admittance = make_branch_admittance(c)
+        Y = make_ybus_matpower(c)
+        f = admittance.from_bus[0]
+        t = admittance.to_bus[0]
+
+        np.testing.assert_allclose(Y[f, f], admittance.yff.sum())
+        np.testing.assert_allclose(Y[f, t], admittance.yft.sum())
+        np.testing.assert_allclose(Y[t, f], admittance.ytf.sum())
+        np.testing.assert_allclose(Y[t, t], admittance.ytt.sum())
+        assert np.count_nonzero(Y) == 4
 
 
 # ---------------------------------------------------------------------------
