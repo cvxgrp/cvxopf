@@ -93,6 +93,10 @@ boundary.
 
 ## 4. Track B — unsuccessful-solve result schema
 
+**Status:** complete — result schemas are initialized from the built model;
+unavailable primal and derived arrays use `None`, scalar objective and cost
+quantities use `NaN`, and successful result schemas remain unchanged
+
 ### Problem
 
 Successful result extraction adds configured device keys, but unsuccessful
@@ -147,6 +151,10 @@ all operands exist.
 - Derived results never perform arithmetic on `None`.
 - All formulations follow the same missing-value conventions.
 - Tests assert exact keys, shapes, `None`, and `NaN` policy.
+
+All gates are covered by formulation × horizon × component schema tests,
+reproducible convex infeasibility fixtures, partial-primal derived-value
+tests, and AC hard-terminal status characterization.
 
 This track may proceed in parallel with early M16+ adapter work, but its result
 changes should land before M16+ deletes old orchestration so equivalence tests

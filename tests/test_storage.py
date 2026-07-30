@@ -701,6 +701,26 @@ class TestStorageTerminalPolicy:
         else:
             assert build.prob.status == cp.INFEASIBLE
 
+        results = extract_results(build)
+        expected = {
+            "status",
+            "objective",
+            "Pg",
+            "p_net",
+            "b",
+            "soc",
+            "storage_cost",
+            "storage_terminal_deviation",
+        }
+        if formulation == "ac":
+            expected |= {"Qg", "Vm", "Va_deg", "q_net", "b_q"}
+        elif formulation == "lossy_dc":
+            expected.add("p_flows")
+        assert set(results) == expected
+        if results["Pg"] is None:
+            assert np.isnan(results["objective"])
+            assert results["storage_terminal_deviation"] is None
+
     def test_multistep_terminal_uses_last_post_step_soc(self):
         unit = _default_unit(
             bus=1,

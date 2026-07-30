@@ -177,9 +177,16 @@ from cvxopf.results import extract_results
 build = build_opf(case9(), formulation="ac")
 build.solve()
 results = extract_results(build)
-print(f"Objective: {results['objective']:.2f} $/hr")
-print(f"Pg (MW):   {results['Pg']}")
+print(f"Status: {results['status']}")
+if results["Pg"] is not None:
+    print(f"Objective: {results['objective']:.2f} $/hr")
+    print(f"Pg (MW):   {results['Pg']}")
 ```
+
+Result keys are determined by the built model and remain stable when a solve
+does not return primal values. Check `status` first: unavailable array-valued
+and derived quantities are `None`, while scalar objective and cost quantities
+are `NaN`.
 
 **Lossy DC OPF:**
 
