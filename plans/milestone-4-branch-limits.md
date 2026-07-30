@@ -547,7 +547,7 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 3 — Thermal operating constraints
 
-**Status:** implemented and verified; awaiting review and checkpoint commit.
+**Status:** complete in commit `514ff54`.
 
 1. Remove the single- and multistep `NotImplementedError` stubs.
 2. For each constrained branch and time step, reuse the published lifted
@@ -565,7 +565,7 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 4 — Numerical and behavioral verification
 
-**Status:** implemented and verified; awaiting review and checkpoint commit.
+**Status:** complete in commit `c371b64`.
 
 1. Add a nonbinding-limit regression: enabling limits leaves the solution
    unchanged within existing AC tolerances.
@@ -605,10 +605,29 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 5 — Default-policy migration
 
+**Status:** implemented; awaiting verification and checkpoint commit.
+
 1. Review the Stage 0 and Stage 4 all-case evidence.
 2. Change the default from `False` to `True` in an isolated commit.
 3. Record the compatibility change, the `False` escape hatch, and before/after
    solver evidence.
+
+The migration is supported by two complementary evidence sets. Stage 0
+separated the construction and solve costs of baseline, reporting-only, and
+enforced lifted models through case118. Stage 4 then solved all nine bundled
+AC cases with enforcement and verified that nonbinding case9 ratings preserve
+the prior optimum. Representative Stage 0 single-step solve times for lifted
+reporting versus lifted enforcement were `0.049 s` versus `0.076 s` on case9,
+`0.509 s` versus `0.711 s` on case57, and `2.547 s` versus `3.268 s` on
+case118. The compatibility change is intentional: positive finite `rateA`
+values now affect the default AC feasible set.
+
+Users who need the former behavior can set
+`OPFOptions(enforce_branch_limits=False)`. Terminal-flow expressions and
+results remain available under that escape hatch; only the thermal
+inequalities are omitted. Because exact terminal physics must agree with nodal
+physics when limits are enforced, positive `sparsity_tol` values also require
+this explicit opt-out.
 
 ### Stage 6 — Documentation and examples
 

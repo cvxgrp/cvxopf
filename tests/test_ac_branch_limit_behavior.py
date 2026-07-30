@@ -95,7 +95,11 @@ def _assert_all_limits(results, build):
 class TestSingleStepBehavior:
 
     def test_nonbinding_limits_preserve_solution(self):
-        disabled = build_opf(case9(), formulation="ac")
+        disabled = build_opf(
+            case9(),
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
         enabled = build_opf(
             case9(), formulation="ac", options=_enabled_options()
         )
@@ -115,6 +119,26 @@ class TestSingleStepBehavior:
                 atol=1e-5,
             )
         _assert_all_limits(enabled_results, enabled)
+
+    def test_default_enforces_limits_and_false_is_escape_hatch(self):
+        constrained_case = case9()
+        constrained_case["branch"][0, 5] = 80.0
+        default = build_opf(constrained_case, formulation="ac")
+        disabled = build_opf(
+            constrained_case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
+        default.solve()
+        disabled.solve()
+        default_results = extract_results(default)
+        disabled_results = extract_results(disabled)
+
+        assert OPFOptions().enforce_branch_limits is True
+        assert default_results["branch_s_from"][0] == pytest.approx(
+            80.0, abs=MVA_ATOL
+        )
+        assert disabled_results["branch_s_from"][0] > 80.0 + 1.0
 
     def test_binding_limit_redispatches_and_binds_from_terminal(self):
         unconstrained_case = case9()
@@ -284,31 +308,44 @@ class TestMultistepAndRepresentation:
 
 class TestReferenceAndSchema:
 
+    @pytest.mark.parametrize(
+        ("case_factory", "reference_fixture", "angle_atol", "flow_atol"),
+        [
+            (case9, "case9_ref", 1e-3, 5e-2),
+            (case14, "case14_ref", 1e-3, 5e-2),
+            (case57, "case57_ref", 1e-2, 1e-1),
+        ],
+    )
     def test_reported_flows_agree_with_pypower_fixture(
         self,
-        case9_ref,
+        request,
+        case_factory,
+        reference_fixture,
+        angle_atol,
+        flow_atol,
     ):
-        case = case9()
+        reference = request.getfixturevalue(reference_fixture)
+        case = case_factory()
         build = build_opf(case, formulation="ac")
         build.solve()
         results = extract_results(build)
         np.testing.assert_allclose(
-            results["Vm"], case9_ref["Vm"], atol=1e-4
+            results["Vm"], reference["Vm"], atol=1e-4
         )
         np.testing.assert_allclose(
-            results["Va_deg"], case9_ref["Va_deg"], atol=1e-3
+            results["Va_deg"], reference["Va_deg"], atol=angle_atol
         )
         np.testing.assert_allclose(
-            results["branch_p_from"], case9_ref["PF"], atol=5e-2
+            results["branch_p_from"], reference["PF"], atol=flow_atol
         )
         np.testing.assert_allclose(
-            results["branch_q_from"], case9_ref["QF"], atol=5e-2
+            results["branch_q_from"], reference["QF"], atol=flow_atol
         )
         np.testing.assert_allclose(
-            results["branch_p_to"], case9_ref["PT"], atol=5e-2
+            results["branch_p_to"], reference["PT"], atol=flow_atol
         )
         np.testing.assert_allclose(
-            results["branch_q_to"], case9_ref["QT"], atol=5e-2
+            results["branch_q_to"], reference["QT"], atol=flow_atol
         )
 
     def test_reported_flows_match_internal_equations_at_pypower_voltage(

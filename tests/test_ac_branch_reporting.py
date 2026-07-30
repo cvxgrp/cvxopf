@@ -7,7 +7,12 @@ import pytest
 
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.network import make_branch_admittance, reindex_case_to_consecutive
-from cvxopf.problem import OPFBuild, build_opf, build_opf_multistep
+from cvxopf.problem import (
+    OPFBuild,
+    OPFOptions,
+    build_opf,
+    build_opf_multistep,
+)
 from cvxopf.results import extract_results
 from cvxopf.testcases import case9, make_singlenode_case
 
@@ -63,7 +68,11 @@ class TestACBranchBuildContract:
 
     def test_metadata_preserves_external_and_internal_endpoints(self):
         case = case9()
-        build = build_opf(case, formulation="ac")
+        build = build_opf(
+            case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
 
         assert build.data["nl"] == case["branch"].shape[0]
         np.testing.assert_array_equal(
@@ -137,7 +146,11 @@ class TestACBranchBuildContract:
         case["branch"][1, 5] = np.inf
         case["branch"][2, 5] = 1.0e12
         case["branch"][3, 10] = 0
-        build = build_opf(case, formulation="ac")
+        build = build_opf(
+            case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
 
         expected = np.flatnonzero(
             build.data["branch_status"]

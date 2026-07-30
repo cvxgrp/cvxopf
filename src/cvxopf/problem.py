@@ -64,7 +64,8 @@ class OPFOptions:
     enforce_branch_limits : bool
         If True, enforce MATPOWER rateA as an apparent-power limit at both
         terminals of every in-service branch with a finite positive rating.
-        AC only. Requires sparsity_tol=0. Default False.
+        AC only. Requires sparsity_tol=0. Default True. Set False as an
+        explicit compatibility escape hatch when ratings should remain inert.
     loss_weight : float
         Weighting factor lambda for line losses in the lossy DC objective:
             minimize delta * sum_t (G_t + loss_weight * L_t)
@@ -99,7 +100,7 @@ class OPFOptions:
     enforce_vset:           bool  = False
     sparsity_tol:           float = 0.0
     init_flat:              bool  = True
-    enforce_branch_limits:  bool  = False
+    enforce_branch_limits:  bool  = True
     loss_weight:            float = 1.0
     branch_limit_sentinel:  float = 1e6
     sparse_pq:              bool  = True

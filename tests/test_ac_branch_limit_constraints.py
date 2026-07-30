@@ -64,7 +64,11 @@ class TestBranchLimitValidation:
         case = case9()
         case["branch"][0, 5] = np.inf
 
-        build = build_opf(case, formulation="ac")
+        build = build_opf(
+            case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
 
         assert build.data["branch_rate_a_mva"][0] == np.inf
         assert 0 not in build.data["constrained_branch_indices"]
@@ -107,7 +111,11 @@ class TestBranchLimitValidation:
 class TestBranchLimitStructure:
 
     def test_single_step_adds_two_inequalities_per_constrained_branch(self):
-        disabled = build_opf(case9(), formulation="ac")
+        disabled = build_opf(
+            case9(),
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
         enabled = build_opf(
             case9(), formulation="ac", options=_options()
         )
@@ -122,7 +130,12 @@ class TestBranchLimitStructure:
     def test_multistep_adds_two_inequalities_per_branch_and_step(self):
         df_p, df_q = _flat_load(2)
         disabled = build_opf_multistep(
-            case9(), df_p, df_q, T=2, formulation="ac"
+            case9(),
+            df_p,
+            df_q,
+            T=2,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
         )
         enabled = build_opf_multistep(
             case9(),
@@ -149,7 +162,11 @@ class TestBranchLimitStructure:
         case["branch"][:, 5] = 0.0
         case["branch"][0, 5] = 100.0
         case["branch"][0, 10] = 0
-        disabled = build_opf(case, formulation="ac")
+        disabled = build_opf(
+            case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
         enabled = build_opf(case, formulation="ac", options=_options())
 
         assert enabled.data["constrained_branch_indices"].size == 0
@@ -162,7 +179,11 @@ class TestBranchLimitStructure:
         case = case9()
         case["branch"][:, 5] = 0.0
         case["branch"][0, 5] = 1.0e12
-        disabled = build_opf(case, formulation="ac")
+        disabled = build_opf(
+            case,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=False),
+        )
         enabled = build_opf(case, formulation="ac", options=_options())
 
         np.testing.assert_array_equal(

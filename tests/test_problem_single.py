@@ -271,7 +271,14 @@ class TestOptions:
         assert isinstance(build, OPFBuild)
 
     def test_sparsity_tol_accepted(self, case9_raw):
-        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(sparsity_tol=1e-12))
+        build = build_opf(
+            case9_raw,
+            formulation="ac",
+            options=OPFOptions(
+                enforce_branch_limits=False,
+                sparsity_tol=1e-12,
+            ),
+        )
         assert isinstance(build, OPFBuild)
 
     def test_default_options_when_none_passed(self, case9_raw):
