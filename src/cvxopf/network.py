@@ -120,6 +120,23 @@ def make_branch_admittance(case: dict) -> BranchAdmittance:
         b = float(branch[e, BR_B])
         tap = float(branch[e, TAP])
         shift = float(branch[e, SHIFT])
+        electrical = {
+            "BR_R": r,
+            "BR_X": x,
+            "BR_B": b,
+            "TAP": tap,
+            "SHIFT": shift,
+        }
+        invalid = [
+            f"{name}={value!r}"
+            for name, value in electrical.items()
+            if not np.isfinite(value)
+        ]
+        if invalid:
+            raise ValueError(
+                f"In-service branch row {e} has nonfinite electrical "
+                f"data: {', '.join(invalid)}."
+            )
 
         z = r + 1j * x
         if z == 0:

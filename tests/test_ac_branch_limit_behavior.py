@@ -120,6 +120,40 @@ class TestSingleStepBehavior:
             )
         _assert_all_limits(enabled_results, enabled)
 
+    def test_rate_b_rate_c_and_angle_bounds_remain_inert(self):
+        baseline_case = case9()
+        modified_case = case9()
+        modified_case["branch"][:, 6] = 1.0
+        modified_case["branch"][:, 7] = 2.0
+        modified_case["branch"][:, 11] = -0.01
+        modified_case["branch"][:, 12] = 0.01
+        baseline = build_opf(baseline_case, formulation="ac")
+        modified = build_opf(modified_case, formulation="ac")
+        baseline.solve()
+        modified.solve()
+        baseline_results = extract_results(baseline)
+        modified_results = extract_results(modified)
+
+        assert modified_results["objective"] == pytest.approx(
+            baseline_results["objective"], rel=1e-9, abs=1e-7
+        )
+        for name in (
+            "Pg",
+            "Qg",
+            "Vm",
+            "Va_deg",
+            "branch_p_from",
+            "branch_q_from",
+            "branch_p_to",
+            "branch_q_to",
+        ):
+            np.testing.assert_allclose(
+                modified_results[name],
+                baseline_results[name],
+                rtol=1e-8,
+                atol=1e-7,
+            )
+
     def test_default_enforces_limits_and_false_is_escape_hatch(self):
         constrained_case = case9()
         constrained_case["branch"][0, 5] = 80.0

@@ -187,6 +187,36 @@ class TestMakeBranchAdmittance:
             np.zeros(4, dtype=complex),
         )
 
+    @pytest.mark.parametrize(
+        ("column", "name"),
+        [
+            (2, "BR_R"),
+            (3, "BR_X"),
+            (4, "BR_B"),
+            (8, "TAP"),
+            (9, "SHIFT"),
+        ],
+    )
+    def test_nonfinite_active_electrical_data_rejected(self, column, name):
+        c = _reindexed(case9)
+        c["branch"][0, column] = np.nan
+
+        with pytest.raises(
+            ValueError,
+            match=rf"row 0.*{name}=nan",
+        ):
+            make_branch_admittance(c)
+
+    def test_nonfinite_inactive_electrical_data_is_not_evaluated(self):
+        c = _reindexed(case9)
+        c["branch"][0, [2, 3, 4, 8, 9]] = np.nan
+        c["branch"][0, 10] = 0
+
+        admittance = make_branch_admittance(c)
+
+        for name in ("yff", "yft", "ytf", "ytt"):
+            assert getattr(admittance, name)[0] == 0
+
     def test_reversed_phase_shifter_swaps_terminal_coefficients(self):
         c = _reindexed(case9)
         c["branch"] = c["branch"][[0]].copy()

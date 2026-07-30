@@ -327,6 +327,13 @@ def _parse_case(
     Returns a flat dict consumed by the AC single-step and multistep builders.
     """
     validate_case(case)
+    if np.asarray(case["branch"]).shape[0] == 0:
+        raise ValueError(
+            "Branchless AC cases are unsupported by the current CVXPY "
+            "DNLP/IPOPT path. Use formulation='singlenode_dc' only if "
+            "collapsing the network and omitting voltage/reactive-power "
+            "physics is appropriate."
+        )
     branch_from_bus_external = (
         np.asarray(case["branch"])[:, F_BUS].astype(int).copy()
     )

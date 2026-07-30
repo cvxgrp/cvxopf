@@ -26,6 +26,36 @@ _T_BUS      = 1
 _BR_STATUS  = 10
 
 
+def _validate_integer_column(name: str, values: np.ndarray) -> None:
+    """Require a numeric identifier column to contain finite integers."""
+    values = np.asarray(values)
+    try:
+        numeric = values.astype(float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} values must be finite integers.") from exc
+    invalid = ~np.isfinite(numeric) | (numeric != np.trunc(numeric))
+    if np.any(invalid):
+        details = ", ".join(
+            f"row {int(row)}: {numeric[row]!r}"
+            for row in np.flatnonzero(invalid)
+        )
+        raise ValueError(
+            f"{name} values must be finite integers; invalid values: "
+            f"{details}."
+        )
+
+
+def validate_case_identifiers(case: dict) -> None:
+    """Validate bus-reference columns without imposing full case structure."""
+    bus = np.asarray(case["bus"])
+    branch = np.asarray(case["branch"])
+    gen = np.asarray(case["gen"])
+    _validate_integer_column("BUS_I", bus[:, _BUS_I])
+    _validate_integer_column("F_BUS", branch[:, _F_BUS])
+    _validate_integer_column("T_BUS", branch[:, _T_BUS])
+    _validate_integer_column("GEN_BUS", gen[:, _GEN_BUS])
+
+
 def validate_branch_status(branch: np.ndarray) -> None:
     """Require every MATPOWER branch status to be exactly zero or one."""
     branch = np.asarray(branch)
@@ -101,6 +131,8 @@ def validate_case(case: dict) -> None:
         )
 
     validate_branch_status(branch)
+
+    validate_case_identifiers(case)
 
     bus_ids = bus[:, _BUS_I].astype(int)
     if np.unique(bus_ids).size != bus_ids.size:

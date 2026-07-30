@@ -46,3 +46,34 @@ def test_singlenode_malformed_branch_shape_rejected(malformed_branch):
         match=r"branch array must be two-dimensional and include.*BR_STATUS",
     ):
         build_opf(case, formulation="singlenode_dc")
+
+
+@pytest.mark.parametrize(
+    "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+)
+@pytest.mark.parametrize(
+    ("table", "column", "name"),
+    [
+        ("bus", 0, "BUS_I"),
+        ("branch", 0, "F_BUS"),
+        ("branch", 1, "T_BUS"),
+        ("gen", 0, "GEN_BUS"),
+    ],
+)
+@pytest.mark.parametrize("value", [1.5, np.nan, np.inf])
+def test_nonintegral_or_nonfinite_case_identifier_rejected(
+    formulation,
+    table,
+    column,
+    name,
+    value,
+):
+    case = case9()
+    case[table] = case[table].astype(float)
+    case[table][0, column] = value
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{name} values must be finite integers.*row 0",
+    ):
+        build_opf(case, formulation=formulation)

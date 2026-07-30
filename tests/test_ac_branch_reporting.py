@@ -180,7 +180,7 @@ class TestACBranchBuildContract:
                 item.shape == (build.data["nl"],) for item in expressions
             )
 
-    def test_zero_branch_table_uses_empty_constants(self):
+    def test_single_step_rejects_zero_branch_table(self):
         generator = DispatchableGenerator(
             bus=1,
             p_max_mw=100.0,
@@ -189,13 +189,12 @@ class TestACBranchBuildContract:
             cost_coeffs=(0.0, 1.0),
         )
         case = make_singlenode_case(50.0, [generator])
-        build = build_opf(case, formulation="ac")
 
-        assert build.data["nl"] == 0
-        for name in BRANCH_EXPRESSION_KEYS:
-            expression = build.expressions[name]
-            assert isinstance(expression, cp.Constant)
-            assert expression.shape == (0,)
+        with pytest.raises(
+            ValueError,
+            match=r"Branchless AC cases are unsupported.*singlenode_dc",
+        ):
+            build_opf(case, formulation="ac")
 
 
 class TestACBranchNumerics:
@@ -250,24 +249,7 @@ class TestACBranchNumerics:
         for name in BRANCH_RESULT_KEYS:
             assert results[name].shape == (2, build.data["nl"])
 
-    def test_empty_branch_results_have_empty_shape(self):
-        generator = DispatchableGenerator(
-            bus=1,
-            p_max_mw=100.0,
-            q_min_mvar=-100.0,
-            q_max_mvar=100.0,
-            cost_coeffs=(0.0, 1.0),
-        )
-        case = make_singlenode_case(50.0, [generator])
-        build = build_opf(case, formulation="ac")
-        build.variables["v"].value = np.ones((1, 1))
-        build.variables["theta"].value = np.zeros((1, 1))
-        results = extract_results(build)
-
-        for name in BRANCH_RESULT_KEYS:
-            assert results[name].shape == (0,)
-
-    def test_multistep_empty_branch_results_have_t_by_zero_shape(self):
+    def test_multistep_rejects_zero_branch_table(self):
         generator = DispatchableGenerator(
             bus=1,
             p_max_mw=100.0,
@@ -278,20 +260,13 @@ class TestACBranchNumerics:
         case = make_singlenode_case(50.0, [generator])
         df_p = pd.DataFrame([[50.0], [50.0]])
         df_q = pd.DataFrame([[0.0], [0.0]])
-        build = build_opf_multistep(
-            case, df_p, df_q, T=2, formulation="ac"
-        )
-        for voltage, angle in zip(
-            build.variables["v"],
-            build.variables["theta"],
-            strict=True,
+        with pytest.raises(
+            ValueError,
+            match=r"Branchless AC cases are unsupported.*singlenode_dc",
         ):
-            voltage.value = np.ones((1, 1))
-            angle.value = np.zeros((1, 1))
-        results = extract_results(build)
-
-        for name in BRANCH_RESULT_KEYS:
-            assert results[name].shape == (2, 0)
+            build_opf_multistep(
+                case, df_p, df_q, T=2, formulation="ac"
+            )
 
     def test_apparent_power_requires_all_four_signed_channels(self):
         variables = {

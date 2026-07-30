@@ -1,7 +1,7 @@
 # Milestone 4 — AC branch terminal flows and thermal limits
 
-**Status:** implementation and verification complete; Stage 6 documentation
-checkpoint awaiting review (2026-07-30)
+**Status:** complete through Stage 6 in commit `2e2d398`; post-review
+hardening implemented and verified, awaiting checkpoint commit (2026-07-30)
 
 ## 1. Goal
 
@@ -521,19 +521,26 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 11. Implement strict shared `{0, 1}` status validation outside the admittance
    arithmetic, in a separate commit covering all three formulations. Stop for
    review if the Stage 0 audit finds a legitimate nonbinary case.
+12. Post-review hardening requires finite `r`, `x`, charging, tap, and shift
+    values on every in-service branch while preserving the rule that inactive
+    electrical data is not evaluated.
+13. Validate `BUS_I`, `F_BUS`, `T_BUS`, and `GEN_BUS` as finite integer-valued
+    identifiers before any integer conversion or reindexing.
 
 ### Stage 2 — AC terminal-flow expressions and reporting
 
-**Status:** complete.
+**Status:** complete in commit `a606d66`.
 
 1. Copy external branch endpoint arrays from the original case before calling
    `reindex_case_to_consecutive()`, then parse the internal endpoints, status,
    rating, and constrained-index arrays from the reindexed case.
 2. Add the real-valued DNLP terminal-flow expression helper using scalar
    `theta[i, 0]` and `v[i, 0]` indexing.
-3. Handle `nl == 0` explicitly: create no lifted variables or defining
-   equalities and publish four empty constants without calling
-   `cp.hstack([])` or `cp.Variable(0)`.
+3. Reject public AC builds with `nl == 0` during case preparation. Mention
+   `singlenode_dc` only as a deliberate model reduction when collapsing the
+   network and omitting voltage/reactive-power physics is appropriate. Retain
+   a defensive empty-expression path inside the private numerical helper
+   without advertising branchless AC solves.
 4. Invoke the helper exactly once per AC time step.
 5. For `nl > 0`, create four network-owned lifted variables and tie them to the
    direct expressions with four vector equalities.
@@ -544,6 +551,18 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
    apparent magnitudes derived using `np.hypot`.
 8. Keep direct equation and lifted-variable construction independent of
    `enforce_branch_limits`, so disabling limits does not disable observability.
+
+The branchless rejection is numerical, not a claim of physical equivalence
+with `singlenode_dc`. A branchless AC model still has reactive-power balance,
+voltage magnitudes, reactive generation, bus shunts, AC storage capability,
+and inverter reactive support; a branchless multi-bus model can also expose
+local infeasibility at electrically isolated buses. In local review probes,
+the current CVXPY DNLP/IPOPT path failed inside low-level linear algebra for
+both sparse and dense zero-branch AC models rather than returning a controlled
+solver status. Consequently, `(0,)` and `(T, 0)` AC branch results are not
+part of the public contract. The private empty-expression path remains
+defensive, and public branchless AC support may be restored if the DNLP
+limitation is resolved.
 
 ### Stage 3 — Thermal operating constraints
 
@@ -590,8 +609,10 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
     the documented project rule.
 12. Verify AC branch fields are present regardless of enforcement and absent
     from lossy-DC and single-node result schemas.
-13. Verify a zero-row branch table produces `(0,)` single-step arrays and
-    `(T, 0)` multistep arrays.
+13. Verify a zero-row branch table is rejected before AC model construction
+    in both single- and multistep modes. The error may mention
+    `singlenode_dc` only conditionally and must not present it as an equivalent
+    replacement for AC voltage/reactive-power physics.
 14. Verify all six branch fields are `None` when no usable core primal exists,
     and that apparent magnitudes are not partially derived.
 15. For the binding case, independently recompute `S_f` and `S_t` from solved
@@ -631,7 +652,7 @@ this explicit opt-out.
 
 ### Stage 6 — Documentation and examples
 
-**Status:** implemented and verified; awaiting review and checkpoint commit.
+**Status:** complete in commit `2e2d398`.
 
 1. Update `OPFOptions`, `OPFBuild`, and result docstrings.
 2. Update the README formulation table and remove the AC branch-limit caveat.
@@ -642,6 +663,13 @@ this explicit opt-out.
    constraint and verifies both terminals.
 6. Regenerate `examples/README.md` if an example changes.
 7. Update the M4 and M17 status/dependency records after verification.
+
+One deliberate architectural debt remains: AC single- and multistep builders
+still repeat network-owned terminal-flow invocation, metadata publication, and
+compatibility-expression publication. The mathematical helpers are shared and
+currently consistent. Do not introduce a new network-contribution abstraction
+without first reviewing how it will also serve future angle, rating, and
+contingency operating sets.
 
 ## 7. Test matrix and acceptance gates
 
@@ -657,6 +685,10 @@ this explicit opt-out.
   `Yft`/`Ytf` swaps.
 - Out-of-service rows are skipped before impedance division and produce exact
   zero terminal coefficients.
+- Nonfinite electrical coefficients on in-service rows fail with row- and
+  field-qualified errors; inactive-row electrical data remains unevaluated.
+- Bus, branch-endpoint, and generator-bus identifiers are finite integers
+  before reindexing and cannot be silently truncated.
 - Bus shunts enter `Ybus` but never branch-terminal flows.
 - `Ybus` is unchanged by the internal refactor.
 
@@ -714,17 +746,20 @@ this explicit opt-out.
   MATPOWER branch table; internal endpoint indices are named unambiguously.
 - Unsuccessful AC solves retain all six keys with `None`.
 - Lossy-DC and single-node schemas do not gain AC terminal-flow fields.
-- Empty branch tables produce `(0,)` and `(T, 0)` arrays.
+- Branchless AC cases fail during preparation rather than entering a
+  degenerate DNLP solve. Any `singlenode_dc` recommendation explicitly
+  identifies its omitted voltage/reactive-power physics.
 - Apparent magnitudes use `np.hypot` and are derived only when both signed
   channels for that terminal are available.
 
 ### Gate 6 — regression and performance
 
-- Full pytest, Ruff, mypy, and diff checks pass.
+- Full pytest, Ruff, the configured component-adapter mypy surface, and diff
+  checks pass. M4 network modules are not yet part of the typed mypy surface.
 - Existing Pypower objective, generation, voltage, and angle comparisons
   remain within their established tolerances when limits are nonbinding.
-- Case57 and case118 measurements cover sparse and dense single-step builds
-  and a representative multistep build.
+- Measurements cover sparse and dense case57 single-step builds, sparse
+  case118 single-step builds, and a representative case9 multistep build.
 - Measurements record Python construction, DNLP setup/canonicalization,
   variables, constraints, derivative nonzero counts when exposed, IPOPT
   iterations and solve time, and practical memory observations.

@@ -19,7 +19,7 @@ across a full multi-day horizon and able to enforce the AC network
 constraints that determine whether a plan is actually executable. 
 
 `cvxopf` is designed with this application in mind. It formulates optimal power
-flow problems using CVXPY, supports full AC-OPF, a convex lossy DC relaxation,
+flow problems using CVXPY, supports nonlinear AC-OPF, a convex lossy DC relaxation,
 and single-node economic dispatch from a single entry point (with more to
 come), and handles multi-step
 optimization with time-varying load, battery storage, and nondispatchable generation
@@ -130,9 +130,34 @@ reserved for the Milestone 17 hierarchical controller.
 
 | Key | Description | Convex | Solver |
 |---|---|---|---|
-| `"ac"` | Full AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
+| `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 | `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
+
+AC branch-limit enforcement is enabled by default. `rateA == 0` means no
+thermal limit; every positive finite value is enforced at both terminals,
+including large values that MATPOWER may treat as unconstrained sentinels.
+Set `OPFOptions(enforce_branch_limits=False)` for reporting-only terminal
+flows under the former compatibility behavior. Because terminal flows retain
+exact branch coefficients, any positive `sparsity_tol` also requires this
+explicit opt-out.
+
+AC network operating-set scope:
+
+- Implemented: MATPOWER branch status; fixed tap ratios and phase shifts;
+  line charging and bus shunts; voltage-magnitude bounds; nonlinear nodal
+  real/reactive balance; generator real/reactive bounds; and two-terminal
+  apparent-power limits using `rateA`.
+- Not yet implemented: branch angle-difference bounds (`ANGMIN`/`ANGMAX`);
+  selection or contingency use of alternate `rateB`/`rateC` ratings; soft
+  thermal limits; current-magnitude or active-power-only branch limits;
+  time-varying or contingency-dependent ratings; topology switching; and
+  controllable transformer tap or phase-shift decisions.
+
+The fixed electrical data in the branch table still enters the AC equations
+even when its associated operating control is not implemented. See the
+[M4 plan](plans/milestone-4-branch-limits.md) for the detailed boundary and
+future extension notes.
 
 The `"singlenode_dc"` formulation collapses the whole network to a single
 bus: no branch flows, no transmission limits, no losses, no reactive power —
