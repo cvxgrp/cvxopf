@@ -77,3 +77,15 @@ def test_nonintegral_or_nonfinite_case_identifier_rejected(
         match=rf"{name} values must be finite integers.*row 0",
     ):
         build_opf(case, formulation=formulation)
+
+
+def test_nonnumeric_case_identifier_rejected_cleanly():
+    case = case9()
+    case["bus"] = case["bus"].astype(object)
+    case["bus"][0, 0] = "not-a-bus"
+
+    with pytest.raises(
+        ValueError,
+        match=r"BUS_I values must be finite integers",
+    ):
+        build_opf(case, formulation="singlenode_dc")

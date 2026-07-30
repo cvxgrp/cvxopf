@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from cvxopf.ac_problem import _make_branch_terminal_flow
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.network import make_branch_admittance, reindex_case_to_consecutive
 from cvxopf.problem import (
@@ -139,6 +140,48 @@ class TestACBranchBuildContract:
             expression = build.expressions[name]
             assert isinstance(expression, cp.Variable)
             assert expression.shape == (build.data["nl"],)
+
+    def test_private_empty_terminal_flow_path_remains_defensive(self):
+        generator = DispatchableGenerator(
+            bus=1,
+            p_max_mw=100.0,
+            q_min_mvar=-100.0,
+            q_max_mvar=100.0,
+            cost_coeffs=(0.0, 1.0),
+        )
+        case = make_singlenode_case(50.0, [generator])
+        reindexed, _ = reindex_case_to_consecutive(case)
+        admittance = make_branch_admittance(reindexed)
+        theta = cp.Variable((1, 1))
+        voltage = cp.Variable((1, 1))
+
+        flow, constraints = _make_branch_terminal_flow(
+            theta,
+            voltage,
+            admittance,
+            suffix="",
+        )
+
+        assert constraints == []
+        for expression in (
+            flow.p_from,
+            flow.q_from,
+            flow.p_to,
+            flow.q_to,
+        ):
+            assert isinstance(expression, cp.Constant)
+            assert expression.shape == (0,)
+
+    def test_already_zero_based_case_retains_none_reindex_mapping(self):
+        reindexed, _ = reindex_case_to_consecutive(case9())
+
+        build = build_opf(reindexed, formulation="ac")
+
+        assert build.data["ext_to_int"] is None
+        np.testing.assert_array_equal(
+            build.data["branch_from_bus_external"],
+            reindexed["branch"][:, 0],
+        )
 
     def test_constrained_indices_select_finite_positive_active_ratings(self):
         case = case9()

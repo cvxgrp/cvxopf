@@ -380,13 +380,17 @@ def _parse_case(
     # Get external bus IDs for validation (needed for both storage and nondispatchable)
     if ext_to_int is not None:
         ext_bus_ids = set(ext_to_int.keys())
+        component_ext_to_int = ext_to_int
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+        component_ext_to_int = {
+            bus_id: bus_id for bus_id in ext_bus_ids
+        }
 
     preparation = PreparationContext(
         base_mva=baseMVA,
         nb=nb,
-        ext_to_int=ext_to_int,
+        ext_to_int=component_ext_to_int,
         ext_bus_ids=frozenset(ext_bus_ids),
         horizon_steps=horizon_steps,
         delta=delta,
@@ -419,6 +423,7 @@ def _parse_case(
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
         ref=ref, pv=pv, ext_to_int=ext_to_int,
+        _component_ext_to_int=component_ext_to_int,
         ext_bus_ids=ext_bus_ids,
         nl=len(branch_admittance.from_bus),
         branch_admittance=branch_admittance,
@@ -652,7 +657,7 @@ def _build_ac_single(
         formulation="ac",
         step=0,
         base_mva=d["baseMVA"],
-        ext_to_int=d["ext_to_int"],
+        ext_to_int=d["_component_ext_to_int"],
         network_state=ACNetworkState(
             v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
         ),
@@ -848,7 +853,7 @@ def _build_ac_multistep(
             formulation="ac",
             step=t,
             base_mva=d["baseMVA"],
-            ext_to_int=d["ext_to_int"],
+            ext_to_int=d["_component_ext_to_int"],
             network_state=ACNetworkState(
                 v_t,
                 tuple(np.r_[[d["ref"]], d["pv"]]),
