@@ -11,14 +11,18 @@ from cvxopf._component_adapter import (
     HorizonContext,
     PreparationContext,
     StepContext,
+    FormulationCapability,
     bind_injection_scale,
 )
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
+    HVDC_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
     STORAGE_ADAPTER,
+    HVDCInputs,
     NondispatchableInputs,
 )
+from cvxopf.hvdc import HVDCLink
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.testcases import case9
@@ -375,3 +379,88 @@ def test_storage_adapter_t1_hard_terminal_policy_has_no_terminal_cost():
 
     assert len(horizon.constraints) == 2
     assert horizon.terminal_cost is None
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc"])
+def test_hvdc_adapter_preserves_active_contributions(formulation):
+    _, preparation = _case_context(horizon_steps=2)
+    units = (
+        HVDCLink(
+            from_bus=4,
+            to_bus=9,
+            p_min_mw=-20.0,
+            p_max_mw=-5.0,
+            loss_percent=5.0,
+            cost_coeffs=(1.0, 0.1, 0.01),
+        ),
+    )
+    inputs = HVDCInputs(
+        p_min_mw=np.array([[-20.0], [5.0]]),
+        p_max_mw=np.array([[-5.0], [20.0]]),
+    )
+    prepared = HVDC_ADAPTER.prepare(units, inputs, preparation)
+    assert set(HVDC_ADAPTER.metadata(prepared, formulation)) == {
+        "n_hvdc", "Ch_from", "Ch_to"
+    }
+    step = StepContext(
+        formulation,
+        step=1,
+        base_mva=preparation.base_mva,
+        ext_to_int=preparation.ext_to_int,
+        network_state=(
+            ACNetworkState(cp.Variable(preparation.nb), (), False)
+            if formulation == "ac"
+            else DCNetworkState()
+        ),
+    )
+    binding = HVDC_ADAPTER.formulations[formulation]
+    assert binding.capability is FormulationCapability.ACTIVE
+    assert binding.variable_specs is not None
+    assert binding.injections is not None
+    assert binding.operating_constraints is not None
+    assert binding.step_cost is not None
+    assert binding.horizon is not None
+
+    variables = _variables(binding.variable_specs(units, prepared, step))
+    assert set(variables) == {"p_hvdc_in", "p_hvdc_out"}
+    injection = binding.injections(units, prepared, variables, step)
+    assert injection.q_pu is None
+    assert injection.inv_base_mva is not None
+    bind_injection_scale(injection, preparation.base_mva)
+    constraints = binding.operating_constraints(
+        units, prepared, variables, step
+    )
+    assert len(constraints) == 3
+    assert constraints[0].args[0].value[0] == pytest.approx(5.0)
+    assert constraints[1].args[1].value[0] == pytest.approx(20.0)
+    assert binding.step_cost(units, prepared, variables, step).is_dcp()
+    horizon = binding.horizon(
+        units,
+        prepared,
+        {
+            "p_hvdc_in": [variables["p_hvdc_in"]],
+            "p_hvdc_out": [variables["p_hvdc_out"]],
+        },
+        HorizonContext(formulation, 1, 1.0),
+    )
+    assert horizon.constraints == ()
+
+
+def test_hvdc_adapter_derives_static_box_and_declares_singlenode_null():
+    _, preparation = _case_context(horizon_steps=2)
+    units = (HVDCLink(4, 9, -10.0, 15.0),)
+    prepared = HVDC_ADAPTER.prepare(units, None, preparation)
+
+    np.testing.assert_array_equal(
+        prepared["hvdc_p_min_mw"], [[-10.0], [-10.0]]
+    )
+    np.testing.assert_array_equal(
+        prepared["hvdc_p_max_mw"], [[15.0], [15.0]]
+    )
+    null_binding = HVDC_ADAPTER.formulations["singlenode_dc"]
+    assert null_binding.capability is FormulationCapability.NULL
+    assert null_binding.variable_specs is None
+    assert null_binding.injections is None
+    assert null_binding.operating_constraints is None
+    assert null_binding.step_cost is None
+    assert null_binding.horizon is None

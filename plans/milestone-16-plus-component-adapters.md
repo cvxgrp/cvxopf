@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stages 0–3 complete; Stage 4 next
+**Status:** in progress — Stages 0–4 complete; Stage 5 next
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -265,6 +265,11 @@ metadata
 - Preserve the M12 result and metadata contracts exactly.
 
 ### Stage 4 — HVDC and explicit null capability
+
+**Status:** complete — AC and lossy-DC builders use the HVDC adapter for
+preparation, variable specification, signed terminal injections, per-step
+box/loss constraints, transfer cost, horizon invocation, and metadata;
+single-node builders require the explicitly registered null capability
 
 - Migrate the two-terminal injection and per-step box/loss model.
 - Represent HVDC as explicitly null in `singlenode_dc`.

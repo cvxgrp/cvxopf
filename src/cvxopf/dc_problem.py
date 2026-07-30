@@ -56,8 +56,10 @@ from cvxopf._component_adapter import (
 )
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
+    HVDC_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
     STORAGE_ADAPTER,
+    HVDCInputs,
     NondispatchableInputs,
 )
 from cvxopf.storage import (
@@ -68,13 +70,6 @@ from cvxopf.nondispatchable import (
 )
 from cvxopf.hvdc import (
     HVDCLink,
-    _prepare_data as hvdc_prepare_data,
-    _build_metadata as hvdc_build_metadata,
-    _hvdc_static_box,
-    dc_injections as hvdc_dc_injections,
-    dc_operating_constraints as hvdc_dc_operating_constraints,
-    coupling_constraints as hvdc_coupling_constraints,
-    hvdc_cost_expr,
 )
 
 if TYPE_CHECKING:
@@ -104,6 +99,7 @@ def _parse_dc_case(
     generators: list[DispatchableGenerator] | None = None,
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
+    hvdc_inputs: HVDCInputs | None = None,
     is_multistep: bool = False,
 ) -> dict:
     """
@@ -187,8 +183,8 @@ def _parse_dc_case(
     # Parse HVDC links if present
     hvdc_data = {}
     if hvdc:
-        hvdc_data = hvdc_prepare_data(
-            hvdc, nb, ext_to_int, ext_bus_ids
+        hvdc_data = HVDC_ADAPTER.prepare(
+            hvdc, hvdc_inputs, preparation
         )
 
     return dict(
@@ -218,12 +214,7 @@ def _make_dc_step_constraints(
     nd_operating_constraints=(),
     n_hvdc: int = 0,
     hvdc_injection_expr=None,
-    links=None,
-    p_in_t=None,
-    p_out_t=None,
-    p_min_hvdc_t=None,
-    p_max_hvdc_t=None,
-    step: int = 0,
+    hvdc_operating_constraints=(),
 ) -> tuple[list, cp.Expression]:
     """Build one DC step's constraints and modeled net bus injection."""
     # Section 1: Nodal real power balance
@@ -251,9 +242,7 @@ def _make_dc_step_constraints(
 
     # Section 5c: HVDC operating constraints (omitted when n_hvdc == 0)
     if n_hvdc > 0:
-        constr += hvdc_dc_operating_constraints(
-            links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
-        )
+        constr += list(hvdc_operating_constraints)
 
     return constr, p_net
 
@@ -365,20 +354,29 @@ def _build_lossy_dc_single(
     # Create HVDC variables if present
     p_in = p_out = None
     hvdc_inj_expr = None
+    hvdc_operating = ()
     if "n_hvdc" in d:
-        n_hvdc = d["n_hvdc"]
-        p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
-        p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
-        hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_dc_injections(
-            hvdc,
-            p_in,
-            p_out,
-            d["ext_to_int"],
-            incidence=(d["Ch_from"], d["Ch_to"]),
+        hvdc_binding = HVDC_ADAPTER.formulations["lossy_dc"]
+        assert hvdc_binding.variable_specs is not None
+        assert hvdc_binding.injections is not None
+        assert hvdc_binding.operating_constraints is not None
+        hvdc_variables = {
+            spec.name: cp.Variable(
+                spec.shape, name=spec.name, **spec.attributes
+            )
+            for spec in hvdc_binding.variable_specs(hvdc, d, step_context)
+        }
+        p_in = hvdc_variables["p_hvdc_in"]
+        p_out = hvdc_variables["p_hvdc_out"]
+        hvdc_injection = hvdc_binding.injections(
+            hvdc, d, hvdc_variables, step_context
         )
-        assert hvdc_q_inj is None
-        inv_bMVA.value = 1.0 / d["baseMVA"]
-        p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
+        bind_injection_scale(hvdc_injection, d["baseMVA"])
+        hvdc_inj_expr = hvdc_injection.p_pu
+        assert hvdc_injection.q_pu is None
+        hvdc_operating = hvdc_binding.operating_constraints(
+            hvdc, d, hvdc_variables, step_context
+        )
 
     assert generator_binding.injections is not None
     assert generator_binding.operating_constraints is not None
@@ -416,12 +414,7 @@ def _build_lossy_dc_single(
         nd_operating_constraints=nd_operating,
         n_hvdc=d.get("n_hvdc", 0),
         hvdc_injection_expr=hvdc_inj_expr,
-        links=hvdc,
-        p_in_t=p_in,
-        p_out_t=p_out,
-        p_min_hvdc_t=p_min_hvdc if "n_hvdc" in d else None,
-        p_max_hvdc_t=p_max_hvdc if "n_hvdc" in d else None,
-        step=0,
+        hvdc_operating_constraints=hvdc_operating,
     )
     constr.extend(
         generator_binding.network_constraints(
@@ -448,7 +441,10 @@ def _build_lossy_dc_single(
 
     # Add HVDC cost if present
     if "n_hvdc" in d:
-        cost = cost + hvdc_cost_expr(hvdc, p_in)
+        assert hvdc_binding.step_cost is not None
+        cost = cost + hvdc_binding.step_cost(
+            hvdc, d, hvdc_variables, step_context
+        )
 
     storage_terminal_cost = None
     if "ns" in d:
@@ -479,6 +475,19 @@ def _build_lossy_dc_single(
                 nondispatchable,
                 d,
                 {"p_nd": [p_nd_t]},
+                HorizonContext("lossy_dc", 1, delta),
+            ).constraints
+        )
+    if "n_hvdc" in d:
+        assert hvdc_binding.horizon is not None
+        constr.extend(
+            hvdc_binding.horizon(
+                hvdc,
+                d,
+                {
+                    "p_hvdc_in": [p_in],
+                    "p_hvdc_out": [p_out],
+                },
                 HorizonContext("lossy_dc", 1, delta),
             ).constraints
         )
@@ -520,7 +529,7 @@ def _build_lossy_dc_single(
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(hvdc_build_metadata(d))
+        data.update(HVDC_ADAPTER.metadata(d, "lossy_dc"))
 
     expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
@@ -590,6 +599,14 @@ def _build_lossy_dc_multistep(
         horizon_steps=T,
         nd_available_mw=(
             None if df_nd is None else df_nd.to_numpy(dtype=float)
+        ),
+        hvdc_inputs=(
+            None
+            if not hvdc
+            else HVDCInputs(
+                df_hvdc_min.to_numpy(dtype=float),
+                df_hvdc_max.to_numpy(dtype=float),
+            )
         ),
         is_multistep=True,
     )
@@ -690,22 +707,33 @@ def _build_lossy_dc_multistep(
         # Create HVDC variables if present
         p_in_t = p_out_t = None
         hvdc_inj_expr_t = None
-        p_min_hvdc_t = p_max_hvdc_t = None
+        hvdc_operating_t = ()
         if "n_hvdc" in d:
-            n_hvdc = d["n_hvdc"]
-            p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
-            p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
-            hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_dc_injections(
-                hvdc,
-                p_in_t,
-                p_out_t,
-                d["ext_to_int"],
-                incidence=(d["Ch_from"], d["Ch_to"]),
+            hvdc_binding = HVDC_ADAPTER.formulations["lossy_dc"]
+            assert hvdc_binding.variable_specs is not None
+            assert hvdc_binding.injections is not None
+            assert hvdc_binding.operating_constraints is not None
+            hvdc_variables_t = {
+                spec.name: cp.Variable(
+                    spec.shape,
+                    name=f"{spec.name}_{t}",
+                    **spec.attributes,
+                )
+                for spec in hvdc_binding.variable_specs(
+                    hvdc, d, step_context
+                )
+            }
+            p_in_t = hvdc_variables_t["p_hvdc_in"]
+            p_out_t = hvdc_variables_t["p_hvdc_out"]
+            hvdc_injection_t = hvdc_binding.injections(
+                hvdc, d, hvdc_variables_t, step_context
             )
-            assert hvdc_q_inj_t is None
-            inv_bMVA_t.value = 1.0 / d["baseMVA"]
-            p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
-            p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
+            bind_injection_scale(hvdc_injection_t, d["baseMVA"])
+            hvdc_inj_expr_t = hvdc_injection_t.p_pu
+            assert hvdc_injection_t.q_pu is None
+            hvdc_operating_t = hvdc_binding.operating_constraints(
+                hvdc, d, hvdc_variables_t, step_context
+            )
 
         assert generator_binding.injections is not None
         assert generator_binding.operating_constraints is not None
@@ -743,12 +771,7 @@ def _build_lossy_dc_multistep(
             nd_operating_constraints=nd_operating_t,
             n_hvdc=d.get("n_hvdc", 0),
             hvdc_injection_expr=hvdc_inj_expr_t,
-            links=hvdc,
-            p_in_t=p_in_t,
-            p_out_t=p_out_t,
-            p_min_hvdc_t=p_min_hvdc_t,
-            p_max_hvdc_t=p_max_hvdc_t,
-            step=t,
+            hvdc_operating_constraints=hvdc_operating_t,
         )
         step_constr.extend(
             generator_binding.network_constraints(
@@ -774,7 +797,10 @@ def _build_lossy_dc_multistep(
 
         # Add HVDC cost if present
         if "n_hvdc" in d:
-            step_cost = step_cost + hvdc_cost_expr(hvdc, p_in_t)
+            assert hvdc_binding.step_cost is not None
+            step_cost = step_cost + hvdc_binding.step_cost(
+                hvdc, d, hvdc_variables_t, step_context
+            )
 
         all_constr.extend(step_constr)
         total_cost  = total_cost + step_cost
@@ -827,10 +853,17 @@ def _build_lossy_dc_multistep(
             ).constraints
         )
     if "n_hvdc" in d:
+        assert hvdc_binding.horizon is not None
         all_constr.extend(
-            hvdc_coupling_constraints(
-                hvdc, p_hvdc_in_list, p_hvdc_out_list, delta=delta
-            )
+            hvdc_binding.horizon(
+                hvdc,
+                d,
+                {
+                    "p_hvdc_in": p_hvdc_in_list,
+                    "p_hvdc_out": p_hvdc_out_list,
+                },
+                HorizonContext("lossy_dc", T, delta),
+            ).constraints
         )
 
     if storage_terminal_cost is not None:
@@ -876,7 +909,7 @@ def _build_lossy_dc_multistep(
 
     # Add HVDC data if present
     if "n_hvdc" in d:
-        data.update(hvdc_build_metadata(d))
+        data.update(HVDC_ADAPTER.metadata(d, "lossy_dc"))
 
     expressions = {"p_net": p_net_expr_list}
     if "ns" in d:

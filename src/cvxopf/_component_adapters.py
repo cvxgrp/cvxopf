@@ -13,7 +13,7 @@ from typing import Mapping, Sequence, cast
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import generator, nondispatchable, storage
+from cvxopf import generator, hvdc, nondispatchable, storage
 from cvxopf._component_adapter import (
     ACNetworkState,
     ComponentAdapter,
@@ -28,6 +28,7 @@ from cvxopf._component_adapter import (
     VariableSpec,
 )
 from cvxopf.generator import DispatchableGenerator
+from cvxopf.hvdc import HVDCLink
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
 
@@ -498,5 +499,166 @@ STORAGE_ADAPTER = ComponentAdapter[StorageUnitIdeal, None](
         "ac": STORAGE_AC,
         "lossy_dc": STORAGE_DC,
         "singlenode_dc": STORAGE_DC,
+    },
+)
+
+
+@dataclass(frozen=True)
+class HVDCInputs:
+    """Normalized per-step HVDC transfer boxes in MW."""
+
+    p_min_mw: np.ndarray
+    p_max_mw: np.ndarray
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "p_min_mw", np.array(self.p_min_mw, dtype=float, copy=True)
+        )
+        object.__setattr__(
+            self, "p_max_mw", np.array(self.p_max_mw, dtype=float, copy=True)
+        )
+
+
+def _hvdc_prepare(
+    units: Sequence[HVDCLink],
+    inputs: HVDCInputs | None,
+    context: PreparationContext,
+) -> Mapping[str, object]:
+    prepared = hvdc._prepare_data(
+        list(units),
+        context.nb,
+        dict(context.ext_to_int),
+        set(context.ext_bus_ids),
+    )
+    if inputs is None:
+        p_min, p_max = hvdc._hvdc_static_box(list(units))
+        p_min = np.tile(p_min, (context.horizon_steps, 1))
+        p_max = np.tile(p_max, (context.horizon_steps, 1))
+    else:
+        p_min = inputs.p_min_mw
+        p_max = inputs.p_max_mw
+    expected_shape = (context.horizon_steps, len(units))
+    if p_min.shape != expected_shape or p_max.shape != expected_shape:
+        raise ValueError(
+            "HVDC bounds must both have shape "
+            f"{expected_shape}, got {p_min.shape} and {p_max.shape}"
+        )
+    if not np.all(np.isfinite(p_min)) or not np.all(np.isfinite(p_max)):
+        raise ValueError("HVDC bounds must contain only finite values")
+    if np.any(p_min > p_max):
+        raise ValueError("HVDC bounds must satisfy p_min_mw <= p_max_mw")
+    prepared["hvdc_p_min_mw"] = np.array(p_min, copy=True)
+    prepared["hvdc_p_max_mw"] = np.array(p_max, copy=True)
+    return prepared
+
+
+def _hvdc_metadata(
+    prepared: Mapping[str, object],
+    formulation: Formulation,
+) -> Mapping[str, object]:
+    return hvdc._build_metadata(dict(prepared))
+
+
+def _hvdc_variable_specs(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    context: StepContext,
+) -> tuple[VariableSpec, ...]:
+    shape = (cast(int, prepared["n_hvdc"]),)
+    return (
+        VariableSpec("p_hvdc_in", shape),
+        VariableSpec("p_hvdc_out", shape),
+    )
+
+
+def _hvdc_injections(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> InjectionContribution:
+    injection_method = (
+        hvdc.ac_injections
+        if context.formulation == "ac"
+        else hvdc.dc_injections
+    )
+    p_pu, q_pu, inv_base_mva = injection_method(
+        list(units),
+        variables["p_hvdc_in"],
+        variables["p_hvdc_out"],
+        dict(context.ext_to_int),
+        incidence=(
+            _array(prepared, "Ch_from"),
+            _array(prepared, "Ch_to"),
+        ),
+    )
+    return InjectionContribution(p_pu, q_pu, inv_base_mva)
+
+
+def _hvdc_operating_constraints(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> tuple[cp.Constraint, ...]:
+    constraint_method = (
+        hvdc.ac_operating_constraints
+        if context.formulation == "ac"
+        else hvdc.dc_operating_constraints
+    )
+    constraints = constraint_method(
+        list(units),
+        variables["p_hvdc_in"],
+        variables["p_hvdc_out"],
+        _array(prepared, "hvdc_p_min_mw")[context.step],
+        _array(prepared, "hvdc_p_max_mw")[context.step],
+        context.step,
+    )
+    return tuple(constraints)
+
+
+def _hvdc_step_cost(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> cp.Expression:
+    return hvdc.hvdc_cost_expr(list(units), variables["p_hvdc_in"])
+
+
+def _hvdc_horizon(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    variable_history: Mapping[str, Sequence[cp.Variable]],
+    context: HorizonContext,
+) -> HorizonContribution:
+    constraints = hvdc.coupling_constraints(
+        list(units),
+        list(variable_history["p_hvdc_in"]),
+        list(variable_history["p_hvdc_out"]),
+        context.delta,
+    )
+    return HorizonContribution(constraints=tuple(constraints))
+
+
+HVDC_ACTIVE = FormulationAdapter[HVDCLink](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_hvdc_variable_specs,
+    injections=_hvdc_injections,
+    operating_constraints=_hvdc_operating_constraints,
+    step_cost=_hvdc_step_cost,
+    horizon=_hvdc_horizon,
+)
+HVDC_NULL = FormulationAdapter[HVDCLink](
+    capability=FormulationCapability.NULL,
+)
+HVDC_ADAPTER = ComponentAdapter[HVDCLink, HVDCInputs | None](
+    name="hvdc",
+    prepare=_hvdc_prepare,
+    metadata=_hvdc_metadata,
+    formulations={
+        "ac": HVDC_ACTIVE,
+        "lossy_dc": HVDC_ACTIVE,
+        "singlenode_dc": HVDC_NULL,
     },
 )

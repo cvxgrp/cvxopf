@@ -57,6 +57,7 @@ from cvxopf.generator import (
 )
 from cvxopf._component_adapter import (
     DCNetworkState,
+    FormulationCapability,
     HorizonContext,
     PreparationContext,
     StepContext,
@@ -64,6 +65,7 @@ from cvxopf._component_adapter import (
 )
 from cvxopf._component_adapters import (
     GENERATOR_ADAPTER,
+    HVDC_ADAPTER,
     NONDISPATCHABLE_ADAPTER,
     STORAGE_ADAPTER,
     NondispatchableInputs,
@@ -81,6 +83,15 @@ if TYPE_CHECKING:
 
 # MATPOWER column index constants
 PD = 2
+
+
+def _require_null_hvdc_model() -> None:
+    """Verify that copper-plate HVDC elimination is explicitly registered."""
+    capability = HVDC_ADAPTER.formulations["singlenode_dc"].capability
+    if capability is not FormulationCapability.NULL:
+        raise RuntimeError(
+            "singlenode_dc requires the registered null HVDC capability"
+        )
 
 
 def _make_singlenode_dc_step_constraints(
@@ -315,6 +326,9 @@ def _build_singlenode_dc_single(
         Problem container with formulation="singlenode_dc", is_convex=True.
     """
     from cvxopf.problem import OPFBuild
+
+    if hvdc:
+        _require_null_hvdc_model()
 
     # Parse the case
     d = _parse_singlenode_dc_case(
@@ -582,6 +596,9 @@ def _build_singlenode_dc_multistep(
     import warnings
 
     from cvxopf.problem import OPFBuild
+
+    if hvdc:
+        _require_null_hvdc_model()
 
     # df_Q is ignored for the DC formulation
     if df_Q is not None:
