@@ -565,22 +565,27 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 4 — Numerical and behavioral verification
 
+**Status:** implemented and verified; awaiting review and checkpoint commit.
+
 1. Add a nonbinding-limit regression: enabling limits leaves the solution
    unchanged within existing AC tolerances.
 2. Add a binding-limit case that redispatches and has at least one terminal
    magnitude active at `rateA`.
 3. Add a case where from- and to-terminal magnitudes differ, proving that both
    ends are computed and constrained rather than one being inferred by sign.
-4. Add an infeasible case with physically unreachable ratings.
+4. Add an analytically infeasible case with physically unreachable ratings
+   and verify that it is never reported optimal. Treat IPOPT `USER_LIMIT`
+   honestly as failure to certify a result, not as proof of infeasibility.
 5. Verify all constrained terminal magnitudes at every time step.
 6. Verify sparse/dense equivalence with limits enabled.
 7. Verify single-step versus multistep `T=1` equivalence.
 8. Verify multistep result ordering and shapes.
 9. Verify unsuccessful-result schema retention.
-10. Compare reported terminal flows with independent Pypower fixtures only
-    after confirming voltage-magnitude and angle agreement. Keep the
-    fixed-voltage equation oracle as the primary branch-physics comparison so
-    different nonconvex local solutions are not mistaken for equation errors.
+10. Compare reported terminal flows directly with committed Pypower
+    `PF`/`QF`/`PT`/`QT` fixtures after confirming voltage-magnitude and angle
+    agreement. Also retain the fixed-voltage reconstruction using cvxopf's
+    branch primitive as a separate internal-equation check, while recognizing
+    that it is not an independent reference.
 11. Verify a finite positive rating at or above `1e10` remains active under
     the documented project rule.
 12. Verify AC branch fields are present regardless of enforcement and absent
@@ -670,7 +675,9 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 - A nonbinding case preserves the prior optimum.
 - A binding case changes dispatch for the expected network reason.
-- A sufficiently tight case is infeasible.
+- A sufficiently tight case is analytically infeasible and is never reported
+  optimal. IPOPT is not treated as an infeasibility certifier when it returns
+  `USER_LIMIT`.
 - Independently recomputed terminal powers prove which terminal binds and that
   the other terminal and unrelated constrained branches remain feasible.
 - Every solved constrained terminal satisfies both a documented

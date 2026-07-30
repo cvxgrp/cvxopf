@@ -84,6 +84,10 @@ Each JSON file contains a single object with the following keys:
     Qg          list    generator reactive outputs in MVAr, length ng
     Vm          list    bus voltage magnitudes in p.u., length nb
     Va_deg      list    bus voltage angles in degrees, length nb
+    PF          list    from-terminal real flows in MW, length nl
+    QF          list    from-terminal reactive flows in MVAr, length nl
+    PT          list    to-terminal real flows in MW, length nl
+    QT          list    to-terminal reactive flows in MVAr, length nl
 """
 
 import json
@@ -108,6 +112,7 @@ from pypower.idx_gen import (
     QMIN,
     VG,
 )
+from pypower.idx_brch import PF, QF, PT, QT
 from pypower.idx_dcline import c
 from pypower.isload import isload
 from pypower.add_userfcn import add_userfcn
@@ -156,6 +161,10 @@ def _extract_result(result, case_name: str) -> dict:
             Qg=None,
             Vm=None,
             Va_deg=None,
+            PF=None,
+            QF=None,
+            PT=None,
+            QT=None,
         )
 
     objective = float(result["f"])
@@ -163,6 +172,10 @@ def _extract_result(result, case_name: str) -> dict:
     Qg = result["gen"][:, QG].tolist()  # MVAr
     Vm = result["bus"][:, VM].tolist()  # p.u.
     Va_deg = result["bus"][:, VA].tolist()  # degrees
+    p_from = result["branch"][:, PF].tolist()  # MW
+    q_from = result["branch"][:, QF].tolist()  # MVAr
+    p_to = result["branch"][:, PT].tolist()  # MW
+    q_to = result["branch"][:, QT].tolist()  # MVAr
 
     print(f"OK  (f = {objective:.4f} $/hr)")
 
@@ -175,6 +188,10 @@ def _extract_result(result, case_name: str) -> dict:
         Qg=Qg,
         Vm=Vm,
         Va_deg=Va_deg,
+        PF=p_from,
+        QF=q_from,
+        PT=p_to,
+        QT=q_to,
     )
 
 
