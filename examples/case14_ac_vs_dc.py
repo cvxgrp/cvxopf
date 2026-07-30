@@ -73,7 +73,7 @@ def main():
 
     print(f"\n  {'':22}  {'AC-OPF':>14}  {'Lossy DC OPF':>14}  {'Diff':>10}")
     print(f"  {'-'*22}  {'-'*14}  {'-'*14}  {'-'*10}")
-    print(f"  {'Objective ($/hr)':<22}  {r_ac['objective']:>14.4f}  "
+    print(f"  {'Objective ($)':<22}  {r_ac['objective']:>14.4f}  "
           f"{r_dc['objective']:>14.4f}  "
           f"{r_dc['objective'] - r_ac['objective']:>+10.4f}")
     print(f"  {'Solve time (s)':<22}  {t_ac:>14.3f}  {t_dc:>14.3f}")

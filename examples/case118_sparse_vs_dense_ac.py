@@ -28,7 +28,7 @@ def main():
     ppc = case118()
     nb  = ppc["bus"].shape[0]
 
-    header = (f"{'':>8}  {'P/Q vars':>10}  {'status':>8}  {'obj ($/hr)':>14}"
+    header = (f"{'':>8}  {'P/Q vars':>10}  {'status':>8}  {'obj ($)':>14}"
               f"  {'build (s)':>10}  {'canonicalize+solve (s)':>10} ")
     # print(header)
     # print("-" * len(header))
@@ -70,7 +70,7 @@ def main():
     obj_diff = abs(results["sparse"]["objective"] - results["dense"]["objective"])
     pg_diff  = np.max(np.abs(results["sparse"]["Pg"] - results["dense"]["Pg"]))
     vm_diff  = np.max(np.abs(results["sparse"]["Vm"] - results["dense"]["Vm"]))
-    print(f"Objective difference:  {obj_diff:.2e} $/hr")
+    print(f"Objective difference:  {obj_diff:.2e} $")
     print(f"Max Pg difference:     {pg_diff:.2e} MW")
     print(f"Max Vm difference:     {vm_diff:.2e} p.u.")
 

@@ -60,7 +60,7 @@ def main():
     for f in FORMULATIONS:
         _, r = _solve(f, case14())
         results[f] = r
-        print(f"\n  [{f}] status={r['status']}, objective={r['objective']:.2f} $/hr")
+        print(f"\n  [{f}] status={r['status']}, objective={r['objective']:.2f} $")
 
     # ------------------------------------------------------------------
     # Per-generator dispatch table
@@ -110,7 +110,7 @@ def main():
     print("    singlenode_dc only by a quadratic loss PENALTY in its")
     print("    objective, which nudges the dispatch and raises the")
     print("    objective slightly (here by "
-          f"{results['lossy_dc']['objective'] - results['singlenode_dc']['objective']:.2f} $/hr).")
+          f"{results['lossy_dc']['objective'] - results['singlenode_dc']['objective']:.2f} $).")
     print("  - Objective values are NOT directly comparable across all")
     print("    three: each optimizes a different quantity.")
 

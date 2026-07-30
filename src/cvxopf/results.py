@@ -213,7 +213,7 @@ def extract_results(build: OPFBuild) -> dict:
     results : dict
         AC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Generator real output, MW
             Qg          np.ndarray   (ng,)  Generator reactive output, MVAr
             Vm          np.ndarray   (nb,)  Bus voltage magnitudes, p.u.
@@ -222,11 +222,11 @@ def extract_results(build: OPFBuild) -> dict:
             q_net       np.ndarray   (nb,)  Net reactive bus injection, MVAr
 
         AC multi-step: same keys; Pg, Qg are (T, ng); Vm, Va_deg, p_net,
-        q_net are (T, nb). objective is total cost across all steps.
+        q_net are (T, nb). objective is total integrated horizon cost.
 
         DC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Per-generator output, MW
                                             stored per generator as Pg
             p_flows     np.ndarray   (nl,)  Branch real power flows, MW
@@ -240,7 +240,7 @@ def extract_results(build: OPFBuild) -> dict:
 
         Singlenode DC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Per-generator output, MW
             p_net       float        Net generation minus load, MW
                                      (near zero at optimum)

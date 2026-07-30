@@ -53,7 +53,7 @@ def main():
     # Print results
     # ------------------------------------------------------------------
     print(f"Status:     {r['status']}")
-    print(f"Objective:  {r['objective']:.4f} $/hr")
+    print(f"Objective:  {r['objective']:.4f} $")
     print()
 
     print(

@@ -38,6 +38,8 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
@@ -407,7 +409,6 @@ def _build_ac_single(
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
     step_aggregate = aggregate_step_contributions(step_components)
-    storage_step = step_components.get("storage")
 
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q,
@@ -423,8 +424,14 @@ def _build_ac_single(
 
     # Build the generic component stage cost.
     assert step_aggregate.cost is not None
-    storage_cost = None if storage_step is None else storage_step.cost
-    total_cost = step_aggregate.cost
+    total_cost = integrate_stage_cost_rates(
+        [step_aggregate.cost],
+        delta,
+    )
+    component_costs = integrate_component_stage_costs(
+        [step_components],
+        delta,
+    )
 
     horizon = assemble_component_horizon(
         components, [step_components], HorizonContext("ac", 1, delta)
@@ -465,8 +472,7 @@ def _build_ac_single(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p, "q_net": q}
-    if storage_cost is not None:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost
@@ -547,8 +553,6 @@ def _build_ac_multistep(
     step_aggregates = []
     components: PreparedComponents = d["_components"]
     all_constr  = []
-    total_cost  = 0
-    storage_cost = 0
 
     for t in range(T):
         # Create step variables
@@ -595,10 +599,8 @@ def _build_ac_multistep(
 
         all_constr.extend(step_constr)
 
-        # Add generation cost and HVDC cost (inside loop, per-step)
+        # Retain the complete component stage-cost rate.
         assert step_aggregate.cost is not None
-        total_cost = total_cost + step_aggregate.cost
-
         theta_list.append(theta_t)
         v_list.append(v_t)
         PQ_P_list.append(PQ_P_t)
@@ -606,12 +608,14 @@ def _build_ac_multistep(
         p_list.append(p_t)
         q_list.append(q_t)
 
-    # Retain the named storage-cost reporting expression.
-    if "ns" in d:
-        for step_components in component_steps:
-            step_storage_cost = step_components["storage"].cost
-            assert step_storage_cost is not None
-            storage_cost = storage_cost + step_storage_cost
+    total_cost = integrate_stage_cost_rates(
+        [aggregate.cost for aggregate in step_aggregates],
+        delta,
+    )
+    component_costs = integrate_component_stage_costs(
+        component_steps,
+        delta,
+    )
 
     horizon = assemble_component_horizon(
         components, component_steps, HorizonContext("ac", T, delta)
@@ -661,8 +665,7 @@ def _build_ac_multistep(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_list, "q_net": q_list}
-    if "ns" in d:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost

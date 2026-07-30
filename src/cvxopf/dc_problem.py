@@ -13,11 +13,14 @@ Variables:
     Pg       (ng,)  per-generator real generation, p.u.
 
 Objective:
-    minimize  G + loss_weight * L
+    minimize  delta * sum_t (G_t + loss_weight * L_t) + terminal_cost
 
     where
-        G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)   generation cost
-        L = sum_e r_e * p_flows_e^2                         line losses
+        G_t = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)
+        L_t = sum_e r_e * p_flows_e^2
+
+G and the weighted loss proxy are stage-cost rates. Terminal cost is a
+once-per-horizon boundary term and is not multiplied by delta.
 
 Constraints:
     A @ p_flows + Cg @ Pg == Pd    flow conservation at every bus
@@ -59,6 +62,8 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
@@ -220,12 +225,13 @@ def _make_dc_step_constraints(
 
 
 def _make_dc_step_cost(
-    generator_cost,
+    component_cost_rate,
     r, p_flows, loss_weight,
-) -> cp.Expression:
-    """Build the per-step DC cost expression."""
+) -> tuple[cp.Expression, cp.Expression]:
+    """Build the total and network-loss DC stage-cost rates."""
     L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
-    return generator_cost + cp.multiply(loss_weight, L)
+    loss_cost = cp.multiply(loss_weight, L)
+    return component_cost_rate + loss_cost, loss_cost
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +272,6 @@ def _build_lossy_dc_single(
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
     step_aggregate = aggregate_step_contributions(step_components)
-    storage_step = step_components.get("storage")
 
     constr, p_net_expr = _make_dc_step_constraints(
         p_flows,
@@ -277,16 +282,16 @@ def _build_lossy_dc_single(
     constr.extend(step_aggregate.network_constraints)
 
     assert step_aggregate.cost is not None
-    cost = _make_dc_step_cost(
+    step_cost_rate, loss_cost_rate = _make_dc_step_cost(
         step_aggregate.cost,
         d["r"], p_flows, d["loss_weight"],
     )
-
-    # Retain the named storage-cost reporting expression.
-    storage_cost = None
-    if storage_step is not None:
-        storage_cost = storage_step.cost
-        assert storage_cost is not None
+    cost = integrate_stage_cost_rates([step_cost_rate], delta)
+    component_costs = integrate_component_stage_costs(
+        [step_components],
+        delta,
+    )
+    dc_loss_cost = integrate_stage_cost_rates([loss_cost_rate], delta)
 
     horizon = assemble_component_horizon(
         components,
@@ -321,8 +326,8 @@ def _build_lossy_dc_single(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_net_expr}
-    if storage_cost is not None:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
+    compatibility_expressions["dc_loss_cost"] = dc_loss_cost
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost
@@ -420,8 +425,8 @@ def _build_lossy_dc_multistep(
     components: PreparedComponents = d["_components"]
     p_net_expr_list = []
     all_constr      = []
-    total_cost      = 0
-    storage_cost    = 0
+    step_cost_rates = []
+    loss_cost_rates = []
 
     for t in range(T):
         p_flows_t = cp.Variable(d["nl"], name=f"p_flows_{t}")
@@ -438,7 +443,6 @@ def _build_lossy_dc_multistep(
         component_steps.append(step_components)
         step_aggregate = aggregate_step_contributions(step_components)
         step_aggregates.append(step_aggregate)
-        storage_step = step_components.get("storage")
 
         step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t,
@@ -448,21 +452,23 @@ def _build_lossy_dc_multistep(
         )
         step_constr.extend(step_aggregate.network_constraints)
         assert step_aggregate.cost is not None
-        step_cost = _make_dc_step_cost(
+        step_cost_rate, loss_cost_rate = _make_dc_step_cost(
             step_aggregate.cost,
             d["r"], p_flows_t, d["loss_weight"],
         )
 
-        # Add storage aging cost if present
-        if storage_step is not None:
-            step_storage_cost = storage_step.cost
-            assert step_storage_cost is not None
-            storage_cost = storage_cost + step_storage_cost
-
         all_constr.extend(step_constr)
-        total_cost  = total_cost + step_cost
+        step_cost_rates.append(step_cost_rate)
+        loss_cost_rates.append(loss_cost_rate)
         p_flows_list.append(p_flows_t)
         p_net_expr_list.append(p_net_expr_t)
+
+    total_cost = integrate_stage_cost_rates(step_cost_rates, delta)
+    component_costs = integrate_component_stage_costs(
+        component_steps,
+        delta,
+    )
+    dc_loss_cost = integrate_stage_cost_rates(loss_cost_rates, delta)
 
     horizon = assemble_component_horizon(
         components,
@@ -500,8 +506,8 @@ def _build_lossy_dc_multistep(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_net_expr_list}
-    if "ns" in d:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
+    compatibility_expressions["dc_loss_cost"] = dc_loss_cost
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost

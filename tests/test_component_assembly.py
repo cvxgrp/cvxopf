@@ -40,6 +40,8 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
@@ -709,6 +711,45 @@ def test_terminal_cost_aggregation_rejects_vector_contribution():
         match="component 'toy' terminal cost must be a scalar cp.Expression",
     ):
         aggregate_horizon_contributions({"toy": contribution})
+
+
+def test_stage_cost_rates_are_integrated_once_by_delta():
+    first = cp.Parameter(value=3.0)
+    second = cp.Parameter(value=5.0)
+
+    integrated = integrate_stage_cost_rates((first, second), 0.25)
+
+    assert integrated.value == pytest.approx(2.0)
+
+
+def test_named_component_costs_are_integrated_across_steps():
+    first = {
+        "generator": StepContribution(
+            variables={},
+            injection=InjectionContribution(None, None),
+            cost=cp.Constant(4.0),
+        ),
+        "nondispatchable": StepContribution(
+            variables={},
+            injection=InjectionContribution(None, None),
+        ),
+    }
+    second = {
+        "generator": StepContribution(
+            variables={},
+            injection=InjectionContribution(None, None),
+            cost=cp.Constant(6.0),
+        ),
+        "nondispatchable": StepContribution(
+            variables={},
+            injection=InjectionContribution(None, None),
+        ),
+    }
+
+    costs = integrate_component_stage_costs((first, second), 0.5)
+
+    assert tuple(costs) == ("generator_cost",)
+    assert costs["generator_cost"].value == pytest.approx(5.0)
 
 
 def test_expression_publication_rejects_inconsistent_multistep_keys():

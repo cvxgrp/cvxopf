@@ -2,14 +2,16 @@
 
 This module owns the repeated mechanics of preparing component collections,
 creating builder-owned variables, binding injection scales, invoking adapter
-hooks, and publishing component state. Formulation modules retain ownership
-of network variables, network equations, contribution ordering, objectives,
-and ``OPFBuild`` construction.
+hooks, integrating stage-cost rates, and publishing component state.
+Formulation modules retain ownership of network variables, network equations,
+network-specific stage rates, contribution ordering, horizon-boundary
+composition, and ``OPFBuild`` construction.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence, cast
 
@@ -528,6 +530,53 @@ def aggregate_horizon_contributions(
         terminal_cost=terminal_cost,
         expressions=expressions,
     )
+
+
+def integrate_stage_cost_rates(
+    stage_cost_rates: Sequence[cp.Expression],
+    delta: float,
+) -> cp.Expression:
+    """Integrate scalar stage-cost rates over equal-duration intervals."""
+    if not math.isfinite(delta) or delta <= 0:
+        raise ValueError("delta must be finite and > 0")
+    if not stage_cost_rates:
+        raise ValueError("stage-cost integration requires at least one rate")
+    for index, rate in enumerate(stage_cost_rates):
+        if not isinstance(rate, cp.Expression) or not rate.is_scalar():
+            raise ValueError(
+                f"stage cost rate at index {index} must be a scalar "
+                "cp.Expression"
+            )
+    summed_rate = cast(
+        cp.Expression,
+        sum(stage_cost_rates[1:], start=stage_cost_rates[0]),
+    )
+    return cp.multiply(delta, summed_rate)
+
+
+def integrate_component_stage_costs(
+    step_contributions: Sequence[Mapping[str, StepContribution]],
+    delta: float,
+) -> Mapping[str, cp.Expression]:
+    """Return one integrated, named cost for each cost-bearing component."""
+    _validate_step_variable_schemas(step_contributions)
+    costs: dict[str, cp.Expression] = {}
+    for component_name in step_contributions[0]:
+        rates = [
+            step[component_name].cost for step in step_contributions
+        ]
+        if all(rate is None for rate in rates):
+            continue
+        if any(rate is None for rate in rates):
+            raise ValueError(
+                f"component {component_name!r} has inconsistent step-cost "
+                "availability across the horizon"
+            )
+        costs[f"{component_name}_cost"] = integrate_stage_cost_rates(
+            cast(list[cp.Expression], rates),
+            delta,
+        )
+    return MappingProxyType(costs)
 
 
 def _validate_publication_step_count(

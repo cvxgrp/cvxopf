@@ -25,9 +25,9 @@ CORE_VARIABLES = {
     "singlenode_dc": {"Pg"},
 }
 CORE_EXPRESSIONS = {
-    "ac": {"p_net", "q_net"},
-    "lossy_dc": {"p_net"},
-    "singlenode_dc": {"p_net"},
+    "ac": {"p_net", "q_net", "generator_cost"},
+    "lossy_dc": {"p_net", "generator_cost", "dc_loss_cost"},
+    "singlenode_dc": {"p_net", "generator_cost"},
 }
 CORE_DATA = {
     "ac": {
@@ -263,6 +263,7 @@ def test_build_schema_is_additive_by_component(
     if with_hvdc and formulation != "singlenode_dc":
         variables.update({"p_hvdc_in", "p_hvdc_out"})
         data.update(HVDC_DATA)
+        expressions.add("hvdc_cost")
 
     assert set(build.variables) == variables
     assert set(build.data) == data

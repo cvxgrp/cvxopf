@@ -218,10 +218,14 @@ Do not change this formulation without understanding the DNLP paper.
 Reference: *Convex Optimization with Smart Grid Examples*,
 https://doi.org/10.2172/3018252
 
-Objective: minimize `G + loss_weight * L`
+Objective: minimize
+`delta * sum_t (G_t + loss_weight * L_t) + terminal_cost`
 - `G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)` — generation cost
 - `L = sum_e r_e * p_flows_e^2` — line losses
 - `loss_weight` is user-configurable via `OPFOptions.loss_weight` (default 1.0)
+
+`G_t` and the weighted loss proxy are stage-cost rates. The terminal term is
+a once-per-horizon boundary cost and is not scaled by `delta`.
 
 Constraints:
 - `A @ p_flows + Cg @ Pg == Pd` — flow conservation at every bus
@@ -246,8 +250,8 @@ scalar real power balance:
 
 where Pd_total = sum(bus[:, PD]) / baseMVA.
 
-Objective: minimize generation cost G (same polynomial cost as AC and
-lossy DC) plus storage aging cost when storage is present.
+Objective: minimize the time integral of generation and storage-aging
+stage-cost rates plus any once-per-horizon terminal cost.
 
 Variables: Pg (ng,) per-unit, b/soc when storage present,
 p_nd when nondispatchable present. (Results keys: see the table under `"ac"`.)
@@ -315,8 +319,8 @@ Both emit `DeprecationWarning` when called.
 `build_opf` and `build_opf_multistep`. It must always be a finite, strictly
 positive real scalar, regardless of whether a temporal device is present.
 Booleans are not accepted as numeric time-step durations. Storage uses
-`delta` in its SoC dynamics; the package-wide stage-cost convention is
-specified separately in the correctness and API hardening plan.
+`delta` in its SoC dynamics, and shared component assembly multiplies the sum
+of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 
 ### `OPFBuild` fields
 
@@ -336,7 +340,7 @@ specified separately in the correctness and API hardening plan.
 | `apparent_power_rating` | float | required | S_max (MVA); AC: circle constraint; DC: real power bound |
 | `capacity` | float | required | Energy capacity Q (MWh) |
 | `initial_soc` | float | required | Initial state of charge (MWh); 0 ≤ initial_soc ≤ capacity |
-| `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ ($/MW); 0.0 = zero-cost storage |
+| `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ (objective units/MWh); 0.0 = zero-cost storage |
 
 `delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
 global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).
@@ -569,7 +573,12 @@ Variable units are **not** uniform across all CVXPY variable types:
   them by `baseMVA` at declaration or inside constraint loops, and **do not**
   multiply them by `baseMVA` in `extract_results` — both are latent unit bugs.
 - Generator cost expressions receive `Pg` in **MW** — the `baseMVA` scaling
-  is applied before building cost expressions in both AC and DC.
+  is applied before building cost-rate expressions in both AC and DC.
+- The objective convention is
+  `delta * sum_t(stage_cost_rate_t) + terminal_cost`. Generator, storage
+  cycling, HVDC, and lossy-DC regularization terms are rates; shared assembly
+  owns their time integration. Named integrated costs are retained in
+  `OPFBuild.expressions` for auditing.
 - `poly_cost_expr` in `cost.py` uses an explicit monomial sum (not Horner's
   method) so that CVXPY's DCP checker can verify convexity for quadratic costs.
   Horner's method produces `(affine * affine)` products when leading coefficients
@@ -578,8 +587,9 @@ Variable units are **not** uniform across all CVXPY variable types:
 
 ### Multi-step structure
 `build_opf_multistep` builds a **single `cp.Problem`** containing T sets
-of per-step variables and constraints. The objective is the sum of per-step
-costs. Coupling constraints (e.g., battery SoC dynamics) are passed via
+of per-step variables and constraints. The objective integrates per-step cost
+rates using the global interval duration `delta`, then adds horizon-boundary
+costs once. Coupling constraints (e.g., battery SoC dynamics) are passed via
 `coupling_constraints` and appended without modification.
 
 ### Incidence matrices
@@ -613,6 +623,8 @@ The aging cost uses `cp.multiply(aging_weight, cp.abs(b_t))` — never
 `numpy_array * cp.abs(cp_var)` or `np.multiply(...)`. NumPy intercepts `*`
 via `__array_ufunc__` and routes through CVXPY's deprecated matrix
 multiplication path, causing `CvxpyDeprecationWarning`.
+This expression is a stage-cost rate; shared assembly multiplies its horizon
+sum by `delta`, so `aging_weight` has objective units/MWh of throughput.
 
 `_make_step_constraints` (AC) is organised into five labelled sections in
 fixed order, with Section 4b added for nondispatchable constraints:

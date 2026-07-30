@@ -66,8 +66,11 @@ class OPFOptions:
         implemented; raises NotImplementedError. AC only. Default False.
     loss_weight : float
         Weighting factor lambda for line losses in the lossy DC objective:
-            minimize G + loss_weight * L
+            minimize delta * sum_t (G_t + loss_weight * L_t)
         where G is generation cost and L = sum_e r_e * p_flows_e^2.
+        The loss proxy is dimensionless on the system base, so loss_weight
+        supplies its objective-rate units. Default 1.0 is a unit-normalized
+        regularizer, not a calibrated physical loss price.
         Reference: Convex Optimization with Smart Grid Examples,
         https://doi.org/10.2172/3018252
         DC only. Default 1.0.
@@ -169,7 +172,13 @@ class OPFBuild:
         nonconvex (ac). Controls solver defaults in solve().
     expressions : dict
         Named modeled CVXPY expressions used for solved-value reporting.
-        Multi-step expressions are stored as lists of length T.
+        Per-step reporting expressions are stored as one expression for a
+        single-step build and lists of length T for a multistep build.
+        Integrated stage costs (``generator_cost``, conditional
+        ``storage_cost`` and ``hvdc_cost``, and lossy-DC ``dc_loss_cost``)
+        are scalar horizon totals in both modes. Horizon-boundary expressions,
+        including ``storage_terminal_cost``, are scalar expressions published
+        once and are not multiplied by ``delta``.
     """
     prob:        cp.Problem
     variables:   dict
@@ -303,9 +312,10 @@ def build_opf(
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance.
     delta : float, optional
-        Time step duration in hours (default 1.0). Passed to every component's
-        temporal coupling hook and used by storage SoC dynamics. Must be a
-        finite, strictly positive real scalar.
+        Time step duration in hours (default 1.0). Integrates every stage-cost
+        rate over the interval, is passed to every component's temporal
+        coupling hook, and is used by storage SoC dynamics. Horizon-boundary
+        costs are not scaled. Must be a finite, strictly positive real scalar.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.
@@ -395,9 +405,10 @@ def build_opf_multistep(
         Each unit is a StorageUnitIdeal dataclass instance. Storage SoC
         dynamics are automatically added as coupling constraints.
     delta : float, optional
-        Time step duration in hours (default 1.0). Passed to every component's
-        temporal coupling hook and used by storage SoC dynamics. Must be a
-        finite, strictly positive real scalar.
+        Time step duration in hours (default 1.0). Integrates every stage-cost
+        rate over each interval, is passed to every component's temporal
+        coupling hook, and is used by storage SoC dynamics. Horizon-boundary
+        costs are not scaled. Must be a finite, strictly positive real scalar.
     nondispatchable : list[NondispatchableUnit] | None, optional
         List of nondispatchable generator units (wind, solar, etc.).
         If None, no nondispatchable generation is modelled.

@@ -1,6 +1,6 @@
 # Correctness and API hardening after Milestones 12 and 16
 
-**Status:** in progress — Tracks A and B implemented; Track C remains
+**Status:** complete — Tracks A, B, and C implemented and verified
 **Relationship to M16+:** independent except where noted
 **Nature of work:** small correctness fixes, one result-contract decision, and
 one package-wide scientific-units decision
@@ -161,6 +161,8 @@ changes should land before M16+ deletes old orchestration so equivalence tests
 can distinguish intentional schema changes from refactor regressions.
 
 ## 5. Track C — objective time discretization and scientific units
+
+**Status:** implemented and verified on `critical-path`
 
 ### Problem
 
@@ -369,6 +371,37 @@ Reproducible implementation, tests, tables, and interpretation are in
 `tests/test_battery_terminal_resolution_study.py`, and the executable
 `experiments/battery_terminal/report.py`.
 
+### Implementation result (2026-07-30)
+
+Shared component assembly now owns the equal-step integration operation:
+
+```text
+delta * sum_t stage_cost_rate_t.
+```
+
+All six formulation/horizon builders pass their complete stage-cost rates
+through that operation. AC and single-node DC include component rates; lossy
+DC includes the component rates and its network-loss regularizer. Aggregated
+horizon terminal cost is added afterward and is not scaled.
+
+`OPFBuild.expressions` retains integrated `generator_cost`, conditional
+`storage_cost` and `hvdc_cost`, and `dc_loss_cost` for lossy DC. These named
+expressions reconstruct the operating objective and preserve the existing
+`storage_cost` result field with corrected energy-throughput units.
+
+The high-window resolution experiment was rerun under the implemented
+convention. The quadratic policy now terminates at 350.122 MWh at
+`delta = 1`, `0.5`, and `0.25` hours; its objective is 83,500.145 objective
+units at all three resolutions to solver tolerance. The maximum
+common-boundary SoC discrepancy is `1.55e-5` MWh. The earlier results above
+remain the diagnostic record of the former unscaled convention.
+
+Public regression tests cover all three formulations in single- and
+multistep modes, single-step `delta != 1`, named-cost reconstruction,
+terminal-cost separation, and source-independent zero-order-hold refinement.
+The README and objective docstrings record the intentional behavior change;
+`delta = 1` numerical baselines remain unchanged.
+
 ### Implementation stages after decision
 
 1. Retain separate named expressions for each objective contribution.
@@ -398,6 +431,9 @@ Reproducible implementation, tests, tables, and interpretation are in
 - Single-step `delta != 1` scales the interval cost and is tested.
 - Invalid `delta` is rejected even without storage.
 - No compatibility mode preserves the unscaled convention.
+
+All acceptance gates are covered by unit, formulation-level, and
+cross-resolution regression tests.
 
 ### Future application: Milestone 19 load shedding
 

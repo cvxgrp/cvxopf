@@ -73,7 +73,9 @@ class HVDCLink:
         Fixed converter loss (LOSS0) is not modelled; see Milestone 15.
     cost_coeffs : tuple of float
         Polynomial cost (c0, c1, c2) in lowest-first order. Cost acts on the
-        transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. Default (0,0,0).
+        transfer magnitude: c2*|p_in|^2 + c1*|p_in| + c0. The resulting
+        stage-cost rate is integrated by the problem time step. Default
+        (0,0,0).
     device_id : str or None
         Stable external identity used to align time-series columns. Required
         only when ``df_hvdc_min`` and ``df_hvdc_max`` are supplied.
@@ -404,7 +406,7 @@ def coupling_constraints(
 
 def hvdc_cost_expr(links: list, p_in: cp.Variable) -> cp.Expression:
     """
-    Total HVDC cost over all links.
+    Total HVDC stage-cost rate over all links.
 
     Cost acts on the transfer magnitude so it is symmetric in flow direction.
     (c0, c1, c2) is lowest-first — the package-wide user-facing convention.

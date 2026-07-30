@@ -9,7 +9,7 @@ import cvxpy as cp
 from cvxopf.testcases import case9
 from cvxopf.problem import (
     build_opf, build_opf_multistep,
-    OPFBuild, OPFOptions, StorageUnitIdeal,
+    OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.results import extract_results
 from cvxopf.storage import (
@@ -786,9 +786,9 @@ class TestStorageTerminalPolicy:
     @pytest.mark.parametrize(
         "formulation", ["ac", "lossy_dc", "singlenode_dc"]
     )
-    def test_multistep_terminal_penalty_is_counted_once(self, formulation):
-        ppc = case9()
-        ppc["gencost"][:, 4:] = 0.0
+    def test_multistep_objective_reconstructs_with_terminal_cost(
+        self, formulation
+    ):
         unit = _default_unit(
             bus=1,
             S_max=10.0,
@@ -803,22 +803,33 @@ class TestStorageTerminalPolicy:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             build = build_opf_multistep(
-                ppc,
+                case9(),
                 df_P,
                 reactive_load,
                 T=2,
                 formulation=formulation,
                 storage=[unit],
-                delta=1.0,
-                options=OPFOptions(loss_weight=0.0),
+                delta=0.25,
             )
         build.solve()
         results = extract_results(build)
 
         assert results["status"] == "optimal"
         assert results["storage_terminal_cost"] > VAL_ATOL
+        cost_names = {"generator_cost", "storage_cost"}
+        if formulation == "lossy_dc":
+            cost_names.add("dc_loss_cost")
+        reconstructed = sum(
+            float(build.expressions[name].value) for name in cost_names
+        )
+        reconstructed += float(
+            build.expressions["storage_terminal_cost"].value
+        )
+        assert build.prob.value == pytest.approx(
+            reconstructed, rel=1e-8, abs=1e-6
+        )
         assert results["objective"] == pytest.approx(
-            results["storage_terminal_cost"], rel=OBJ_RTOL
+            reconstructed, rel=1e-8, abs=1e-6
         )
 
     @pytest.mark.parametrize(
@@ -1100,8 +1111,10 @@ class TestStorageACMultistep:
 
 
 @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+@pytest.mark.parametrize("delta", [1.0, 0.5])
 def test_dc_t1_objective_counts_forced_storage_cycling_cost_once(
     formulation,
+    delta,
 ):
     unit = _default_unit(
         initial_soc=50.0,
@@ -1116,7 +1129,7 @@ def test_dc_t1_objective_counts_forced_storage_cycling_cost_once(
             case9(),
             formulation=formulation,
             storage=[unit],
-            delta=1.0,
+            delta=delta,
         )
         multi = build_opf_multistep(
             case9(),
@@ -1125,15 +1138,20 @@ def test_dc_t1_objective_counts_forced_storage_cycling_cost_once(
             T=1,
             formulation=formulation,
             storage=[unit],
-            delta=1.0,
+            delta=delta,
         )
     single.solve()
     multi.solve()
     single_results = extract_results(single)
     multi_results = extract_results(multi)
 
-    assert single_results["b"][0] == pytest.approx(20.0, abs=VAL_ATOL)
-    assert multi_results["b"][0, 0] == pytest.approx(20.0, abs=VAL_ATOL)
+    expected_power = 20.0 / delta
+    assert single_results["b"][0] == pytest.approx(
+        expected_power, abs=VAL_ATOL
+    )
+    assert multi_results["b"][0, 0] == pytest.approx(
+        expected_power, abs=VAL_ATOL
+    )
     assert single_results["storage_cost"] == pytest.approx(140.0)
     assert multi_results["storage_cost"] == pytest.approx(140.0)
     assert single_results["objective"] == pytest.approx(

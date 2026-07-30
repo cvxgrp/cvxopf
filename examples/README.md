@@ -59,7 +59,7 @@ Constraints: 63
 Solving with IPOPT ...
 
 Status    : optimal
-Objective : 5296.6862 $/hr
+Objective : 5296.6862 $
 
 Generator dispatch:
    Gen     Pg (MW)   Qg (MVAr)
@@ -102,7 +102,7 @@ Constraints: 117
 Solving with IPOPT ...
 
 Status    : optimal
-Objective : 8081.5263 $/hr
+Objective : 8081.5263 $
 
 Generator dispatch:
    Gen     Pg (MW)   Qg (MVAr)
@@ -180,7 +180,7 @@ Branch limit   : 175 MW (all branches, per reference)
 Base load solution (alpha = 1.0)
 ------------------------------------------------------------
 Status    : optimal
-Objective : 7642.7260 $/hr
+Objective : 7642.7260 $
 
 Generator dispatch:
    Gen     Pg (MW)   Pmax (MW)
@@ -229,7 +229,7 @@ Load scaling sweep to find alpha_max
 Solution at alpha = 4.6
 ------------------------------------------------------------
 Status    : optimal
-Objective : 59448.2262 $/hr
+Objective : 59448.2262 $
 Total load: 1191.4 MW
 Total Pg  : 1191.4 MW
 
@@ -317,7 +317,7 @@ Building AC-OPF ...
   Named variables : 8
   Constraints     : 117
 Solving AC-OPF with IPOPT ...
-  Status : optimal  (0.053s)
+  Status : optimal  (0.058s)
 
 Building lossy DC OPF ...
   Named variables : 2
@@ -331,8 +331,8 @@ Summary
 
                                   AC-OPF    Lossy DC OPF        Diff
   ----------------------  --------------  --------------  ----------
-  Objective ($/hr)             8081.5263       7642.7260   -438.8003
-  Solve time (s)                   0.053           0.006
+  Objective ($)                8081.5263       7642.7260   -438.8003
+  Solve time (s)                   0.058           0.006
   Solver                           IPOPT        CLARABEL
   nlp=True required                  yes              no
   Named variables                      8               2
@@ -453,11 +453,11 @@ Buses       : 14
 Generators  : 5  (at buses [1, 2, 3, 6, 8])
 Total load  : 259.0 MW
 
-  [ac] status=optimal, objective=8081.53 $/hr
+  [ac] status=optimal, objective=8081.53 $
 
-  [lossy_dc] status=optimal, objective=7642.73 $/hr
+  [lossy_dc] status=optimal, objective=7642.73 $
 
-  [singlenode_dc] status=optimal, objective=7642.59 $/hr
+  [singlenode_dc] status=optimal, objective=7642.59 $
 
 ----------------------------------------------------------------
 Per-generator dispatch, Pg (MW)
@@ -489,7 +489,7 @@ Notes:
     balance (total Pg == total load). lossy_dc differs from
     singlenode_dc only by a quadratic loss PENALTY in its
     objective, which nudges the dispatch and raises the
-    objective slightly (here by 0.13 $/hr).
+    objective slightly (here by 0.13 $).
   - Objective values are NOT directly comparable across all
     three: each optimizes a different quantity.
 ```
@@ -528,7 +528,7 @@ Constraints: 189
 Solving with IPOPT ...
 
 Status    : optimal
-Objective : 15890.0586 $/hr  (total across all steps)
+Objective : 15890.0586 $  (horizon total)
 
 --- Step 0 ---
    Gen     Pg (MW)   Qg (MVAr)
@@ -561,8 +561,8 @@ Comparison: multi-step step 0  vs  single-step
      1      134.3206      134.3206     +0.0000
      2       94.1874       94.1874     -0.0000
 
-  Multi-step obj/step : 5296.6862 $/hr
-  Single-step obj     : 5296.6862 $/hr
+  Multi-step average rate: 5296.6862 $/hr
+  Single-step objective  : 5296.6862 $
 ```
 
 ---
@@ -593,7 +593,7 @@ Reference:
 
 ```
 Status:     optimal
-Objective:  14728.9727 $/hr (total, all steps)
+Objective:  14728.9727 $ (total, all steps)
 Storage cost (aging): 1.0892 $
 
 Step  Load scale                         Pg (MW)    b (MW)  b_q (MVAr)   soc (MWh)
@@ -608,7 +608,7 @@ Storage unit summary:
   Capacity:               100.0 MWh
   Initial SoC:            50.0 MWh
   Final SoC:              0.000 MWh
-  Aging weight:           0.01 $/MW
+  Aging weight:           0.01 $/MWh
   Total |b| throughput:   108.923 MWh
 
 SoC dynamics verification:
@@ -655,7 +655,7 @@ Warning: df_Q is ignored for formulation='lossy_dc'. Reactive power is not model
 Warning: Storage apparent_power_rating is applied as a real power limit only for formulation='lossy_dc'. Reactive power is not modelled in the DC formulation.
 
 Status:     optimal
-Objective:  14521.3126 $/hr (total, all steps)
+Objective:  14521.3126 $ (total, all steps)
 Storage cost (aging): 1.1271 $
 
 Step  Load scale                         Pg (MW)    b (MW)   soc (MWh)
@@ -670,7 +670,7 @@ Storage unit summary:
   Capacity:               100.0 MWh
   Initial SoC:            50.0 MWh
   Final SoC:              0.000 MWh
-  Aging weight:           0.01 $/MW
+  Aging weight:           0.01 $/MWh
   Total |b| throughput:   112.708 MWh
 
 b_q absent from results (DC has no reactive power): True
@@ -699,7 +699,7 @@ This produces a load that peaks at step 6 (1.3x base) and troughs at
 step 18 (0.7x base), representing a simplified diurnal load curve.
 
 Storage unit: 60 MVA rating, 150 MWh capacity, initially half-charged.
-Aging weight: 1e-2 $/MW (small L1 penalty to discourage unnecessary cycling).
+Aging weight: 1e-2 $/MWh (small L1 throughput penalty).
 
 The storage unit charges during low-load periods and discharges during
 high-load periods, reducing peak generation cost. The apparent power
@@ -715,9 +715,9 @@ Building AC OPF with storage (T=24)...
 Solving...
 
 Status:               optimal
-Total objective:      128392.9843 $/hr
+Total objective:      128392.9843 $
 Total storage cost:   3.7321 $ (aging penalty)
-Generation cost:      128389.2522 $/hr
+Generation cost:      128389.2522 $
 Total |b| throughput: 373.209 MWh
 Max discharge:        45.353 MW at t=23
 Max charge:           -47.046 MW at t=0
@@ -781,7 +781,7 @@ real power bound only (|b_t| <= S_max). No reactive power is modelled.
 A UserWarning is emitted at build time.
 
 Storage unit: 60 MW rating, 150 MWh capacity, initially half-charged.
-Aging weight: 1e-2 $/MW.
+Aging weight: 1e-2 $/MWh.
 
 Usage:
     uv run examples/case9_storage_dc_24h.py
@@ -802,9 +802,9 @@ Warning: Storage apparent_power_rating is applied as a real power limit only for
 Solving...
 
 Status:               optimal
-Total objective:      126314.3073 $/hr
+Total objective:      126314.3073 $
 Total storage cost:   3.8130 $ (aging penalty)
-Generation cost:      126310.4943 $/hr
+Non-storage cost:     126310.4943 $
 Total |b| throughput: 381.299 MWh
 Max discharge:        47.767 MW at t=23
 Max charge:           -48.902 MW at t=0
@@ -852,9 +852,9 @@ SoC bounds verification (0 <= soc <= capacity):
   Max SoC: 150.000 MWh  (PASS)
 
 Comparison: with vs without storage...
-  Objective without storage: 128878.4773 $/hr
-  Objective with storage:    126314.3073 $/hr
-  Cost saving:               2564.1700 $/hr (1.99%)
+  Objective without storage: 128878.4773 $
+  Objective with storage:    126314.3073 $
+  Cost saving:               2564.1700 $ (1.99%)
 ```
 
 ### `case9_storage_terminal.py`
@@ -1030,8 +1030,7 @@ Demonstrates the HVDC MVP (Milestone 7) in the full AC formulation:
     ``hvdc_from_dcline`` (the realistic entry point)
   - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
     (to-bus), Convention B (positive = injection into the grid)
-  - Proportional converter loss on fixed-direction links
-    (``p_out = -(1 - loss_frac) * p_in``)
+  - Direction-specific proportional loss selected from the ``p_in`` box
 
 case9_dcline has three in-service DC links:
   link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
@@ -1054,20 +1053,20 @@ Importing HVDC links from the dcline table...
 Warning: hvdc_from_dcline: one or more active dcline rows have loss0 != 0. Fixed converter loss (LOSS0) is not modelled in the MVP; the imported model will not match Pypower exactly. Full fixed-loss modelling is deferred to Milestone 15.
 
 Status:     optimal
-Objective:  5490.1038 $/hr
+Objective:  5498.8147 $
 
 Link    from->to   p_in (MW)   p_out (MW)   loss (MW)   loss %
 --------------------------------------------------------------
-   0       30->4      1.0000      -0.9900      0.0100     1.00
-   1        7->9      2.0000      -2.0000      0.0000     0.00
-   2        5->9     10.0000      -9.5000      0.5000     5.00
+   0       30->4      1.0000      -1.0101      0.0101     1.00
+   1        7->9      2.0000      -2.0000     -0.0000     0.00
+   2        5->9      0.0000      -0.0000      0.0000     5.00
 
-Generator dispatch Pg (MW): [ 90.   ,  10.   , 220.163]
+Generator dispatch Pg (MW): [ 90.   ,  10.   , 220.598]
 
-Loss-law verification (p_out == -(1 - loss_frac) * p_in on fixed-direction links):
-  link 0: p_out=-0.9900  expected=-0.9900  residual=0.00e+00
+Direction-specific loss-law verification:
+  link 0: p_out=-1.0101  expected=-1.0101  residual=2.22e-16
   link 1: p_out=-2.0000  expected=-2.0000  residual=0.00e+00
-  link 2: p_out=-9.5000  expected=-9.5000  residual=0.00e+00
+  link 2: p_out=-0.0000  expected=-0.0000  residual=0.00e+00
 
 HVDC loss non-negative (all links): True
 ```
@@ -1081,8 +1080,7 @@ Demonstrates the HVDC MVP (Milestone 7) in the convex lossy DC formulation:
     ``hvdc_from_dcline`` (the realistic entry point)
   - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
     (to-bus), Convention B (positive = injection into the grid)
-  - Proportional converter loss on fixed-direction links
-    (``p_out = -(1 - loss_frac) * p_in``)
+  - Direction-specific proportional loss selected from the ``p_in`` box
 
 case9_dcline has three in-service DC links:
   link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
@@ -1110,20 +1108,20 @@ Importing HVDC links from the dcline table...
 Warning: hvdc_from_dcline: one or more active dcline rows have loss0 != 0. Fixed converter loss (LOSS0) is not modelled in the MVP; the imported model will not match Pypower exactly. Full fixed-loss modelling is deferred to Milestone 15.
 
 Status:     optimal
-Objective:  5534.6282 $/hr
+Objective:  5547.1235 $
 
 Link    from->to   p_in (MW)   p_out (MW)   loss (MW)   loss %
 --------------------------------------------------------------
-   0       30->4      1.0000      -0.9900      0.0100     1.00
-   1        7->9      9.9883      -9.9883      0.0000     0.00
-   2        5->9     10.0000      -9.5000      0.5000     5.00
+   0       30->4      1.0000      -1.0101      0.0101     1.00
+   1        7->9      9.9973      -9.9973     -0.0000     0.00
+   2        5->9      0.0000      -0.0000      0.0000     5.00
 
-Generator dispatch Pg (MW): [ 90.  ,  35.49, 189.  ]
+Generator dispatch Pg (MW): [ 90.  ,  36.01, 189.  ]
 
-Loss-law verification (p_out == -(1 - loss_frac) * p_in on fixed-direction links):
-  link 0: p_out=-0.9900  expected=-0.9900  residual=1.11e-16
-  link 1: p_out=-9.9883  expected=-9.9883  residual=0.00e+00
-  link 2: p_out=-9.5000  expected=-9.5000  residual=0.00e+00
+Direction-specific loss-law verification:
+  link 0: p_out=-1.0101  expected=-1.0101  residual=2.22e-16
+  link 1: p_out=-9.9973  expected=-9.9973  residual=0.00e+00
+  link 2: p_out=-0.0000  expected=-0.0000  residual=4.78e-18
 
 HVDC loss non-negative (all links): True
 
@@ -1170,7 +1168,7 @@ Constraints: 233
 Solving with IPOPT ...
 
 Status    : optimal
-Objective : 5813.2261 $/hr
+Objective : 5813.2261 $
 
 Generator dispatch:
    Gen     Pg (MW)   Qg (MVAr)
@@ -1200,12 +1198,12 @@ Usage:
 #### Expected Output
 
 ```
-P/Q vars    status    obj ($/hr)   time (s)
+P/Q vars    status       obj ($)   time (s)
 -------------------------------------------------------
-[sparse]         426   optimal    41737.7863      0.282s
-[dense ]        6498   optimal    41737.7863      0.129s
+[sparse]         426   optimal    41737.7863      0.309s
+[dense ]        6498   optimal    41737.7863      0.134s
 
-Objective difference:  2.91e-08 $/hr
+Objective difference:  2.91e-08 $
 Max Pg difference:     1.85e-06 MW
 Max Vm difference:     3.26e-10 p.u.
 
@@ -1235,12 +1233,12 @@ Usage:
 ```
 ### IPOPT output, sparse ###
 ### IPOPT output, dense  ###
-            P/Q vars    status      obj ($/hr)   build (s)  canonicalize+solve (s) 
+            P/Q vars    status         obj ($)   build (s)  canonicalize+solve (s)
 -----------------------------------------------------------------------------------
-[sparse]         952   optimal     129660.6850       0.086s       1.609s
-[dense ]       27848   optimal     129660.6850       0.010s       1.385s
+[sparse]         952   optimal     129660.6850       0.092s       1.637s
+[dense ]       27848   optimal     129660.6850       0.013s       1.380s
 
-Objective difference:  7.22e-07 $/hr
+Objective difference:  7.22e-07 $
 Max Pg difference:     1.45e-06 MW
 Max Vm difference:     6.71e-08 p.u.
 

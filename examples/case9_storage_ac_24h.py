@@ -11,7 +11,7 @@ This produces a load that peaks at step 6 (1.3x base) and troughs at
 step 18 (0.7x base), representing a simplified diurnal load curve.
 
 Storage unit: 60 MVA rating, 150 MWh capacity, initially half-charged.
-Aging weight: 1e-2 $/MW (small L1 penalty to discourage unnecessary cycling).
+Aging weight: 1e-2 $/MWh (small L1 throughput penalty).
 
 The storage unit charges during low-load periods and discharges during
 high-load periods, reducing peak generation cost. The apparent power
@@ -48,7 +48,7 @@ def main():
         apparent_power_rating=60.0,   # S_max = 60 MVA
         capacity=150.0,               # Q     = 150 MWh
         initial_soc=75.0,             # q_0   = 75 MWh (half charged)
-        aging_weight=1e-2,            # lambda = 0.01 $/MW
+        aging_weight=1e-2,            # lambda = 0.01 $/MWh
     )
 
     print("Building AC OPF with storage (T=24)...")
@@ -67,9 +67,9 @@ def main():
     # Summary
     # ------------------------------------------------------------------
     print(f"Status:               {r['status']}")
-    print(f"Total objective:      {r['objective']:.4f} $/hr")
+    print(f"Total objective:      {r['objective']:.4f} $")
     print(f"Total storage cost:   {r['storage_cost']:.4f} $ (aging penalty)")
-    print(f"Generation cost:      {r['objective'] - r['storage_cost']:.4f} $/hr")
+    print(f"Generation cost:      {r['objective'] - r['storage_cost']:.4f} $")
     print(f"Total |b| throughput: {np.sum(np.abs(r['b'])):.3f} MWh")
     print(f"Max discharge:        {np.max(r['b']):.3f} MW "
           f"at t={np.argmax(r['b'][:, 0])}")

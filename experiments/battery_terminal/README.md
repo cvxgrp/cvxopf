@@ -244,9 +244,9 @@ The command writes these ignored artifacts under
   DC/AC power and SoC traces, and AC realization of equal-length subsections
   that do and do not cross an internal SoC boundary;
 - `resolution_study.csv`, `resolution_comparison.csv`, and
-  `resolution_energy_validation.csv`: current-objective behavior when the same
-  high-window 24-hour trajectory is represented at 1-hour, 30-minute, and
-  15-minute resolution;
+  `resolution_energy_validation.csv`: time-integrated-objective behavior when
+  the same high-window 24-hour trajectory is represented at 1-hour,
+  30-minute, and 15-minute resolution;
 - `metadata.json`: source-file SHA-256 hash, package versions, formulation,
   time-step duration, and every study grid.
 
@@ -286,10 +286,10 @@ states as an operational comparison; AC and DC objectives are not equated.
 The resolution study uses zero-order hold, so refining the time grid does not
 change source or load energy. Storage dynamics use the matching `delta`.
 Reported generation, curtailment, and storage-throughput energies explicitly
-include `delta`. The optimized objective is left unchanged and therefore
-retains the package's current convention: stage terms are summed once per step
-without multiplication by `delta`, while terminal cost is added once per
-horizon.
+include `delta`. The optimized objective uses the package convention
+`delta * sum(stage-cost rates) + terminal cost`, so stage economics and the
+once-per-horizon terminal policy retain the same relative units across the
+three resolutions.
 
 ## Executable report
 

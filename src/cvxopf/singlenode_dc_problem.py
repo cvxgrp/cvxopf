@@ -20,11 +20,16 @@ Variables:
                     (present only when nondispatchable is not None)
 
 Objective:
-    minimize  G + sum_s aging_weight[s] * |b[s]|
+    minimize  delta * sum_t (
+                  G_t + sum_s aging_weight[s] * |b[t, s]|
+              ) + terminal_cost
 
     where
-        G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)   generation cost
+        G_t = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)
         aging term absent when storage is None
+
+Stage-cost rates are integrated over time. Terminal cost is a once-per-horizon
+boundary term and is not multiplied by delta.
 
 Constraints:
     sum(Pg) + (1/baseMVA)*sum(b) + (1/baseMVA)*sum(p_nd) == Pd_total
@@ -67,6 +72,8 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
@@ -127,26 +134,22 @@ def _make_singlenode_dc_step_constraints(
 
 
 def _make_singlenode_dc_step_cost(
-    generator_cost: cp.Expression,
+    component_cost_rate: cp.Expression,
 ) -> cp.Expression:
     """
-    Build the cost expression for a single time step.
+    Retain the complete component cost-rate expression for one time step.
 
     Parameters
     ----------
-    Pg : cp.Variable
-        Generator real power variables (ng,) in per-unit.
-    gencost : np.ndarray
-        Generator cost data (ng, 7) in MATPOWER format.
-    baseMVA : float
-        System base MVA.
+    component_cost_rate : cp.Expression
+        Aggregate component-owned stage-cost rate.
 
     Returns
     -------
     cp.Expression
-        Total generation cost expression.
+        Total component stage-cost-rate expression.
     """
-    return generator_cost
+    return component_cost_rate
 
 
 def _parse_singlenode_dc_case(
@@ -174,7 +177,8 @@ def _parse_singlenode_dc_case(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
 
@@ -273,7 +277,8 @@ def _build_singlenode_dc_single(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
 
@@ -305,7 +310,6 @@ def _build_singlenode_dc_single(
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
     step_aggregate = aggregate_step_contributions(step_components)
-    storage_step = step_components.get("storage")
 
     constr, p_net_expr = _make_singlenode_dc_step_constraints(
         component_injection=step_aggregate.injection.p_pu,
@@ -318,13 +322,12 @@ def _build_singlenode_dc_single(
 
     # Build cost
     assert step_aggregate.cost is not None
-    cost = _make_singlenode_dc_step_cost(step_aggregate.cost)
-
-    # Retain the named storage-cost reporting expression.
-    storage_cost = None
-    if storage_step is not None:
-        storage_cost = storage_step.cost
-        assert storage_cost is not None
+    step_cost_rate = _make_singlenode_dc_step_cost(step_aggregate.cost)
+    cost = integrate_stage_cost_rates([step_cost_rate], delta)
+    component_costs = integrate_component_stage_costs(
+        [step_components],
+        delta,
+    )
 
     horizon = assemble_component_horizon(
         components,
@@ -360,8 +363,7 @@ def _build_singlenode_dc_single(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_net_expr}
-    if storage_cost is not None:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost
@@ -404,8 +406,9 @@ def _build_singlenode_dc_multistep(
     Build a multi-step single-node DC dispatch problem.
 
     A single cp.Problem containing T sets of per-step variables and
-    constraints. The objective is the sum of per-step costs. Storage SoC
-    dynamics couple consecutive steps.
+    constraints. The objective is the time integral of per-step cost rates
+    plus unscaled horizon-boundary costs. Storage SoC dynamics couple
+    consecutive steps.
 
     Parameters
     ----------
@@ -426,7 +429,8 @@ def _build_singlenode_dc_multistep(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
     df_nd : pd.DataFrame | None
@@ -488,8 +492,7 @@ def _build_singlenode_dc_multistep(
     components: PreparedComponents = d["_components"]
     p_net_expr_list = []
     all_constr = []
-    total_cost = 0
-    storage_cost = 0
+    step_cost_rates = []
 
     for t in range(T):
         step_context = StepContext(
@@ -505,7 +508,6 @@ def _build_singlenode_dc_multistep(
         component_steps.append(step_components)
         step_aggregate = aggregate_step_contributions(step_components)
         step_aggregates.append(step_aggregate)
-        storage_step = step_components.get("storage")
 
         step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
             component_injection=step_aggregate.injection.p_pu,
@@ -519,15 +521,18 @@ def _build_singlenode_dc_multistep(
 
         # Per-step cost
         assert step_aggregate.cost is not None
-        step_cost = _make_singlenode_dc_step_cost(step_aggregate.cost)
-        if storage_step is not None:
-            step_storage_cost = storage_step.cost
-            assert step_storage_cost is not None
-            storage_cost = storage_cost + step_storage_cost
-        total_cost = total_cost + step_cost
+        step_cost_rates.append(
+            _make_singlenode_dc_step_cost(step_aggregate.cost)
+        )
 
         # Accumulate variables
         p_net_expr_list.append(p_net_expr_t)
+
+    total_cost = integrate_stage_cost_rates(step_cost_rates, delta)
+    component_costs = integrate_component_stage_costs(
+        component_steps,
+        delta,
+    )
 
     horizon = assemble_component_horizon(
         components,
@@ -567,8 +572,7 @@ def _build_singlenode_dc_multistep(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_net_expr_list}
-    if "ns" in d:
-        compatibility_expressions["storage_cost"] = storage_cost
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
             storage_terminal_cost
