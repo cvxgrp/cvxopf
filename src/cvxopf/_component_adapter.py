@@ -60,6 +60,26 @@ class PreparationContext:
     is_multistep: bool | None = None
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.base_mva) or self.base_mva <= 0:
+            raise ValueError("base_mva must be finite and > 0")
+        if (
+            not isinstance(self.nb, int)
+            or isinstance(self.nb, bool)
+            or self.nb <= 0
+        ):
+            raise ValueError("nb must be a positive integer")
+        if (
+            not isinstance(self.horizon_steps, int)
+            or isinstance(self.horizon_steps, bool)
+            or self.horizon_steps <= 0
+        ):
+            raise ValueError("horizon_steps must be a positive integer")
+        if not math.isfinite(self.delta) or self.delta <= 0:
+            raise ValueError("delta must be finite and > 0")
+        if self.horizon_steps > 1 and self.is_multistep is False:
+            raise ValueError(
+                "is_multistep must be True when horizon_steps > 1"
+            )
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
         if self.is_multistep is None:
             object.__setattr__(
@@ -74,6 +94,11 @@ class ACNetworkState:
     voltage: cp.Variable
     controlled_buses: tuple[int, ...]
     enforce_vset: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "controlled_buses", tuple(self.controlled_buses)
+        )
 
 
 @dataclass(frozen=True)
@@ -95,6 +120,12 @@ class StepContext:
     network_state: NetworkState
 
     def __post_init__(self) -> None:
+        if not isinstance(self.step, int) or isinstance(self.step, bool):
+            raise ValueError("step must be a nonnegative integer")
+        if self.step < 0:
+            raise ValueError("step must be a nonnegative integer")
+        if not math.isfinite(self.base_mva) or self.base_mva <= 0:
+            raise ValueError("base_mva must be finite and > 0")
         if self.formulation == "ac":
             if not isinstance(self.network_state, ACNetworkState):
                 raise ValueError(
@@ -115,6 +146,16 @@ class HorizonContext:
     horizon_steps: int
     delta: float
 
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.horizon_steps, int)
+            or isinstance(self.horizon_steps, bool)
+            or self.horizon_steps <= 0
+        ):
+            raise ValueError("horizon_steps must be a positive integer")
+        if not math.isfinite(self.delta) or self.delta <= 0:
+            raise ValueError("delta must be finite and > 0")
+
 
 @dataclass(frozen=True)
 class VariableSpec:
@@ -125,6 +166,8 @@ class VariableSpec:
     attributes: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("variable specification name must be nonempty")
         object.__setattr__(self, "attributes", _readonly(self.attributes))
 
 
@@ -173,6 +216,16 @@ class StepContribution:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables", _readonly(self.variables))
+        object.__setattr__(
+            self,
+            "operating_constraints",
+            tuple(self.operating_constraints),
+        )
+        object.__setattr__(
+            self,
+            "network_constraints",
+            tuple(self.network_constraints),
+        )
         object.__setattr__(self, "expressions", _readonly(self.expressions))
 
 
@@ -185,6 +238,7 @@ class HorizonContribution:
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "constraints", tuple(self.constraints))
         object.__setattr__(self, "expressions", _readonly(self.expressions))
 
 
@@ -352,4 +406,5 @@ class PreparedComponent(Generic[UnitT, InputT]):
     data: Mapping[str, object]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "units", tuple(self.units))
         object.__setattr__(self, "data", _readonly(self.data))

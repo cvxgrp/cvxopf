@@ -39,12 +39,16 @@ class ComponentRequest:
     inputs: Any = None
     required_capability: FormulationCapability | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "units", tuple(self.units))
+
 
 @dataclass(frozen=True)
 class PreparedComponents:
     """Ordered prepared component registry plus compatibility flat data."""
 
     formulation: Formulation
+    context: PreparationContext
     components: Mapping[str, PreparedComponent[Any, Any]]
     flat_data: Mapping[str, object]
 
@@ -109,7 +113,7 @@ def prepare_components(
             units=request.units,
             data=prepared_data,
         )
-    return PreparedComponents(formulation, components, flat_data)
+    return PreparedComponents(formulation, context, components, flat_data)
 
 
 def merge_prepared_component_data(
@@ -176,6 +180,67 @@ def _validate_step_variable_schemas(
                 )
 
 
+def _validate_injection_contribution(
+    component_name: str,
+    contribution: InjectionContribution,
+    *,
+    formulation: Formulation,
+    nb: int,
+) -> None:
+    """Enforce exact nodal-channel shapes and formulation channel support."""
+    if formulation != "ac" and contribution.q_pu is not None:
+        raise ValueError(
+            f"component {component_name!r} returned a reactive injection "
+            f"for formulation {formulation!r}; q_pu must be None"
+        )
+    expected_shape = (nb,)
+    for channel_name, expression in (
+        ("p_pu", contribution.p_pu),
+        ("q_pu", contribution.q_pu),
+    ):
+        if expression is not None and expression.shape != expected_shape:
+            raise ValueError(
+                f"component {component_name!r} injection {channel_name} "
+                f"must have shape {expected_shape}, got {expression.shape}"
+            )
+    parameter = contribution.inv_base_mva
+    if (
+        parameter is not None
+        and contribution.p_pu is None
+        and contribution.q_pu is None
+    ):
+        raise ValueError(
+            f"component {component_name!r} returned inv_base_mva "
+            "without an injection channel"
+        )
+    if parameter is None:
+        return
+    if not isinstance(parameter, cp.Parameter):
+        raise ValueError(
+            f"component {component_name!r} inv_base_mva must be "
+            "a scalar cp.Parameter"
+        )
+    if parameter.shape != ():
+        raise ValueError(
+            f"component {component_name!r} inv_base_mva must be scalar, "
+            f"got shape {parameter.shape}"
+        )
+    channels = tuple(
+        expression
+        for expression in (contribution.p_pu, contribution.q_pu)
+        if expression is not None
+    )
+    if not any(
+        parameter is used_parameter
+        for expression in channels
+        for used_parameter in expression.parameters()
+    ):
+        raise ValueError(
+            f"component {component_name!r} inv_base_mva does not occur "
+            "in any injection channel"
+        )
+
+
 def assemble_component_step(
     prepared: PreparedComponents,
     context: StepContext,
@@ -186,6 +251,19 @@ def assemble_component_step(
     if context.formulation != prepared.formulation:
         raise ValueError(
             "step formulation does not match prepared component formulation"
+        )
+    if context.base_mva != prepared.context.base_mva:
+        raise ValueError(
+            "step base_mva does not match component preparation"
+        )
+    if context.ext_to_int != prepared.context.ext_to_int:
+        raise ValueError(
+            "step ext_to_int does not match component preparation"
+        )
+    if context.step >= prepared.context.horizon_steps:
+        raise ValueError(
+            f"step index {context.step} is outside prepared horizon "
+            f"[0, {prepared.context.horizon_steps})"
         )
     contributions: dict[str, StepContribution] = {}
     for name, component in prepared.components.items():
@@ -231,6 +309,12 @@ def assemble_component_step(
         }
         injection = binding.injections(
             component.units, component.data, variables, context
+        )
+        _validate_injection_contribution(
+            name,
+            injection,
+            formulation=context.formulation,
+            nb=prepared.context.nb,
         )
         bind_injection_scale(injection, context.base_mva)
         operating_constraints = binding.operating_constraints(
@@ -278,6 +362,12 @@ def assemble_component_horizon(
         raise ValueError(
             "horizon formulation does not match prepared component formulation"
         )
+    if context.horizon_steps != prepared.context.horizon_steps:
+        raise ValueError(
+            "horizon_steps does not match component preparation"
+        )
+    if context.delta != prepared.context.delta:
+        raise ValueError("horizon delta does not match component preparation")
     if len(step_contributions) != context.horizon_steps:
         raise ValueError(
             "step contribution count must equal horizon_steps"
@@ -338,7 +428,18 @@ def aggregate_step_contributions(
         operating_constraints.extend(contribution.operating_constraints)
         network_constraints.extend(contribution.network_constraints)
         if contribution.cost is not None:
+            if (
+                not isinstance(contribution.cost, cp.Expression)
+                or not contribution.cost.is_scalar()
+            ):
+                raise ValueError(
+                    f"component {name!r} step cost must be a scalar "
+                    "cp.Expression"
+                )
             costs.append(contribution.cost)
+        _validate_expression_names(
+            name, contribution.expressions, horizon=False
+        )
         duplicate_expressions = set(expressions).intersection(
             contribution.expressions
         )
@@ -367,6 +468,22 @@ def aggregate_step_contributions(
     )
 
 
+def _validate_expression_names(
+    component_name: str,
+    expressions: Mapping[str, cp.Expression],
+    *,
+    horizon: bool,
+) -> None:
+    """Require nonempty string keys in the flattened expression namespace."""
+    for expression_name in expressions:
+        if not isinstance(expression_name, str) or not expression_name:
+            scope = "horizon " if horizon else ""
+            raise ValueError(
+                f"component {component_name!r} published an empty or "
+                f"non-string {scope}expression name"
+            )
+
+
 def aggregate_horizon_contributions(
     contributions: Mapping[str, HorizonContribution],
 ) -> HorizonContribution:
@@ -377,7 +494,18 @@ def aggregate_horizon_contributions(
     for name, contribution in contributions.items():
         constraints.extend(contribution.constraints)
         if contribution.terminal_cost is not None:
+            if (
+                not isinstance(contribution.terminal_cost, cp.Expression)
+                or not contribution.terminal_cost.is_scalar()
+            ):
+                raise ValueError(
+                    f"component {name!r} terminal cost must be a scalar "
+                    "cp.Expression"
+                )
             terminal_costs.append(contribution.terminal_cost)
+        _validate_expression_names(
+            name, contribution.expressions, horizon=True
+        )
         duplicate_expressions = set(expressions).intersection(
             contribution.expressions
         )
@@ -419,6 +547,40 @@ def _validate_publication_step_count(
         )
 
 
+def _validate_formulation_variable_schema(
+    formulation_variables: Mapping[
+        str, cp.Variable | list[cp.Variable]
+    ],
+    *,
+    step_count: int,
+    multistep: bool,
+) -> None:
+    """Require formulation-owned variables to match publication mode."""
+    for name, value in formulation_variables.items():
+        if not multistep:
+            if not isinstance(value, cp.Variable):
+                raise ValueError(
+                    f"single-step formulation variable {name!r} must be "
+                    "a cp.Variable"
+                )
+            continue
+        if not isinstance(value, list):
+            raise ValueError(
+                f"multistep formulation variable {name!r} must be a list "
+                "of cp.Variable objects"
+            )
+        if len(value) != step_count:
+            raise ValueError(
+                f"multistep formulation variable {name!r} must have "
+                f"{step_count} entries, got {len(value)}"
+            )
+        if any(not isinstance(variable, cp.Variable) for variable in value):
+            raise ValueError(
+                f"multistep formulation variable {name!r} must contain "
+                "only cp.Variable objects"
+            )
+
+
 def publish_component_variables(
     step_contributions: Sequence[Mapping[str, StepContribution]],
     formulation_variables: Mapping[
@@ -431,10 +593,16 @@ def publish_component_variables(
     _validate_publication_step_count(
         len(step_contributions), multistep=multistep
     )
-    _validate_step_variable_schemas(step_contributions)
-    published = (
-        {} if formulation_variables is None else dict(formulation_variables)
+    formulation_variables = (
+        {} if formulation_variables is None else formulation_variables
     )
+    _validate_formulation_variable_schema(
+        formulation_variables,
+        step_count=len(step_contributions),
+        multistep=multistep,
+    )
+    _validate_step_variable_schemas(step_contributions)
+    published = dict(formulation_variables)
     for name, contribution in step_contributions[0].items():
         for variable_name, variable in contribution.variables.items():
             if variable_name in published:

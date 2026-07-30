@@ -194,6 +194,10 @@ TOY_ADAPTER = ComponentAdapter[_ToyUnit, None](
 )
 
 
+_VECTOR_SCALE = cp.Parameter(2)
+_UNUSED_SCALE = cp.Parameter(nonneg=True)
+
+
 @pytest.mark.parametrize(
     ("formulation", "expects_q"),
     [
@@ -378,6 +382,109 @@ def test_component_rejects_duplicate_variable_specs_before_construction():
         )
 
 
+@pytest.mark.parametrize(
+    ("formulation", "injection", "message"),
+    [
+        (
+            "lossy_dc",
+            InjectionContribution(cp.Constant(1.0), None),
+            r"injection p_pu must have shape \(2,\), got \(\)",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(cp.Constant(np.zeros(3)), None),
+            r"injection p_pu must have shape \(2,\), got \(3,\)",
+        ),
+        (
+            "ac",
+            InjectionContribution(
+                cp.Constant(np.zeros(2)),
+                cp.Constant(np.zeros((2, 1))),
+            ),
+            r"injection q_pu must have shape \(2,\), got \(2, 1\)",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(
+                cp.Constant(np.zeros(2)),
+                cp.Constant(np.zeros(2)),
+            ),
+            r"returned a reactive injection.*q_pu must be None",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(
+                None,
+                None,
+                cp.Parameter(nonneg=True),
+            ),
+            r"returned inv_base_mva without an injection channel",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(
+                cp.Constant(np.zeros(2)),
+                None,
+                cp.Constant(1.0),
+            ),
+            r"inv_base_mva must be a scalar cp.Parameter",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(
+                cp.multiply(_VECTOR_SCALE, np.ones(2)),
+                None,
+                _VECTOR_SCALE,
+            ),
+            r"inv_base_mva must be scalar, got shape \(2,\)",
+        ),
+        (
+            "lossy_dc",
+            InjectionContribution(
+                cp.Constant(np.zeros(2)),
+                None,
+                _UNUSED_SCALE,
+            ),
+            r"inv_base_mva does not occur in any injection channel",
+        ),
+    ],
+)
+def test_component_injection_contract_rejects_malformed_channels(
+    formulation, injection, message
+):
+    def malformed_injection(units, prepared, variables, context):
+        return injection
+
+    formulations = dict(TOY_ADAPTER.formulations)
+    formulations[formulation] = replace(
+        formulations[formulation],
+        injections=malformed_injection,
+    )
+    adapter = replace(TOY_ADAPTER, formulations=formulations)
+    prepared = prepare_components(
+        (ComponentRequest(adapter, (_ToyUnit(2, 20.0),)),),
+        formulation,
+        _preparation(),
+    )
+    network_state = (
+        ACNetworkState(cp.Variable(2), (), False)
+        if formulation == "ac"
+        else DCNetworkState()
+    )
+
+    with pytest.raises(ValueError, match=message):
+        assemble_component_step(
+            prepared,
+            StepContext(
+                formulation,
+                0,
+                100.0,
+                {1: 0, 2: 1},
+                network_state,
+            ),
+        )
+
+
 def test_component_publication_rejects_formulation_namespace_collisions():
     prepared = prepare_components(
         (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
@@ -529,6 +636,35 @@ def test_step_expression_aggregation_rejects_duplicate_flat_names():
         aggregate_step_contributions({"first": first, "second": second})
 
 
+def test_step_expression_aggregation_rejects_empty_name():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        expressions={"": cp.Constant(1.0)},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "component 'toy' published an empty or non-string expression name"
+        ),
+    ):
+        aggregate_step_contributions({"toy": contribution})
+
+
+def test_step_cost_aggregation_rejects_vector_contribution():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant([1.0, 2.0]),
+    )
+    with pytest.raises(
+        ValueError,
+        match="component 'toy' step cost must be a scalar cp.Expression",
+    ):
+        aggregate_step_contributions({"toy": contribution})
+
+
 def test_horizon_expression_aggregation_rejects_duplicate_flat_names():
     with pytest.raises(
         ValueError,
@@ -547,6 +683,32 @@ def test_horizon_expression_aggregation_rejects_duplicate_flat_names():
                 ),
             }
         )
+
+
+def test_horizon_expression_aggregation_rejects_empty_name():
+    contribution = HorizonContribution(
+        expressions={"": cp.Constant(1.0)}
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "component 'toy' published an empty or non-string horizon "
+            "expression name"
+        ),
+    ):
+        aggregate_horizon_contributions({"toy": contribution})
+
+
+def test_terminal_cost_aggregation_rejects_vector_contribution():
+    contribution = HorizonContribution(
+        terminal_cost=cp.Constant([1.0, 2.0])
+    )
+    with pytest.raises(
+        ValueError,
+        match="component 'toy' terminal cost must be a scalar cp.Expression",
+    ):
+        aggregate_horizon_contributions({"toy": contribution})
 
 
 def test_expression_publication_rejects_inconsistent_multistep_keys():
@@ -653,6 +815,77 @@ def test_multistep_t1_publication_remains_a_list():
     assert variables["p_toy"] == [variable]
     assert isinstance(expressions["toy_metric"], list)
     assert len(expressions["toy_metric"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("multistep", "step_count", "formulation_variables", "message"),
+    [
+        (
+            False,
+            1,
+            {"network": [cp.Variable(1)]},
+            "single-step formulation variable 'network' must be a cp.Variable",
+        ),
+        (
+            True,
+            1,
+            {"network": cp.Variable(1)},
+            "multistep formulation variable 'network' must be a list",
+        ),
+        (
+            True,
+            2,
+            {"network": [cp.Variable(1)]},
+            "multistep formulation variable 'network' must have 2 entries",
+        ),
+        (
+            True,
+            1,
+            {"network": [cp.Constant(1.0)]},
+            "multistep formulation variable 'network' must contain only",
+        ),
+    ],
+)
+def test_formulation_variable_schema_must_match_publication_mode(
+    multistep, step_count, formulation_variables, message
+):
+    step = {
+        "toy": StepContribution(
+            variables={"p_toy": cp.Variable(1)},
+            injection=InjectionContribution(None, None),
+        )
+    }
+    with pytest.raises(ValueError, match=message):
+        publish_component_variables(
+            tuple(step for _ in range(step_count)),
+            formulation_variables,
+            multistep=multistep,
+        )
+
+
+def test_formulation_variable_schema_preserves_both_t1_modes():
+    step = {
+        "toy": StepContribution(
+            variables={"p_toy": cp.Variable(1)},
+            injection=InjectionContribution(None, None),
+        )
+    }
+    single_network = cp.Variable(1)
+    multi_network = cp.Variable(1)
+
+    single = publish_component_variables(
+        (step,),
+        {"network": single_network},
+        multistep=False,
+    )
+    multi = publish_component_variables(
+        (step,),
+        {"network": [multi_network]},
+        multistep=True,
+    )
+
+    assert single["network"] is single_network
+    assert multi["network"] == [multi_network]
 
 
 @pytest.mark.parametrize(
@@ -845,6 +1078,17 @@ def test_required_capability_is_checked_only_for_supplied_components():
         )
 
 
+def test_component_request_units_are_normalized_to_a_tuple():
+    unit = _ToyUnit(2, 20.0)
+    units = [unit]
+
+    request = ComponentRequest(TOY_ADAPTER, units)
+    units.clear()
+
+    assert request.units == (unit,)
+    assert isinstance(request.units, tuple)
+
+
 def test_shared_assembly_rejects_formulation_and_horizon_mismatches():
     generator = DispatchableGenerator(
         bus=1, p_max_mw=100.0, cost_coeffs=(0.0, 1.0, 0.0)
@@ -886,6 +1130,64 @@ def test_shared_assembly_rejects_formulation_and_horizon_mismatches():
     np.testing.assert_equal(
         step["generator"].variables["Pg"].shape, (1,)
     )
+
+
+@pytest.mark.parametrize(
+    ("step", "base_mva", "ext_to_int", "message"),
+    [
+        (0, 50.0, {1: 0, 2: 1}, "step base_mva does not match"),
+        (0, 100.0, {1: 1, 2: 0}, "step ext_to_int does not match"),
+        (1, 100.0, {1: 0, 2: 1}, "step index 1 is outside"),
+    ],
+)
+def test_step_context_must_match_component_preparation(
+    step, base_mva, ext_to_int, message
+):
+    prepared = prepare_components(
+        (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(),
+    )
+    with pytest.raises(ValueError, match=message):
+        assemble_component_step(
+            prepared,
+            StepContext(
+                "lossy_dc",
+                step,
+                base_mva,
+                ext_to_int,
+                DCNetworkState(),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("horizon_steps", "delta", "message"),
+    [
+        (1, 1.0, "horizon delta does not match"),
+        (2, 0.5, "horizon_steps does not match"),
+    ],
+)
+def test_horizon_context_must_match_component_preparation(
+    horizon_steps, delta, message
+):
+    prepared = prepare_components(
+        (ComponentRequest(TOY_ADAPTER, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(),
+    )
+    step = assemble_component_step(
+        prepared,
+        StepContext(
+            "lossy_dc", 0, 100.0, {1: 0, 2: 1}, DCNetworkState()
+        ),
+    )
+    with pytest.raises(ValueError, match=message):
+        assemble_component_horizon(
+            prepared,
+            (step,),
+            HorizonContext("lossy_dc", horizon_steps, delta),
+        )
 
 
 def test_formulation_builders_do_not_call_adapter_hooks_directly():

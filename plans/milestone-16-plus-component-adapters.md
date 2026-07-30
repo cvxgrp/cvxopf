@@ -103,6 +103,7 @@ class PreparedComponent:
 @dataclass(frozen=True)
 class PreparedComponents:
     formulation: Formulation
+    context: PreparationContext
     components: Mapping[str, PreparedComponent]
     flat_data: Mapping[str, object]
 ```
@@ -112,8 +113,15 @@ schema during this milestone. The typed container is the assembly contract;
 flattening is an explicit, collision-checked publication step. Mapping
 structure is defensively copied and read-only; contained NumPy arrays and
 CVXPY objects are not deep-frozen and must not be mutated after preparation.
+Sequence-valued fields in the frozen contract objects are defensively copied
+to tuples, so callers cannot weaken structural immutability by supplying lists.
 Prepared component keys are also collision-checked against the
 formulation-owned parser namespace before the two mappings are merged.
+The retained preparation context is the authority for `base_mva`, bus
+mapping, bus count, horizon length, `delta`, and single-/multistep mode.
+Step and horizon contexts must match it; step indices must lie inside the
+prepared horizon. Duplicate or reordered step provenance is not tracked by
+the contribution container and remains outside this private contract.
 
 ### 3.3 Per-step contribution
 
@@ -142,10 +150,19 @@ The injection channels are bus-scattered, per-unit nodal injections with
 positive sign into the network. A component expressed in engineering units
 creates an unbound inverse-base parameter inside its injection expression;
 the shared assembler alone binds it to `1 / baseMVA`. Reactive absence is
-`None`, never scalar zero.
+`None`, never scalar zero. Every present channel must have exact shape
+`(nb,)`; scalar and broadcastable alternatives are rejected. DC formulations
+reject any reactive channel rather than silently ignoring it. A supplied
+inverse-base scale must be a scalar `cp.Parameter` that occurs in at least one
+present injection expression; unused or channel-free scale parameters are
+rejected.
 
 The ordered aggregate combines all component injections, constraints, costs,
 and expression maps. Duplicate variable or expression names are rejected.
+Variable specifications and flattened step/horizon expression maps require
+nonempty published names.
+Every step and terminal cost contribution must be a scalar CVXPY expression
+and is validated with a component-qualified error before objective assembly.
 Publication then merges component variables, metadata, and expressions with
 the formulation-owned `OPFBuild` namespaces using explicit collision checks.
 
@@ -167,6 +184,9 @@ Horizon constraints and terminal costs are aggregated once per horizon.
 Before horizon assembly or variable publication, every step must contain the
 same component names and each component must retain identical variable names
 and shapes. Violations raise a step- and component-qualified `ValueError`.
+Formulation-owned variables obey the same publication mode: single-step
+values are `cp.Variable` objects, while multistep values are lists of exactly
+the horizon length, including one-element lists for multistep `T=1`.
 Per-step reporting expressions publish as one expression for a single-step
 build and as an ordered list for a multistep build; horizon expressions
 publish once and are never stacked or scaled by `delta`. Step, horizon, and

@@ -542,7 +542,10 @@ def gen_cost_expr(gencost: np.ndarray, Pg_MW) -> cp.Expression:
     DCP-critical explicit-monomial construction lives in poly_cost_expr
     (cost.py) and is kept there so cost.py is the single source of truth.
     """
-    return poly_cost_expr(gencost, Pg_MW)
+    expression = poly_cost_expr(gencost, Pg_MW)
+    if isinstance(expression, cp.Expression):
+        return expression
+    return cp.Constant(expression)
 
 
 def gen_from_matpower(gen: np.ndarray, gencost: np.ndarray) -> list:

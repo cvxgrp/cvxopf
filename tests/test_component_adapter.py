@@ -161,6 +161,13 @@ def test_component_adapter_name_must_be_nonempty():
         )
 
 
+def test_variable_specification_name_must_be_nonempty():
+    with pytest.raises(
+        ValueError, match="variable specification name must be nonempty"
+    ):
+        VariableSpec("", (1,))
+
+
 def test_step_and_horizon_contexts_keep_temporal_roles_separate():
     step = StepContext(
         "lossy_dc",
@@ -173,6 +180,48 @@ def test_step_and_horizon_contexts_keep_temporal_roles_separate():
     assert step.step == 2
     assert horizon.horizon_steps == 4
     assert horizon.delta == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"base_mva": 0.0}, "base_mva must be finite and > 0"),
+        ({"base_mva": float("nan")}, "base_mva must be finite and > 0"),
+        ({"nb": 0}, "nb must be a positive integer"),
+        ({"horizon_steps": 0}, "horizon_steps must be a positive integer"),
+        ({"delta": 0.0}, "delta must be finite and > 0"),
+        (
+            {"horizon_steps": 2, "is_multistep": False},
+            "is_multistep must be True when horizon_steps > 1",
+        ),
+    ],
+)
+def test_preparation_context_rejects_invalid_primitives(overrides, message):
+    values = {
+        "base_mva": 100.0,
+        "nb": 1,
+        "ext_to_int": {1: 0},
+        "ext_bus_ids": frozenset({1}),
+        "horizon_steps": 1,
+        "delta": 1.0,
+    }
+    values.update(overrides)
+    with pytest.raises(ValueError, match=message):
+        PreparationContext(**values)
+
+
+@pytest.mark.parametrize("is_multistep", [False, True])
+def test_preparation_context_preserves_both_t1_modes(is_multistep):
+    context = PreparationContext(
+        base_mva=100.0,
+        nb=1,
+        ext_to_int={1: 0},
+        ext_bus_ids=frozenset({1}),
+        horizon_steps=1,
+        delta=1.0,
+        is_multistep=is_multistep,
+    )
+    assert context.is_multistep is is_multistep
 
 
 @pytest.mark.parametrize(
@@ -263,6 +312,44 @@ def test_context_and_contribution_mappings_are_read_only_copies():
     assert set(contribution.expressions) == {"reported_p"}
     with pytest.raises(TypeError):
         spec.attributes["nonneg"] = False
+
+
+def test_sequence_fields_are_normalized_to_tuples():
+    adapter = _adapter()
+    unit = object()
+    units = [unit]
+    controlled_buses = [0, 1]
+    variable = cp.Variable(2)
+    operating_constraints = [variable >= 0]
+    network_constraints = [variable <= 1]
+    horizon_constraints = [variable[0] == variable[1]]
+
+    prepared = PreparedComponent(adapter, units, {})
+    network_state = ACNetworkState(variable, controlled_buses, False)
+    step = StepContribution(
+        variables={"p": variable},
+        injection=InjectionContribution(variable, None),
+        operating_constraints=operating_constraints,
+        network_constraints=network_constraints,
+    )
+    horizon = HorizonContribution(constraints=horizon_constraints)
+
+    units.clear()
+    controlled_buses.clear()
+    operating_constraints.clear()
+    network_constraints.clear()
+    horizon_constraints.clear()
+
+    assert prepared.units == (unit,)
+    assert network_state.controlled_buses == (0, 1)
+    assert len(step.operating_constraints) == 1
+    assert len(step.network_constraints) == 1
+    assert len(horizon.constraints) == 1
+    assert isinstance(prepared.units, tuple)
+    assert isinstance(network_state.controlled_buses, tuple)
+    assert isinstance(step.operating_constraints, tuple)
+    assert isinstance(step.network_constraints, tuple)
+    assert isinstance(horizon.constraints, tuple)
 
 
 def test_assembler_binds_component_created_scaling_parameter_once():
