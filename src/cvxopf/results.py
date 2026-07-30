@@ -25,6 +25,11 @@ Singlenode DC (singlenode_dc) results keys:
 Storage terminal-policy results (all formulations, when configured):
     storage_terminal_deviation (signed, MWh; negative means shortfall)
     storage_terminal_cost (scalar, soft terminal policies only)
+
+The result schema is determined by the built model, not by solve success.
+When no primal solution is available, configured array-valued and derived
+quantities are ``None`` while scalar objective and cost quantities are NaN.
+Callers should inspect ``status`` before consuming numerical values.
 """
 
 from __future__ import annotations
@@ -45,26 +50,74 @@ def _solved_expression_value(build: OPFBuild, name: str) -> float:
 
 def _solved_expression_values(build: OPFBuild, name: str):
     """Evaluate a named single- or multi-step modeled expression."""
-    expression = build.expressions[name]
+    expression = build.expressions.get(name)
+    if expression is None:
+        return None
     if isinstance(expression, list):
         values = [item.value for item in expression]
         return None if any(value is None for value in values) else np.array(values)
     return expression.value
 
 
-def _empty_results(build: OPFBuild, *fields: str) -> dict:
-    """Return the common result shape when no primal solution is available."""
-    return {
+def _scaled_values(value, scale: float):
+    """Scale an available scalar or array while preserving ``None``."""
+    return None if value is None else value * scale
+
+
+def _objective_value(build: OPFBuild) -> float:
+    """Return the solver objective, or NaN when it is unavailable."""
+    value = build.prob.value
+    if value is None or not np.isfinite(value):
+        return float("nan")
+    return float(value)
+
+
+def _initialize_results(build: OPFBuild) -> dict:
+    """Initialize the public schema from the built model, before values."""
+    core_fields = {
+        "ac": ("Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"),
+        "lossy_dc": ("Pg", "p_flows", "p_net"),
+        "singlenode_dc": ("Pg", "p_net"),
+    }[build.formulation]
+    results = {
         "status": build.prob.status,
         "objective": float("nan"),
-        **{field: None for field in fields},
+        **{field: None for field in core_fields},
     }
+
+    if "ns" in build.data:
+        results["b"] = None
+        if "b_q" in build.variables:
+            results["b_q"] = None
+        results["soc"] = None
+        results["storage_cost"] = float("nan")
+        targets = build.data["storage_terminal_soc"]
+        if np.any(np.isfinite(targets)):
+            results["storage_terminal_deviation"] = None
+        if "storage_terminal_cost" in build.expressions:
+            results["storage_terminal_cost"] = float("nan")
+
+    if "nnd" in build.data:
+        results["p_nd"] = None
+        if "q_nd" in build.variables:
+            results["q_nd"] = None
+        results["curtailment"] = None
+
+    if "n_hvdc" in build.data:
+        results["p_hvdc_in"] = None
+        results["p_hvdc_out"] = None
+        results["hvdc_loss"] = None
+
+    return results
 
 
 def _variable_values(variable):
     """Return one variable value or stack a multistep variable list."""
     if isinstance(variable, list):
-        return np.array([item.value for item in variable])
+        values = [item.value for item in variable]
+        if any(value is None for value in values):
+            return None
+        return np.array(values)
     return variable.value
 
 
@@ -79,12 +132,15 @@ def _add_storage_results(results: dict, build: OPFBuild) -> None:
     results["storage_cost"] = _solved_expression_value(build, "storage_cost")
     targets = build.data["storage_terminal_soc"]
     if np.any(np.isfinite(targets)):
-        terminal_soc = (
-            results["soc"][-1] if "T" in build.data else results["soc"]
-        )
-        results["storage_terminal_deviation"] = _terminal_deviation_values(
-            targets, terminal_soc
-        )
+        if results["soc"] is None:
+            results["storage_terminal_deviation"] = None
+        else:
+            terminal_soc = (
+                results["soc"][-1] if "T" in build.data else results["soc"]
+            )
+            results["storage_terminal_deviation"] = (
+                _terminal_deviation_values(targets, terminal_soc)
+            )
     if "storage_terminal_cost" in build.expressions:
         results["storage_terminal_cost"] = _solved_expression_value(
             build, "storage_terminal_cost"
@@ -101,8 +157,12 @@ def _add_nd_results(results: dict, build: OPFBuild) -> None:
     availability_key = (
         "nd_available" if "T" in build.data else "nd_p_available"
     )
-    results["curtailment"] = _curtailment_values(
-        build.data[availability_key], results["p_nd"]
+    results["curtailment"] = (
+        None
+        if results["p_nd"] is None
+        else _curtailment_values(
+            build.data[availability_key], results["p_nd"]
+        )
     )
 
 
@@ -112,8 +172,15 @@ def _add_hvdc_results(results: dict, build: OPFBuild) -> None:
         return
     results["p_hvdc_in"] = _variable_values(build.variables["p_hvdc_in"])
     results["p_hvdc_out"] = _variable_values(build.variables["p_hvdc_out"])
-    results["hvdc_loss"] = _loss_values(
-        results["p_hvdc_in"], results["p_hvdc_out"]
+    results["hvdc_loss"] = (
+        None
+        if (
+            results["p_hvdc_in"] is None
+            or results["p_hvdc_out"] is None
+        )
+        else _loss_values(
+            results["p_hvdc_in"], results["p_hvdc_out"]
+        )
     )
 
 
@@ -146,7 +213,7 @@ def extract_results(build: OPFBuild) -> dict:
     results : dict
         AC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Generator real output, MW
             Qg          np.ndarray   (ng,)  Generator reactive output, MVAr
             Vm          np.ndarray   (nb,)  Bus voltage magnitudes, p.u.
@@ -155,11 +222,11 @@ def extract_results(build: OPFBuild) -> dict:
             q_net       np.ndarray   (nb,)  Net reactive bus injection, MVAr
 
         AC multi-step: same keys; Pg, Qg are (T, ng); Vm, Va_deg, p_net,
-        q_net are (T, nb). objective is total cost across all steps.
+        q_net are (T, nb). objective is total integrated horizon cost.
 
         DC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Per-generator output, MW
                                             stored per generator as Pg
             p_flows     np.ndarray   (nl,)  Branch real power flows, MW
@@ -173,12 +240,16 @@ def extract_results(build: OPFBuild) -> dict:
 
         Singlenode DC single-step keys:
             status      str          CVXPY solve status
-            objective   float        Optimal cost ($/hr)
+            objective   float        Optimal interval cost (objective units)
             Pg          np.ndarray   (ng,)  Per-generator output, MW
             p_net       float        Net generation minus load, MW
                                      (near zero at optimum)
 
         Singlenode DC multi-step: Pg is (T, ng); p_net is (T,).
+
+        Configured keys remain present when no primal solution is available.
+        Array-valued primal and derived quantities are then None; scalar
+        objective and cost quantities are NaN. Inspect status first.
 
     Raises
     ------
@@ -261,60 +332,58 @@ def _extract_ac_results(build: OPFBuild) -> dict:
     data    = build.data
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
+    results = _initialize_results(build)
 
     multistep = "T" in data
 
     if not multistep:
-        if any(
-            variable.value is None
-            for variable in (
-                var["Pg"], var["Qg"], var["v"], var["theta"], var["p"], var["q"]
-            )
-        ):
-            return _empty_results(
-                build, "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"
-            )
-
-        results = dict(
+        voltage = var["v"].value
+        angle = var["theta"].value
+        results.update(
             status    = prob.status,
-            objective = float(prob.value),
-            Pg        = var["Pg"].value * baseMVA,
-            Qg        = var["Qg"].value * baseMVA,
-            Vm        = var["v"].value.flatten(),
-            Va_deg    = np.rad2deg(var["theta"].value.flatten()),
-            p_net     = _solved_expression_values(build, "p_net") * baseMVA,
-            q_net     = _solved_expression_values(build, "q_net") * baseMVA,
+            objective = _objective_value(build),
+            Pg        = _scaled_values(var["Pg"].value, baseMVA),
+            Qg        = _scaled_values(var["Qg"].value, baseMVA),
+            Vm        = None if voltage is None else voltage.flatten(),
+            Va_deg    = (
+                None
+                if angle is None
+                else np.rad2deg(angle.flatten())
+            ),
+            p_net     = _scaled_values(
+                _solved_expression_values(build, "p_net"), baseMVA
+            ),
+            q_net     = _scaled_values(
+                _solved_expression_values(build, "q_net"), baseMVA
+            ),
         )
         
         _add_device_results(results, build)
         return results
 
-    T       = data["T"]
-    Pg_rows = []
-    Qg_rows = []
-    Vm_rows = []
-    Va_rows = []
-    for t in range(T):
-        if any(
-            var[name][t].value is None
-            for name in ("Pg", "Qg", "v", "theta", "p", "q")
-        ):
-            return _empty_results(
-                build, "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net"
-            )
-        Pg_rows.append(var["Pg"][t].value)
-        Qg_rows.append(var["Qg"][t].value)
-        Vm_rows.append(var["v"][t].value.flatten())
-        Va_rows.append(var["theta"][t].value.flatten())
-    results = dict(
+    Pg_values = _variable_values(var["Pg"])
+    Qg_values = _variable_values(var["Qg"])
+    voltage = _variable_values(var["v"])
+    angle = _variable_values(var["theta"])
+    results.update(
         status    = prob.status,
-        objective = float(prob.value),
-        Pg        = np.array(Pg_rows) * baseMVA,
-        Qg        = np.array(Qg_rows) * baseMVA,
-        Vm        = np.array(Vm_rows),
-        Va_deg    = np.rad2deg(np.array(Va_rows)),
-        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
-        q_net     = _solved_expression_values(build, "q_net") * baseMVA,
+        objective = _objective_value(build),
+        Pg        = _scaled_values(Pg_values, baseMVA),
+        Qg        = _scaled_values(Qg_values, baseMVA),
+        Vm        = (
+            None if voltage is None else np.squeeze(voltage, axis=-1)
+        ),
+        Va_deg    = (
+            None
+            if angle is None
+            else np.rad2deg(np.squeeze(angle, axis=-1))
+        ),
+        p_net     = _scaled_values(
+            _solved_expression_values(build, "p_net"), baseMVA
+        ),
+        q_net     = _scaled_values(
+            _solved_expression_values(build, "q_net"), baseMVA
+        ),
     )
     
     _add_device_results(results, build)
@@ -333,41 +402,34 @@ def _extract_dc_results(build: OPFBuild) -> dict:
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
     multistep = "T" in data
+    results = _initialize_results(build)
 
     if not multistep:
         Pg_val      = var["Pg"].value
         p_flows_val = var["p_flows"].value
-        # Guard: solver may return None values if problem is infeasible
-        if Pg_val is None or p_flows_val is None:
-            return _empty_results(build, "Pg", "p_flows", "p_net")
-
-        results = dict(
+        results.update(
             status    = prob.status,
-            objective = float(prob.value),
-            Pg        = Pg_val * baseMVA,
-            p_flows   = p_flows_val * baseMVA,
-            p_net     = _solved_expression_values(build, "p_net") * baseMVA,
+            objective = _objective_value(build),
+            Pg        = _scaled_values(Pg_val, baseMVA),
+            p_flows   = _scaled_values(p_flows_val, baseMVA),
+            p_net     = _scaled_values(
+                _solved_expression_values(build, "p_net"), baseMVA
+            ),
         )
         
         _add_device_results(results, build)
         return results
 
-    T            = data["T"]
-    Pg_rows      = []
-    p_flows_rows = []
-    for t in range(T):
-        Pg_t      = var["Pg"][t].value
-        p_flows_t = var["p_flows"][t].value
-        if Pg_t is None or p_flows_t is None:
-            return _empty_results(build, "Pg", "p_flows", "p_net")
-        Pg_rows.append(Pg_t)
-        p_flows_rows.append(p_flows_t)
-    results = dict(
+    results.update(
         status    = prob.status,
-        objective = float(prob.value),
-        Pg        = np.array(Pg_rows) * baseMVA,
-        p_flows   = np.array(p_flows_rows) * baseMVA,
-        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
+        objective = _objective_value(build),
+        Pg        = _scaled_values(_variable_values(var["Pg"]), baseMVA),
+        p_flows   = _scaled_values(
+            _variable_values(var["p_flows"]), baseMVA
+        ),
+        p_net     = _scaled_values(
+            _solved_expression_values(build, "p_net"), baseMVA
+        ),
     )
     
     _add_device_results(results, build)
@@ -385,6 +447,7 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
     data    = build.data
     baseMVA = float(data["baseMVA"])
     prob    = build.prob
+    results = _initialize_results(build)
 
     multistep = "T" in data
 
@@ -392,36 +455,26 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
         # Single-step extraction
         Pg_val = var["Pg"].value
 
-        # Guard: solver may return None values if problem is infeasible
-        if Pg_val is None:
-            return _empty_results(build, "Pg", "p_net")
-
-        results = dict(
+        p_net = _solved_expression_values(build, "p_net")
+        results.update(
             status    = prob.status,
-            objective = float(prob.value),
-            Pg        = Pg_val * baseMVA,          # (ng,) MW
-            p_net     = float(
-                _solved_expression_values(build, "p_net") * baseMVA
+            objective = _objective_value(build),
+            Pg        = _scaled_values(Pg_val, baseMVA),
+            p_net     = (
+                None if p_net is None else float(p_net * baseMVA)
             ),
         )
 
         _add_device_results(results, build)
         return results
 
-    # Multi-step extraction
-    T = data["T"]
-    Pg_rows = []
-    for t in range(T):
-        Pg_val = var["Pg"][t].value
-        if Pg_val is None:
-            return _empty_results(build, "Pg", "p_net")
-        Pg_rows.append(Pg_val)
-
-    results = dict(
+    results.update(
         status    = prob.status,
-        objective = float(prob.value),
-        Pg        = np.array(Pg_rows) * baseMVA,  # (T, ng)
-        p_net     = _solved_expression_values(build, "p_net") * baseMVA,
+        objective = _objective_value(build),
+        Pg        = _scaled_values(_variable_values(var["Pg"]), baseMVA),
+        p_net     = _scaled_values(
+            _solved_expression_values(build, "p_net"), baseMVA
+        ),
     )
 
     _add_device_results(results, build)

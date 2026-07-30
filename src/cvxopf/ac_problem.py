@@ -25,41 +25,40 @@ from cvxopf.data import validate_case, load_timeseries_from_dataframe
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
-    _prepare_data as generator_prepare_data,
-    _build_metadata as generator_build_metadata,
-    ac_injections as generator_ac_injections,
-    ac_operating_constraints as generator_ac_operating_constraints,
-    ac_network_constraints as generator_ac_network_constraints,
-    coupling_constraints as generator_coupling_constraints,
-    gen_cost_expr,
+)
+from cvxopf._component_adapter import (
+    ACNetworkState,
+    HorizonContext,
+    PreparationContext,
+    StepContext,
+)
+from cvxopf._component_assembly import (
+    PreparedComponents,
+    aggregate_horizon_contributions,
+    aggregate_step_contributions,
+    assemble_component_horizon,
+    assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
+    merge_prepared_component_data,
+    prepare_components,
+    publish_component_expressions,
+    publish_component_metadata,
+    publish_component_variables,
+)
+from cvxopf._component_adapters import (
+    HVDCInputs,
+    NondispatchableInputs,
+    component_requests,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _prepare_data as storage_prepare_data,
-    _build_metadata as storage_build_metadata,
-    ac_injections as storage_ac_injections,
-    ac_operating_constraints as storage_ac_operating_constraints,
-    coupling_constraints as storage_coupling_constraints,
-    storage_cost_expr,
-    terminal_cost_expr as storage_terminal_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _prepare_data as nd_prepare_data,
-    _build_metadata as nd_build_metadata,
-    ac_injections as nd_ac_injections,
-    ac_operating_constraints as nd_ac_operating_constraints,
-    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.hvdc import (
     HVDCLink,
-    _prepare_data as hvdc_prepare_data,
-    _build_metadata as hvdc_build_metadata,
-    _hvdc_static_box,
-    ac_injections as hvdc_ac_injections,
-    ac_operating_constraints as hvdc_ac_operating_constraints,
-    coupling_constraints as hvdc_coupling_constraints,
-    hvdc_cost_expr,
 )
 
 if TYPE_CHECKING:
@@ -120,6 +119,10 @@ def _parse_case(
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    horizon_steps: int = 1,
+    nd_available_mw: np.ndarray | None = None,
+    hvdc_inputs: HVDCInputs | None = None,
+    is_multistep: bool = False,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
@@ -160,33 +163,36 @@ def _parse_case(
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
 
-    generator_data = generator_prepare_data(
-        generators, baseMVA, nb, ext_to_int, ext_bus_ids
+    preparation = PreparationContext(
+        base_mva=baseMVA,
+        nb=nb,
+        ext_to_int=ext_to_int,
+        ext_bus_ids=frozenset(ext_bus_ids),
+        horizon_steps=horizon_steps,
+        delta=delta,
+        is_multistep=is_multistep,
     )
-    
-    # Parse storage if present
-    storage_data = {}
-    if storage:
-        storage_data = storage_prepare_data(
-            storage, nb, ext_to_int, ext_bus_ids
+    if nondispatchable and nd_available_mw is None:
+        nd_available_mw = np.array(
+            [[unit.p_available for unit in nondispatchable]],
+            dtype=float,
         )
-        storage_data["storage_delta"] = float(delta)
+    requests = component_requests(
+        "ac",
+        generators=generators,
+        storage_units=storage or (),
+        nondispatchable_units=nondispatchable or (),
+        nondispatchable_inputs=(
+            None
+            if not nondispatchable
+            else NondispatchableInputs(nd_available_mw)
+        ),
+        hvdc_links=hvdc or (),
+        hvdc_inputs=hvdc_inputs,
+    )
+    components = prepare_components(requests, "ac", preparation)
 
-    # Parse nondispatchable if present
-    nd_data = {}
-    if nondispatchable:
-        nd_data = nd_prepare_data(
-            nondispatchable, nb, ext_to_int, ext_bus_ids
-        )
-
-    # Parse HVDC links if present
-    hvdc_data = {}
-    if hvdc:
-        hvdc_data = hvdc_prepare_data(
-            hvdc, nb, ext_to_int, ext_bus_ids
-        )
-
-    return dict(
+    formulation_data = dict(
         case=case, baseMVA=baseMVA,
         bus=bus,
         nb=nb,
@@ -196,19 +202,17 @@ def _parse_case(
         ext_bus_ids=ext_bus_ids,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
-        **generator_data,
-        **storage_data,
-        **nd_data,
-        **hvdc_data,
+        _components=components,
     )
+    return merge_prepared_component_data(components, formulation_data)
 
 
 def _make_step_variables(
-    nb: int, ng: int,
+    nb: int,
     vmin_arr, vmax_arr,
-    Qgmin, Qgmax,
     E,
     suffix: str,
+    step: int,
     init_flat: bool,
     sparse_pq: bool,
 ):
@@ -219,8 +223,8 @@ def _make_step_variables(
     P_vec and Q_vec over the Ybus sparsity pattern.
     When sparse_pq=False, P and Q are dense (nb, nb) matrices.
 
-    Returns a tuple of length 8:
-        (theta, v, PQ_P, PQ_Q, p, q, Pg, Qg)
+    Returns a tuple of length 6:
+        (theta, v, PQ_P, PQ_Q, p, q)
     where PQ_P is either P_vec (nnz,) or P (nb, nb), and similarly for PQ_Q.
     """
     def name(s):
@@ -231,9 +235,6 @@ def _make_step_variables(
                         bounds=[vmin_arr[:, None], vmax_arr[:, None]])
     p     = cp.Variable(nb, name=name("p"))
     q     = cp.Variable(nb, name=name("q"))
-    Pg    = cp.Variable(ng, name=name("Pg"))
-    Qg    = cp.Variable(ng, name=name("Qg"))
-
     if sparse_pq:
         nnz   = len(E[0])
         PQ_P  = cp.Variable(nnz, name=name("P_vec"))
@@ -246,60 +247,29 @@ def _make_step_variables(
         theta.value = np.zeros((nb, 1))
         v.value     = np.ones((nb, 1))
 
-    return theta, v, PQ_P, PQ_Q, p, q, Pg, Qg
+    return theta, v, PQ_P, PQ_Q, p, q
 
 
 def _make_step_constraints(
-    theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
+    theta, v, PQ_P, PQ_Q, p, q,
     G, B, E, Z,
     rows, cols, G_vec, B_vec, Rp,
-    generator_injection_p, generator_injection_q,
-    Pgmin, Pgmax, Qgmin, Qgmax, Pd, Qd, ref,
-    pv, generators, ext_to_int,
-    enforce_vset: bool,
+    component_injection_p, component_injection_q,
+    Pd, Qd, ref,
+    component_operating_constraints,
+    component_network_constraints,
     sparse_pq: bool,
-    # Storage — all None when storage=None
-    ns: int = 0,
-    storage_units=None,
-    storage_injection_p=None,
-    storage_injection_q=None,
-    b_t=None,
-    b_q_t=None,
-    soc_t=None,
-    # Nondispatchable — all None when nondispatchable=None
-    nnd: int = 0,
-    nd_units=None,
-    nd_injection_p=None,
-    nd_injection_q=None,
-    nd_p_available_t=None,
-    p_nd_t=None,
-    q_nd_t=None,
-    # HVDC — all None/0 when hvdc=None
-    n_hvdc: int = 0,
-    hvdc_injection_expr=None,
-    links=None,
-    p_in_t=None,
-    p_out_t=None,
-    p_min_hvdc_t=None,
-    p_max_hvdc_t=None,
-    step: int = 0,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
 
-    Internal structure (seven sections — do not reorder or split):
+    Internal structure (five sections — do not reorder or split):
       1. Reference bus angle fix
       2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
       3. Nodal power balance: exactly one p== and one q== constraint,
-         incorporating storage, nondispatchable, and HVDC injection if present.
-         HVDC enters p== only (unity power factor; q== is untouched).
-      4. Storage operating constraints (apparent power circle, SoC bounds)
-         — omitted when ns==0
-      4b. Nondispatchable operating constraints (apparent power circle, real power bounds)
-          — omitted when nnd==0
-      4c. HVDC operating constraints (box bounds, loss-branch equality)
-          — omitted when n_hvdc==0
-      5. Generator-owned AC network constraints
+         using aggregate component real/reactive injections.
+      4. Ordered component operating constraints.
+      5. Ordered component-to-network constraints.
 
     The caller must not append additional p== or q== constraints after
     this function returns.
@@ -367,66 +337,24 @@ def _make_step_constraints(
     # ------------------------------------------------------------------
     # Section 3: Nodal power balance
     # Exactly one p== and one q== constraint.
-    # Storage and nondispatchable injection added here if present.
+    # Active component injections are composed before entering this function.
     # ------------------------------------------------------------------
-    storage_injection_p = storage_injection_p if ns > 0 else 0
-    storage_injection_q = storage_injection_q if ns > 0 else 0
-    nd_injection_p = nd_injection_p if nnd > 0 else 0
-    nd_injection_q = nd_injection_q if nnd > 0 else 0
-    hvdc_injection_p = hvdc_injection_expr if n_hvdc > 0 else 0
-
     constr.append(
-        p == generator_injection_p - Pd
-        + storage_injection_p + nd_injection_p + hvdc_injection_p
+        p == component_injection_p - Pd
     )
     constr.append(
-        q == generator_injection_q - Qd
-        + storage_injection_q + nd_injection_q
-    )
-    constr += generator_ac_operating_constraints(
-        Pg, Qg, Pgmin, Pgmax, Qgmin, Qgmax
+        q == component_injection_q - Qd
     )
 
     # ------------------------------------------------------------------
-    # Section 4: Storage operating constraints
-    # Apparent power circle (AC) and SoC bounds.
-    # Omitted entirely when ns == 0.
+    # Section 4: Ordered component operating constraints.
     # ------------------------------------------------------------------
-    if ns > 0:
-        constr += storage_ac_operating_constraints(
-            storage_units, b_t, b_q_t, soc_t
-        )
+    constr += list(component_operating_constraints)
 
     # ------------------------------------------------------------------
-    # Section 4b: Nondispatchable operating constraints
-    # Apparent power circle and real power bounds.
-    # Omitted entirely when nnd == 0.
+    # Section 5: Ordered component-to-network constraints.
     # ------------------------------------------------------------------
-    if nnd > 0:
-        constr += nd_ac_operating_constraints(
-            nd_units, p_nd_t, q_nd_t, nd_p_available_t
-        )
-
-    # ------------------------------------------------------------------
-    # Section 4c: HVDC operating constraints
-    # Box bounds (p_min_t <= p_in <= p_max_t) and loss-branch equality
-    # (p_out == coeff_vec * p_in). Omitted entirely when n_hvdc == 0.
-    # ------------------------------------------------------------------
-    if n_hvdc > 0:
-        constr += hvdc_ac_operating_constraints(
-            links, p_in_t, p_out_t, p_min_hvdc_t, p_max_hvdc_t, step
-        )
-
-    # ------------------------------------------------------------------
-    # Section 5: Generator-owned AC network constraints.
-    # ------------------------------------------------------------------
-    constr += generator_ac_network_constraints(
-        generators,
-        v,
-        ext_to_int,
-        np.r_[np.array([ref]), pv],
-        enforce_vset=enforce_vset,
-    )
+    constr += list(component_network_constraints)
 
     return constr
 
@@ -459,159 +387,78 @@ def _build_ac_single(
     )
 
     # Create step variables
-    theta, v, PQ_P, PQ_Q, p, q, Pg, Qg = _make_step_variables(
-        d["nb"], d["ng"],
+    theta, v, PQ_P, PQ_Q, p, q = _make_step_variables(
+        d["nb"],
         d["vmin_arr"], d["vmax_arr"],
-        d["Qgmin"], d["Qgmax"],
         E=d["E"],
         suffix="",
+        step=0,
         init_flat=options.init_flat,
         sparse_pq=options.sparse_pq,
     )
-
-    # Create storage variables if present
-    b_t = b_q_t = soc_t = None
-    storage_inj_p = storage_inj_q = None
-    if "ns" in d:
-        ns = d["ns"]
-        # b_t: real power (MW), b_q_t: reactive power (MVAr), soc_t: state of charge (MWh)
-        b_t = cp.Variable(ns, name="b")
-        b_q_t = cp.Variable(ns, name="b_q")
-        soc_t = cp.Variable(ns, name="soc")
-        storage_inj_p, storage_inj_q, storage_scaling = storage_ac_injections(
-            storage, b_t, b_q_t, d["ext_to_int"], incidence=d["Cs"]
-        )
-        storage_scaling.value = 1.0 / d["baseMVA"]
-
-    # Create nondispatchable variables if present
-    p_nd_t = q_nd_t = None
-    nd_inj_p = nd_inj_q = None
-    if "nnd" in d:
-        nnd = d["nnd"]
-        # p_nd_t: real power (MW), q_nd_t: reactive power (MVAr)
-        p_nd_t = cp.Variable(nnd, name="p_nd")
-        q_nd_t = cp.Variable(nnd, name="q_nd")
-        nd_inj_p, nd_inj_q, nd_scaling = nd_ac_injections(
-            nondispatchable,
-            p_nd_t,
-            q_nd_t,
-            d["ext_to_int"],
-            incidence=d["Cnd"],
-        )
-        nd_scaling.value = 1.0 / d["baseMVA"]
-
-    # Create HVDC variables if present
-    p_in = p_out = None
-    hvdc_inj_expr = None
-    if "n_hvdc" in d:
-        n_hvdc = d["n_hvdc"]
-        p_in  = cp.Variable((n_hvdc,), name="p_hvdc_in")
-        p_out = cp.Variable((n_hvdc,), name="p_hvdc_out")
-        hvdc_inj_expr, hvdc_q_inj, inv_bMVA = hvdc_ac_injections(
-            hvdc,
-            p_in,
-            p_out,
-            d["ext_to_int"],
-            incidence=(d["Ch_from"], d["Ch_to"]),
-        )
-        assert hvdc_q_inj is None
-        inv_bMVA.value = 1.0 / d["baseMVA"]
-        p_min_hvdc, p_max_hvdc = _hvdc_static_box(hvdc)
-
-    generator_inj_p, generator_inj_q, generator_scaling = (
-        generator_ac_injections(
-            d["generators"],
-            Pg,
-            Qg,
-            d["ext_to_int"],
-            incidence=d["Cg"],
-        )
+    step_context = StepContext(
+        formulation="ac",
+        step=0,
+        base_mva=d["baseMVA"],
+        ext_to_int=d["ext_to_int"],
+        network_state=ACNetworkState(
+            v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
+        ),
     )
-    assert generator_scaling is None
+
+    components: PreparedComponents = d["_components"]
+    step_components = assemble_component_step(components, step_context)
+    step_aggregate = aggregate_step_contributions(step_components)
 
     constr = _make_step_constraints(
-        theta, v, PQ_P, PQ_Q, p, q, Pg, Qg,
+        theta, v, PQ_P, PQ_Q, p, q,
         d["G"], d["B"], d["E"], d["Z"],
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-        generator_inj_p, generator_inj_q,
-        d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
+        step_aggregate.injection.p_pu,
+        step_aggregate.injection.q_pu,
         d["Pd"], d["Qd"], d["ref"],
-        d["pv"], d["generators"], d["ext_to_int"],
-        enforce_vset=options.enforce_vset,
+        step_aggregate.operating_constraints,
+        step_aggregate.network_constraints,
         sparse_pq=options.sparse_pq,
-        ns=d.get("ns", 0),
-        storage_units=storage,
-        storage_injection_p=storage_inj_p,
-        storage_injection_q=storage_inj_q,
-        b_t=b_t,
-        b_q_t=b_q_t,
-        soc_t=soc_t,
-        nnd=d.get("nnd", 0),
-        nd_units=nondispatchable,
-        nd_injection_p=nd_inj_p,
-        nd_injection_q=nd_inj_q,
-        nd_p_available_t=d.get("nd_p_available"),
-        p_nd_t=p_nd_t,
-        q_nd_t=q_nd_t,
-        n_hvdc=d.get("n_hvdc", 0),
-        hvdc_injection_expr=hvdc_inj_expr,
-        links=hvdc,
-        p_in_t=p_in,
-        p_out_t=p_out,
-        p_min_hvdc_t=p_min_hvdc if "n_hvdc" in d else None,
-        p_max_hvdc_t=p_max_hvdc if "n_hvdc" in d else None,
-        step=0,
     )
 
-    # Build cost: generation cost plus storage aging cost plus HVDC cost
-    gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg)
-    storage_cost = None
-    if "ns" in d:
-        storage_cost = storage_cost_expr(storage, b_t)
-        total_cost = gen_cost + storage_cost
-    else:
-        total_cost = gen_cost
-    if "n_hvdc" in d:
-        total_cost = total_cost + hvdc_cost_expr(hvdc, p_in)
+    # Build the generic component stage cost.
+    assert step_aggregate.cost is not None
+    total_cost = integrate_stage_cost_rates(
+        [step_aggregate.cost],
+        delta,
+    )
+    component_costs = integrate_component_stage_costs(
+        [step_components],
+        delta,
+    )
 
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(storage, soc_t)
-        if storage_terminal_cost is not None:
-            total_cost = total_cost + storage_terminal_cost
-    
-    # Add storage SoC dynamics constraints if present
-    if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, [b_t], [soc_t], d["storage_delta"]
-        )
-        constr.extend(storage_coupling)
+    horizon = assemble_component_horizon(
+        components, [step_components], HorizonContext("ac", 1, delta)
+    )
+    horizon_aggregate = aggregate_horizon_contributions(horizon)
+    storage_horizon = horizon.get("storage")
+    storage_terminal_cost = (
+        None if storage_horizon is None else storage_horizon.terminal_cost
+    )
+    if horizon_aggregate.terminal_cost is not None:
+        total_cost = total_cost + horizon_aggregate.terminal_cost
+    constr.extend(horizon_aggregate.constraints)
     
     prob = cp.Problem(cp.Minimize(total_cost), constr)
 
     # Build variables dict
     if options.sparse_pq:
         variables = dict(theta=theta, v=v, P_vec=PQ_P, Q_vec=PQ_Q,
-                         p=p, q=q, Pg=Pg, Qg=Qg)
+                         p=p, q=q)
     else:
         variables = dict(theta=theta, v=v, P=PQ_P, Q=PQ_Q,
-                         p=p, q=q, Pg=Pg, Qg=Qg)
-    
-    # Add storage variables if present
-    if "ns" in d:
-        variables["b"] = b_t
-        variables["b_q"] = b_q_t
-        variables["soc"] = soc_t
-
-    # Add nondispatchable variables if present
-    if "nnd" in d:
-        variables["p_nd"] = p_nd_t
-        variables["q_nd"] = q_nd_t
-
-    # Add HVDC variables if present
-    if "n_hvdc" in d:
-        variables["p_hvdc_in"]  = p_in
-        variables["p_hvdc_out"] = p_out
+                         p=p, q=q)
+    variables = publish_component_variables(
+        [step_components],
+        variables,
+        multistep=False,
+    )
 
     # Build data dict
     data = dict(
@@ -622,26 +469,20 @@ def _build_ac_single(
         B_vec=d["B_vec"], Rp=d["Rp"],
         Pd=d["Pd"], Qd=d["Qd"],
     )
-    data.update(generator_build_metadata(d, reactive=True))
+    data = publish_component_metadata(components, data)
 
-    # Add storage data if present
-    if "ns" in d:
-        data.update(storage_build_metadata(d))
-
-    # Add nondispatchable data if present
-    if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_p_available"] = d["nd_p_available"]
-
-    # Add HVDC data if present
-    if "n_hvdc" in d:
-        data.update(hvdc_build_metadata(d))
-
-    expressions = {"p_net": p, "q_net": q}
-    if storage_cost is not None:
-        expressions["storage_cost"] = storage_cost
+    compatibility_expressions = {"p_net": p, "q_net": q}
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        [step_aggregate],
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=False,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
@@ -677,13 +518,28 @@ def _build_ac_multistep(
         )
 
     d = _parse_case(
-        case, options, storage, delta, nondispatchable, hvdc, generators
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        hvdc,
+        generators,
+        horizon_steps=T,
+        nd_available_mw=(
+            None if df_nd is None else df_nd.to_numpy(dtype=float)
+        ),
+        hvdc_inputs=(
+            None
+            if not hvdc
+            else HVDCInputs(
+                df_hvdc_min.to_numpy(dtype=float),
+                df_hvdc_max.to_numpy(dtype=float),
+            )
+        ),
+        is_multistep=True,
     )
     Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
-    
-    # The public builder guarantees a normalized ND time series when ND is active.
-    if "nnd" in d:
-        d["nd_available"] = df_nd.to_numpy(dtype=float)
 
     if Pd_series.shape[0] != T:
         raise ValueError(
@@ -692,206 +548,86 @@ def _build_ac_multistep(
 
     # Initialize lists for variables
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
-    p_list, q_list, Pg_list, Qg_list          = [], [], [], []
-    b_list, b_q_list, soc_list               = [], [], []
-    p_nd_list, q_nd_list                     = [], []
-    p_hvdc_in_list, p_hvdc_out_list          = [], []
+    p_list, q_list = [], []
+    component_steps = []
+    step_aggregates = []
+    components: PreparedComponents = d["_components"]
     all_constr  = []
-    total_cost  = 0
-    storage_cost = 0
 
     for t in range(T):
         # Create step variables
-        theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t = \
+        theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t = \
             _make_step_variables(
-                d["nb"], d["ng"],
+                d["nb"],
                 d["vmin_arr"], d["vmax_arr"],
-                d["Qgmin"], d["Qgmax"],
                 E=d["E"],
                 suffix=f"_{t}",
+                step=t,
                 init_flat=options.init_flat,
                 sparse_pq=options.sparse_pq,
             )
-
-        # Create storage variables if present
-        b_t = b_q_t = soc_t = None
-        storage_inj_p_t = storage_inj_q_t = None
-        if "ns" in d:
-            ns = d["ns"]
-            b_t = cp.Variable(ns, name=f"b_{t}")
-            b_q_t = cp.Variable(ns, name=f"b_q_{t}")
-            soc_t = cp.Variable(ns, name=f"soc_{t}")
-            (
-                storage_inj_p_t,
-                storage_inj_q_t,
-                storage_scaling_t,
-            ) = storage_ac_injections(
-                storage,
-                b_t,
-                b_q_t,
-                d["ext_to_int"],
-                incidence=d["Cs"],
-            )
-            storage_scaling_t.value = 1.0 / d["baseMVA"]
-
-        # Create nondispatchable variables if present
-        p_nd_t = q_nd_t = None
-        nd_inj_p_t = nd_inj_q_t = None
-        if "nnd" in d:
-            nnd = d["nnd"]
-            p_nd_t = cp.Variable(nnd, name=f"p_nd_{t}")
-            q_nd_t = cp.Variable(nnd, name=f"q_nd_{t}")
-            nd_inj_p_t, nd_inj_q_t, nd_scaling_t = nd_ac_injections(
-                nondispatchable,
-                p_nd_t,
-                q_nd_t,
-                d["ext_to_int"],
-                incidence=d["Cnd"],
-            )
-            nd_scaling_t.value = 1.0 / d["baseMVA"]
-
-        # Create HVDC variables if present
-        p_in_t = p_out_t = None
-        hvdc_inj_expr_t = None
-        p_min_hvdc_t = p_max_hvdc_t = None
-        if "n_hvdc" in d:
-            n_hvdc = d["n_hvdc"]
-            p_in_t  = cp.Variable((n_hvdc,), name=f"p_hvdc_in_{t}")
-            p_out_t = cp.Variable((n_hvdc,), name=f"p_hvdc_out_{t}")
-            hvdc_inj_expr_t, hvdc_q_inj_t, inv_bMVA_t = hvdc_ac_injections(
-                hvdc,
-                p_in_t,
-                p_out_t,
-                d["ext_to_int"],
-                incidence=(d["Ch_from"], d["Ch_to"]),
-            )
-            assert hvdc_q_inj_t is None
-            inv_bMVA_t.value = 1.0 / d["baseMVA"]
-            p_min_hvdc_t = df_hvdc_min.iloc[t].values.astype(float)
-            p_max_hvdc_t = df_hvdc_max.iloc[t].values.astype(float)
-
-        # Get available power for this time step
-        if "nnd" in d:
-            nd_p_available_t = d["nd_available"][t, :]
-        else:
-            nd_p_available_t = None
-
-        generator_inj_p_t, generator_inj_q_t, generator_scaling_t = (
-            generator_ac_injections(
-                d["generators"],
-                Pg_t,
-                Qg_t,
-                d["ext_to_int"],
-                incidence=d["Cg"],
-            )
+        step_context = StepContext(
+            formulation="ac",
+            step=t,
+            base_mva=d["baseMVA"],
+            ext_to_int=d["ext_to_int"],
+            network_state=ACNetworkState(
+                v_t,
+                tuple(np.r_[[d["ref"]], d["pv"]]),
+                options.enforce_vset,
+            ),
         )
-        assert generator_scaling_t is None
+
+        step_components = assemble_component_step(
+            components, step_context, variable_suffix=f"_{t}"
+        )
+        component_steps.append(step_components)
+        step_aggregate = aggregate_step_contributions(step_components)
+        step_aggregates.append(step_aggregate)
 
         step_constr = _make_step_constraints(
-            theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t, Pg_t, Qg_t,
+            theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t,
             d["G"], d["B"], d["E"], d["Z"],
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
-            generator_inj_p_t, generator_inj_q_t,
-            d["Pgmin"], d["Pgmax"], d["Qgmin"], d["Qgmax"],
+            step_aggregate.injection.p_pu,
+            step_aggregate.injection.q_pu,
             Pd_series[t], Qd_series[t], d["ref"],
-            d["pv"], d["generators"], d["ext_to_int"],
-            enforce_vset=options.enforce_vset,
+            step_aggregate.operating_constraints,
+            step_aggregate.network_constraints,
             sparse_pq=options.sparse_pq,
-            ns=d.get("ns", 0),
-            storage_units=storage,
-            storage_injection_p=storage_inj_p_t,
-            storage_injection_q=storage_inj_q_t,
-            b_t=b_t,
-            b_q_t=b_q_t,
-            soc_t=soc_t,
-            nnd=d.get("nnd", 0),
-            nd_units=nondispatchable,
-            nd_injection_p=nd_inj_p_t,
-            nd_injection_q=nd_inj_q_t,
-            nd_p_available_t=nd_p_available_t,
-            p_nd_t=p_nd_t,
-            q_nd_t=q_nd_t,
-            n_hvdc=d.get("n_hvdc", 0),
-            hvdc_injection_expr=hvdc_inj_expr_t,
-            links=hvdc,
-            p_in_t=p_in_t,
-            p_out_t=p_out_t,
-            p_min_hvdc_t=p_min_hvdc_t,
-            p_max_hvdc_t=p_max_hvdc_t,
-            step=t,
         )
 
         all_constr.extend(step_constr)
 
-        # Add generation cost and HVDC cost (inside loop, per-step)
-        gen_cost = gen_cost_expr(d["gencost"], d["baseMVA"] * Pg_t)
-        total_cost = total_cost + gen_cost
-        if "n_hvdc" in d:
-            total_cost = total_cost + hvdc_cost_expr(hvdc, p_in_t)
-
+        # Retain the complete component stage-cost rate.
+        assert step_aggregate.cost is not None
         theta_list.append(theta_t)
         v_list.append(v_t)
         PQ_P_list.append(PQ_P_t)
         PQ_Q_list.append(PQ_Q_t)
         p_list.append(p_t)
         q_list.append(q_t)
-        Pg_list.append(Pg_t)
-        Qg_list.append(Qg_t)
-        
-        # Add storage variables to lists
-        if "ns" in d:
-            b_list.append(b_t)
-            b_q_list.append(b_q_t)
-            soc_list.append(soc_t)
 
-        # Add nondispatchable variables to lists
-        if "nnd" in d:
-            p_nd_list.append(p_nd_t)
-            q_nd_list.append(q_nd_t)
-
-        # Add HVDC variables to lists
-        if "n_hvdc" in d:
-            p_hvdc_in_list.append(p_in_t)
-            p_hvdc_out_list.append(p_out_t)
-
-    # Add storage aging cost if present
-    if "ns" in d:
-        for t in range(T):
-            step_storage_cost = storage_cost_expr(storage, b_list[t])
-            storage_cost = storage_cost + step_storage_cost
-            total_cost = total_cost + step_storage_cost
-
-    # Add storage SoC dynamics constraints if present
-    if "ns" in d:
-        storage_coupling = storage_coupling_constraints(
-            storage, b_list, soc_list, d["storage_delta"]
-        )
-        all_constr.extend(storage_coupling)
-    all_constr.extend(
-        generator_coupling_constraints(
-            d["generators"], Pg_list, Qg_list, delta=delta
-        )
+    total_cost = integrate_stage_cost_rates(
+        [aggregate.cost for aggregate in step_aggregates],
+        delta,
     )
-    if "nnd" in d:
-        all_constr.extend(
-            nd_coupling_constraints(
-                nondispatchable, p_nd_list, q_nd_list, delta=delta
-            )
-        )
-    if "n_hvdc" in d:
-        all_constr.extend(
-            hvdc_coupling_constraints(
-                hvdc, p_hvdc_in_list, p_hvdc_out_list, delta=delta
-            )
-        )
+    component_costs = integrate_component_stage_costs(
+        component_steps,
+        delta,
+    )
 
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(
-            storage, soc_list[-1]
-        )
-        if storage_terminal_cost is not None:
-            total_cost = total_cost + storage_terminal_cost
+    horizon = assemble_component_horizon(
+        components, component_steps, HorizonContext("ac", T, delta)
+    )
+    horizon_aggregate = aggregate_horizon_contributions(horizon)
+    storage_horizon = horizon.get("storage")
+    storage_terminal_cost = (
+        None if storage_horizon is None else storage_horizon.terminal_cost
+    )
+    all_constr.extend(horizon_aggregate.constraints)
+    if horizon_aggregate.terminal_cost is not None:
+        total_cost = total_cost + horizon_aggregate.terminal_cost
 
     all_constr.extend(coupling_constraints)
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
@@ -901,30 +637,19 @@ def _build_ac_multistep(
         variables = dict(
             theta=theta_list, v=v_list,
             P_vec=PQ_P_list, Q_vec=PQ_Q_list,
-            p=p_list, q=q_list, Pg=Pg_list, Qg=Qg_list,
+            p=p_list, q=q_list,
         )
     else:
         variables = dict(
             theta=theta_list, v=v_list,
             P=PQ_P_list, Q=PQ_Q_list,
-            p=p_list, q=q_list, Pg=Pg_list, Qg=Qg_list,
+            p=p_list, q=q_list,
         )
-    
-    # Add storage variables if present
-    if "ns" in d:
-        variables["b"] = b_list
-        variables["b_q"] = b_q_list
-        variables["soc"] = soc_list
-
-    # Add nondispatchable variables if present
-    if "nnd" in d:
-        variables["p_nd"] = p_nd_list
-        variables["q_nd"] = q_nd_list
-
-    # Add HVDC variables if present
-    if "n_hvdc" in d:
-        variables["p_hvdc_in"] = p_hvdc_in_list
-        variables["p_hvdc_out"] = p_hvdc_out_list
+    variables = publish_component_variables(
+        component_steps,
+        variables,
+        multistep=True,
+    )
 
     # Build data dict
     data = dict(
@@ -937,26 +662,20 @@ def _build_ac_multistep(
         Pd_series=Pd_series,
         Qd_series=Qd_series,
     )
-    data.update(generator_build_metadata(d, reactive=True))
-    
-    # Add storage data if present
-    if "ns" in d:
-        data.update(storage_build_metadata(d))
+    data = publish_component_metadata(components, data)
 
-    # Add nondispatchable data if present
-    if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_available"] = d["nd_available"]
-
-    # Add HVDC data if present
-    if "n_hvdc" in d:
-        data.update(hvdc_build_metadata(d))
-
-    expressions = {"p_net": p_list, "q_net": q_list}
-    if "ns" in d:
-        expressions["storage_cost"] = storage_cost
+    compatibility_expressions = {"p_net": p_list, "q_net": q_list}
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        step_aggregates,
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=True,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,

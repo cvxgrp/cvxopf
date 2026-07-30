@@ -98,10 +98,10 @@ def _(mo):
        terminal-locality and saturation geometry; physical loss, voltage
        constraints, reactive allocation, and local optimality explain the
        remaining DC–AC differences.
-    6. **Time-resolution sensitivity.** Hard endpoint policies and the
-       no-policy solution are invariant at common physical times, but a fixed
-       soft terminal weight is not invariant under the package's current
-       unscaled stage-sum objective.
+    6. **Time-resolution invariance.** With stage-cost rates integrated by
+       the interval duration, no-policy, hard-equality, and soft-quadratic
+       solutions are invariant at common physical times across 1-hour,
+       30-minute, and 15-minute grids.
 
     ## Implication for hierarchical DC–AC control
 
@@ -1019,7 +1019,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 6. Time-resolution sensitivity
+    ## 6. Time-resolution invariance
 
     The final figure represents the same 24-hour high-window power trajectory
     at 1-hour, 30-minute, and 15-minute resolution. It plots optimized
@@ -1067,29 +1067,25 @@ def _(energy_validation_data, mo):
     mo.md(
         rf"""
         Zero-order hold preserves every source and load channel to a maximum
-        energy error of {maximum_energy_error:.2e} MWh. No-policy and equality
-        dispatch remain invariant at common hourly boundaries.
-
-        The soft quadratic endpoint is not invariant:
+        energy error of {maximum_energy_error:.2e} MWh. No-policy, equality,
+        and soft-quadratic dispatch remain invariant at common hourly
+        boundaries under the time-integrated objective:
 
         | Step duration | Terminal SoC |
         |---:|---:|
         | 1 hour | 350.1 MWh |
-        | 30 minutes | 215.7 MWh |
-        | 15 minutes | approximately 0 MWh |
+        | 30 minutes | 350.1 MWh |
+        | 15 minutes | 350.1 MWh |
 
-        Under the current objective convention, refinement gives
+        The implemented objective is
 
-        $$\frac{{1}}{{\Delta}}V(q_T) + w(q_T-q_\mathrm{{target}})^2.$$
+        $$\Delta\sum_t J_t + w(q_T-q_\mathrm{{target}})^2.$$
 
-        Multiplication by $\Delta>0$ shows that the fixed terminal weight
-        behaves like the hourly-equivalent weight $\Delta w$. The observed
-        30-minute endpoint exactly matches the earlier hourly weight-0.025
-        result. At 15 minutes, the effective weight 0.0125 lies below the
-        marginal threshold at zero SoC.
-
-        This resolution dependence comes from objective scaling, not changed
-        physics or interpolation.
+        Across the three grids, the quadratic-case objective agrees to about
+        1e-5 objective units, terminal SoC agrees within 3e-7 MWh, and the
+        maximum common-boundary SoC difference is about 2e-5 MWh. The
+        corrected discretization therefore preserves the intended tradeoff
+        between operating value and the once-per-horizon terminal penalty.
         """
     )
     return
@@ -1113,22 +1109,19 @@ def _(mo):
        the principal SoC geometry without reproducing DC dispatch; physical
        loss, voltage activity, reactive allocation, and local optimality
        explain the trajectory differences.
-    6. The current unscaled stage-sum objective makes soft terminal weights
-       depend on numerical time resolution.
+    6. Integrating stage-cost rates by $\Delta$ removes the prior numerical
+       time-resolution dependence of soft terminal weights.
 
     ## Open decisions and limitations
 
-    - Decide whether to test or adopt the physical-time convention
-      $\Delta\sum_t J_t + J_T$ through the package correctness/API plan.
     - Complete the separate reactive-support tie-breaker experiment.
     - AC branch thermal limits and load shedding remain future package
       capabilities.
     - Storage siting, sizing, forecast error, and receding-horizon control
       are follow-on studies rather than acceptance requirements here.
 
-    The experiment demonstrates the intended storage terminal-policy
-    behavior and identifies the objective-time convention as the principal
-    unresolved package-level modeling decision.
+    The experiment demonstrates the intended storage terminal-policy behavior
+    and verifies the adopted package-level objective-time convention.
     """)
     return
 

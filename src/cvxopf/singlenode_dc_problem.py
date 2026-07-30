@@ -20,11 +20,16 @@ Variables:
                     (present only when nondispatchable is not None)
 
 Objective:
-    minimize  G + sum_s aging_weight[s] * |b[s]|
+    minimize  delta * sum_t (
+                  G_t + sum_s aging_weight[s] * |b[t, s]|
+              ) + terminal_cost
 
     where
-        G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)   generation cost
+        G_t = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)
         aging term absent when storage is None
+
+Stage-cost rates are integrated over time. Terminal cost is a once-per-horizon
+boundary term and is not multiplied by delta.
 
 Constraints:
     sum(Pg) + (1/baseMVA)*sum(b) + (1/baseMVA)*sum(p_nd) == Pd_total
@@ -54,31 +59,36 @@ from cvxopf.network import reindex_case_to_consecutive
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
-    _prepare_data as generator_prepare_data,
-    _build_metadata as generator_build_metadata,
-    dc_injections as generator_dc_injections,
-    dc_operating_constraints as generator_dc_operating_constraints,
-    dc_network_constraints as generator_dc_network_constraints,
-    coupling_constraints as generator_coupling_constraints,
-    gen_cost_expr,
+)
+from cvxopf._component_adapter import (
+    DCNetworkState,
+    HorizonContext,
+    PreparationContext,
+    StepContext,
+)
+from cvxopf._component_assembly import (
+    PreparedComponents,
+    aggregate_horizon_contributions,
+    aggregate_step_contributions,
+    assemble_component_horizon,
+    assemble_component_step,
+    integrate_component_stage_costs,
+    integrate_stage_cost_rates,
+    merge_prepared_component_data,
+    prepare_components,
+    publish_component_expressions,
+    publish_component_metadata,
+    publish_component_variables,
+)
+from cvxopf._component_adapters import (
+    NondispatchableInputs,
+    component_requests,
 )
 from cvxopf.storage import (
     StorageUnitIdeal,
-    _prepare_data as storage_prepare_data,
-    _build_metadata as storage_build_metadata,
-    dc_injections as storage_dc_injections,
-    dc_operating_constraints as storage_dc_operating_constraints,
-    coupling_constraints as storage_coupling_constraints,
-    storage_cost_expr,
-    terminal_cost_expr as storage_terminal_cost_expr,
 )
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
-    _prepare_data as nd_prepare_data,
-    _build_metadata as nd_build_metadata,
-    dc_injections as nd_dc_injections,
-    dc_operating_constraints as nd_dc_operating_constraints,
-    coupling_constraints as nd_coupling_constraints,
 )
 from cvxopf.network import BUS_I
 
@@ -90,49 +100,21 @@ PD = 2
 
 
 def _make_singlenode_dc_step_constraints(
-    Pg,
-    generator_injection,
+    component_injection,
     Pd_total_t: float,
-    Pgmin,
-    Pgmax,
-    ns: int = 0,
-    storage_units=None,
-    storage_injection=None,
-    b_t=None,
-    soc_t=None,
-    nnd: int = 0,
-    nd_units=None,
-    nd_injection=None,
-    nd_p_available_t=None,
-    p_nd_t=None,
+    component_operating_constraints,
 ) -> tuple[list, cp.Expression]:
     """
     Build constraints for a single time step of the single-node DC formulation.
 
     Parameters
     ----------
-    Pg : cp.Variable
-        Generator real power variables (ng,).
+    component_injection : cp.Expression
+        Aggregate one-node component injection in per-unit.
     Pd_total_t : float
         Total load for this time step (scalar, per-unit).
-    Pgmin, Pgmax : np.ndarray
-        Generator bounds (ng,) in per-unit.
-    ns : int
-        Number of storage units (0 if no storage).
-    storage_units : list[StorageUnitIdeal] or None
-        Storage devices whose DC operating constraints apply at this step.
-    storage_injection : cp.Expression or None
-        Collapsed one-node real-power injection, already scaled to per-unit.
-    b_t : cp.Variable or None
-        Storage real power variables (ns,) in MW.
-    soc_t : cp.Variable or None
-        Storage state-of-charge variables (ns,) in MWh.
-    nnd : int
-        Number of nondispatchable units (0 if none).
-    nd_p_available_t : np.ndarray or None
-        Nondispatchable available power (nnd,) in MW.
-    p_nd_t : cp.Variable or None
-        Nondispatchable real power variables (nnd,) in MW.
+    component_operating_constraints : tuple[cp.Constraint, ...]
+        Ordered operating constraints from all active components.
 
     Returns
     -------
@@ -142,48 +124,32 @@ def _make_singlenode_dc_step_constraints(
     constr = []
 
     # Section 1: Power balance (exactly one equality constraint)
-    storage_term = storage_injection[0] if ns > 0 else 0
-    nd_term = nd_injection[0] if nnd > 0 else 0
-    p_net = (
-        generator_injection[0] + storage_term + nd_term - Pd_total_t
-    )
+    p_net = component_injection[0] - Pd_total_t
     constr.append(p_net == 0)
 
-    # Section 2: Generator bounds
-    constr += generator_dc_operating_constraints(Pg, Pgmin, Pgmax)
-
-    # Section 3: Storage real power bounds (omitted when ns == 0)
-    if ns > 0:
-        constr += storage_dc_operating_constraints(storage_units, b_t, soc_t)
-
-    # Section 3b: Nondispatchable real power bounds (omitted when nnd == 0)
-    if nnd > 0:
-        constr += nd_dc_operating_constraints(
-            nd_units, p_nd_t, nd_p_available_t
-        )
+    # Section 2: Ordered component operating constraints
+    constr += list(component_operating_constraints)
 
     return constr, p_net
 
 
-def _make_singlenode_dc_step_cost(Pg, gencost, baseMVA) -> cp.Expression:
+def _make_singlenode_dc_step_cost(
+    component_cost_rate: cp.Expression,
+) -> cp.Expression:
     """
-    Build the cost expression for a single time step.
+    Retain the complete component cost-rate expression for one time step.
 
     Parameters
     ----------
-    Pg : cp.Variable
-        Generator real power variables (ng,) in per-unit.
-    gencost : np.ndarray
-        Generator cost data (ng, 7) in MATPOWER format.
-    baseMVA : float
-        System base MVA.
+    component_cost_rate : cp.Expression
+        Aggregate component-owned stage-cost rate.
 
     Returns
     -------
     cp.Expression
-        Total generation cost expression.
+        Total component stage-cost-rate expression.
     """
-    return gen_cost_expr(gencost, cp.multiply(baseMVA, Pg))
+    return component_cost_rate
 
 
 def _parse_singlenode_dc_case(
@@ -193,6 +159,10 @@ def _parse_singlenode_dc_case(
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    hvdc=None,
+    horizon_steps: int = 1,
+    nd_available_mw: np.ndarray | None = None,
+    is_multistep: bool = False,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -207,7 +177,8 @@ def _parse_singlenode_dc_case(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
 
@@ -241,30 +212,37 @@ def _parse_singlenode_dc_case(
     Pd_total = float(np.sum(bus[:, PD]) / baseMVA)
 
     collapsed_ext_to_int = {bus_id: 0 for bus_id in ext_bus_ids}
-    generator_data = generator_prepare_data(
-        generators,
-        baseMVA,
+    preparation = PreparationContext(
+        base_mva=baseMVA,
         nb=1,
         ext_to_int=collapsed_ext_to_int,
-        ext_bus_ids=ext_bus_ids,
+        ext_bus_ids=frozenset(ext_bus_ids),
+        horizon_steps=horizon_steps,
+        delta=delta,
+        is_multistep=is_multistep,
+    )
+    if nondispatchable and nd_available_mw is None:
+        nd_available_mw = np.array(
+            [[unit.p_available for unit in nondispatchable]],
+            dtype=float,
+        )
+    requests = component_requests(
+        "singlenode_dc",
+        generators=generators,
+        storage_units=storage or (),
+        nondispatchable_units=nondispatchable or (),
+        nondispatchable_inputs=(
+            None
+            if not nondispatchable
+            else NondispatchableInputs(nd_available_mw)
+        ),
+        hvdc_links=hvdc or (),
+    )
+    components = prepare_components(
+        requests, "singlenode_dc", preparation
     )
 
-    # Storage data (if present)
-    storage_data = {}
-    if storage:
-        storage_data = storage_prepare_data(
-            storage, 1, collapsed_ext_to_int, ext_bus_ids
-        )
-        storage_data["storage_delta"] = float(delta)
-
-    # Nondispatchable data (if present)
-    nd_data = {}
-    if nondispatchable:
-        nd_data = nd_prepare_data(
-            nondispatchable, 1, collapsed_ext_to_int, ext_bus_ids
-        )
-
-    return {
+    formulation_data = {
         "baseMVA": baseMVA,
         "nb": 1,
         "source_nb": source_nb,
@@ -272,10 +250,9 @@ def _parse_singlenode_dc_case(
         "ext_bus_ids": ext_bus_ids,
         "collapsed_ext_to_int": collapsed_ext_to_int,
         "Pd_total": Pd_total,
-        **generator_data,
-        **storage_data,
-        **nd_data,
+        "_components": components,
     }
+    return merge_prepared_component_data(components, formulation_data)
 
 
 def _build_singlenode_dc_single(
@@ -300,7 +277,8 @@ def _build_singlenode_dc_single(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
 
@@ -313,114 +291,66 @@ def _build_singlenode_dc_single(
 
     # Parse the case
     d = _parse_singlenode_dc_case(
-        case, options, storage, delta, nondispatchable, generators
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        generators,
+        hvdc=hvdc,
     )
 
-    # Declare variables
-    Pg = cp.Variable(d["ng"], name="Pg")
-
-    # Storage variables (if present)
-    b_t = None
-    soc_t = None
-    storage_inj = None
-    if "ns" in d:
-        b_t = cp.Variable(d["ns"], name="b")
-        soc_t = cp.Variable(d["ns"], name="soc")
-        storage_inj, storage_q_inj, storage_scaling = storage_dc_injections(
-            storage,
-            b_t,
-            d["collapsed_ext_to_int"],
-            nb=1,
-            incidence=d["Cs"],
-        )
-        assert storage_q_inj is None
-        storage_scaling.value = 1.0 / d["baseMVA"]
-
-    # Nondispatchable variables (if present)
-    p_nd_t = None
-    nd_inj = None
-    if "nnd" in d:
-        p_nd_t = cp.Variable(d["nnd"], name="p_nd")
-        nd_inj, nd_q_inj, nd_scaling = nd_dc_injections(
-            nondispatchable,
-            p_nd_t,
-            d["collapsed_ext_to_int"],
-            nb=1,
-            incidence=d["Cnd"],
-        )
-        assert nd_q_inj is None
-        nd_scaling.value = 1.0 / d["baseMVA"]
-
-    # Build constraints
-    generator_inj_expr, generator_q_inj, generator_scaling = generator_dc_injections(
-        d["generators"],
-        Pg,
+    step_context = StepContext(
+        "singlenode_dc",
+        0,
+        d["baseMVA"],
         d["collapsed_ext_to_int"],
-        nb=1,
-        incidence=d["Cg"],
+        DCNetworkState(),
     )
-    assert generator_q_inj is None
-    assert generator_scaling is None
+    components: PreparedComponents = d["_components"]
+    step_components = assemble_component_step(components, step_context)
+    step_aggregate = aggregate_step_contributions(step_components)
 
     constr, p_net_expr = _make_singlenode_dc_step_constraints(
-        Pg=Pg,
-        generator_injection=generator_inj_expr,
+        component_injection=step_aggregate.injection.p_pu,
         Pd_total_t=d["Pd_total"],
-        Pgmin=d["Pgmin"],
-        Pgmax=d["Pgmax"],
-        ns=d.get("ns", 0),
-        storage_units=storage,
-        storage_injection=storage_inj,
-        b_t=b_t,
-        soc_t=soc_t,
-        nnd=d.get("nnd", 0),
-        nd_units=nondispatchable,
-        nd_injection=nd_inj,
-        nd_p_available_t=d.get("nd_p_available"),
-        p_nd_t=p_nd_t,
+        component_operating_constraints=(
+            step_aggregate.operating_constraints
+        ),
     )
-    constr.extend(
-        generator_dc_network_constraints(
-            d["generators"],
-            None,
-            d["collapsed_ext_to_int"],
-            controlled_buses=(),
-            enforce_vset=False,
-        )
-    )
+    constr.extend(step_aggregate.network_constraints)
 
     # Build cost
-    cost = _make_singlenode_dc_step_cost(Pg, d["gencost"], d["baseMVA"])
+    assert step_aggregate.cost is not None
+    step_cost_rate = _make_singlenode_dc_step_cost(step_aggregate.cost)
+    cost = integrate_stage_cost_rates([step_cost_rate], delta)
+    component_costs = integrate_component_stage_costs(
+        [step_components],
+        delta,
+    )
 
-    # Add storage aging cost if present
-    storage_cost = None
-    if "ns" in d:
-        storage_cost = storage_cost_expr(storage, b_t)
-        cost = cost + storage_cost
-
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(storage, soc_t)
-        if storage_terminal_cost is not None:
-            cost = cost + storage_terminal_cost
-
-    # Add storage SoC constraints if present
-    if "ns" in d:
-        soc_constr = storage_coupling_constraints(
-            storage, [b_t], [soc_t], d["storage_delta"]
-        )
-        constr.extend(soc_constr)
+    horizon = assemble_component_horizon(
+        components,
+        [step_components],
+        HorizonContext("singlenode_dc", 1, delta),
+    )
+    horizon_aggregate = aggregate_horizon_contributions(horizon)
+    storage_horizon = horizon.get("storage")
+    storage_terminal_cost = (
+        None if storage_horizon is None else storage_horizon.terminal_cost
+    )
+    if horizon_aggregate.terminal_cost is not None:
+        cost = cost + horizon_aggregate.terminal_cost
+    constr.extend(horizon_aggregate.constraints)
 
     # Build the problem
     prob = cp.Problem(cp.Minimize(cost), constr)
 
     # Assemble variables dict
-    variables = {"Pg": Pg}
-    if "ns" in d:
-        variables["b"] = b_t
-        variables["soc"] = soc_t
-    if "nnd" in d:
-        variables["p_nd"] = p_nd_t
+    variables = publish_component_variables(
+        [step_components],
+        multistep=False,
+    )
 
     # Assemble data dict
     data = {
@@ -430,22 +360,20 @@ def _build_singlenode_dc_single(
         "ext_to_int": d["ext_to_int"],
         "Pd_total": d["Pd_total"],
     }
-    data.update(generator_build_metadata(d, reactive=False))
+    data = publish_component_metadata(components, data)
 
-    # Add storage data if present
-    if "ns" in d:
-        data.update(storage_build_metadata(d))
-
-    # Add nondispatchable data if present
-    if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_p_available"] = d["nd_p_available"]
-
-    expressions = {"p_net": p_net_expr}
-    if storage_cost is not None:
-        expressions["storage_cost"] = storage_cost
+    compatibility_expressions = {"p_net": p_net_expr}
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        [step_aggregate],
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=False,
+    )
 
     return OPFBuild(
         prob=prob,
@@ -478,8 +406,9 @@ def _build_singlenode_dc_multistep(
     Build a multi-step single-node DC dispatch problem.
 
     A single cp.Problem containing T sets of per-step variables and
-    constraints. The objective is the sum of per-step costs. Storage SoC
-    dynamics couple consecutive steps.
+    constraints. The objective is the time integral of per-step cost rates
+    plus unscaled horizon-boundary costs. Storage SoC dynamics couple
+    consecutive steps.
 
     Parameters
     ----------
@@ -500,7 +429,8 @@ def _build_singlenode_dc_multistep(
     storage : list[StorageUnitIdeal] | None
         Storage units, if any.
     delta : float
-        Time step duration in hours (used only when storage is present).
+        Time step duration in hours. Integrates every stage-cost rate and is
+        also used by storage dynamics.
     nondispatchable : list[NondispatchableUnit] | None
         Nondispatchable units, if any.
     df_nd : pd.DataFrame | None
@@ -528,7 +458,18 @@ def _build_singlenode_dc_multistep(
 
     # Parse the case
     d = _parse_singlenode_dc_case(
-        case, options, storage, delta, nondispatchable, generators
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        generators,
+        hvdc=hvdc,
+        horizon_steps=T,
+        nd_available_mw=(
+            None if df_nd is None else df_nd.to_numpy(dtype=float)
+        ),
+        is_multistep=True,
     )
 
     # Validate df_P column count before summing
@@ -545,145 +486,67 @@ def _build_singlenode_dc_multistep(
             f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
         )
 
-    # The public builder guarantees a normalized ND time series when ND is active.
-    if "nnd" in d:
-        d["nd_available"] = df_nd.to_numpy(dtype=float)
-
     # Accumulators
-    Pg_list = []
-    b_list = []
-    soc_list = []
-    p_nd_list = []
+    component_steps = []
+    step_aggregates = []
+    components: PreparedComponents = d["_components"]
     p_net_expr_list = []
     all_constr = []
-    total_cost = 0
-    storage_cost = 0
+    step_cost_rates = []
 
     for t in range(T):
-        # Declare per-step variables
-        Pg_t = cp.Variable(d["ng"], name=f"Pg_{t}")
-
-        b_t = None
-        soc_t = None
-        storage_inj_t = None
-        if "ns" in d:
-            b_t = cp.Variable(d["ns"], name=f"b_{t}")
-            soc_t = cp.Variable(d["ns"], name=f"soc_{t}")
-            (
-                storage_inj_t,
-                storage_q_inj_t,
-                storage_scaling_t,
-            ) = storage_dc_injections(
-                storage,
-                b_t,
-                d["collapsed_ext_to_int"],
-                nb=1,
-                incidence=d["Cs"],
-            )
-            assert storage_q_inj_t is None
-            storage_scaling_t.value = 1.0 / d["baseMVA"]
-
-        p_nd_t = None
-        nd_inj_t = None
-        if "nnd" in d:
-            p_nd_t = cp.Variable(d["nnd"], name=f"p_nd_{t}")
-            nd_inj_t, nd_q_inj_t, nd_scaling_t = nd_dc_injections(
-                nondispatchable,
-                p_nd_t,
-                d["collapsed_ext_to_int"],
-                nb=1,
-                incidence=d["Cnd"],
-            )
-            assert nd_q_inj_t is None
-            nd_scaling_t.value = 1.0 / d["baseMVA"]
-
-        # Determine available ND power for this step
-        if "nnd" in d:
-            nd_p_available_t = d["nd_available"][t, :]
-        else:
-            nd_p_available_t = None
-
-        # Per-step constraints
-        generator_inj_expr_t, generator_q_inj_t, generator_scaling_t = generator_dc_injections(
-            d["generators"],
-            Pg_t,
+        step_context = StepContext(
+            "singlenode_dc",
+            t,
+            d["baseMVA"],
             d["collapsed_ext_to_int"],
-            nb=1,
-            incidence=d["Cg"],
+            DCNetworkState(),
         )
-        assert generator_q_inj_t is None
-        assert generator_scaling_t is None
+        step_components = assemble_component_step(
+            components, step_context, variable_suffix=f"_{t}"
+        )
+        component_steps.append(step_components)
+        step_aggregate = aggregate_step_contributions(step_components)
+        step_aggregates.append(step_aggregate)
 
         step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
-            Pg=Pg_t,
-            generator_injection=generator_inj_expr_t,
+            component_injection=step_aggregate.injection.p_pu,
             Pd_total_t=float(Pd_series[t]),
-            Pgmin=d["Pgmin"],
-            Pgmax=d["Pgmax"],
-            ns=d.get("ns", 0),
-            storage_units=storage,
-            storage_injection=storage_inj_t,
-            b_t=b_t,
-            soc_t=soc_t,
-            nnd=d.get("nnd", 0),
-            nd_units=nondispatchable,
-            nd_injection=nd_inj_t,
-            nd_p_available_t=nd_p_available_t,
-            p_nd_t=p_nd_t,
+            component_operating_constraints=(
+                step_aggregate.operating_constraints
+            ),
         )
-        step_constr.extend(
-            generator_dc_network_constraints(
-                d["generators"],
-                None,
-                d["collapsed_ext_to_int"],
-                controlled_buses=(),
-                enforce_vset=False,
-            )
-        )
+        step_constr.extend(step_aggregate.network_constraints)
         all_constr.extend(step_constr)
 
         # Per-step cost
-        step_cost = _make_singlenode_dc_step_cost(Pg_t, d["gencost"], d["baseMVA"])
-        if "ns" in d:
-            step_storage_cost = storage_cost_expr(storage, b_t)
-            storage_cost = storage_cost + step_storage_cost
-            step_cost = step_cost + step_storage_cost
-        total_cost = total_cost + step_cost
+        assert step_aggregate.cost is not None
+        step_cost_rates.append(
+            _make_singlenode_dc_step_cost(step_aggregate.cost)
+        )
 
         # Accumulate variables
-        Pg_list.append(Pg_t)
         p_net_expr_list.append(p_net_expr_t)
-        if "ns" in d:
-            b_list.append(b_t)
-            soc_list.append(soc_t)
-        if "nnd" in d:
-            p_nd_list.append(p_nd_t)
 
-    # Storage SoC dynamics (cross-step coupling)
-    if "ns" in d:
-        soc_constr = storage_coupling_constraints(
-            storage, b_list, soc_list, d["storage_delta"]
-        )
-        all_constr.extend(soc_constr)
-    all_constr.extend(
-        generator_coupling_constraints(
-            d["generators"], Pg_list, delta=delta
-        )
+    total_cost = integrate_stage_cost_rates(step_cost_rates, delta)
+    component_costs = integrate_component_stage_costs(
+        component_steps,
+        delta,
     )
-    if "nnd" in d:
-        all_constr.extend(
-            nd_coupling_constraints(
-                nondispatchable, p_nd_list, delta=delta
-            )
-        )
 
-    storage_terminal_cost = None
-    if "ns" in d:
-        storage_terminal_cost = storage_terminal_cost_expr(
-            storage, soc_list[-1]
-        )
-        if storage_terminal_cost is not None:
-            total_cost = total_cost + storage_terminal_cost
+    horizon = assemble_component_horizon(
+        components,
+        component_steps,
+        HorizonContext("singlenode_dc", T, delta),
+    )
+    horizon_aggregate = aggregate_horizon_contributions(horizon)
+    storage_horizon = horizon.get("storage")
+    storage_terminal_cost = (
+        None if storage_horizon is None else storage_horizon.terminal_cost
+    )
+    all_constr.extend(horizon_aggregate.constraints)
+    if horizon_aggregate.terminal_cost is not None:
+        total_cost = total_cost + horizon_aggregate.terminal_cost
 
     # Append user coupling constraints unchanged
     all_constr.extend(coupling_constraints)
@@ -692,12 +555,10 @@ def _build_singlenode_dc_multistep(
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
     # Assemble variables dict
-    variables = {"Pg": Pg_list}
-    if "ns" in d:
-        variables["b"] = b_list
-        variables["soc"] = soc_list
-    if "nnd" in d:
-        variables["p_nd"] = p_nd_list
+    variables = publish_component_variables(
+        component_steps,
+        multistep=True,
+    )
 
     # Assemble data dict
     data = dict(
@@ -708,20 +569,20 @@ def _build_singlenode_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
-    data.update(generator_build_metadata(d, reactive=False))
+    data = publish_component_metadata(components, data)
 
-    if "ns" in d:
-        data.update(storage_build_metadata(d))
-
-    if "nnd" in d:
-        data.update(nd_build_metadata(d))
-        data["nd_available"] = d["nd_available"]
-
-    expressions = {"p_net": p_net_expr_list}
-    if "ns" in d:
-        expressions["storage_cost"] = storage_cost
+    compatibility_expressions = {"p_net": p_net_expr_list}
+    compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        step_aggregates,
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=True,
+    )
 
     return OPFBuild(
         prob=prob,

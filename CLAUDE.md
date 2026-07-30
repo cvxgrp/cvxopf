@@ -218,10 +218,14 @@ Do not change this formulation without understanding the DNLP paper.
 Reference: *Convex Optimization with Smart Grid Examples*,
 https://doi.org/10.2172/3018252
 
-Objective: minimize `G + loss_weight * L`
+Objective: minimize
+`delta * sum_t (G_t + loss_weight * L_t) + terminal_cost`
 - `G = sum_k (c0_k + c1_k * Pg_k + c2_k * Pg_k^2)` — generation cost
 - `L = sum_e r_e * p_flows_e^2` — line losses
 - `loss_weight` is user-configurable via `OPFOptions.loss_weight` (default 1.0)
+
+`G_t` and the weighted loss proxy are stage-cost rates. The terminal term is
+a once-per-horizon boundary cost and is not scaled by `delta`.
 
 Constraints:
 - `A @ p_flows + Cg @ Pg == Pd` — flow conservation at every bus
@@ -246,8 +250,8 @@ scalar real power balance:
 
 where Pd_total = sum(bus[:, PD]) / baseMVA.
 
-Objective: minimize generation cost G (same polynomial cost as AC and
-lossy DC) plus storage aging cost when storage is present.
+Objective: minimize the time integral of generation and storage-aging
+stage-cost rates plus any once-per-horizon terminal cost.
 
 Variables: Pg (ng,) per-unit, b/soc when storage present,
 p_nd when nondispatchable present. (Results keys: see the table under `"ac"`.)
@@ -268,10 +272,10 @@ without API changes. Planned future formulations:
 | `"fast_decoupled"` | Fast-decoupled AC (convex) |
 | `"socp"` | SOCP relaxation (convex) |
 
-To add a new formulation: implement `_build_<name>_single` and
-`_build_<name>_multistep` in a new `src/cvxopf/<name>_problem.py`,
-add them to `_get_single_builders()` and `_get_multistep_builders()`
-in `problem.py`, and add `_extract_<name>_results` in `results.py`.
+To add a new formulation, follow the complete formulation-extension contract
+under **Module responsibilities**. In brief: implement and register both
+network builders and the result extractor, then declare the formulation's
+capability explicitly on every component adapter.
 
 ---
 
@@ -312,9 +316,11 @@ Both emit `DeprecationWarning` when called.
 | `sparse_pq` | bool | True | AC only |
 
 `delta` is not an `OPFOptions` field. It is a separate parameter on
-`build_opf` and `build_opf_multistep`, only meaningful when `storage` is
-not None. Validated (`delta > 0`) only when storage is present; silently
-ignored otherwise.
+`build_opf` and `build_opf_multistep`. It must always be a finite, strictly
+positive real scalar, regardless of whether a temporal device is present.
+Booleans are not accepted as numeric time-step durations. Storage uses
+`delta` in its SoC dynamics, and shared component assembly multiplies the sum
+of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 
 ### `OPFBuild` fields
 
@@ -334,7 +340,7 @@ ignored otherwise.
 | `apparent_power_rating` | float | required | S_max (MVA); AC: circle constraint; DC: real power bound |
 | `capacity` | float | required | Energy capacity Q (MWh) |
 | `initial_soc` | float | required | Initial state of charge (MWh); 0 ≤ initial_soc ≤ capacity |
-| `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ ($/MW); 0.0 = zero-cost storage |
+| `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ (objective units/MWh); 0.0 = zero-cost storage |
 
 `delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
 global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).
@@ -369,15 +375,11 @@ problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
 problem.py    →  generator.py            (DispatchableGenerator, case normalization)
 problem.py    →  ac_problem.py           (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
-ac_problem.py →  storage.py             (storage component interface)
-ac_problem.py →  nondispatchable.py     (ND component interface)
-ac_problem.py →  generator.py           (generator component interface)
+formulation builders → _component_adapters.py (central component registry)
+_component_adapters.py → component modules (typed bindings to owned models)
+formulation builders → _component_assembly.py (generic contribution assembly)
 ac_problem.py →  network.py, data.py
-dc_problem.py →  storage.py             (storage component interface)
-dc_problem.py →  nondispatchable.py     (ND component interface)
-dc_problem.py →  generator.py           (generator component interface)
 dc_problem.py →  network.py, data.py
-singlenode_dc_problem.py → generator.py (collapsed incidence, bounds, cost)
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 results.py    →  problem.py             (OPFBuild type only, unchanged)
 storage.py    →  cvxpy, numpy           (no other cvxopf imports)
@@ -389,6 +391,62 @@ hvdc.py       →  data.py, cvxpy, numpy
 
 All four device modules now follow the M16 component pattern. See
 `plans/milestone-16-unify-components.md`.
+
+### Extending components and formulations
+
+The adapter layer is a private, closed-world repository architecture, not a
+third-party plugin API. Once a component collection reaches the centralized
+registry, every formulation builder consumes its mathematical contributions
+generically. Adding a new public component still requires ordinary API
+plumbing through `problem.py` and the formulation parser signatures so that
+the collection can reach that registry.
+
+To add a repository-supported component:
+
+1. Put its authoritative data model, validation, injections, feasible set,
+   temporal coupling, and costs in its component module.
+2. Bind those functions to a `ComponentAdapter` in
+   `_component_adapters.py`. Declare each formulation as `ACTIVE`, `NULL`, or
+   `UNSUPPORTED`; an active binding supplies variable specifications,
+   injections, operating constraints, and a horizon hook, even when that
+   horizon hook returns an empty contribution.
+3. Thread its public collection and any time-series inputs through
+   `problem.py` and the formulation parser signatures, then register the
+   collection in `component_requests()`. Do not add component-specific
+   construction, constraints, injections, or costs to any formulation
+   builder.
+4. Extend result extraction only for new public result fields. The shared
+   assembler publishes component expressions automatically beside the
+   formulation-owned compatibility fields.
+
+The existing formulation-local named expressions are a compatibility path
+that preserves the established `OPFBuild.expressions` schema. New components
+should contribute per-step expressions through the adapter hook and horizon
+expressions through `HorizonContribution`; shared publication places both in
+`OPFBuild.expressions`. Single-step expressions remain scalar expressions,
+multistep expressions become ordered lists, and horizon expressions are
+published once without time scaling. Migration of existing compatibility
+fields is separate work and must preserve the public schema and numerical
+behavior exactly.
+
+Component variables remain builder-owned: adapters return `VariableSpec`
+objects and never construct `cp.Variable`. Engineering-unit nodal injections
+use a component-created, unbound inverse-base parameter; the shared assembler
+alone binds it to `1 / baseMVA`. AC bindings may return both real and reactive
+channels, while DC bindings return real power with reactive power represented
+by `None`, never scalar zero. Component variable, metadata, step-expression,
+and horizon-expression names share flattened public namespaces with
+formulation-owned fields; duplicate names are rejected rather than
+overwritten.
+
+To add a formulation, implement its single- and multistep network builders,
+register them in `problem.py`, and add its result extractor. The builders own
+network variables, physics, balances, and formulation-specific loss terms,
+but must obtain device requests from `component_requests()` and consume only
+the generic step and horizon aggregates. Add the new formulation capability
+to every component adapter explicitly; use `NULL` only when eliminating the
+component is the intended physical model, and `UNSUPPORTED` when a supplied
+component must be rejected.
 
 Generator polynomial costs are limited to degree two; use the shared
 piecewise-linear representation for more general convex cost curves. External
@@ -515,7 +573,12 @@ Variable units are **not** uniform across all CVXPY variable types:
   them by `baseMVA` at declaration or inside constraint loops, and **do not**
   multiply them by `baseMVA` in `extract_results` — both are latent unit bugs.
 - Generator cost expressions receive `Pg` in **MW** — the `baseMVA` scaling
-  is applied before building cost expressions in both AC and DC.
+  is applied before building cost-rate expressions in both AC and DC.
+- The objective convention is
+  `delta * sum_t(stage_cost_rate_t) + terminal_cost`. Generator, storage
+  cycling, HVDC, and lossy-DC regularization terms are rates; shared assembly
+  owns their time integration. Named integrated costs are retained in
+  `OPFBuild.expressions` for auditing.
 - `poly_cost_expr` in `cost.py` uses an explicit monomial sum (not Horner's
   method) so that CVXPY's DCP checker can verify convexity for quadratic costs.
   Horner's method produces `(affine * affine)` products when leading coefficients
@@ -524,8 +587,9 @@ Variable units are **not** uniform across all CVXPY variable types:
 
 ### Multi-step structure
 `build_opf_multistep` builds a **single `cp.Problem`** containing T sets
-of per-step variables and constraints. The objective is the sum of per-step
-costs. Coupling constraints (e.g., battery SoC dynamics) are passed via
+of per-step variables and constraints. The objective integrates per-step cost
+rates using the global interval duration `delta`, then adds horizon-boundary
+costs once. Coupling constraints (e.g., battery SoC dynamics) are passed via
 `coupling_constraints` and appended without modification.
 
 ### Incidence matrices
@@ -552,12 +616,15 @@ would risk a cycle) and is re-exported from `problem.py` for the public API.
 
 `delta` (time step duration, hours) is a global problem parameter on
 `build_opf` / `build_opf_multistep`, not a field on `StorageUnitIdeal`.
-It applies uniformly to all storage units in a given problem.
+It applies uniformly to all storage units in a given problem and is validated
+at the public problem boundary before formulation dispatch.
 
 The aging cost uses `cp.multiply(aging_weight, cp.abs(b_t))` — never
 `numpy_array * cp.abs(cp_var)` or `np.multiply(...)`. NumPy intercepts `*`
 via `__array_ufunc__` and routes through CVXPY's deprecated matrix
 multiplication path, causing `CvxpyDeprecationWarning`.
+This expression is a stage-cost rate; shared assembly multiplies its horizon
+sum by `delta`, so `aging_weight` has objective units/MWh of throughput.
 
 `_make_step_constraints` (AC) is organised into five labelled sections in
 fixed order, with Section 4b added for nondispatchable constraints:

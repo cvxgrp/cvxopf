@@ -17,7 +17,7 @@ from cvxopf.results import extract_results
 
 
 def main():
-    print(f"{'':>8}  {'P/Q vars':>10}  {'status':>8}  {'obj ($/hr)':>12}  "
+    print(f"{'':>8}  {'P/Q vars':>10}  {'status':>8}  {'obj ($)':>12}  "
           f"{'time (s)':>9}")
     print("-" * 55)
 
@@ -47,7 +47,7 @@ def main():
     obj_diff = abs(results["sparse"]["objective"] - results["dense"]["objective"])
     pg_diff  = np.max(np.abs(results["sparse"]["Pg"] - results["dense"]["Pg"]))
     vm_diff  = np.max(np.abs(results["sparse"]["Vm"] - results["dense"]["Vm"]))
-    print(f"Objective difference:  {obj_diff:.2e} $/hr")
+    print(f"Objective difference:  {obj_diff:.2e} $")
     print(f"Max Pg difference:     {pg_diff:.2e} MW")
     print(f"Max Vm difference:     {vm_diff:.2e} p.u.")
 

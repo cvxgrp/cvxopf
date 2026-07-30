@@ -125,7 +125,9 @@ def run_script(filepath: Path) -> str:
             timeout=TIMEOUT,
             cwd=PROJECT_ROOT,
         )
-        output = result.stdout.strip()
+        output = "\n".join(
+            line.rstrip() for line in result.stdout.strip().splitlines()
+        )
         if result.returncode != 0:
             error = result.stderr.strip()
             return f"_Script exited with errors:_\n```\n{error}\n```"

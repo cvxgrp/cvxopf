@@ -44,7 +44,7 @@ def main():
         apparent_power_rating=50.0,   # S_max = 50 MVA
         capacity=100.0,               # Q     = 100 MWh
         initial_soc=50.0,             # q_0   = 50 MWh (half charged)
-        aging_weight=1e-2,            # lambda = 0.01 $/MW
+        aging_weight=1e-2,            # lambda = 0.01 $/MWh
     )
 
     build = build_opf_multistep(
@@ -60,7 +60,7 @@ def main():
     # Print results
     # ------------------------------------------------------------------
     print(f"Status:     {r['status']}")
-    print(f"Objective:  {r['objective']:.4f} $/hr (total, all steps)")
+    print(f"Objective:  {r['objective']:.4f} $ (total, all steps)")
     print(f"Storage cost (aging): {r['storage_cost']:.4f} $")
     print()
 
@@ -83,7 +83,7 @@ def main():
     print(f"  Capacity:               {unit.capacity} MWh")
     print(f"  Initial SoC:            {unit.initial_soc} MWh")
     print(f"  Final SoC:              {r['soc'][-1, 0]:.3f} MWh")
-    print(f"  Aging weight:           {unit.aging_weight} $/MW")
+    print(f"  Aging weight:           {unit.aging_weight} $/MWh")
     print(f"  Total |b| throughput:   {np.sum(np.abs(r['b'])):.3f} MWh")
 
     print()

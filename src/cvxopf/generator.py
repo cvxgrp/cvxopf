@@ -536,13 +536,17 @@ def coupling_constraints(
 
 def gen_cost_expr(gencost: np.ndarray, Pg_MW) -> cp.Expression:
     """
-    Total generation cost expression. Thin wrapper over poly_cost_expr.
+    Generation stage-cost-rate expression. Thin wrapper over poly_cost_expr.
 
     Pg_MW is generator real power in MW (baseMVA * Pg), matching AC/DC. The
     DCP-critical explicit-monomial construction lives in poly_cost_expr
     (cost.py) and is kept there so cost.py is the single source of truth.
+    Shared assembly multiplies this rate by the interval duration.
     """
-    return poly_cost_expr(gencost, Pg_MW)
+    expression = poly_cost_expr(gencost, Pg_MW)
+    if isinstance(expression, cp.Expression):
+        return expression
+    return cp.Constant(expression)
 
 
 def gen_from_matpower(gen: np.ndarray, gencost: np.ndarray) -> list:

@@ -65,9 +65,10 @@ class StorageUnitIdeal:
         0 <= initial_soc <= capacity.
     aging_weight : float
         Weight lambda on the L1 battery cycling penalty in the objective:
-            lambda * sum_t |b_t|
+            delta * lambda * sum_t |b_t|
         Penalises real power cycling to extend battery lifetime.
         Reactive power is not penalised.
+        Units are objective units/MWh of one-way throughput.
         Default 1e-2. Set to 0.0 for zero-cost storage.
         Reference: Nnorom et al., "Aging-Aware Battery Control via Convex
         Optimization," Optimization and Engineering, 27:1303-1326, 2026.
@@ -502,7 +503,7 @@ def coupling_constraints(
 
 
 def storage_cost_expr(storage_units: list, b: cp.Variable) -> cp.Expression:
-    """Per-step L1 cycling cost; reactive power is intentionally unpenalized."""
+    """L1 cycling cost rate; integration is owned by shared assembly."""
     weights = _storage_static_data(storage_units)["storage_aging_weight"]
     return cp.sum(cp.multiply(weights, cp.abs(b)))
 

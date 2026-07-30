@@ -90,6 +90,42 @@ inverter apparent-power region in AC and to separate availability and rating
 bounds in DC. This preserves the converter-capacity limit without adding
 nonconvexity.
 
+The implementation follows the same separation of responsibilities. Public
+build APIs select formulation-owned network physics, while a shared typed
+assembly layer obtains variables, injections, feasible sets, costs, and
+intertemporal contributions from component-owned models. The resulting
+`OPFBuild` provides one boundary for solving and stable result extraction
+across all formulations.
+
+```mermaid
+flowchart LR
+    user["User inputs<br/>case · time series · devices"] --> api["Public build API<br/>validation and formulation selection"]
+
+    api --> physics["Formulation-owned network physics<br/>AC · lossy DC · single-node DC"]
+    api --> assembly["Shared typed component assembly"]
+    devices["Component-owned models<br/>generation · storage<br/>nondispatchable · HVDC"] --> assembly
+    assembly --> physics
+
+    physics --> build["OPFBuild<br/>problem · variables · data · expressions"]
+    build --> solve["Formulation-appropriate solve<br/>and stable results"]
+
+    classDef public fill:#e8f1ff,stroke:#2563a6,color:#102a43
+    classDef formulation fill:#fff4dd,stroke:#b7791f,color:#4a2c0a
+    classDef assembly fill:#e8f8ef,stroke:#27864b,color:#123d24
+    classDef component fill:#f2eafe,stroke:#7650a8,color:#321c52
+    classDef output fill:#fdecec,stroke:#b74b4b,color:#551d1d
+
+    class user,api public
+    class physics formulation
+    class assembly assembly
+    class devices component
+    class build,solve output
+```
+
+See the [full software architecture and component lifecycle](PROJECT_FLOWCHART.md)
+for the as-built assembly sequence, architectural invariants, and the boundary
+reserved for the Milestone 17 hierarchical controller.
+
 ### Formulations
 
 | Key | Description | Convex | Solver |
@@ -177,9 +213,16 @@ from cvxopf.results import extract_results
 build = build_opf(case9(), formulation="ac")
 build.solve()
 results = extract_results(build)
-print(f"Objective: {results['objective']:.2f} $/hr")
-print(f"Pg (MW):   {results['Pg']}")
+print(f"Status: {results['status']}")
+if results["Pg"] is not None:
+    print(f"Objective: {results['objective']:.2f}")
+    print(f"Pg (MW):   {results['Pg']}")
 ```
+
+Result keys are determined by the built model and remain stable when a solve
+does not return primal values. Check `status` first: unavailable array-valued
+and derived quantities are `None`, while scalar objective and cost quantities
+are `NaN`.
 
 **Lossy DC OPF:**
 
@@ -191,7 +234,7 @@ from cvxopf.results import extract_results
 build = build_opf(case14(), formulation="lossy_dc")
 build.solve()
 results = extract_results(build)
-print(f"Objective:  {results['objective']:.2f} $/hr")
+print(f"Objective:  {results['objective']:.2f}")
 print(f"Pg (MW):    {results['Pg']}")
 print(f"Flows (MW): {results['p_flows']}")
 ```
@@ -223,7 +266,7 @@ case = make_singlenode_case(
 build = build_opf(case, formulation="singlenode_dc")
 build.solve()
 results = extract_results(build)
-print(f"Objective: {results['objective']:.2f} $/hr")
+print(f"Objective: {results['objective']:.2f}")
 print(f"Pg (MW):   {results['Pg']}")
 ```
 
@@ -316,9 +359,26 @@ df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
 build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac")
 build.solve()
 results = extract_results(build)
-print(f"Summed per-step objective: {results['objective']:.2f}")
+print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
+
+### Objective units and time discretization
+
+`delta` is the interval duration in hours. cvxopf treats generator, storage
+cycling, HVDC, and lossy-DC regularization terms as stage-cost rates and forms
+
+```text
+objective = delta * sum(stage-cost rates) + horizon-boundary costs.
+```
+
+Thus the reported objective is a total over the modeled interval or horizon,
+normally in currency when the coefficients use currency-based units.
+Terminal storage penalties occur once and are not multiplied by `delta`.
+`build.expressions` retains integrated `generator_cost`, conditional
+`storage_cost` and `hvdc_cost`, and `dc_loss_cost` for lossy DC so the
+objective composition can be audited. This corrects the former unscaled
+per-step sum for `delta != 1`; `delta=1` results are unchanged.
 
 ## Battery storage example
 
@@ -349,7 +409,7 @@ unit = StorageUnitIdeal(
     apparent_power_rating=50.0,  # MVA
     capacity=100.0,              # MWh
     initial_soc=50.0,            # MWh
-    aging_weight=1e-2,           # $/MW
+    aging_weight=1e-2,           # objective units/MWh
 )
 
 build = build_opf_multistep(
@@ -358,7 +418,7 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Summed per-step objective: {results['objective']:.2f}")
+print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
@@ -376,11 +436,10 @@ controlled violation is preferable.
 
 Linear terminal weights have units of objective units/MWh, and quadratic
 weights have units of objective units/MWh². The terminal term is applied once
-at the horizon boundary and is not scaled by `delta`. As with the existing
-multistep stage costs, when `delta != 1` hour the weight is relative to the
-package's summed-stage objective rather than automatically representing a
-physical dollar coefficient. See `examples/case9_storage_terminal.py` for a
-side-by-side comparison.
+at the horizon boundary and is not scaled by `delta`. Stage-cost rates are
+integrated over time, so a fixed terminal weight retains its meaning when the
+same physical signals are represented at a finer resolution. See
+`examples/case9_storage_terminal.py` for a side-by-side comparison.
 
 ## Nondispatchable generator example
 
@@ -426,7 +485,7 @@ build = build_opf_multistep(
 )
 build.solve()
 results = extract_results(build)
-print(f"Summed per-step objective: {results['objective']:.2f}")
+print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"ND real power (MW):   {results['p_nd']}")
 print(f"ND reactive (MVAr):   {results['q_nd']}")
 print(f"Curtailment (MW):     {results['curtailment']}")
@@ -458,7 +517,7 @@ links = hvdc_from_dcline(ppc["dcline"])  # three in-service DC links
 build = build_opf(ppc, formulation="ac", hvdc=links)
 build.solve()
 results = extract_results(build)
-print(f"Objective:          {results['objective']:.2f} $/hr")
+print(f"Objective:          {results['objective']:.2f}")
 print(f"HVDC in  (MW):      {results['p_hvdc_in']}")
 print(f"HVDC out (MW):      {results['p_hvdc_out']}")
 print(f"HVDC loss (MW):     {results['hvdc_loss']}")
@@ -565,8 +624,8 @@ package environment.
 - [ ] Vectorize time constraints (currently built with iterative loop)
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
-- [ ] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
-- [ ] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
+- [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
+- [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
 - [ ] Explicit nodal load shedding with value-of-lost-load costs and energy-not-served reporting (see `plans/milestone-19-load-shedding.md`)

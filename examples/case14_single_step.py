@@ -30,7 +30,7 @@ def main():
     results = extract_results(build)
 
     print(f"\nStatus    : {results['status']}")
-    print(f"Objective : {results['objective']:.4f} $/hr")
+    print(f"Objective : {results['objective']:.4f} $")
 
     print("\nGenerator dispatch:")
     print(f"  {'Gen':>4}  {'Pg (MW)':>10}  {'Qg (MVAr)':>10}")

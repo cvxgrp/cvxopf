@@ -87,7 +87,7 @@ def main():
     r_base = extract_results(build_base)
 
     print(f"Status    : {r_base['status']}")
-    print(f"Objective : {r_base['objective']:.4f} $/hr")
+    print(f"Objective : {r_base['objective']:.4f} $")
 
     print("\nGenerator dispatch:")
     print(f"  {'Gen':>4}  {'Pg (MW)':>10}  {'Pmax (MW)':>10}")
@@ -161,7 +161,7 @@ def main():
     r_46 = extract_results(build_46)
 
     print(f"Status    : {r_46['status']}")
-    print(f"Objective : {r_46['objective']:.4f} $/hr")
+    print(f"Objective : {r_46['objective']:.4f} $")
     print(f"Total load: {Pd_base.sum() * alpha_demo:.1f} MW")
     print(f"Total Pg  : {r_46['Pg'].sum():.1f} MW")
 

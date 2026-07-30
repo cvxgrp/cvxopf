@@ -20,7 +20,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Mathematics",
@@ -40,6 +39,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "mypy>=1.11",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.16,<0.17",
@@ -78,3 +78,31 @@ select = ["E4", "E7", "E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # The package initializes IPOPT environment settings before public imports.
 "src/cvxopf/__init__.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/cvxopf/_component_adapter.py",
+    "src/cvxopf/_component_adapters.py",
+    "src/cvxopf/_component_assembly.py",
+]
+check_untyped_defs = true
+disallow_untyped_defs = true
+# Third-party CVXPY/NumPy stub internals are outside this typed contract.
+follow_imports = "normal"
+follow_imports_for_stubs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cvxpy",
+    "cvxpy.*",
+    "numpy",
+    "numpy.*",
+    "cvxopf.generator",
+    "cvxopf.nondispatchable",
+]
+follow_imports = "skip"

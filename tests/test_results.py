@@ -2,12 +2,19 @@
 Tests for src/cvxopf/results.py
 """
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import cvxpy as cp
 
 from cvxopf.testcases import case9, case14
-from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild
+from cvxopf.problem import (
+    OPFBuild,
+    StorageUnitIdeal,
+    build_opf,
+    build_opf_multistep,
+)
 from cvxopf.results import extract_results, compare_to_reference
 
 
@@ -347,3 +354,255 @@ class TestEdgeCases:
         assert np.isnan(results["objective"])
         assert fields <= results.keys()
         assert all(results[field] is None for field in fields)
+
+    def test_unreachable_hard_terminal_policy_retains_storage_schema(self):
+        unit = StorageUnitIdeal(
+            bus=1,
+            apparent_power_rating=10.0,
+            capacity=100.0,
+            initial_soc=0.0,
+            terminal_soc=100.0,
+            terminal_constraint="equality",
+        )
+        build = build_opf(
+            case9(),
+            formulation="singlenode_dc",
+            storage=[unit],
+            delta=1.0,
+        )
+        build.solve()
+
+        results = extract_results(build)
+        assert set(results) == {
+            "status",
+            "objective",
+            "Pg",
+            "p_net",
+            "b",
+            "soc",
+            "storage_cost",
+            "storage_terminal_deviation",
+        }
+        assert results["status"] == cp.INFEASIBLE
+        assert np.isnan(results["objective"])
+        assert np.isnan(results["storage_cost"])
+        assert all(
+            results[field] is None
+            for field in (
+                "Pg", "p_net", "b", "soc",
+                "storage_terminal_deviation",
+            )
+        )
+
+    def test_device_independent_infeasibility_retains_core_schema(self):
+        case = case9()
+        case["bus"][:, 2] = 1e6
+        build = build_opf(case, formulation="singlenode_dc")
+        build.solve()
+
+        results = extract_results(build)
+        assert set(results) == {"status", "objective", "Pg", "p_net"}
+        assert results["status"] == cp.INFEASIBLE
+        assert np.isnan(results["objective"])
+        assert results["Pg"] is None
+        assert results["p_net"] is None
+
+    def test_derived_results_remain_unavailable_with_partial_primal_values(
+        self,
+    ):
+        pg = cp.Variable(1)
+        flow = cp.Variable(1)
+        b = cp.Variable(1)
+        soc = cp.Variable(1)
+        p_nd = cp.Variable(1)
+        p_hvdc_in = cp.Variable(1)
+        p_hvdc_out = cp.Variable(1)
+        p_net = cp.Variable(1)
+        prob = cp.Problem(cp.Minimize(0), [pg == 0, flow == 0])
+        prob.solve()
+        build = OPFBuild(
+            prob=SimpleNamespace(status=prob.status, value=None),
+            variables={
+                "Pg": pg,
+                "p_flows": flow,
+                "b": b,
+                "soc": soc,
+                "p_nd": p_nd,
+                "p_hvdc_in": p_hvdc_in,
+                "p_hvdc_out": p_hvdc_out,
+            },
+            data={
+                "baseMVA": 100.0,
+                "ns": 1,
+                "storage_terminal_soc": np.array([50.0]),
+                "nnd": 1,
+                "nd_p_available": np.array([20.0]),
+                "n_hvdc": 1,
+            },
+            formulation="lossy_dc",
+            is_convex=True,
+            expressions={
+                "p_net": p_net,
+                "storage_cost": cp.abs(b),
+                "storage_terminal_cost": cp.square(soc - 50.0),
+            },
+        )
+
+        results = extract_results(build)
+        assert results["Pg"] is not None
+        assert results["p_flows"] is not None
+        assert results["p_net"] is None
+        assert np.isnan(results["objective"])
+        assert results["b"] is None
+        assert results["soc"] is None
+        assert np.isnan(results["storage_cost"])
+        assert results["storage_terminal_deviation"] is None
+        assert np.isnan(results["storage_terminal_cost"])
+        assert results["p_nd"] is None
+        assert results["curtailment"] is None
+        assert results["p_hvdc_in"] is None
+        assert results["p_hvdc_out"] is None
+        assert results["hvdc_loss"] is None
+
+    def test_available_device_values_survive_missing_core_expression(self):
+        pg = cp.Variable(1)
+        flow = cp.Variable(1)
+        p_nd = cp.Variable(1)
+        missing_p_net = cp.Variable(1)
+        prob = cp.Problem(cp.Minimize(0), [pg == 0, flow == 0])
+        prob.solve()
+        p_nd.value = np.array([5.0])
+        build = OPFBuild(
+            prob=prob,
+            variables={"Pg": pg, "p_flows": flow, "p_nd": p_nd},
+            data={
+                "baseMVA": 100.0,
+                "nnd": 1,
+                "nd_p_available": np.array([20.0]),
+            },
+            formulation="lossy_dc",
+            is_convex=True,
+            expressions={"p_net": missing_p_net},
+        )
+
+        results = extract_results(build)
+        assert results["p_net"] is None
+        np.testing.assert_array_equal(results["p_nd"], [5.0])
+        np.testing.assert_array_equal(results["curtailment"], [15.0])
+
+    @pytest.mark.parametrize(
+        ("with_storage", "soft_terminal", "with_nd", "with_hvdc"),
+        [
+            (False, False, False, False),
+            (True, False, False, False),
+            (True, True, False, False),
+            (False, False, True, False),
+            (False, False, False, True),
+            (True, True, True, True),
+        ],
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_no_primal_schema_is_determined_by_built_model(
+        self,
+        formulation,
+        multistep,
+        with_storage,
+        soft_terminal,
+        with_nd,
+        with_hvdc,
+    ):
+        x = cp.Variable(1)
+        prob = cp.Problem(cp.Minimize(0), [x >= 1, x <= 0])
+        prob.solve()
+        value = [x] if multistep else x
+
+        core_variables = {
+            "ac": {
+                name: value
+                for name in ("Pg", "Qg", "v", "theta", "p", "q")
+            },
+            "lossy_dc": {"Pg": value, "p_flows": value},
+            "singlenode_dc": {"Pg": value},
+        }[formulation]
+        variables = dict(core_variables)
+        data = {"baseMVA": 100.0}
+        expressions = {"p_net": value}
+        expected = {
+            "ac": {
+                "status", "objective", "Pg", "Qg", "Vm", "Va_deg",
+                "p_net", "q_net",
+            },
+            "lossy_dc": {
+                "status", "objective", "Pg", "p_flows", "p_net",
+            },
+            "singlenode_dc": {
+                "status", "objective", "Pg", "p_net",
+            },
+        }[formulation]
+        if formulation == "ac":
+            expressions["q_net"] = value
+        if multistep:
+            data["T"] = 1
+
+        scalar_nan_fields = {"objective"}
+        if with_storage:
+            variables.update({"b": value, "soc": value})
+            if formulation == "ac":
+                variables["b_q"] = value
+            data.update({
+                "ns": 1,
+                "storage_terminal_soc": np.array([50.0]),
+            })
+            expressions["storage_cost"] = x
+            expected |= {
+                "b", "soc", "storage_cost",
+                "storage_terminal_deviation",
+            }
+            scalar_nan_fields.add("storage_cost")
+            if formulation == "ac":
+                expected.add("b_q")
+            if soft_terminal:
+                expressions["storage_terminal_cost"] = x
+                expected.add("storage_terminal_cost")
+                scalar_nan_fields.add("storage_terminal_cost")
+
+        if with_nd:
+            variables["p_nd"] = value
+            if formulation == "ac":
+                variables["q_nd"] = value
+            data["nnd"] = 1
+            data[
+                "nd_available" if multistep else "nd_p_available"
+            ] = np.array([[20.0]]) if multistep else np.array([20.0])
+            expected |= {"p_nd", "curtailment"}
+            if formulation == "ac":
+                expected.add("q_nd")
+
+        if with_hvdc and formulation != "singlenode_dc":
+            variables.update({
+                "p_hvdc_in": value,
+                "p_hvdc_out": value,
+            })
+            data["n_hvdc"] = 1
+            expected |= {"p_hvdc_in", "p_hvdc_out", "hvdc_loss"}
+
+        build = OPFBuild(
+            prob=prob,
+            variables=variables,
+            data=data,
+            formulation=formulation,
+            is_convex=formulation != "ac",
+            expressions=expressions,
+        )
+        results = extract_results(build)
+
+        assert set(results) == expected
+        assert results["status"] == cp.INFEASIBLE
+        assert all(np.isnan(results[field]) for field in scalar_nan_fields)
+        assert all(
+            results[field] is None
+            for field in expected - scalar_nan_fields - {"status"}
+        )

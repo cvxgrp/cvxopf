@@ -1,5 +1,6 @@
 """Cross-device conformance tests for the Milestone 16 component contract."""
 
+from dataclasses import replace
 import warnings
 
 import cvxpy as cp
@@ -14,7 +15,8 @@ from cvxopf import (
     StorageUnitIdeal,
 )
 from cvxopf import generator, hvdc, nondispatchable, storage
-from cvxopf import ac_problem, dc_problem, singlenode_dc_problem
+from cvxopf import _component_adapters as component_adapters
+from cvxopf._component_adapters import HVDC_ADAPTER
 from cvxopf.problem import build_opf, build_opf_multistep
 from cvxopf.results import extract_results
 from cvxopf.testcases import case9
@@ -240,16 +242,9 @@ def test_memoryless_components_have_empty_coupling_slot():
     assert hvdc.coupling_constraints([], [], []) == []
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("ac", ac_problem),
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
 def test_multistep_builders_compose_generator_coupling_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -257,9 +252,7 @@ def test_multistep_builders_compose_generator_coupling_hook(
         calls.append((generators, Pg_list, Qg_list, delta))
         return []
 
-    monkeypatch.setattr(
-        builder_module, "generator_coupling_constraints", coupling_spy
-    )
+    monkeypatch.setattr(generator, "coupling_constraints", coupling_spy)
     case = case9()
     T = 2
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
@@ -276,16 +269,9 @@ def test_multistep_builders_compose_generator_coupling_hook(
     assert calls[0][3] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("ac", ac_problem),
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
 def test_multistep_builders_compose_nd_coupling_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -293,7 +279,9 @@ def test_multistep_builders_compose_nd_coupling_hook(
         calls.append((units, p_nd_list, q_nd_list, delta))
         return []
 
-    monkeypatch.setattr(builder_module, "nd_coupling_constraints", coupling_spy)
+    monkeypatch.setattr(
+        nondispatchable, "coupling_constraints", coupling_spy
+    )
     case = case9()
     T = 2
     df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
@@ -319,12 +307,74 @@ def test_multistep_builders_compose_nd_coupling_hook(
     assert calls[0][3] == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
 @pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [("ac", ac_problem), ("lossy_dc", dc_problem)],
+    ("horizon_mode", "T"),
+    [("single", 1), ("multistep_t1", 1), ("multistep", 2)],
 )
-def test_multistep_builders_compose_hvdc_coupling_hook(
-    formulation, builder_module, monkeypatch
+def test_builders_compose_storage_horizon_hooks_once(
+    formulation, horizon_mode, T, monkeypatch
+):
+    coupling_calls = []
+    terminal_cost_calls = []
+
+    def coupling_spy(units, b_list, soc_list, delta=1.0):
+        coupling_calls.append((units, b_list, soc_list, delta))
+        return []
+
+    def terminal_cost_spy(units, terminal_soc):
+        terminal_cost_calls.append((units, terminal_soc))
+        return cp.Constant(0.0)
+
+    monkeypatch.setattr(storage, "coupling_constraints", coupling_spy)
+    monkeypatch.setattr(storage, "terminal_cost_expr", terminal_cost_spy)
+
+    case = case9()
+    units = [
+        StorageUnitIdeal(
+            bus=5,
+            apparent_power_rating=10.0,
+            capacity=20.0,
+            initial_soc=10.0,
+        )
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        if horizon_mode == "single":
+            build_opf(
+                case,
+                formulation=formulation,
+                storage=units,
+                delta=0.5,
+            )
+        else:
+            df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+            df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+            build_opf_multistep(
+                case,
+                df_P,
+                df_Q,
+                T=T,
+                formulation=formulation,
+                storage=units,
+                delta=0.5,
+            )
+
+    assert len(coupling_calls) == 1
+    assert len(coupling_calls[0][1]) == T
+    assert len(coupling_calls[0][2]) == T
+    assert coupling_calls[0][3] == pytest.approx(0.5)
+    assert len(terminal_cost_calls) == 1
+    assert terminal_cost_calls[0][1] is coupling_calls[0][2][-1]
+
+
+@pytest.mark.parametrize("formulation", ["ac", "lossy_dc"])
+@pytest.mark.parametrize(
+    ("horizon_mode", "T"),
+    [("single", 1), ("multistep_t1", 1), ("multistep", 2)],
+)
+def test_builders_compose_hvdc_coupling_hook_once(
+    formulation, horizon_mode, T, monkeypatch
 ):
     calls = []
 
@@ -332,45 +382,136 @@ def test_multistep_builders_compose_hvdc_coupling_hook(
         calls.append((links, p_in_list, p_out_list, delta))
         return []
 
-    monkeypatch.setattr(
-        builder_module, "hvdc_coupling_constraints", coupling_spy
-    )
+    monkeypatch.setattr(hvdc, "coupling_constraints", coupling_spy)
     case = case9()
-    T = 2
-    df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
-    df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
     links = [HVDCLink(4, 9, -10.0, 10.0, device_id="hvdc")]
     df_min = pd.DataFrame({"hvdc": [-10.0, -10.0]})
     df_max = pd.DataFrame({"hvdc": [10.0, 10.0]})
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        build_opf_multistep(
-            case,
-            df_P,
-            df_Q,
-            T=T,
-            formulation=formulation,
-            hvdc=links,
-            df_hvdc_min=df_min,
-            df_hvdc_max=df_max,
-            delta=0.5,
-        )
+        if horizon_mode == "single":
+            build_opf(
+                case,
+                formulation=formulation,
+                hvdc=links,
+                delta=0.5,
+            )
+        else:
+            df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+            df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+            build_opf_multistep(
+                case,
+                df_P,
+                df_Q,
+                T=T,
+                formulation=formulation,
+                hvdc=links,
+                df_hvdc_min=df_min.iloc[:T],
+                df_hvdc_max=df_max.iloc[:T],
+                delta=0.5,
+            )
 
     assert len(calls) == 1
     assert len(calls[0][1]) == T
+    assert len(calls[0][2]) == T
     assert calls[0][3] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize(
-    ("formulation", "builder_module"),
-    [
-        ("lossy_dc", dc_problem),
-        ("singlenode_dc", singlenode_dc_problem),
-    ],
-)
+@pytest.mark.parametrize("multistep", [False, True])
+def test_singlenode_null_hvdc_model_preserves_structure_and_solution(
+    multistep,
+):
+    case = case9()
+    links = [HVDCLink(4, 9, -10.0, 10.0, device_id="hvdc")]
+    if multistep:
+        T = 2
+        df_P = pd.DataFrame(np.tile(case["bus"][:, 2], (T, 1)))
+        df_Q = pd.DataFrame(np.tile(case["bus"][:, 3], (T, 1)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            without = build_opf_multistep(
+                case, df_P, df_Q, T=T, formulation="singlenode_dc"
+            )
+            with_hvdc = build_opf_multistep(
+                case,
+                df_P,
+                df_Q,
+                T=T,
+                formulation="singlenode_dc",
+                hvdc=links,
+            )
+    else:
+        without = build_opf(case, formulation="singlenode_dc")
+        with_hvdc = build_opf(
+            case, formulation="singlenode_dc", hvdc=links
+        )
+
+    assert set(with_hvdc.variables) == set(without.variables)
+    assert set(with_hvdc.data) == set(without.data)
+    assert set(with_hvdc.expressions) == set(without.expressions)
+    assert len(with_hvdc.prob.constraints) == len(without.prob.constraints)
+    assert not any("hvdc" in key for key in with_hvdc.variables)
+    assert not any("hvdc" in key for key in with_hvdc.data)
+    assert not any("hvdc" in key for key in with_hvdc.expressions)
+
+    without.solve()
+    with_hvdc.solve()
+    without_results = extract_results(without)
+    with_hvdc_results = extract_results(with_hvdc)
+    assert with_hvdc_results["objective"] == pytest.approx(
+        without_results["objective"]
+    )
+    np.testing.assert_allclose(
+        with_hvdc_results["Pg"], without_results["Pg"]
+    )
+
+
+@pytest.mark.parametrize("multistep", [False, True])
+def test_singlenode_builders_require_null_capability_only_for_supplied_hvdc(
+    monkeypatch, multistep
+):
+    formulations = dict(HVDC_ADAPTER.formulations)
+    formulations["singlenode_dc"] = formulations["lossy_dc"]
+    monkeypatch.setattr(
+        component_adapters,
+        "HVDC_ADAPTER",
+        replace(HVDC_ADAPTER, formulations=formulations),
+    )
+
+    case = case9()
+    if multistep:
+        df_P = pd.DataFrame([case["bus"][:, 2]])
+        df_Q = pd.DataFrame([case["bus"][:, 3]])
+
+        def build(hvdc_links=None):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                return build_opf_multistep(
+                    case,
+                    df_P,
+                    df_Q,
+                    T=1,
+                    formulation="singlenode_dc",
+                    hvdc=hvdc_links,
+                )
+    else:
+
+        def build(hvdc_links=None):
+            return build_opf(
+                case,
+                formulation="singlenode_dc",
+                hvdc=hvdc_links,
+            )
+
+    build()
+    with pytest.raises(RuntimeError, match="registered null HVDC"):
+        build([HVDCLink(4, 9, -10.0, 10.0)])
+
+
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
 def test_dc_builders_compose_generator_network_hook(
-    formulation, builder_module, monkeypatch
+    formulation, monkeypatch
 ):
     calls = []
 
@@ -385,9 +526,7 @@ def test_dc_builders_compose_generator_network_hook(
         calls.append((generators, network_state, ext_to_int))
         return []
 
-    monkeypatch.setattr(
-        builder_module, "generator_dc_network_constraints", network_spy
-    )
+    monkeypatch.setattr(generator, "dc_network_constraints", network_spy)
     case = case9()
     build_opf(case, formulation=formulation)
     assert len(calls) == 1
@@ -404,14 +543,41 @@ def test_dc_builders_compose_generator_network_hook(
     assert len(calls) == T
 
 
-def test_multistep_delta_is_ignored_without_temporal_devices():
+@pytest.mark.parametrize("delta", [0.0, -1.0, np.nan, np.inf, -np.inf])
+def test_multistep_invalid_delta_is_rejected_without_temporal_devices(delta):
     case = case9()
     df_P = pd.DataFrame([case["bus"][:, 2]])
     df_Q = pd.DataFrame([case["bus"][:, 3]])
-    build = build_opf_multistep(
-        case, df_P, df_Q, T=1, formulation="ac", delta=0.0
-    )
-    assert build.data["T"] == 1
+    with pytest.raises(ValueError, match="delta"):
+        build_opf_multistep(
+            case, df_P, df_Q, T=1, formulation="ac", delta=delta
+        )
+
+
+@pytest.mark.parametrize("multistep", [False, True])
+def test_invalid_delta_is_rejected_before_builder_dispatch(
+    monkeypatch, multistep
+):
+    def fail_if_dispatched():
+        raise AssertionError("formulation builder dispatch was reached")
+
+    case = case9()
+    if multistep:
+        monkeypatch.setattr(
+            "cvxopf.problem._get_multistep_builders", fail_if_dispatched
+        )
+        df_P = pd.DataFrame([case["bus"][:, 2]])
+        df_Q = pd.DataFrame([case["bus"][:, 3]])
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf_multistep(
+                case, df_P, df_Q, T=1, formulation="ac", delta=np.nan
+            )
+    else:
+        monkeypatch.setattr(
+            "cvxopf.problem._get_single_builders", fail_if_dispatched
+        )
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf(case, formulation="ac", delta=np.nan)
 
 
 @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])
