@@ -128,6 +128,16 @@ def test_inactive_binding_rejects_hooks(capability):
         )
 
 
+def test_null_binding_cannot_publish_step_expressions():
+    with pytest.raises(ValueError, match="cannot define hooks"):
+        FormulationAdapter(
+            capability=FormulationCapability.NULL,
+            step_expressions=lambda units, prepared, variables, context: {
+                "forbidden": cp.Constant(0.0)
+            },
+        )
+
+
 def test_component_adapter_requires_explicit_formulation_capabilities():
     with pytest.raises(ValueError, match="contain exactly"):
         ComponentAdapter(

@@ -268,10 +268,10 @@ without API changes. Planned future formulations:
 | `"fast_decoupled"` | Fast-decoupled AC (convex) |
 | `"socp"` | SOCP relaxation (convex) |
 
-To add a new formulation: implement `_build_<name>_single` and
-`_build_<name>_multistep` in a new `src/cvxopf/<name>_problem.py`,
-add them to `_get_single_builders()` and `_get_multistep_builders()`
-in `problem.py`, and add `_extract_<name>_results` in `results.py`.
+To add a new formulation, follow the complete formulation-extension contract
+under **Module responsibilities**. In brief: implement and register both
+network builders and the result extractor, then declare the formulation's
+capability explicitly on every component adapter.
 
 ---
 
@@ -371,15 +371,11 @@ problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
 problem.py    →  generator.py            (DispatchableGenerator, case normalization)
 problem.py    →  ac_problem.py           (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
-ac_problem.py →  storage.py             (storage component interface)
-ac_problem.py →  nondispatchable.py     (ND component interface)
-ac_problem.py →  generator.py           (generator component interface)
+formulation builders → _component_adapters.py (central component registry)
+_component_adapters.py → component modules (typed bindings to owned models)
+formulation builders → _component_assembly.py (generic contribution assembly)
 ac_problem.py →  network.py, data.py
-dc_problem.py →  storage.py             (storage component interface)
-dc_problem.py →  nondispatchable.py     (ND component interface)
-dc_problem.py →  generator.py           (generator component interface)
 dc_problem.py →  network.py, data.py
-singlenode_dc_problem.py → generator.py (collapsed incidence, bounds, cost)
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 results.py    →  problem.py             (OPFBuild type only, unchanged)
 storage.py    →  cvxpy, numpy           (no other cvxopf imports)
@@ -391,6 +387,62 @@ hvdc.py       →  data.py, cvxpy, numpy
 
 All four device modules now follow the M16 component pattern. See
 `plans/milestone-16-unify-components.md`.
+
+### Extending components and formulations
+
+The adapter layer is a private, closed-world repository architecture, not a
+third-party plugin API. Once a component collection reaches the centralized
+registry, every formulation builder consumes its mathematical contributions
+generically. Adding a new public component still requires ordinary API
+plumbing through `problem.py` and the formulation parser signatures so that
+the collection can reach that registry.
+
+To add a repository-supported component:
+
+1. Put its authoritative data model, validation, injections, feasible set,
+   temporal coupling, and costs in its component module.
+2. Bind those functions to a `ComponentAdapter` in
+   `_component_adapters.py`. Declare each formulation as `ACTIVE`, `NULL`, or
+   `UNSUPPORTED`; an active binding supplies variable specifications,
+   injections, operating constraints, and a horizon hook, even when that
+   horizon hook returns an empty contribution.
+3. Thread its public collection and any time-series inputs through
+   `problem.py` and the formulation parser signatures, then register the
+   collection in `component_requests()`. Do not add component-specific
+   construction, constraints, injections, or costs to any formulation
+   builder.
+4. Extend result extraction only for new public result fields. The shared
+   assembler publishes component expressions automatically beside the
+   formulation-owned compatibility fields.
+
+The existing formulation-local named expressions are a compatibility path
+that preserves the established `OPFBuild.expressions` schema. New components
+should contribute per-step expressions through the adapter hook and horizon
+expressions through `HorizonContribution`; shared publication places both in
+`OPFBuild.expressions`. Single-step expressions remain scalar expressions,
+multistep expressions become ordered lists, and horizon expressions are
+published once without time scaling. Migration of existing compatibility
+fields is separate work and must preserve the public schema and numerical
+behavior exactly.
+
+Component variables remain builder-owned: adapters return `VariableSpec`
+objects and never construct `cp.Variable`. Engineering-unit nodal injections
+use a component-created, unbound inverse-base parameter; the shared assembler
+alone binds it to `1 / baseMVA`. AC bindings may return both real and reactive
+channels, while DC bindings return real power with reactive power represented
+by `None`, never scalar zero. Component variable, metadata, step-expression,
+and horizon-expression names share flattened public namespaces with
+formulation-owned fields; duplicate names are rejected rather than
+overwritten.
+
+To add a formulation, implement its single- and multistep network builders,
+register them in `problem.py`, and add its result extractor. The builders own
+network variables, physics, balances, and formulation-specific loss terms,
+but must obtain device requests from `component_requests()` and consume only
+the generic step and horizon aggregates. Add the new formulation capability
+to every component adapter explicitly; use `NULL` only when eliminating the
+component is the intended physical model, and `UNSUPPORTED` when a supplied
+component must be rejected.
 
 Generator polynomial costs are limited to degree two; use the shared
 piecewise-linear representation for more general convex cost curves. External

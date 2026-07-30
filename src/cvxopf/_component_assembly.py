@@ -112,6 +112,70 @@ def prepare_components(
     return PreparedComponents(formulation, components, flat_data)
 
 
+def merge_prepared_component_data(
+    prepared: PreparedComponents,
+    formulation_data: Mapping[str, object],
+) -> dict[str, object]:
+    """Merge prepared component data into a formulation parser namespace."""
+    overlap = set(formulation_data).intersection(prepared.flat_data)
+    if overlap:
+        raise ValueError(
+            "component prepared data collides with formulation parser data: "
+            f"{sorted(overlap)}"
+        )
+    merged = dict(formulation_data)
+    merged.update(prepared.flat_data)
+    return merged
+
+
+def _validate_step_variable_schemas(
+    step_contributions: Sequence[Mapping[str, StepContribution]],
+    *,
+    expected_components: Sequence[str] | None = None,
+) -> None:
+    """Require stable component, variable-name, and shape schemas by step."""
+    if not step_contributions:
+        raise ValueError("at least one step contribution is required")
+    first = step_contributions[0]
+    component_names = tuple(first)
+    component_name_set = set(component_names)
+    if (
+        expected_components is not None
+        and component_name_set != set(expected_components)
+    ):
+        raise ValueError(
+            "step 0 component keys do not match the prepared registry: "
+            f"expected {sorted(expected_components)}, "
+            f"got {sorted(component_names)}"
+        )
+    variable_schemas = {
+        component_name: {
+            variable_name: variable.shape
+            for variable_name, variable in contribution.variables.items()
+        }
+        for component_name, contribution in first.items()
+    }
+    for step, contributions in enumerate(step_contributions[1:], start=1):
+        if set(contributions) != component_name_set:
+            raise ValueError(
+                f"inconsistent component keys at step {step}: "
+                f"expected {sorted(component_names)}, "
+                f"got {sorted(contributions)}"
+            )
+        for component_name in component_names:
+            actual_schema = {
+                variable_name: variable.shape
+                for variable_name, variable
+                in contributions[component_name].variables.items()
+            }
+            if actual_schema != variable_schemas[component_name]:
+                raise ValueError(
+                    f"component {component_name!r} has an inconsistent "
+                    f"variable schema at step {step}: expected "
+                    f"{variable_schemas[component_name]}, got {actual_schema}"
+                )
+
+
 def assemble_component_step(
     prepared: PreparedComponents,
     context: StepContext,
@@ -141,15 +205,29 @@ def assemble_component_step(
         assert binding.injections is not None
         assert binding.operating_constraints is not None
         assert binding.horizon is not None
+        specs = binding.variable_specs(
+            component.units, component.data, context
+        )
+        variable_names = [spec.name for spec in specs]
+        duplicate_names = sorted(
+            {
+                name
+                for name in variable_names
+                if variable_names.count(name) > 1
+            }
+        )
+        if duplicate_names:
+            raise ValueError(
+                f"component {name!r} requested duplicate variables: "
+                f"{duplicate_names}"
+            )
         variables = {
             spec.name: cp.Variable(
                 spec.shape,
                 name=f"{spec.name}{variable_suffix}",
                 **spec.attributes,
             )
-            for spec in binding.variable_specs(
-                component.units, component.data, context
-            )
+            for spec in specs
         }
         injection = binding.injections(
             component.units, component.data, variables, context
@@ -172,12 +250,20 @@ def assemble_component_step(
                 component.units, component.data, variables, context
             )
         )
+        expressions = (
+            {}
+            if binding.step_expressions is None
+            else binding.step_expressions(
+                component.units, component.data, variables, context
+            )
+        )
         contributions[name] = StepContribution(
             variables=variables,
             injection=injection,
             operating_constraints=operating_constraints,
             network_constraints=network_constraints,
             cost=cost,
+            expressions=expressions,
         )
     return MappingProxyType(contributions)
 
@@ -196,6 +282,10 @@ def assemble_component_horizon(
         raise ValueError(
             "step contribution count must equal horizon_steps"
         )
+    _validate_step_variable_schemas(
+        step_contributions,
+        expected_components=tuple(prepared.components),
+    )
     contributions: dict[str, HorizonContribution] = {}
     for name, component in prepared.components.items():
         binding = component.adapter.formulations[context.formulation]
@@ -312,20 +402,45 @@ def aggregate_horizon_contributions(
     )
 
 
+def _validate_publication_step_count(
+    step_count: int,
+    *,
+    multistep: bool,
+) -> None:
+    """Enforce the shared single- versus multistep publication cardinality."""
+    if step_count == 0:
+        raise ValueError(
+            "publication requires at least one step contribution"
+        )
+    if not multistep and step_count != 1:
+        raise ValueError(
+            "single-step publication requires exactly one step "
+            f"contribution, got {step_count}"
+        )
+
+
 def publish_component_variables(
     step_contributions: Sequence[Mapping[str, StepContribution]],
+    formulation_variables: Mapping[
+        str, cp.Variable | list[cp.Variable]
+    ] | None = None,
     *,
     multistep: bool,
 ) -> dict[str, cp.Variable | list[cp.Variable]]:
-    """Flatten component variables into the established ``OPFBuild`` schema."""
-    if not step_contributions:
-        return {}
-    published: dict[str, cp.Variable | list[cp.Variable]] = {}
+    """Merge component variables into the formulation-owned build schema."""
+    _validate_publication_step_count(
+        len(step_contributions), multistep=multistep
+    )
+    _validate_step_variable_schemas(step_contributions)
+    published = (
+        {} if formulation_variables is None else dict(formulation_variables)
+    )
     for name, contribution in step_contributions[0].items():
         for variable_name, variable in contribution.variables.items():
             if variable_name in published:
                 raise ValueError(
-                    f"duplicate published component variable {variable_name!r}"
+                    f"component {name!r} variable {variable_name!r} "
+                    "collides with an already published variable"
                 )
             published[variable_name] = (
                 [step[name].variables[variable_name]
@@ -338,10 +453,13 @@ def publish_component_variables(
 
 def publish_component_metadata(
     prepared: PreparedComponents,
+    formulation_metadata: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Flatten active component metadata into the established data schema."""
-    published: dict[str, object] = {}
-    for component in prepared.components.values():
+    """Merge active component metadata into the formulation-owned data."""
+    published = (
+        {} if formulation_metadata is None else dict(formulation_metadata)
+    )
+    for name, component in prepared.components.items():
         binding = component.adapter.formulations[prepared.formulation]
         if binding.capability is FormulationCapability.NULL:
             continue
@@ -351,7 +469,66 @@ def publish_component_metadata(
         overlap = set(published).intersection(metadata)
         if overlap:
             raise ValueError(
-                f"duplicate published component metadata: {sorted(overlap)}"
+                f"component {name!r} metadata collides with already "
+                f"published data: {sorted(overlap)}"
             )
         published.update(metadata)
+    return published
+
+
+def publish_component_expressions(
+    step_aggregates: Sequence[StepContribution],
+    horizon_contribution: HorizonContribution,
+    compatibility_expressions: Mapping[
+        str, cp.Expression | list[cp.Expression]
+    ],
+    *,
+    multistep: bool,
+) -> dict[str, cp.Expression | list[cp.Expression]]:
+    """Publish component expressions beside formulation compatibility fields.
+
+    Per-step expression names must be identical across a multistep horizon.
+    Horizon expressions are published once. No component or horizon expression
+    may collide with another contribution or with a formulation-owned
+    compatibility expression.
+    """
+    _validate_publication_step_count(
+        len(step_aggregates), multistep=multistep
+    )
+    step_expressions = [
+        aggregate.expressions for aggregate in step_aggregates
+    ]
+    expression_names = tuple(step_expressions[0])
+    expected_names = set(expression_names)
+    for step, expressions in enumerate(step_expressions[1:], start=1):
+        if set(expressions) != expected_names:
+            raise ValueError(
+                "inconsistent component expression keys at "
+                f"step {step}: expected {sorted(expected_names)}, "
+                f"got {sorted(expressions)}"
+            )
+
+    published = dict(compatibility_expressions)
+    compatibility_collisions = set(published).intersection(expression_names)
+    if compatibility_collisions:
+        raise ValueError(
+            "component expressions collide with formulation compatibility "
+            f"expressions: {sorted(compatibility_collisions)}"
+        )
+    for name in expression_names:
+        published[name] = (
+            [expressions[name] for expressions in step_expressions]
+            if multistep
+            else step_expressions[0][name]
+        )
+
+    horizon_collisions = set(published).intersection(
+        horizon_contribution.expressions
+    )
+    if horizon_collisions:
+        raise ValueError(
+            "horizon expressions collide with published expressions: "
+            f"{sorted(horizon_collisions)}"
+        )
+    published.update(horizon_contribution.expressions)
     return published

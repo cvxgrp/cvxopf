@@ -1,6 +1,6 @@
 # Correctness and API hardening after Milestones 12 and 16
 
-**Status:** in progress — Track A implemented; Tracks B and C remain
+**Status:** in progress — Tracks A and B implemented; Track C remains
 **Relationship to M16+:** independent except where noted
 **Nature of work:** small correctness fixes, one result-contract decision, and
 one package-wide scientific-units decision

@@ -1,6 +1,6 @@
 # Milestone 16+ — Typed component adapters and uniform assembly
 
-**Status:** in progress — Stages 0–5 complete; Stage 6 next
+**Status:** complete — implemented and verified 2026-07-29
 **Depends on:** Milestone 16
 **Enables:** cheaper formulation growth, Milestone 17 orchestration, future
 SOCP integration
@@ -35,8 +35,9 @@ object-oriented rewrite of CVXPY.
   formulations own the one real and, where applicable, reactive balance.
 - **Builders own variables.** Component modules and adapters must not create
   `cp.Variable` objects.
-- **Prepared data is immutable build input.** Preparation validates and
-  vectorizes once. Per-step assembly does not reinterpret user dataclasses.
+- **Prepared data is structurally read-only build input.** Preparation
+  validates and vectorizes once. Per-step assembly does not reinterpret or
+  mutate user dataclasses or prepared arrays.
 - **Capabilities are explicit.** Optional cost, reactive, network-constraint,
   and result hooks are represented as capabilities or `None`, not discovered
   with `hasattr` or exception handling.
@@ -51,79 +52,126 @@ object-oriented rewrite of CVXPY.
 
 ### 3.1 Component adapter
 
-Introduce a private typed adapter, provisionally:
+The implemented private contract separates component-family hooks from
+formulation-specific capabilities:
 
 ```python
+@dataclass(frozen=True)
+class FormulationAdapter:
+    capability: FormulationCapability
+    variable_specs: VariableSpecHook | None = None
+    injections: InjectionHook | None = None
+    operating_constraints: ConstraintHook | None = None
+    network_constraints: ConstraintHook | None = None
+    step_cost: StepCostHook | None = None
+    step_expressions: StepExpressionHook | None = None
+    horizon: HorizonHook | None = None
+
+
 @dataclass(frozen=True)
 class ComponentAdapter:
     name: str
     prepare: PrepareHook
     metadata: MetadataHook
-    variables: VariableSpecHook
-    injections: InjectionHook
-    operating_constraints: OperatingHook
-    coupling_constraints: CouplingHook
-    network_constraints: NetworkHook | None = None
-    step_cost: StepCostHook | None = None
-    terminal_cost: TerminalCostHook | None = None
+    formulations: Mapping[Formulation, FormulationAdapter]
 ```
 
-The exact callable signatures should be settled with `Protocol` definitions
-and type checking before migration. The important contract is the data flow,
-not these provisional field names.
+Every adapter declares exactly one `ACTIVE`, `NULL`, or `UNSUPPORTED` binding
+for each supported formulation. Active bindings must provide variable,
+injection, operating-constraint, and horizon hooks. Cost, network-constraint,
+and reporting-expression hooks are optional. Null and unsupported bindings
+cannot define hooks.
 
-An adapter describes how a formulation assembles one component collection. It
-does not replace the user-facing dataclasses and does not absorb the component
-math currently living in `generator.py`, `storage.py`,
-`nondispatchable.py`, and `hvdc.py`.
+The protocols receive prepared data and typed step or horizon context. They
+bind the shared assembler to the authoritative mathematics in `generator.py`,
+`storage.py`, `nondispatchable.py`, and `hvdc.py`; they do not replace the
+user-facing dataclasses or duplicate those models.
 
 ### 3.2 Prepared component state
 
-Use a typed internal container rather than passing an ever-growing flat
-dictionary through the assembly layer:
+Each supplied component collection is prepared once and stored in the typed,
+structurally read-only registry:
 
 ```python
 @dataclass(frozen=True)
 class PreparedComponent:
     adapter: ComponentAdapter
-    units: Sequence[object]
+    units: tuple[object, ...]
     data: Mapping[str, object]
+
+
+@dataclass(frozen=True)
+class PreparedComponents:
+    formulation: Formulation
+    components: Mapping[str, PreparedComponent]
+    flat_data: Mapping[str, object]
 ```
 
 `OPFBuild.data` may retain its current flat public/internal compatibility
 schema during this milestone. The typed container is the assembly contract;
-flattening is an explicit publication step.
+flattening is an explicit, collision-checked publication step. Mapping
+structure is defensively copied and read-only; contained NumPy arrays and
+CVXPY objects are not deep-frozen and must not be mutated after preparation.
+Prepared component keys are also collision-checked against the
+formulation-owned parser namespace before the two mappings are merged.
 
 ### 3.3 Per-step contribution
 
-Normalize the output of per-step assembly:
+For each active component and network step, the assembler creates variables
+from `VariableSpec` objects and produces:
 
 ```python
-@dataclass
+@dataclass(frozen=True)
+class InjectionContribution:
+    p_pu: cp.Expression | None
+    q_pu: cp.Expression | None
+    inv_base_mva: cp.Parameter | None = None
+
+
+@dataclass(frozen=True)
 class StepContribution:
-    variables: dict[str, cp.Variable]
-    p_injection: cp.Expression | None
-    q_injection: cp.Expression | None
-    constraints: list[cp.Constraint]
-    network_constraints: list[cp.Constraint]
-    cost: cp.Expression | None
-    expressions: dict[str, cp.Expression]
+    variables: Mapping[str, cp.Variable]
+    injection: InjectionContribution
+    operating_constraints: tuple[cp.Constraint, ...] = ()
+    network_constraints: tuple[cp.Constraint, ...] = ()
+    cost: cp.Expression | None = None
+    expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
 ```
 
-Scaling parameters, when required, should be bound inside the common assembly
-helper from a supplied `baseMVA`, rather than returned to three formulation
-builders and assigned independently.
+The injection channels are bus-scattered, per-unit nodal injections with
+positive sign into the network. A component expressed in engineering units
+creates an unbound inverse-base parameter inside its injection expression;
+the shared assembler alone binds it to `1 / baseMVA`. Reactive absence is
+`None`, never scalar zero.
+
+The ordered aggregate combines all component injections, constraints, costs,
+and expression maps. Duplicate variable or expression names are rejected.
+Publication then merges component variables, metadata, and expressions with
+the formulation-owned `OPFBuild` namespaces using explicit collision checks.
 
 ### 3.4 Horizon contribution
 
-After the per-step loop, the common orchestration layer passes the collected
-variables to every active component's coupling hook, including for a
-single-step horizon represented by a one-element list. Storage terminal cost
-is then composed exactly once as a horizon contribution.
+After the per-step loop, the assembler passes each active component's variable
+history to its `horizon` hook exactly once, including a single-step horizon
+represented by one-element lists:
 
-This removes the current semantic difference in which single-step builders
-call only storage coupling while multistep builders call every component
-coupling hook.
+```python
+@dataclass(frozen=True)
+class HorizonContribution:
+    constraints: tuple[cp.Constraint, ...] = ()
+    terminal_cost: cp.Expression | None = None
+    expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
+```
+
+Horizon constraints and terminal costs are aggregated once per horizon.
+Before horizon assembly or variable publication, every step must contain the
+same component names and each component must retain identical variable names
+and shapes. Violations raise a step- and component-qualified `ValueError`.
+Per-step reporting expressions publish as one expression for a single-step
+build and as an ordered list for a multistep build; horizon expressions
+publish once and are never stacked or scaled by `delta`. Step, horizon, and
+formulation-compatibility expression namespaces are collision-checked before
+constructing `OPFBuild`.
 
 ## 4. Null-component semantics
 
@@ -293,9 +341,16 @@ named reporting expressions, and result construction
 
 ### Stage 6 — Documentation and extension proof
 
+**Status:** complete — the closed-world extension path is documented and a
+test-only adapter proves generic variables, scaled injections, constraints,
+cost, step and horizon expression publication, metadata, memoryless horizon
+behavior, and explicit formulation capability selection
+
 - Document how to add a new component and how to add a new formulation.
-- Implement a test-only toy component adapter to prove that a new memoryless
-  real-power component can compose without edits to each builder.
+- Implement a test-only toy component adapter proving that, once a component
+  collection reaches the centralized registry, every formulation builder
+  consumes its mathematical contributions generically without
+  component-specific assembly logic.
 - Show that an AC-network formulation selects AC channels while a
   copper-plate/DC formulation selects DC channels or an explicit null model.
 
@@ -343,9 +398,10 @@ For single- and multistep AC, lossy DC, and single-node DC:
 
 ### Gate 5 — extension proof
 
-- A test-only component can be registered and assembled without modifying
-  `ac_problem.py`, `dc_problem.py`, and `singlenode_dc_problem.py`
-  independently.
+- A test-only adapter proves that, once a component collection reaches the
+  centralized registry, its contributions assemble without component-specific
+  logic in `ac_problem.py`, `dc_problem.py`, or
+  `singlenode_dc_problem.py`.
 - A memoryless component returns no horizon constraints without special-case
   code in a formulation builder.
 
@@ -354,7 +410,11 @@ For single- and multistep AC, lossy DC, and single-node DC:
 - Ruff passes.
 - Type checking passes.
 - Full test suite passes.
-- Public examples produce unchanged results.
+- Numerical behavior remains locked by the formulation/component
+  characterization suite.
+- The AC and lossy-DC HVDC examples execute successfully and assert the
+  direction-specific proportional-loss law rather than only printing a
+  residual.
 
 ## 8. Non-goals
 

@@ -38,7 +38,9 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    merge_prepared_component_data,
     prepare_components,
+    publish_component_expressions,
     publish_component_metadata,
     publish_component_variables,
 )
@@ -188,7 +190,7 @@ def _parse_case(
     )
     components = prepare_components(requests, "ac", preparation)
 
-    return dict(
+    formulation_data = dict(
         case=case, baseMVA=baseMVA,
         bus=bus,
         nb=nb,
@@ -199,8 +201,8 @@ def _parse_case(
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
         _components=components,
-        **components.flat_data,
     )
+    return merge_prepared_component_data(components, formulation_data)
 
 
 def _make_step_variables(
@@ -445,8 +447,10 @@ def _build_ac_single(
     else:
         variables = dict(theta=theta, v=v, P=PQ_P, Q=PQ_Q,
                          p=p, q=q)
-    variables.update(
-        publish_component_variables([step_components], multistep=False)
+    variables = publish_component_variables(
+        [step_components],
+        variables,
+        multistep=False,
     )
 
     # Build data dict
@@ -458,13 +462,21 @@ def _build_ac_single(
         B_vec=d["B_vec"], Rp=d["Rp"],
         Pd=d["Pd"], Qd=d["Qd"],
     )
-    data.update(publish_component_metadata(components))
+    data = publish_component_metadata(components, data)
 
-    expressions = {"p_net": p, "q_net": q}
+    compatibility_expressions = {"p_net": p, "q_net": q}
     if storage_cost is not None:
-        expressions["storage_cost"] = storage_cost
+        compatibility_expressions["storage_cost"] = storage_cost
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        [step_aggregate],
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=False,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
@@ -532,6 +544,7 @@ def _build_ac_multistep(
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
     p_list, q_list = [], []
     component_steps = []
+    step_aggregates = []
     components: PreparedComponents = d["_components"]
     all_constr  = []
     total_cost  = 0
@@ -566,6 +579,7 @@ def _build_ac_multistep(
         )
         component_steps.append(step_components)
         step_aggregate = aggregate_step_contributions(step_components)
+        step_aggregates.append(step_aggregate)
 
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t,
@@ -627,8 +641,10 @@ def _build_ac_multistep(
             P=PQ_P_list, Q=PQ_Q_list,
             p=p_list, q=q_list,
         )
-    variables.update(
-        publish_component_variables(component_steps, multistep=True)
+    variables = publish_component_variables(
+        component_steps,
+        variables,
+        multistep=True,
     )
 
     # Build data dict
@@ -642,13 +658,21 @@ def _build_ac_multistep(
         Pd_series=Pd_series,
         Qd_series=Qd_series,
     )
-    data.update(publish_component_metadata(components))
+    data = publish_component_metadata(components, data)
 
-    expressions = {"p_net": p_list, "q_net": q_list}
+    compatibility_expressions = {"p_net": p_list, "q_net": q_list}
     if "ns" in d:
-        expressions["storage_cost"] = storage_cost
+        compatibility_expressions["storage_cost"] = storage_cost
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        step_aggregates,
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=True,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,

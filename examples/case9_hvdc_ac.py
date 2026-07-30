@@ -7,8 +7,7 @@ Demonstrates the HVDC MVP (Milestone 7) in the full AC formulation:
     ``hvdc_from_dcline`` (the realistic entry point)
   - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
     (to-bus), Convention B (positive = injection into the grid)
-  - Proportional converter loss on fixed-direction links
-    (``p_out = -(1 - loss_frac) * p_in``)
+  - Direction-specific proportional loss selected from the ``p_in`` box
 
 case9_dcline has three in-service DC links:
   link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
@@ -79,17 +78,23 @@ def main():
     # ------------------------------------------------------------------
     # Verify the proportional-loss law on fixed-direction links
     # ------------------------------------------------------------------
-    print(
-        "Loss-law verification (p_out == -(1 - loss_frac) * p_in on "
-        "fixed-direction links):"
-    )
+    print("Direction-specific loss-law verification:")
     for k, link in enumerate(links):
         loss_frac = link.loss_percent / 100.0
-        expected_out = -(1.0 - loss_frac) * r["p_hvdc_in"][k]
+        if link.p_min_mw >= 0:
+            expected_out = -r["p_hvdc_in"][k] / (1.0 - loss_frac)
+        elif link.p_max_mw <= 0:
+            expected_out = -(1.0 - loss_frac) * r["p_hvdc_in"][k]
+        else:
+            expected_out = -r["p_hvdc_in"][k]
         residual = abs(r["p_hvdc_out"][k] - expected_out)
         print(
             f"  link {k}: p_out={r['p_hvdc_out'][k]:.4f}  "
             f"expected={expected_out:.4f}  residual={residual:.2e}"
+        )
+        assert residual <= 1e-6, (
+            f"HVDC link {k} loss-law residual {residual:.3e} MW "
+            "exceeds tolerance"
         )
     print()
 

@@ -256,6 +256,18 @@ class StepCostHook(Protocol[UnitT_contra]):
     ) -> cp.Expression: ...
 
 
+class StepExpressionHook(Protocol[UnitT_contra]):
+    """Return named per-step expressions retained for result reporting."""
+
+    def __call__(
+        self,
+        units: Sequence[UnitT_contra],
+        prepared: Mapping[str, object],
+        variables: Mapping[str, cp.Variable],
+        context: StepContext,
+    ) -> Mapping[str, cp.Expression]: ...
+
+
 class HorizonHook(Protocol[UnitT_contra]):
     """Return coupling constraints and terminal contributions once per horizon."""
 
@@ -278,6 +290,7 @@ class FormulationAdapter(Generic[UnitT]):
     operating_constraints: ConstraintHook[UnitT] | None = None
     network_constraints: ConstraintHook[UnitT] | None = None
     step_cost: StepCostHook[UnitT] | None = None
+    step_expressions: StepExpressionHook[UnitT] | None = None
     horizon: HorizonHook[UnitT] | None = None
 
     def __post_init__(self) -> None:
@@ -299,6 +312,7 @@ class FormulationAdapter(Generic[UnitT]):
                 *required,
                 self.network_constraints,
                 self.step_cost,
+                self.step_expressions,
             )
         ):
             raise ValueError(

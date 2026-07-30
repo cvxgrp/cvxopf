@@ -59,7 +59,9 @@ from cvxopf._component_assembly import (
     aggregate_step_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    merge_prepared_component_data,
     prepare_components,
+    publish_component_expressions,
     publish_component_metadata,
     publish_component_variables,
 )
@@ -181,7 +183,7 @@ def _parse_dc_case(
     )
     components = prepare_components(requests, "lossy_dc", preparation)
 
-    return dict(
+    formulation_data = dict(
         case=case, baseMVA=baseMVA,
         nb=nb, nl=nl,
         ext_to_int=ext_to_int,
@@ -191,8 +193,8 @@ def _parse_dc_case(
         Pd=Pd,
         loss_weight=options.loss_weight,
         _components=components,
-        **components.flat_data,
     )
+    return merge_prepared_component_data(components, formulation_data)
 
 
 def _make_dc_step_constraints(
@@ -302,8 +304,10 @@ def _build_lossy_dc_single(
 
     prob      = cp.Problem(cp.Minimize(cost), constr)
     variables = dict(p_flows=p_flows)
-    variables.update(
-        publish_component_variables([step_components], multistep=False)
+    variables = publish_component_variables(
+        [step_components],
+        variables,
+        multistep=False,
     )
 
     data = dict(
@@ -314,13 +318,21 @@ def _build_lossy_dc_single(
         Pd=d["Pd"],
         loss_weight=d["loss_weight"],
     )
-    data.update(publish_component_metadata(components))
+    data = publish_component_metadata(components, data)
 
-    expressions = {"p_net": p_net_expr}
+    compatibility_expressions = {"p_net": p_net_expr}
     if storage_cost is not None:
-        expressions["storage_cost"] = storage_cost
+        compatibility_expressions["storage_cost"] = storage_cost
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        [step_aggregate],
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=False,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
@@ -404,6 +416,7 @@ def _build_lossy_dc_multistep(
 
     p_flows_list    = []
     component_steps = []
+    step_aggregates = []
     components: PreparedComponents = d["_components"]
     p_net_expr_list = []
     all_constr      = []
@@ -424,6 +437,7 @@ def _build_lossy_dc_multistep(
         )
         component_steps.append(step_components)
         step_aggregate = aggregate_step_contributions(step_components)
+        step_aggregates.append(step_aggregate)
         storage_step = step_components.get("storage")
 
         step_constr, p_net_expr_t = _make_dc_step_constraints(
@@ -468,8 +482,10 @@ def _build_lossy_dc_multistep(
     prob = cp.Problem(cp.Minimize(total_cost), all_constr)
 
     variables = dict(p_flows=p_flows_list)
-    variables.update(
-        publish_component_variables(component_steps, multistep=True)
+    variables = publish_component_variables(
+        component_steps,
+        variables,
+        multistep=True,
     )
 
     data = dict(
@@ -481,13 +497,21 @@ def _build_lossy_dc_multistep(
         T=T,
         Pd_series=Pd_series,
     )
-    data.update(publish_component_metadata(components))
+    data = publish_component_metadata(components, data)
 
-    expressions = {"p_net": p_net_expr_list}
+    compatibility_expressions = {"p_net": p_net_expr_list}
     if "ns" in d:
-        expressions["storage_cost"] = storage_cost
+        compatibility_expressions["storage_cost"] = storage_cost
     if storage_terminal_cost is not None:
-        expressions["storage_terminal_cost"] = storage_terminal_cost
+        compatibility_expressions["storage_terminal_cost"] = (
+            storage_terminal_cost
+        )
+    expressions = publish_component_expressions(
+        step_aggregates,
+        horizon_aggregate,
+        compatibility_expressions,
+        multistep=True,
+    )
 
     return OPFBuild(
         prob=prob, variables=variables, data=data,
