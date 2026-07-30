@@ -128,6 +128,9 @@ class OPFBuild:
         AC single-step keys (sparse_pq=False):
             theta, v, P, Q, p, q, Pg, Qg
 
+        AC branch-terminal flow variables are retained in ``expressions``
+        rather than this mapping.
+
         AC multi-step: each value is a list of length T.
 
         DC single-step keys:
@@ -149,9 +152,12 @@ class OPFBuild:
 
         AC keys: baseMVA, nb, ng, nl, ref, pv, ext_to_int,
                  Ybus, G, B, E, Z, Pd, Qd, Cg,
-                 Pgmin, Pgmax, Qgmin, Qgmax
-                 and branch endpoint, status, rateA, and constrained-index
-                 metadata in original branch-table row order
+                 Pgmin, Pgmax, Qgmin, Qgmax,
+                 branch_from_bus_internal, branch_to_bus_internal,
+                 branch_from_bus_external, branch_to_bus_external,
+                 branch_status, branch_rate_a_mva, and
+                 constrained_branch_indices. Branch metadata retains original
+                 MATPOWER branch-table row order.
         DC keys: baseMVA, nb, ng, nl, ext_to_int,
                  A, Cg, r, f_max, Pd, gen_bus,
                  Pgmin, Pgmax, loss_weight
@@ -179,7 +185,12 @@ class OPFBuild:
         Per-step reporting expressions are stored as one expression for a
         single-step build and lists of length T for a multistep build.
         AC branch-terminal real and reactive powers are retained in per unit
-        as ``branch_{p,q}_{from,to}_pu``.
+        as ``branch_p_from_pu``, ``branch_q_from_pu``,
+        ``branch_p_to_pu``, and ``branch_q_to_pu``. Each value has shape
+        ``(nl,)`` in a single-step build; each multistep value is a list of T
+        expressions with shape ``(nl,)``. Result extraction scales the real
+        channels to MW and reactive channels to MVAr, and derives
+        ``branch_s_from`` and ``branch_s_to`` in MVA.
         Integrated stage costs (``generator_cost``, conditional
         ``storage_cost`` and ``hvdc_cost``, and lossy-DC ``dc_loss_cost``)
         are scalar horizon totals in both modes. Horizon-boundary expressions,

@@ -30,6 +30,7 @@ TIMEOUT = 60  # seconds per script
 EXAMPLE_GROUPS = {
     "Core Formulations": [
         "case9_single_step.py",
+        "case9_ac_branch_limits.py",
         "case14_single_step.py",
         "case14_lossy_dc.py",
         "case9_singlenode_dc.py",

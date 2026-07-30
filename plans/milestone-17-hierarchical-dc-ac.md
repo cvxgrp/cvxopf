@@ -40,10 +40,10 @@ Dependencies and rationale:
   `plans/correctness-api-hardening.md`.
 - **Depends on M12** for the terminal-SoC hard-constraint-vs-soft-penalty
   machinery the AC window consumes.
-- **Depends on M4** for AC branch-flow limits. Without thermal limits, the
-  lower layer can check nonlinear power flow, voltage bounds, and device
-  feasibility, but cannot support the stronger claim that the DC plan is
-  executable on the transmission network.
+- **Depends on M4**, now complete, for AC branch-flow limits. The lower layer
+  can therefore check nonlinear power flow, voltage bounds, device
+  feasibility, and both terminal thermal limits when assessing whether the DC
+  plan is executable on the transmission network.
 - **Subsumes the convex-tracks-AC validation study.** The open-loop
   special case (single AC window, no recession; replay the DC SoC plan through AC and
   measure the feasibility/correction gap) is the natural validation artifact of
@@ -164,7 +164,8 @@ those become controlled resilience-study extensions.
 - Deviations in battery trajectory and active dispatch are reported.
 - Physical AC losses and voltage constraints are distinguished from DC
   objective penalties.
-- AC local-optimality and missing thermal-limit caveats remain explicit.
+- AC local-optimality remains explicit, and both terminal thermal-limit
+  residuals are retained as network-executability diagnostics.
 
 #### Gate 3 — closed-loop execution
 

@@ -270,8 +270,10 @@ def extract_results(build: OPFBuild) -> dict:
                          np.ndarray   (nl,)  Terminal apparent power, MVA
 
         AC multi-step: same keys; Pg, Qg are (T, ng); Vm, Va_deg, p_net,
-        q_net are (T, nb), and branch fields are (T, nl). objective is total
-        integrated horizon cost.
+        q_net are (T, nb), and branch fields are (T, nl).
+        ``branch_p_*`` is in MW, ``branch_q_*`` is in MVAr, and
+        ``branch_s_*`` is in MVA in both modes. objective is total integrated
+        horizon cost.
 
         DC single-step keys:
             status      str          CVXPY solve status

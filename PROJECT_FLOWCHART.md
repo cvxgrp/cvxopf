@@ -16,7 +16,7 @@ flowchart TD
 
     subgraph formulations["Formulation-local problem builders"]
         direction LR
-        ac["<b>AC</b><br/>voltage and angle variables<br/>nonlinear P/Q network equations<br/>one P and one Q balance"]
+        ac["<b>AC</b><br/>voltage and angle variables<br/>nonlinear P/Q network equations<br/>one P and one Q balance<br/>two-terminal branch flows and thermal limits"]
         ldc["<b>Lossy DC</b><br/>branch-flow variables<br/>convex quadratic loss penalty<br/>nodal P balances"]
         sn["<b>Single-node DC</b><br/>copper-plate model<br/>one aggregate P balance"]
     end

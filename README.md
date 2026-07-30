@@ -130,7 +130,7 @@ reserved for the Milestone 17 hierarchical controller.
 
 | Key | Description | Convex | Solver |
 |---|---|---|---|
-| `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
+| `"ac"` | Full AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 | `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
 
@@ -223,6 +223,15 @@ Result keys are determined by the built model and remain stable when a solve
 does not return primal values. Check `status` first: unavailable array-valued
 and derived quantities are `None`, while scalar objective and cost quantities
 are `NaN`.
+
+AC results include signed terminal powers `branch_p_from`,
+`branch_q_from`, `branch_p_to`, and `branch_q_to`, plus apparent magnitudes
+`branch_s_from` and `branch_s_to`, all in original MATPOWER branch-table row
+order. The `branch_p_*` fields are MW, `branch_q_*` fields are MVAr, and
+`branch_s_*` fields are MVA. Each is shaped `(nl,)` for a single-step result
+and `(T, nl)` for a multistep result. Real and reactive powers are positive
+when entering a branch from the named terminal; apparent powers are
+nonnegative.
 
 **Lossy DC OPF:**
 
@@ -317,11 +326,11 @@ uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 ```
 
 Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
-and adjust generator limits, branch-flow reference values, and load scale
-interactively. The lossy DC formulation enforces the selected branch limits.
-The AC formulation currently uses them only as visualization thresholds; AC
-branch-limit constraints are not yet implemented. Results update automatically
-after each solve.
+and adjust generator limits, branch limits, and load scale interactively.
+The AC formulation interprets each positive finite `rateA` as an MVA limit
+and enforces it independently at both branch terminals; lossy DC interprets
+the selected value as an MW flow limit. Results update automatically after
+each solve.
 
 ```bash
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
@@ -611,7 +620,7 @@ package environment.
 - [x] Port and modularize working code
 - [x] Pypower fixture generation and validation tests
 - [x] Multi-step problem builder
-- [ ] Branch flow limits (AC)
+- [x] AC branch-terminal flows and two-terminal apparent-power limits
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
 - [x] HVDC transmission links (lossless + fixed-direction proportional loss, unity power factor)

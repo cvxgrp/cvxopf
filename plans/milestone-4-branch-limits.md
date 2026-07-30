@@ -1,7 +1,7 @@
 # Milestone 4 — AC branch terminal flows and thermal limits
 
-**Status:** approved for implementation — modeling and API decisions locked
-2026-07-30
+**Status:** implementation and verification complete; Stage 6 documentation
+checkpoint awaiting review (2026-07-30)
 
 ## 1. Goal
 
@@ -605,7 +605,7 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 5 — Default-policy migration
 
-**Status:** implemented; awaiting verification and checkpoint commit.
+**Status:** complete in commit `992743e`.
 
 1. Review the Stage 0 and Stage 4 all-case evidence.
 2. Change the default from `False` to `True` in an isolated commit.
@@ -630,6 +630,8 @@ physics when limits are enforced, positive `sparsity_tol` values also require
 this explicit opt-out.
 
 ### Stage 6 — Documentation and examples
+
+**Status:** implemented and verified; awaiting review and checkpoint commit.
 
 1. Update `OPFOptions`, `OPFBuild`, and result docstrings.
 2. Update the README formulation table and remove the AC branch-limit caveat.
