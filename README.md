@@ -90,6 +90,42 @@ inverter apparent-power region in AC and to separate availability and rating
 bounds in DC. This preserves the converter-capacity limit without adding
 nonconvexity.
 
+The implementation follows the same separation of responsibilities. Public
+build APIs select formulation-owned network physics, while a shared typed
+assembly layer obtains variables, injections, feasible sets, costs, and
+intertemporal contributions from component-owned models. The resulting
+`OPFBuild` provides one boundary for solving and stable result extraction
+across all formulations.
+
+```mermaid
+flowchart LR
+    user["User inputs<br/>case · time series · devices"] --> api["Public build API<br/>validation and formulation selection"]
+
+    api --> physics["Formulation-owned network physics<br/>AC · lossy DC · single-node DC"]
+    api --> assembly["Shared typed component assembly"]
+    devices["Component-owned models<br/>generation · storage<br/>nondispatchable · HVDC"] --> assembly
+    assembly --> physics
+
+    physics --> build["OPFBuild<br/>problem · variables · data · expressions"]
+    build --> solve["Formulation-appropriate solve<br/>and stable results"]
+
+    classDef public fill:#e8f1ff,stroke:#2563a6,color:#102a43
+    classDef formulation fill:#fff4dd,stroke:#b7791f,color:#4a2c0a
+    classDef assembly fill:#e8f8ef,stroke:#27864b,color:#123d24
+    classDef component fill:#f2eafe,stroke:#7650a8,color:#321c52
+    classDef output fill:#fdecec,stroke:#b74b4b,color:#551d1d
+
+    class user,api public
+    class physics formulation
+    class assembly assembly
+    class devices component
+    class build,solve output
+```
+
+See the [full software architecture and component lifecycle](PROJECT_FLOWCHART.md)
+for the as-built assembly sequence, architectural invariants, and the boundary
+reserved for the Milestone 17 hierarchical controller.
+
 ### Formulations
 
 | Key | Description | Convex | Solver |

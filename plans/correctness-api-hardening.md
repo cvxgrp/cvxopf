@@ -28,7 +28,7 @@ Every moderate-to-low finding from the M12/M16 review has an explicit owner:
 |---|---:|---|---|
 | Non-finite `delta` accepted | Moderate | Fix and add boundary tests | Hardening Track A |
 | Single-node silently drops HVDC | Moderate in review | Confirmed as the correct null model; make the null capability explicit and test it | M16+ §4 and Gate 4 |
-| Stage objectives are not time-scaled | Moderate scientific debt | Resolution experiment complete; lock the units convention, then implement it | Hardening Track C |
+| Stage objectives are not time-scaled | Moderate scientific debt | Implemented and verified: all stage-cost rates are integrated by `delta` | Hardening Track C |
 | Infeasible results omit configured-device keys | Low–moderate | Adopt and test a stable build-dependent schema | Hardening Track B |
 | Component interface is conventional rather than substitutable | Low–moderate architecture debt | Add typed adapters/protocols and a shared assembler | M16+ §§3–6 |
 | Single-step builders skip memoryless coupling hooks | Low | Invoke every applicable horizon hook through the common one-element horizon path | M16+ §3.4 and Gate 2 |
@@ -164,27 +164,27 @@ can distinguish intentional schema changes from refactor regressions.
 
 **Status:** implemented and verified on `critical-path`
 
-### Problem
+### Pre-implementation problem
 
-Storage dynamics multiply power by `delta`, but multistep generation, line
-loss, storage cycling, and HVDC stage costs are summed without `delta`.
-Terminal penalties correctly occur once at the horizon boundary. Therefore a
-fixed physical horizon represented at a finer resolution receives more stage
-cost weight relative to its terminal cost.
+Before Track C, storage dynamics multiplied power by `delta`, but multistep
+generation, line loss, storage cycling, and HVDC stage costs were summed
+without `delta`. Terminal penalties correctly occurred once at the horizon
+boundary. Therefore a fixed physical horizon represented at a finer
+resolution received more stage-cost weight relative to its terminal cost.
 
-This is documented behavior, not an accidental M12 regression. It nonetheless
-must be resolved before cross-resolution or hierarchical economic comparisons
-are presented as physically invariant.
+This was documented behavior, not an accidental M12 regression. Track C
+resolved it before cross-resolution or hierarchical economic comparisons are
+presented as physically invariant.
 
 ### Decision study
 
 Before implementation, classify every objective coefficient by units:
 
-| Term | Current expression | Likely physical interpretation |
+| Term | Former expression | Likely physical interpretation |
 |---|---|---|
 | Generator cost | `g(P_t)` | currency/hour at dispatch `P_t` |
 | DC line loss term | `loss_weight * r*p_t^2` | weighted power loss, not inherently currency/hour |
-| Storage cycling | `aging_weight * abs(b_t)` | currently objective units/MW per interval |
+| Storage cycling | `aging_weight * abs(b_t)` | formerly objective units/MW per interval |
 | HVDC cost | polynomial in `abs(p_in_t)` | coefficient-dependent, conventionally currency/hour |
 | Future load shedding (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
 | Terminal linear | `rho * abs(q_T-target)` | objective units |
@@ -207,7 +207,7 @@ total objective
     + horizon_boundary_terms.
 ```
 
-This is an immediate correction when Track C implementation begins:
+This was implemented as an immediate correction:
 
 - do not add a compatibility option;
 - do not preserve the old unscaled behavior for `delta != 1`;
@@ -417,7 +417,7 @@ The README and objective docstrings record the intentional behavior change;
    `base_time_step_hours`, while retaining the explicit resolution grid.
 9. Add a source-independent synthetic regression test for effective terminal
    weight equivalence under the old convention, then update its expected
-   result to resolution invariance when Track C lands.
+   result to resolution invariance with Track C.
 10. Keep the value-function refinement argument explicitly scoped to
     stage-separable models with ideal storage and zero-order-held inputs.
 
