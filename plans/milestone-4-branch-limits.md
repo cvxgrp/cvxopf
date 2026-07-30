@@ -202,14 +202,20 @@ repeated bus pairs.
 
 ### `ac_problem.py`
 
-Own the formulation-specific nonlinear terminal-flow expressions and thermal
-constraints. A small internal helper should:
+Own the formulation-specific nonlinear terminal-flow expressions, lifted
+representation, and thermal constraints through three explicit
+responsibilities:
 
-1. construct `p_from`, `q_from`, `p_to`, and `q_to` from `theta`, `v`, and the
-   prepared branch coefficients;
-2. return expressions for all branch rows;
-3. add both terminal apparent-power constraints only for the constrained
-   branch index set.
+1. construct the direct `p_from`, `q_from`, `p_to`, and `q_to` voltage
+   equations for all branch rows;
+2. create the four lifted variables and their defining equalities, reusing the
+   direct expressions as the right-hand sides;
+3. add both terminal apparent-power constraints for the constrained branch
+   index set using those same lifted variables.
+
+These responsibilities may be implemented as small cooperating helpers. They
+must not be collapsed into an opaque routine that rebuilds terminal
+expressions separately for reporting and enforcement.
 
 These are network expressions, not component contributions. They must not be
 added to `_component_adapter.py`, `_component_adapters.py`, or a device module.
@@ -246,17 +252,20 @@ disabled, ratings are inert metadata and do not block terminal-flow reporting.
 
 The following requirements are explicit implementation constraints:
 
-1. **Construct once, reuse exactly.** Construct each step's four terminal-flow
-   expression vectors once. Publish those identical CVXPY expression objects
-   and use them in the thermal constraints. Do not rebuild a reporting graph
-   separately from the enforced graph.
+1. **One equation graph, one published variable set.** Construct each step's
+   four direct voltage-based terminal-flow expression vectors once and use
+   them as the right-hand sides of four lifted-variable equalities. Publish
+   and constrain the identical lifted CVXPY variables. Do not rebuild either
+   the branch-equation graph or a separate reporting graph.
 2. **Start with scalar DNLP indexing.** Use scalar `theta[i, 0]` and `v[i, 0]`
    expressions for each branch, then assemble the branch vectors. Do not use
    gathered nonlinear indexing until the Stage 0 Hessian-analysis spike proves
    it safe.
-3. **Handle `nl == 0` explicitly.** Never call `cp.hstack([])`. Use an empty
-   expression such as `cp.Constant(np.empty(0))` only after verifying
-   single-step extraction and multistep `(T, 0)` stacking.
+3. **Handle `nl == 0` explicitly.** When `nl > 0`, create four lifted variables
+   and their defining equalities. When `nl == 0`, create no terminal-flow
+   variables or equalities and publish four empty constants. Never call
+   `cp.hstack([])` or attempt to create `cp.Variable(0)`. Verify single-step
+   extraction and multistep `(T, 0)` stacking.
 4. **Skip before division.** Test branch status before evaluating
    `1 / (r + j*x)`. An out-of-service row may contain unusable electrical data;
    it produces four exact zero terminal coefficients without impedance
@@ -314,7 +323,8 @@ debugging or result-consumer need justifies making them part of
 
 ### 4.2 Modeled expressions
 
-Publish four per-step expressions:
+Publish the four lifted per-step terminal-flow variables—or four empty
+constants when `nl == 0`—through the modeled expression namespace:
 
 - `branch_p_from_pu`;
 - `branch_q_from_pu`;
@@ -378,16 +388,28 @@ confuse with the existing nodal `p`/`q`, dense `P`/`Q`, and HVDC terminal
 quantities. Documentation records their direct mapping to MATPOWER
 `PF`, `QF`, `PT`, and `QT`.
 
-### Decision 3 — Direct expression path
+### Decision 3 — Lifted enforcement and reporting path
 
-Test terminal powers as direct expressions of `theta` and `v` first. This
-avoids $4n_lT$ additional variables and equalities if CVXPY DNLP handles the
-structure reliably. Because gathered/vectorized nonlinear expressions have
-already caused DNLP Hessian-analysis failures in the nodal model, Stage 0 must
-evaluate scalar branch construction explicitly. Lifted network-owned
-terminal-flow variables remain a fallback only if the direct path exposes a
-concrete canonicalization, robustness, or performance problem; that fallback
-requires review before implementation.
+Stage 0 tested direct terminal expressions first and found a concrete DNLP
+performance failure. In the refreshed case57 run, three alternating trials
+required `18.4–19.3 s` with direct nonlinear expressions inside the thermal
+inequalities, versus `0.671–0.688 s` with four lifted terminal-flow variables.
+Both formulations returned the same objective, and all 80 ratings were
+nonbinding, so the difference is structural rather than congestion-driven.
+
+The approved production path is:
+
+1. Construct scalar-indexed direct terminal-flow expressions from `theta` and
+   `v` exactly once.
+2. Create four network-owned lifted terminal-flow variables per branch and
+   time step.
+3. Tie those variables to the direct expressions with four vector equalities.
+4. Publish and thermally constrain the identical lifted variable objects.
+
+The added $4n_lT$ variables and equalities are accepted because they preserve
+the authoritative physical equation while avoiding the severe direct
+constraint penalty. Gathered nonlinear indexing remains prohibited until
+separately proven safe.
 
 ### Decision 4 — Independent reference data
 
@@ -421,6 +443,9 @@ review rather than silently narrowing validation to AC.
 
 ### Stage 0 — Characterization and DNLP expression spike
 
+**Status:** complete — evidence recorded in
+`experiments/branch_limits_s0/`
+
 1. Record current default AC results and schemas with limits disabled.
 2. Construct direct terminal-flow expressions for a small case without
    changing production builders.
@@ -444,10 +469,11 @@ review rather than silently narrowing validation to AC.
    - IPOPT iterations and solve time;
    - peak or approximate memory where practical;
    - single-step and a representative multistep horizon.
-   Report three distinct configurations where applicable:
+   Report four distinct configurations where applicable:
    - the pre-M4 baseline;
-   - terminal reporting with enforcement disabled;
-   - terminal reporting with limits enforced.
+   - unused direct reporting expressions;
+   - lifted reporting with enforcement disabled;
+   - lifted reporting with limits enforced.
    This separates universal observability overhead from the incremental
    constraint and canonicalization cost.
 7. Decide direct expressions versus lifted variables from evidence.
@@ -458,6 +484,16 @@ review rather than silently narrowing validation to AC.
    approved shared hardening change.
 
 No public contract changes land in this stage.
+
+**Result:** Direct expressions match independent complex-current arithmetic
+within `4.5e-14` p.u. across the measured cases. The lifted structure solved
+all bundled AC cases through case118 both with and without thermal
+enforcement. Relative to the pre-M4 baseline, lifted reporting increased local
+solve wall time from `0.030 s` to `0.049 s` on case9, `0.295 s` to `0.509 s`
+on case57, and `1.734 s` to `2.547 s` on case118. Positive case57 sparsity
+tolerances through `0.1` removed no entries, while `1.0` removed eight entries
+and made the approximate model infeasible. All bundled branch statuses were
+binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 1 — Authoritative numerical branch primitive
 
@@ -491,21 +527,25 @@ No public contract changes land in this stage.
    rating, and constrained-index arrays from the reindexed case.
 2. Add the real-valued DNLP terminal-flow expression helper using scalar
    `theta[i, 0]` and `v[i, 0]` indexing.
-3. Handle `nl == 0` explicitly without calling `cp.hstack([])`.
-4. Invoke the helper exactly once per AC time step and reuse the identical
-   expression objects for publication and any thermal constraints.
-5. Publish the four per-unit expression channels in single- and multistep
-   form without compacting or reordering branch rows.
-6. Extend result initialization and extraction with signed terminal powers and
+3. Handle `nl == 0` explicitly: create no lifted variables or defining
+   equalities and publish four empty constants without calling
+   `cp.hstack([])` or `cp.Variable(0)`.
+4. Invoke the helper exactly once per AC time step.
+5. For `nl > 0`, create four network-owned lifted variables and tie them to the
+   direct expressions with four vector equalities.
+6. Publish the identical lifted variables through the four per-unit expression
+   channels in single- and multistep form without compacting or reordering
+   branch rows.
+7. Extend result initialization and extraction with signed terminal powers and
    apparent magnitudes derived using `np.hypot`.
-7. Keep expression construction independent of
+8. Keep direct equation and lifted-variable construction independent of
    `enforce_branch_limits`, so disabling limits does not disable observability.
 
 ### Stage 3 — Thermal operating constraints
 
 1. Remove the single- and multistep `NotImplementedError` stubs.
-2. For each constrained branch and time step, reuse the published terminal
-   expressions in both normalized unit-right-hand-side apparent-power limits.
+2. For each constrained branch and time step, reuse the published lifted
+   variables in both normalized unit-right-hand-side apparent-power limits.
 3. Skip out-of-service and zero-rated rows without a sentinel constraint.
 4. Treat every finite positive rating as active, including `rateA >= 1e10`,
    and reject negative or non-finite ratings on in-service branches before or
@@ -612,8 +652,9 @@ No public contract changes land in this stage.
 - Network limits remain formulation-owned and do not enter component
   adapters.
 - Single-step and multistep builders share the same per-step implementation.
-- Each terminal expression is constructed once and the identical object is
-  reused for publication and enforcement.
+- Each direct terminal equation is constructed once; each lifted variable is
+  created once and the identical lifted object is reused for publication and
+  enforcement.
 - The first implementation uses scalar DNLP indexing and handles `nl == 0`
   explicitly.
 - Network operating constraints occupy one documented
@@ -653,8 +694,8 @@ No public contract changes land in this stage.
 - Measurements record Python construction, DNLP setup/canonicalization,
   variables, constraints, derivative nonzero counts when exposed, IPOPT
   iterations and solve time, and practical memory observations.
-- Measurements distinguish the pre-M4 baseline, reporting-only M4 model, and
-  reporting-plus-enforcement model.
+- Measurements distinguish the pre-M4 baseline, unused direct reporting
+  expressions, lifted reporting without enforcement, and lifted enforcement.
 - Any material regression is reviewed rather than hidden by changing
   tolerances.
 
