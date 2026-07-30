@@ -190,6 +190,93 @@ def _branch_expression_mapping(
     }
 
 
+def _validate_branch_limit_inputs(
+    options,
+    admittance: BranchAdmittance,
+) -> None:
+    """Validate AC-only inputs that matter when thermal limits are enforced."""
+    if not options.enforce_branch_limits:
+        return
+    if options.sparsity_tol != 0:
+        raise ValueError(
+            "AC branch-limit enforcement requires sparsity_tol == 0 "
+            "so nodal and terminal-flow physics use consistent coefficients."
+        )
+
+    invalid = (
+        admittance.status
+        & (
+            ~np.isfinite(admittance.rate_a_mva)
+            | (admittance.rate_a_mva < 0)
+        )
+    )
+    if np.any(invalid):
+        details = ", ".join(
+            f"row {int(row)}: {admittance.rate_a_mva[row]!r}"
+            for row in np.flatnonzero(invalid)
+        )
+        raise ValueError(
+            "AC branch-limit enforcement requires every in-service "
+            "rateA to be finite and nonnegative; invalid values: "
+            f"{details}."
+        )
+
+
+def _make_branch_limit_constraints(
+    flow: _BranchTerminalFlow,
+    constrained_branch_indices: np.ndarray,
+    branch_rate_a_mva: np.ndarray,
+    base_mva: float,
+) -> list[cp.Constraint]:
+    """Apply normalized apparent-power limits at both branch terminals."""
+    constraints = []
+    for e in constrained_branch_indices:
+        rating_mva = float(branch_rate_a_mva[e])
+        with np.errstate(
+            divide="ignore",
+            invalid="ignore",
+            over="ignore",
+            under="ignore",
+        ):
+            rating_pu = float(np.divide(rating_mva, base_mva))
+        if not np.isfinite(rating_pu) or rating_pu <= 0:
+            raise ValueError(
+                "AC branch-limit normalization produced a nonpositive or "
+                f"nonfinite rating for row {int(e)}: "
+                f"rateA={rating_mva!r} MVA, baseMVA={base_mva!r}, "
+                f"rating_pu={rating_pu!r}."
+            )
+        constraints.extend(
+            [
+                cp.square(flow.p_from[e] / rating_pu)
+                + cp.square(flow.q_from[e] / rating_pu)
+                <= 1.0,
+                cp.square(flow.p_to[e] / rating_pu)
+                + cp.square(flow.q_to[e] / rating_pu)
+                <= 1.0,
+            ]
+        )
+    return constraints
+
+
+def _make_network_operating_constraints(
+    flow: _BranchTerminalFlow,
+    options,
+    constrained_branch_indices: np.ndarray,
+    branch_rate_a_mva: np.ndarray,
+    base_mva: float,
+) -> list[cp.Constraint]:
+    """Return the formulation-owned AC network operating set."""
+    if not options.enforce_branch_limits:
+        return []
+    return _make_branch_limit_constraints(
+        flow,
+        constrained_branch_indices,
+        branch_rate_a_mva,
+        base_mva,
+    )
+
+
 def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndarray:
     """
     Build a (nb, nnz) constant numpy matrix Rp such that Rp @ x_vec
@@ -254,6 +341,7 @@ def _parse_case(
     bus     = case["bus"]
     nb      = bus.shape[0]
     branch_admittance = make_branch_admittance(case)
+    _validate_branch_limit_inputs(options, branch_admittance)
     constrained_branch_indices = np.flatnonzero(
         branch_admittance.status
         & np.isfinite(branch_admittance.rate_a_mva)
@@ -393,19 +481,21 @@ def _make_step_constraints(
     component_operating_constraints,
     component_network_constraints,
     branch_flow_defining_constraints,
+    network_operating_constraints,
     sparse_pq: bool,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
 
-    Internal structure (six sections — do not reorder or split):
+    Internal structure (seven sections — do not reorder or split):
       1. Reference bus angle fix
       2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
       3. Branch-terminal flow definitions.
       4. Nodal power balance: exactly one p== and one q== constraint,
          using aggregate component real/reactive injections.
-      5. Ordered component operating constraints.
-      6. Ordered component-to-network constraints.
+      5. Formulation-owned network operating constraints.
+      6. Ordered component operating constraints.
+      7. Ordered component-to-network constraints.
 
     The caller must not append additional p== or q== constraints after
     this function returns.
@@ -488,12 +578,17 @@ def _make_step_constraints(
     )
 
     # ------------------------------------------------------------------
-    # Section 5: Ordered component operating constraints.
+    # Section 5: Formulation-owned network operating constraints.
+    # ------------------------------------------------------------------
+    constr += list(network_operating_constraints)
+
+    # ------------------------------------------------------------------
+    # Section 6: Ordered component operating constraints.
     # ------------------------------------------------------------------
     constr += list(component_operating_constraints)
 
     # ------------------------------------------------------------------
-    # Section 6: Ordered component-to-network constraints.
+    # Section 7: Ordered component-to-network constraints.
     # ------------------------------------------------------------------
     constr += list(component_network_constraints)
 
@@ -517,12 +612,6 @@ def _build_ac_single(
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
-    if options.enforce_branch_limits:
-        raise NotImplementedError(
-            "enforce_branch_limits is not yet implemented. "
-            "It is planned for Milestone 4."
-        )
-
     d = _parse_case(
         case, options, storage, delta, nondispatchable, hvdc, generators
     )
@@ -544,6 +633,13 @@ def _build_ac_single(
             d["branch_admittance"],
             suffix="",
         )
+    )
+    network_operating_constraints = _make_network_operating_constraints(
+        branch_flow,
+        options,
+        d["constrained_branch_indices"],
+        d["branch_rate_a_mva"],
+        d["baseMVA"],
     )
     step_context = StepContext(
         formulation="ac",
@@ -569,6 +665,7 @@ def _build_ac_single(
         step_aggregate.operating_constraints,
         step_aggregate.network_constraints,
         branch_flow_defining_constraints,
+        network_operating_constraints,
         sparse_pq=options.sparse_pq,
     )
 
@@ -670,12 +767,6 @@ def _build_ac_multistep(
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
 
-    if options.enforce_branch_limits:
-        raise NotImplementedError(
-            "enforce_branch_limits is not yet implemented. "
-            "It is planned for Milestone 4."
-        )
-
     d = _parse_case(
         case,
         options,
@@ -739,6 +830,13 @@ def _build_ac_multistep(
                 suffix=f"_{t}",
             )
         )
+        network_operating_constraints = _make_network_operating_constraints(
+            branch_flow_t,
+            options,
+            d["constrained_branch_indices"],
+            d["branch_rate_a_mva"],
+            d["baseMVA"],
+        )
         step_context = StepContext(
             formulation="ac",
             step=t,
@@ -768,6 +866,7 @@ def _build_ac_multistep(
             step_aggregate.operating_constraints,
             step_aggregate.network_constraints,
             branch_flow_defining_constraints,
+            network_operating_constraints,
             sparse_pq=options.sparse_pq,
         )
 

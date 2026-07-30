@@ -62,8 +62,9 @@ class OPFOptions:
         If True, initialise theta = 0 and v = 1 (flat start) before
         returning. AC only. Default True.
     enforce_branch_limits : bool
-        If True, enforce per-branch thermal limits via rateA. Not yet
-        implemented; raises NotImplementedError. AC only. Default False.
+        If True, enforce MATPOWER rateA as an apparent-power limit at both
+        terminals of every in-service branch with a finite positive rating.
+        AC only. Requires sparsity_tol=0. Default False.
     loss_weight : float
         Weighting factor lambda for line losses in the lossy DC objective:
             minimize delta * sum_t (G_t + loss_weight * L_t)

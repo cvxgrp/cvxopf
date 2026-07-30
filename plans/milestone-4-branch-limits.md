@@ -547,6 +547,8 @@ binary. Decision 3 was updated to the project-owner-approved lifted path.
 
 ### Stage 3 — Thermal operating constraints
 
+**Status:** implemented and verified; awaiting review and checkpoint commit.
+
 1. Remove the single- and multistep `NotImplementedError` stubs.
 2. For each constrained branch and time step, reuse the published lifted
    variables in both normalized unit-right-hand-side apparent-power limits.
