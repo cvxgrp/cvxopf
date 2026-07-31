@@ -154,6 +154,12 @@ power flows via elementwise trig expressions on the Ybus sparsity pattern.
 Nodal injections `p`, `q` are row sums of `P`, `Q`. Generator variables
 `Pg`, `Qg` are linked via the incidence matrix `Cg`.
 
+Branch-terminal real and reactive powers are defined from the same exact
+MATPOWER branch admittances and retained as lifted per-unit expressions.
+By default, every positive finite `rateA` is enforced as an apparent-power
+limit at both terminals. Set `OPFOptions(enforce_branch_limits=False)` only
+when the ratings should be inert; reporting remains available.
+
 Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 - `P_vec`, `Q_vec` — shape `(nnz,)` flat vectors over the Ybus sparsity
   pattern when `OPFOptions.sparse_pq=True` (default). Nodal injections are
@@ -203,7 +209,7 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 
 | Formulation | Result keys |
 |---|---|
-| AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |
+| AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`, `branch_p_from`, `branch_q_from`, `branch_p_to`, `branch_q_to`, `branch_s_from`, `branch_s_to`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |
 | Lossy DC | `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None. `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 | Single‑node DC | `status`, `objective`, `Pg`, `p_net`. `p_flows`, `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 
@@ -310,7 +316,7 @@ Both emit `DeprecationWarning` when called.
 | `enforce_vset` | bool | False | AC only |
 | `sparsity_tol` | float | 0.0 | AC only |
 | `init_flat` | bool | True | AC only |
-| `enforce_branch_limits` | bool | False | AC only (stub) |
+| `enforce_branch_limits` | bool | True | AC two-terminal `rateA` limits; requires `sparsity_tol=0` |
 | `loss_weight` | float | 1.0 | DC only |
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
@@ -679,7 +685,7 @@ is present.
 | 1 — Port and modularize working code | ✅ Complete | |
 | 2 — Pypower fixture generation and validation | ✅ Complete | |
 | 3 — Multi-step problem builder | ✅ Complete | |
-| 4 — Branch flow limits | 🔲 Stubbed | `OPFOptions.enforce_branch_limits=True` raises `NotImplementedError` in AC. See `plans/milestone-4-branch-limits.md` (placeholder). |
+| 4 — AC branch terminal flows and limits | ✅ Complete | Exact signed terminal-flow reporting in MATPOWER row order; positive finite `rateA` enforced as an apparent-power limit at both terminals by default. See `plans/milestone-4-branch-limits.md`. |
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep`. AC apparent-power circle, DC real-power box; SoC cross-step coupling; L1 aging cost. See `plans/milestone-5-storage.md`. |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
 | 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match. `LOSS0`/reactive/voltage-control deferred to M15. See `plans/milestone-7-hvdc.md` (incl. the `dcline` column map and MVP-vs-M15 subtable) and `experiments/dnlp_vs_pypower/`. |

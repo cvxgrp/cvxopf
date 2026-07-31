@@ -10,6 +10,7 @@ Solver: IPOPT (via cyipopt).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,6 +18,10 @@ import pandas as pd
 import cvxpy as cp
 
 from cvxopf.network import (
+    F_BUS,
+    T_BUS,
+    BranchAdmittance,
+    make_branch_admittance,
     reindex_case_to_consecutive,
     make_ybus_matpower,
     make_ybus_sparsity_mask,
@@ -79,6 +84,199 @@ QD         = 3
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
+@dataclass(frozen=True)
+class _BranchTerminalFlow:
+    """Four per-unit branch-terminal power channels in branch row order."""
+
+    p_from: cp.Expression
+    q_from: cp.Expression
+    p_to: cp.Expression
+    q_to: cp.Expression
+
+
+def _terminal_power_expression(
+    theta,
+    v,
+    i: int,
+    j: int,
+    yii: complex,
+    yij: complex,
+) -> tuple[cp.Expression, cp.Expression]:
+    """Construct one oriented branch-terminal complex-power expression."""
+    cosine = cp.nlp.cos(theta[i, 0] - theta[j, 0])
+    sine = cp.nlp.sin(theta[i, 0] - theta[j, 0])
+    self_p = float(yii.real) * cp.square(v[i, 0])
+    self_q = -float(yii.imag) * cp.square(v[i, 0])
+    cross_scale = v[i, 0] * v[j, 0]
+    cross_p = cross_scale * (
+        float(yij.real) * cosine + float(yij.imag) * sine
+    )
+    cross_q = cross_scale * (
+        float(yij.real) * sine - float(yij.imag) * cosine
+    )
+    return self_p + cross_p, self_q + cross_q
+
+
+def _make_branch_terminal_flow(
+    theta,
+    v,
+    admittance: BranchAdmittance,
+    *,
+    suffix: str,
+) -> tuple[_BranchTerminalFlow, list[cp.Constraint]]:
+    """Create lifted terminal flows and their authoritative definitions."""
+    nl = len(admittance.from_bus)
+    if nl == 0:
+        empty = cp.Constant(np.empty(0))
+        return _BranchTerminalFlow(empty, empty, empty, empty), []
+
+    p_from_direct = []
+    q_from_direct = []
+    p_to_direct = []
+    q_to_direct = []
+    for e in range(nl):
+        if not admittance.status[e]:
+            zero = cp.Constant(0.0)
+            p_from_direct.append(zero)
+            q_from_direct.append(zero)
+            p_to_direct.append(zero)
+            q_to_direct.append(zero)
+            continue
+
+        f = int(admittance.from_bus[e])
+        t = int(admittance.to_bus[e])
+        pf, qf = _terminal_power_expression(
+            theta, v, f, t, admittance.yff[e], admittance.yft[e]
+        )
+        pt, qt = _terminal_power_expression(
+            theta, v, t, f, admittance.ytt[e], admittance.ytf[e]
+        )
+        p_from_direct.append(pf)
+        q_from_direct.append(qf)
+        p_to_direct.append(pt)
+        q_to_direct.append(qt)
+
+    direct = _BranchTerminalFlow(
+        cp.hstack(p_from_direct),
+        cp.hstack(q_from_direct),
+        cp.hstack(p_to_direct),
+        cp.hstack(q_to_direct),
+    )
+    lifted = _BranchTerminalFlow(
+        cp.Variable(nl, name=f"branch_p_from_pu{suffix}"),
+        cp.Variable(nl, name=f"branch_q_from_pu{suffix}"),
+        cp.Variable(nl, name=f"branch_p_to_pu{suffix}"),
+        cp.Variable(nl, name=f"branch_q_to_pu{suffix}"),
+    )
+    defining_equalities = [
+        lifted.p_from == direct.p_from,
+        lifted.q_from == direct.q_from,
+        lifted.p_to == direct.p_to,
+        lifted.q_to == direct.q_to,
+    ]
+    return lifted, defining_equalities
+
+
+def _branch_expression_mapping(
+    flow: _BranchTerminalFlow,
+) -> dict[str, cp.Expression]:
+    """Return the stable modeled-expression names for terminal flow."""
+    return {
+        "branch_p_from_pu": flow.p_from,
+        "branch_q_from_pu": flow.q_from,
+        "branch_p_to_pu": flow.p_to,
+        "branch_q_to_pu": flow.q_to,
+    }
+
+
+def _validate_branch_limit_inputs(
+    options,
+    admittance: BranchAdmittance,
+) -> None:
+    """Validate AC-only inputs that matter when thermal limits are enforced."""
+    if not options.enforce_branch_limits:
+        return
+    if options.sparsity_tol != 0:
+        raise ValueError(
+            "AC branch-limit enforcement requires sparsity_tol == 0 "
+            "so nodal and terminal-flow physics use consistent coefficients."
+        )
+
+    invalid = (
+        admittance.status
+        & (
+            ~np.isfinite(admittance.rate_a_mva)
+            | (admittance.rate_a_mva < 0)
+        )
+    )
+    if np.any(invalid):
+        details = ", ".join(
+            f"row {int(row)}: {admittance.rate_a_mva[row]!r}"
+            for row in np.flatnonzero(invalid)
+        )
+        raise ValueError(
+            "AC branch-limit enforcement requires every in-service "
+            "rateA to be finite and nonnegative; invalid values: "
+            f"{details}."
+        )
+
+
+def _make_branch_limit_constraints(
+    flow: _BranchTerminalFlow,
+    constrained_branch_indices: np.ndarray,
+    branch_rate_a_mva: np.ndarray,
+    base_mva: float,
+) -> list[cp.Constraint]:
+    """Apply normalized apparent-power limits at both branch terminals."""
+    constraints = []
+    for e in constrained_branch_indices:
+        rating_mva = float(branch_rate_a_mva[e])
+        with np.errstate(
+            divide="ignore",
+            invalid="ignore",
+            over="ignore",
+            under="ignore",
+        ):
+            rating_pu = float(np.divide(rating_mva, base_mva))
+        if not np.isfinite(rating_pu) or rating_pu <= 0:
+            raise ValueError(
+                "AC branch-limit normalization produced a nonpositive or "
+                f"nonfinite rating for row {int(e)}: "
+                f"rateA={rating_mva!r} MVA, baseMVA={base_mva!r}, "
+                f"rating_pu={rating_pu!r}."
+            )
+        constraints.extend(
+            [
+                cp.square(flow.p_from[e] / rating_pu)
+                + cp.square(flow.q_from[e] / rating_pu)
+                <= 1.0,
+                cp.square(flow.p_to[e] / rating_pu)
+                + cp.square(flow.q_to[e] / rating_pu)
+                <= 1.0,
+            ]
+        )
+    return constraints
+
+
+def _make_network_operating_constraints(
+    flow: _BranchTerminalFlow,
+    options,
+    constrained_branch_indices: np.ndarray,
+    branch_rate_a_mva: np.ndarray,
+    base_mva: float,
+) -> list[cp.Constraint]:
+    """Return the formulation-owned AC network operating set."""
+    if not options.enforce_branch_limits:
+        return []
+    return _make_branch_limit_constraints(
+        flow,
+        constrained_branch_indices,
+        branch_rate_a_mva,
+        base_mva,
+    )
+
+
 def _make_row_sum_matrix(rows: np.ndarray, cols: np.ndarray, nb: int) -> np.ndarray:
     """
     Build a (nb, nnz) constant numpy matrix Rp such that Rp @ x_vec
@@ -129,6 +327,19 @@ def _parse_case(
     Returns a flat dict consumed by the AC single-step and multistep builders.
     """
     validate_case(case)
+    if np.asarray(case["branch"]).shape[0] == 0:
+        raise ValueError(
+            "Branchless AC cases are unsupported by the current CVXPY "
+            "DNLP/IPOPT path. Use formulation='singlenode_dc' only if "
+            "collapsing the network and omitting voltage/reactive-power "
+            "physics is appropriate."
+        )
+    branch_from_bus_external = (
+        np.asarray(case["branch"])[:, F_BUS].astype(int).copy()
+    )
+    branch_to_bus_external = (
+        np.asarray(case["branch"])[:, T_BUS].astype(int).copy()
+    )
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
@@ -136,7 +347,16 @@ def _parse_case(
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
     nb      = bus.shape[0]
-    Ybus    = make_ybus_matpower(case)
+    branch_admittance = make_branch_admittance(case)
+    _validate_branch_limit_inputs(options, branch_admittance)
+    constrained_branch_indices = np.flatnonzero(
+        branch_admittance.status
+        & np.isfinite(branch_admittance.rate_a_mva)
+        & (branch_admittance.rate_a_mva > 0)
+    )
+    Ybus    = make_ybus_matpower(
+        case, branch_admittance=branch_admittance
+    )
     G       = np.real(Ybus)
     B       = np.imag(Ybus)
     E, Z    = make_ybus_sparsity_mask(Ybus, tol=options.sparsity_tol)
@@ -160,13 +380,17 @@ def _parse_case(
     # Get external bus IDs for validation (needed for both storage and nondispatchable)
     if ext_to_int is not None:
         ext_bus_ids = set(ext_to_int.keys())
+        component_ext_to_int = ext_to_int
     else:
         ext_bus_ids = set(bus[:, 0].astype(int).tolist())
+        component_ext_to_int = {
+            bus_id: bus_id for bus_id in ext_bus_ids
+        }
 
     preparation = PreparationContext(
         base_mva=baseMVA,
         nb=nb,
-        ext_to_int=ext_to_int,
+        ext_to_int=component_ext_to_int,
         ext_bus_ids=frozenset(ext_bus_ids),
         horizon_steps=horizon_steps,
         delta=delta,
@@ -199,7 +423,17 @@ def _parse_case(
         Ybus=Ybus, G=G, B=B, E=E, Z=Z,
         rows=rows, cols=cols, G_vec=G_vec, B_vec=B_vec, Rp=Rp,
         ref=ref, pv=pv, ext_to_int=ext_to_int,
+        _component_ext_to_int=component_ext_to_int,
         ext_bus_ids=ext_bus_ids,
+        nl=len(branch_admittance.from_bus),
+        branch_admittance=branch_admittance,
+        branch_from_bus_internal=branch_admittance.from_bus,
+        branch_to_bus_internal=branch_admittance.to_bus,
+        branch_from_bus_external=branch_from_bus_external,
+        branch_to_bus_external=branch_to_bus_external,
+        branch_status=branch_admittance.status,
+        branch_rate_a_mva=branch_admittance.rate_a_mva,
+        constrained_branch_indices=constrained_branch_indices,
         vmin_arr=vmin_arr, vmax_arr=vmax_arr,
         Pd=Pd, Qd=Qd,
         _components=components,
@@ -258,18 +492,22 @@ def _make_step_constraints(
     Pd, Qd, ref,
     component_operating_constraints,
     component_network_constraints,
+    branch_flow_defining_constraints,
+    network_operating_constraints,
     sparse_pq: bool,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
 
-    Internal structure (five sections — do not reorder or split):
+    Internal structure (seven sections — do not reorder or split):
       1. Reference bus angle fix
       2. Power flow definitions: p and q from P/Q matrix (sparse or dense)
-      3. Nodal power balance: exactly one p== and one q== constraint,
+      3. Branch-terminal flow definitions.
+      4. Nodal power balance: exactly one p== and one q== constraint,
          using aggregate component real/reactive injections.
-      4. Ordered component operating constraints.
-      5. Ordered component-to-network constraints.
+      5. Formulation-owned network operating constraints.
+      6. Ordered component operating constraints.
+      7. Ordered component-to-network constraints.
 
     The caller must not append additional p== or q== constraints after
     this function returns.
@@ -335,7 +573,12 @@ def _make_step_constraints(
         ]
 
     # ------------------------------------------------------------------
-    # Section 3: Nodal power balance
+    # Section 3: Branch-terminal flow definitions.
+    # ------------------------------------------------------------------
+    constr += list(branch_flow_defining_constraints)
+
+    # ------------------------------------------------------------------
+    # Section 4: Nodal power balance
     # Exactly one p== and one q== constraint.
     # Active component injections are composed before entering this function.
     # ------------------------------------------------------------------
@@ -347,12 +590,17 @@ def _make_step_constraints(
     )
 
     # ------------------------------------------------------------------
-    # Section 4: Ordered component operating constraints.
+    # Section 5: Formulation-owned network operating constraints.
+    # ------------------------------------------------------------------
+    constr += list(network_operating_constraints)
+
+    # ------------------------------------------------------------------
+    # Section 6: Ordered component operating constraints.
     # ------------------------------------------------------------------
     constr += list(component_operating_constraints)
 
     # ------------------------------------------------------------------
-    # Section 5: Ordered component-to-network constraints.
+    # Section 7: Ordered component-to-network constraints.
     # ------------------------------------------------------------------
     constr += list(component_network_constraints)
 
@@ -376,12 +624,6 @@ def _build_ac_single(
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
-    if options.enforce_branch_limits:
-        raise NotImplementedError(
-            "enforce_branch_limits is not yet implemented. "
-            "It is planned for Milestone 4."
-        )
-
     d = _parse_case(
         case, options, storage, delta, nondispatchable, hvdc, generators
     )
@@ -396,11 +638,26 @@ def _build_ac_single(
         init_flat=options.init_flat,
         sparse_pq=options.sparse_pq,
     )
+    branch_flow, branch_flow_defining_constraints = (
+        _make_branch_terminal_flow(
+            theta,
+            v,
+            d["branch_admittance"],
+            suffix="",
+        )
+    )
+    network_operating_constraints = _make_network_operating_constraints(
+        branch_flow,
+        options,
+        d["constrained_branch_indices"],
+        d["branch_rate_a_mva"],
+        d["baseMVA"],
+    )
     step_context = StepContext(
         formulation="ac",
         step=0,
         base_mva=d["baseMVA"],
-        ext_to_int=d["ext_to_int"],
+        ext_to_int=d["_component_ext_to_int"],
         network_state=ACNetworkState(
             v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
         ),
@@ -419,6 +676,8 @@ def _build_ac_single(
         d["Pd"], d["Qd"], d["ref"],
         step_aggregate.operating_constraints,
         step_aggregate.network_constraints,
+        branch_flow_defining_constraints,
+        network_operating_constraints,
         sparse_pq=options.sparse_pq,
     )
 
@@ -464,6 +723,14 @@ def _build_ac_single(
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
+        nl=d["nl"],
+        branch_from_bus_internal=d["branch_from_bus_internal"],
+        branch_to_bus_internal=d["branch_to_bus_internal"],
+        branch_from_bus_external=d["branch_from_bus_external"],
+        branch_to_bus_external=d["branch_to_bus_external"],
+        branch_status=d["branch_status"],
+        branch_rate_a_mva=d["branch_rate_a_mva"],
+        constrained_branch_indices=d["constrained_branch_indices"],
         Ybus=d["Ybus"], G=d["G"], B=d["B"], E=d["E"], Z=d["Z"],
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
@@ -472,6 +739,7 @@ def _build_ac_single(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p, "q_net": q}
+    compatibility_expressions.update(_branch_expression_mapping(branch_flow))
     compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (
@@ -511,12 +779,6 @@ def _build_ac_multistep(
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
 
-    if options.enforce_branch_limits:
-        raise NotImplementedError(
-            "enforce_branch_limits is not yet implemented. "
-            "It is planned for Milestone 4."
-        )
-
     d = _parse_case(
         case,
         options,
@@ -549,6 +811,12 @@ def _build_ac_multistep(
     # Initialize lists for variables
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
     p_list, q_list = [], []
+    branch_flow_lists = {
+        "branch_p_from_pu": [],
+        "branch_q_from_pu": [],
+        "branch_p_to_pu": [],
+        "branch_q_to_pu": [],
+    }
     component_steps = []
     step_aggregates = []
     components: PreparedComponents = d["_components"]
@@ -566,11 +834,26 @@ def _build_ac_multistep(
                 init_flat=options.init_flat,
                 sparse_pq=options.sparse_pq,
             )
+        branch_flow_t, branch_flow_defining_constraints = (
+            _make_branch_terminal_flow(
+                theta_t,
+                v_t,
+                d["branch_admittance"],
+                suffix=f"_{t}",
+            )
+        )
+        network_operating_constraints = _make_network_operating_constraints(
+            branch_flow_t,
+            options,
+            d["constrained_branch_indices"],
+            d["branch_rate_a_mva"],
+            d["baseMVA"],
+        )
         step_context = StepContext(
             formulation="ac",
             step=t,
             base_mva=d["baseMVA"],
-            ext_to_int=d["ext_to_int"],
+            ext_to_int=d["_component_ext_to_int"],
             network_state=ACNetworkState(
                 v_t,
                 tuple(np.r_[[d["ref"]], d["pv"]]),
@@ -594,6 +877,8 @@ def _build_ac_multistep(
             Pd_series[t], Qd_series[t], d["ref"],
             step_aggregate.operating_constraints,
             step_aggregate.network_constraints,
+            branch_flow_defining_constraints,
+            network_operating_constraints,
             sparse_pq=options.sparse_pq,
         )
 
@@ -607,6 +892,10 @@ def _build_ac_multistep(
         PQ_Q_list.append(PQ_Q_t)
         p_list.append(p_t)
         q_list.append(q_t)
+        for name, expression in _branch_expression_mapping(
+            branch_flow_t
+        ).items():
+            branch_flow_lists[name].append(expression)
 
     total_cost = integrate_stage_cost_rates(
         [aggregate.cost for aggregate in step_aggregates],
@@ -655,6 +944,14 @@ def _build_ac_multistep(
     data = dict(
         baseMVA=d["baseMVA"], nb=d["nb"],
         ref=d["ref"], pv=d["pv"], ext_to_int=d["ext_to_int"],
+        nl=d["nl"],
+        branch_from_bus_internal=d["branch_from_bus_internal"],
+        branch_to_bus_internal=d["branch_to_bus_internal"],
+        branch_from_bus_external=d["branch_from_bus_external"],
+        branch_to_bus_external=d["branch_to_bus_external"],
+        branch_status=d["branch_status"],
+        branch_rate_a_mva=d["branch_rate_a_mva"],
+        constrained_branch_indices=d["constrained_branch_indices"],
         Ybus=d["Ybus"], G=d["G"], B=d["B"], E=d["E"], Z=d["Z"],
         rows=d["rows"], cols=d["cols"], G_vec=d["G_vec"],
         B_vec=d["B_vec"], Rp=d["Rp"],
@@ -665,6 +962,7 @@ def _build_ac_multistep(
     data = publish_component_metadata(components, data)
 
     compatibility_expressions = {"p_net": p_list, "q_net": q_list}
+    compatibility_expressions.update(branch_flow_lists)
     compatibility_expressions.update(component_costs)
     if storage_terminal_cost is not None:
         compatibility_expressions["storage_terminal_cost"] = (

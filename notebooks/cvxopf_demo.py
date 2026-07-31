@@ -51,6 +51,8 @@ def _(mo):
 
         - Full nonlinear power flow with voltage magnitudes and angles
         - Reactive power dispatch
+        - Positive finite `rateA` values enforced as apparent-power limits at
+          both branch terminals
         - ⚠️ AC-OPF may be slow for large cases (case57, case118)
 
         Reference for DC formulation: *Convex Optimization with Smart Grid Examples*,
@@ -252,7 +254,7 @@ def _(mo, flow_dict, np):
             )
             for ix, v in flow_dict.items()
         ],
-        label="Branch flow limits (MW)",
+        label="Branch limits (MW for DC, MVA for AC)",
     )
     return (flow_limits,)
 
@@ -303,7 +305,7 @@ def _(
                 _ppc["gen"][_row_ix, 9] = gen_limits.value[_k_ix][0]   # Pmin
                 _ppc["gen"][_row_ix, 8] = gen_limits.value[_k_ix][1]   # Pmax
 
-    # Apply branch flow limit overrides
+    # Apply branch-limit overrides: MW for lossy DC, terminal MVA for AC.
     for _ix in range(_ppc["branch"].shape[0]):
         _ppc["branch"][_ix, 5] = flow_limits.value[_ix]   # rateA
         _ppc["branch"][_ix, 6] = flow_limits.value[_ix]   # rateB
@@ -341,7 +343,7 @@ def _(mo, results):
     mo.callout(
         mo.md(
             f"**Status:** `{_status}`  |  "
-            f"**Objective:** `{_obj:.4f} $/hr`"
+            f"**Objective:** `{_obj:.4f} $`"
             if _status == "optimal"
             else f"**Status:** `{_status}`"
         ),

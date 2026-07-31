@@ -23,6 +23,62 @@ _GEN_BUS    = 0
 _GEN_STATUS = 7
 _F_BUS      = 0
 _T_BUS      = 1
+_BR_STATUS  = 10
+
+
+def _validate_integer_column(name: str, values: np.ndarray) -> None:
+    """Require a numeric identifier column to contain finite integers."""
+    values = np.asarray(values)
+    try:
+        numeric = values.astype(float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} values must be finite integers.") from exc
+    invalid = ~np.isfinite(numeric) | (numeric != np.trunc(numeric))
+    if np.any(invalid):
+        details = ", ".join(
+            f"row {int(row)}: {numeric[row]!r}"
+            for row in np.flatnonzero(invalid)
+        )
+        raise ValueError(
+            f"{name} values must be finite integers; invalid values: "
+            f"{details}."
+        )
+
+
+def validate_case_identifiers(case: dict) -> None:
+    """Validate bus-reference columns without imposing full case structure."""
+    bus = np.asarray(case["bus"])
+    branch = np.asarray(case["branch"])
+    gen = np.asarray(case["gen"])
+    _validate_integer_column("BUS_I", bus[:, _BUS_I])
+    _validate_integer_column("F_BUS", branch[:, _F_BUS])
+    _validate_integer_column("T_BUS", branch[:, _T_BUS])
+    _validate_integer_column("GEN_BUS", gen[:, _GEN_BUS])
+
+
+def validate_branch_status(branch: np.ndarray) -> None:
+    """Require every MATPOWER branch status to be exactly zero or one."""
+    branch = np.asarray(branch)
+    if branch.ndim != 2 or branch.shape[1] <= _BR_STATUS:
+        raise ValueError(
+            "branch array must be two-dimensional and include the "
+            f"BR_STATUS column at index {_BR_STATUS}; got shape "
+            f"{branch.shape}."
+        )
+
+    status = branch[:, _BR_STATUS]
+    invalid = ~np.isin(status, (0, 1))
+    if np.any(invalid):
+        rows = np.flatnonzero(invalid)
+        values = status[invalid]
+        details = ", ".join(
+            f"row {int(row)}: {value!r}"
+            for row, value in zip(rows, values, strict=True)
+        )
+        raise ValueError(
+            "branch BR_STATUS values must be exactly 0 or 1; "
+            f"invalid values: {details}."
+        )
 
 
 def validate_case(case: dict) -> None:
@@ -73,6 +129,10 @@ def validate_case(case: dict) -> None:
             f"gencost array must have at least {_GENCOST_MIN_COLS} columns; "
             f"got shape {gencost.shape}."
         )
+
+    validate_branch_status(branch)
+
+    validate_case_identifiers(case)
 
     bus_ids = bus[:, _BUS_I].astype(int)
     if np.unique(bus_ids).size != bus_ids.size:

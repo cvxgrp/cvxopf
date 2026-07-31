@@ -19,7 +19,7 @@ across a full multi-day horizon and able to enforce the AC network
 constraints that determine whether a plan is actually executable. 
 
 `cvxopf` is designed with this application in mind. It formulates optimal power
-flow problems using CVXPY, supports full AC-OPF, a convex lossy DC relaxation,
+flow problems using CVXPY, supports nonlinear AC-OPF, a convex lossy DC relaxation,
 and single-node economic dispatch from a single entry point (with more to
 come), and handles multi-step
 optimization with time-varying load, battery storage, and nondispatchable generation
@@ -130,9 +130,34 @@ reserved for the Milestone 17 hierarchical controller.
 
 | Key | Description | Convex | Solver |
 |---|---|---|---|
-| `"ac"` | Full AC-OPF via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
+| `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 | `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
+
+AC branch-limit enforcement is enabled by default. `rateA == 0` means no
+thermal limit; every positive finite value is enforced at both terminals,
+including large values that MATPOWER may treat as unconstrained sentinels.
+Set `OPFOptions(enforce_branch_limits=False)` for reporting-only terminal
+flows under the former compatibility behavior. Because terminal flows retain
+exact branch coefficients, any positive `sparsity_tol` also requires this
+explicit opt-out.
+
+AC network operating-set scope:
+
+- Implemented: MATPOWER branch status; fixed tap ratios and phase shifts;
+  line charging and bus shunts; voltage-magnitude bounds; nonlinear nodal
+  real/reactive balance; generator real/reactive bounds; and two-terminal
+  apparent-power limits using `rateA`.
+- Not yet implemented: branch angle-difference bounds (`ANGMIN`/`ANGMAX`);
+  selection or contingency use of alternate `rateB`/`rateC` ratings; soft
+  thermal limits; current-magnitude or active-power-only branch limits;
+  time-varying or contingency-dependent ratings; topology switching; and
+  controllable transformer tap or phase-shift decisions.
+
+The fixed electrical data in the branch table still enters the AC equations
+even when its associated operating control is not implemented. See the
+[M4 plan](plans/milestone-4-branch-limits.md) for the detailed boundary and
+future extension notes.
 
 The `"singlenode_dc"` formulation collapses the whole network to a single
 bus: no branch flows, no transmission limits, no losses, no reactive power —
@@ -223,6 +248,15 @@ Result keys are determined by the built model and remain stable when a solve
 does not return primal values. Check `status` first: unavailable array-valued
 and derived quantities are `None`, while scalar objective and cost quantities
 are `NaN`.
+
+AC results include signed terminal powers `branch_p_from`,
+`branch_q_from`, `branch_p_to`, and `branch_q_to`, plus apparent magnitudes
+`branch_s_from` and `branch_s_to`, all in original MATPOWER branch-table row
+order. The `branch_p_*` fields are MW, `branch_q_*` fields are MVAr, and
+`branch_s_*` fields are MVA. Each is shaped `(nl,)` for a single-step result
+and `(T, nl)` for a multistep result. Real and reactive powers are positive
+when entering a branch from the named terminal; apparent powers are
+nonnegative.
 
 **Lossy DC OPF:**
 
@@ -317,11 +351,11 @@ uv run --extra notebook marimo run notebooks/cvxopf_demo.py
 ```
 
 Select a test case (case9 through case118), choose AC-OPF or lossy DC OPF,
-and adjust generator limits, branch-flow reference values, and load scale
-interactively. The lossy DC formulation enforces the selected branch limits.
-The AC formulation currently uses them only as visualization thresholds; AC
-branch-limit constraints are not yet implemented. Results update automatically
-after each solve.
+and adjust generator limits, branch limits, and load scale interactively.
+The AC formulation interprets each positive finite `rateA` as an MVA limit
+and enforces it independently at both branch terminals; lossy DC interprets
+the selected value as an MW flow limit. Results update automatically after
+each solve.
 
 ```bash
 uv run --extra notebook marimo run notebooks/benchmark_opf.py
@@ -611,7 +645,7 @@ package environment.
 - [x] Port and modularize working code
 - [x] Pypower fixture generation and validation tests
 - [x] Multi-step problem builder
-- [ ] Branch flow limits (AC)
+- [x] AC branch-terminal flows and two-terminal apparent-power limits
 - [x] Battery/storage model
 - [x] Lossy DC OPF and multi-formulation architecture
 - [x] HVDC transmission links (lossless + fixed-direction proportional loss, unity power factor)

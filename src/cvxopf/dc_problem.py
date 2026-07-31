@@ -155,14 +155,22 @@ def _parse_dc_case(
     # nodal load (p.u.)
     Pd = bus[:, PD].astype(float) / baseMVA
 
-    # External bus IDs for validation — use ext_to_int keys (external MATPOWER
-    # numbering) rather than the already-reindexed bus table.
-    ext_bus_ids = set(ext_to_int.keys())
+    # Component contexts always receive an explicit bus map. Preserve
+    # ext_to_int=None as public metadata when no reindexing was necessary.
+    component_ext_to_int = (
+        ext_to_int
+        if ext_to_int is not None
+        else {
+            int(bus_id): int(bus_id)
+            for bus_id in bus[:, 0]
+        }
+    )
+    ext_bus_ids = set(component_ext_to_int.keys())
 
     preparation = PreparationContext(
         base_mva=baseMVA,
         nb=nb,
-        ext_to_int=ext_to_int,
+        ext_to_int=component_ext_to_int,
         ext_bus_ids=frozenset(ext_bus_ids),
         horizon_steps=horizon_steps,
         delta=delta,
@@ -192,6 +200,7 @@ def _parse_dc_case(
         case=case, baseMVA=baseMVA,
         nb=nb, nl=nl,
         ext_to_int=ext_to_int,
+        _component_ext_to_int=component_ext_to_int,
         ext_bus_ids=ext_bus_ids,
         A=A,
         r=r, f_max=f_max,
@@ -267,7 +276,11 @@ def _build_lossy_dc_single(
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
     step_context = StepContext(
-        "lossy_dc", 0, d["baseMVA"], d["ext_to_int"], DCNetworkState()
+        "lossy_dc",
+        0,
+        d["baseMVA"],
+        d["_component_ext_to_int"],
+        DCNetworkState(),
     )
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
@@ -434,7 +447,7 @@ def _build_lossy_dc_multistep(
             "lossy_dc",
             t,
             d["baseMVA"],
-            d["ext_to_int"],
+            d["_component_ext_to_int"],
             DCNetworkState(),
         )
         step_components = assemble_component_step(

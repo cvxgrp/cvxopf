@@ -44,6 +44,15 @@ def case14_ref():
 
 
 @pytest.fixture
+def case57_ref():
+    path = FIXTURES / "case57_pypower_reference.json"
+    with open(path) as f:
+        data = json.load(f)
+    return {k: np.asarray(v) if isinstance(v, list) else v
+            for k, v in data.items()}
+
+
+@pytest.fixture
 def case9_multistep_load():
     """
     Three-step load DataFrames for case9 (9 buses).

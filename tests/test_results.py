@@ -534,6 +534,9 @@ class TestEdgeCases:
             "ac": {
                 "status", "objective", "Pg", "Qg", "Vm", "Va_deg",
                 "p_net", "q_net",
+                "branch_p_from", "branch_q_from",
+                "branch_p_to", "branch_q_to",
+                "branch_s_from", "branch_s_to",
             },
             "lossy_dc": {
                 "status", "objective", "Pg", "p_flows", "p_net",

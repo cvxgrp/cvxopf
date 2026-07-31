@@ -6,6 +6,8 @@ bus indexing (i.e., after reindex_case_to_consecutive has been applied).
 No CVXPY in this module.
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 
 # ---------------------------------------------------------------------------
@@ -28,6 +30,7 @@ T_BUS     = 1
 BR_R      = 2
 BR_X      = 3
 BR_B      = 4
+RATE_A    = 5
 TAP       = 8
 SHIFT     = 9
 BR_STATUS = 10
@@ -55,6 +58,114 @@ GEN_STATUS = 7
 #       A @ p_flows + Cg @ Pg = Pd.
 #       Sign convention: flow is positive from from-bus to to-bus.
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BranchAdmittance:
+    """Branch-terminal admittances in MATPOWER branch-table row order."""
+
+    from_bus: np.ndarray
+    to_bus: np.ndarray
+    status: np.ndarray
+    rate_a_mva: np.ndarray
+    yff: np.ndarray
+    yft: np.ndarray
+    ytf: np.ndarray
+    ytt: np.ndarray
+
+
+def make_branch_admittance(case: dict) -> BranchAdmittance:
+    """
+    Compute branch-only terminal admittances using MATPOWER conventions.
+
+    The case must use 0-based consecutive bus IDs. Out-of-service rows retain
+    their position and produce four exact zero coefficients. Their impedance
+    data is not evaluated.
+
+    Parameters
+    ----------
+    case : dict
+        Reindexed MATPOWER-format case dict.
+
+    Returns
+    -------
+    BranchAdmittance
+        Endpoint, status, rating, and terminal-admittance arrays with one
+        entry per branch-table row.
+
+    Raises
+    ------
+    ValueError
+        If an in-service branch has r = x = 0.
+    """
+    branch = np.asarray(case["branch"])
+    nl = branch.shape[0]
+
+    from_bus = branch[:, F_BUS].astype(int)
+    to_bus = branch[:, T_BUS].astype(int)
+    status = branch[:, BR_STATUS].astype(int) != 0
+    rate_a_mva = branch[:, RATE_A].astype(float).copy()
+
+    yff = np.zeros(nl, dtype=np.complex128)
+    yft = np.zeros(nl, dtype=np.complex128)
+    ytf = np.zeros(nl, dtype=np.complex128)
+    ytt = np.zeros(nl, dtype=np.complex128)
+
+    for e in range(nl):
+        if not status[e]:
+            continue
+
+        r = float(branch[e, BR_R])
+        x = float(branch[e, BR_X])
+        b = float(branch[e, BR_B])
+        tap = float(branch[e, TAP])
+        shift = float(branch[e, SHIFT])
+        electrical = {
+            "BR_R": r,
+            "BR_X": x,
+            "BR_B": b,
+            "TAP": tap,
+            "SHIFT": shift,
+        }
+        invalid = [
+            f"{name}={value!r}"
+            for name, value in electrical.items()
+            if not np.isfinite(value)
+        ]
+        if invalid:
+            raise ValueError(
+                f"In-service branch row {e} has nonfinite electrical "
+                f"data: {', '.join(invalid)}."
+            )
+
+        z = r + 1j * x
+        if z == 0:
+            raise ValueError(
+                f"Branch {e} (bus {from_bus[e]} -> {to_bus[e]}) "
+                "has r = x = 0; unsupported."
+            )
+        y = 1.0 / z
+        ysh = 1j * b / 2.0
+
+        if tap == 0.0:
+            tap = 1.0
+        tau = tap * np.exp(1j * np.deg2rad(shift))
+
+        yff[e] = (y + ysh) / (tau * np.conj(tau))
+        yft[e] = -y / np.conj(tau)
+        ytf[e] = -y / tau
+        ytt[e] = y + ysh
+
+    return BranchAdmittance(
+        from_bus=from_bus,
+        to_bus=to_bus,
+        status=status,
+        rate_a_mva=rate_a_mva,
+        yff=yff,
+        yft=yft,
+        ytf=ytf,
+        ytt=ytt,
+    )
 
 
 def reindex_case_to_consecutive(case: dict) -> tuple[dict, dict | None]:
@@ -117,7 +228,11 @@ def reindex_case_to_consecutive(case: dict) -> tuple[dict, dict | None]:
     return {**case, "bus": bus, "branch": branch, "gen": gen}, ext_to_int
 
 
-def make_ybus_matpower(case: dict) -> np.ndarray:
+def make_ybus_matpower(
+    case: dict,
+    *,
+    branch_admittance: BranchAdmittance | None = None,
+) -> np.ndarray:
     """
     Build the complex nodal admittance matrix using MATPOWER conventions.
 
@@ -128,6 +243,9 @@ def make_ybus_matpower(case: dict) -> np.ndarray:
     ----------
     case : dict
         MATPOWER-format case dict with 0-based consecutive bus IDs.
+    branch_admittance : BranchAdmittance, optional
+        Precomputed branch-terminal primitive for ``case``. When omitted, it
+        is constructed internally.
 
     Returns
     -------
@@ -141,43 +259,18 @@ def make_ybus_matpower(case: dict) -> np.ndarray:
     """
     baseMVA = float(case["baseMVA"])
     bus     = case["bus"]
-    branch  = case["branch"]
     nb      = bus.shape[0]
     Y       = np.zeros((nb, nb), dtype=np.complex128)
+    admittance = (
+        make_branch_admittance(case)
+        if branch_admittance is None
+        else branch_admittance
+    )
 
-    for e in range(branch.shape[0]):
-        if int(branch[e, BR_STATUS]) == 0:
-            continue
-
-        f     = int(branch[e, F_BUS])
-        t     = int(branch[e, T_BUS])
-        r     = float(branch[e, BR_R])
-        x     = float(branch[e, BR_X])
-        b     = float(branch[e, BR_B])
-        tap   = float(branch[e, TAP])
-        shift = float(branch[e, SHIFT])
-
-        z = r + 1j * x
-        if z == 0:
-            raise ValueError(
-                f"Branch {e} (bus {f} -> {t}) has r = x = 0; unsupported."
-            )
-        y   = 1.0 / z
-        ysh = 1j * b / 2.0
-
-        if tap == 0.0:
-            tap = 1.0
-        tau = tap * np.exp(1j * np.deg2rad(shift))
-
-        Yff = (y + ysh) / (tau * np.conj(tau))
-        Yft = -y / np.conj(tau)
-        Ytf = -y / tau
-        Ytt = y + ysh
-
-        Y[f, f] += Yff
-        Y[f, t] += Yft
-        Y[t, f] += Ytf
-        Y[t, t] += Ytt
+    np.add.at(Y, (admittance.from_bus, admittance.from_bus), admittance.yff)
+    np.add.at(Y, (admittance.from_bus, admittance.to_bus), admittance.yft)
+    np.add.at(Y, (admittance.to_bus, admittance.from_bus), admittance.ytf)
+    np.add.at(Y, (admittance.to_bus, admittance.to_bus), admittance.ytt)
 
     gs = bus[:, GS].astype(float) / baseMVA
     bs = bus[:, BS].astype(float) / baseMVA

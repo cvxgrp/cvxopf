@@ -56,6 +56,7 @@ import pandas as pd
 import cvxpy as cp
 
 from cvxopf.network import reindex_case_to_consecutive
+from cvxopf.data import validate_branch_status, validate_case_identifiers
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
@@ -195,6 +196,9 @@ def _parse_singlenode_dc_case(
     - Does NOT return A, r, f_max, nogen_buses, nl, or loss_weight.
       ``Cg`` and ``gen_bus`` use the collapsed one-node representation.
     """
+    validate_branch_status(case["branch"])
+    validate_case_identifiers(case)
+
     # Get external bus IDs for validation (before reindexing)
     original_bus = case["bus"]
     ext_bus_ids = set(original_bus[:, BUS_I].astype(int).tolist())
