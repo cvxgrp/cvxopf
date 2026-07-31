@@ -662,4 +662,7 @@ package environment.
 - [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
-- [ ] Explicit nodal load shedding with value-of-lost-load costs and energy-not-served reporting (see `plans/milestone-19-load-shedding.md`)
+- [ ] First-class loads and explicit load shedding: identity-aligned
+  active/reactive demand, optional single-solve interruption with a sufficiently
+  large linear value-of-lost-load cost, and energy-not-served reporting (see
+  `plans/milestone-19-load-shedding.md`)
