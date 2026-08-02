@@ -565,7 +565,7 @@ Each stage receives a clean review and commit boundary.
 
 ### Stage 0 — Characterization and frozen compatibility baseline
 
-**Status:** complete; awaiting review and checkpoint commit
+**Status:** complete — checkpoint commit `f8f01a9`
 
 - Characterize current static and multistep `Pd`, `Qd`, and `Pd_total` data.
 - Lock single- and multistep variable, data, expression, and result schemas
