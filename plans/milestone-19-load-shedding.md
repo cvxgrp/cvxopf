@@ -565,17 +565,43 @@ Each stage receives a clean review and commit boundary.
 
 ### Stage 0 — Characterization and frozen compatibility baseline
 
+**Status:** complete; awaiting review and checkpoint commit
+
 - Characterize current static and multistep `Pd`, `Qd`, and `Pd_total` data.
 - Lock single- and multistep variable, data, expression, and result schemas
   across all three formulations.
-- Record numerical objectives and active/reactive balances for representative
-  MATPOWER cases.
+- Record numerical objectives and active/reactive balances for a
+  representative MATPOWER case across all three formulations.
 - Include zero static load with positive future time-series load.
 - Include negative reactive demand.
 - Characterize unsuccessful solves and `delta != 1`.
 - Record current positional `df_P`/`df_Q` behavior.
 
 No production load behavior changes in this stage.
+
+As-built evidence is in `tests/test_load_characterization.py`:
+
+- exact pre-M19 load-related build and result schemas;
+- AC, lossy-DC, and single-node numerical baselines in single-step and
+  intentional multistep modes;
+- `delta=0.5` objective totals;
+- active and reactive balance reconstruction from internal per-unit variables;
+- static negative active demand and a positional positive-to-zero-to-negative
+  multistep trajectory, including nodal signs and single-node aggregation;
+- negative reactive demand in the solved AC fixture;
+- positional legacy DataFrame columns;
+- zero static load with positive time-series demand;
+- intentional multistep `T=1` schemas and objective equivalence;
+- unsuccessful-result behavior; and
+- explicit absence of all future first-class-load and shedding keys.
+
+Verification at the S0 stopping point:
+
+- 25 focused characterization tests passed;
+- 1,501 full-suite tests passed;
+- Ruff passed;
+- mypy passed; and
+- `git diff --check` passed.
 
 ### Stage 1 — First-class fixed-load model
 
