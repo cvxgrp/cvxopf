@@ -6,8 +6,9 @@ Public API
 build_opf(case, *, formulation, options)
     Single time-step OPF. Returns OPFBuild.
 
-build_opf_multistep(case, df_P, df_Q, *, T, formulation, options,
-                    coupling_constraints)
+build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation, options,
+                    coupling_constraints, loads=None, df_load_p=None,
+                    df_load_q=None)
     T time-step OPF as a single cp.Problem. Returns OPFBuild.
 
 Deprecated (will be removed in a future release)
@@ -38,6 +39,9 @@ from cvxopf.hvdc import (
     _parse_hvdc_timeseries,
 )
 from cvxopf.generator import DispatchableGenerator, _case_with_generators
+from cvxopf.load import Load
+from cvxopf._component_adapters import LoadInputs
+from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +300,71 @@ def _validate_temporal_delta(delta: float) -> None:
         raise ValueError(f"delta must be > 0, got {delta}")
 
 
+def _normalize_multistep_load_inputs(
+    case: dict,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
+    loads: list[Load] | None,
+    df_load_p: pd.DataFrame | None,
+    df_load_q: pd.DataFrame | None,
+    T: int,
+    formulation: str,
+) -> tuple[LoadInputs, bool]:
+    """Select and normalize exactly one public multistep load-input mode."""
+    explicit = loads is not None
+    if not explicit:
+        if df_load_p is not None or df_load_q is not None:
+            raise ValueError(
+                "df_load_p/df_load_q require explicit loads; provide "
+                "loads=[...] (or loads=[] for an explicit empty load set)"
+            )
+        if df_P is None:
+            raise ValueError(
+                "imported-load mode requires df_P; alternatively provide "
+                "explicit loads and df_load_p/df_load_q"
+            )
+        if formulation == "ac" and df_Q is None:
+            raise ValueError("imported-load AC mode requires df_Q")
+        p_pu, q_pu = load_timeseries_from_dataframe(df_P, df_Q, case)
+        if p_pu.shape[0] != T:
+            raise ValueError(
+                f"T={T} but df_P has {p_pu.shape[0]} rows; they must match."
+            )
+        base_mva = float(case["baseMVA"])
+        return LoadInputs(p_pu * base_mva, q_pu * base_mva), False
+
+    if df_P is not None or df_Q is not None:
+        raise ValueError(
+            "explicit-load mode does not accept legacy df_P/df_Q; use "
+            "df_load_p/df_load_q keyed by Load.device_id"
+        )
+    assert loads is not None
+    if df_load_p is None:
+        p_mw = np.tile([unit.p_load_mw for unit in loads], (T, 1))
+    else:
+        p_mw = align_device_dataframe(
+            df_load_p, loads, T, "df_load_p"
+        )
+    if df_load_q is None:
+        q_mvar = np.tile(
+            [
+                0.0 if unit.q_load_mvar is None else unit.q_load_mvar
+                for unit in loads
+            ],
+            (T, 1),
+        )
+    else:
+        q_mvar = align_device_dataframe(
+            df_load_q, loads, T, "df_load_q"
+        )
+    has_reactive = np.asarray(
+        [unit.q_load_mvar is not None for unit in loads], dtype=bool
+    )
+    if df_load_q is not None:
+        has_reactive[:] = True
+    return LoadInputs(p_mw, q_mvar, has_reactive), True
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -310,6 +379,7 @@ def build_opf(
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -353,6 +423,10 @@ def build_opf(
         ``gen``/``gencost`` tables to DispatchableGenerator objects at build
         time. Unlike other device arguments, None means MATPOWER fallback,
         not absence.
+    loads : list[Load] | None, optional
+        First-class loads. ``None`` imports one fixed load per MATPOWER bus;
+        an explicit sequence replaces MATPOWER ``PD``/``QD`` demand. An empty
+        sequence deliberately selects a zero-load model.
 
     Returns
     -------
@@ -381,14 +455,14 @@ def build_opf(
     )
     return builders[formulation](
         normalized_case, options, storage, delta, nondispatchable,
-        hvdc=hvdc, generators=generators,
+        hvdc=hvdc, generators=generators, loads=loads,
     )
 
 
 def build_opf_multistep(
     case: dict,
-    df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_P: pd.DataFrame | None = None,
+    df_Q: pd.DataFrame | None = None,
     *,
     T: int,
     formulation: str = "ac",
@@ -402,6 +476,9 @@ def build_opf_multistep(
     df_hvdc_min: pd.DataFrame | None = None,
     df_hvdc_max: pd.DataFrame | None = None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    df_load_p: pd.DataFrame | None = None,
+    df_load_q: pd.DataFrame | None = None,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -411,16 +488,32 @@ def build_opf_multistep(
     case : dict
         MATPOWER-format case dict. When ``generators`` is supplied explicitly,
         ``gen`` and ``gencost`` may be omitted.
-    df_P : pd.DataFrame, shape (T, nb)
-        Active load time series in MW.
-    df_Q : pd.DataFrame, shape (T, nb)
+    df_P : pd.DataFrame | None, shape (T, nb)
+        Legacy positional active load time series in MW. Required when
+        ``loads is None`` and rejected when explicit loads are supplied.
+    df_Q : pd.DataFrame | None, shape (T, nb)
         Reactive load time series in MVAr. It enters optimization only for
         formulation="ac". For formulation="lossy_dc" or
         formulation="singlenode_dc", it is retained as reactive load input
         metadata and reporting but is not used in optimization; a UserWarning
         is emitted.
+    loads : list[Load] | None, optional
+        ``None`` selects legacy MATPOWER-load mode using ``df_P``/``df_Q``.
+        A supplied sequence selects explicit first-class loads, including an
+        empty sequence for a zero-load model.
+    df_load_p : pd.DataFrame | None, optional
+        Explicit-load active trajectories in MW. Columns must exactly match
+        unique ``Load.device_id`` values and are aligned to device order. If
+        omitted, each load's static ``p_load_mw`` is tiled across the horizon.
+    df_load_q : pd.DataFrame | None, optional
+        Explicit-load reactive trajectories in MVAr with the same identity
+        contract. May define a trajectory when static ``q_load_mvar`` is
+        ``None``. DC formulations retain this input for reporting, warn, and
+        do not use it in optimization. If omitted, static reactive values
+        (with ``None`` represented numerically as zero) are tiled.
     T : int
-        Number of time steps. Must equal df_P.shape[0].
+        Number of time steps. Must equal the row count of every supplied load
+        trajectory; static explicit-load fallback is tiled to this length.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).
@@ -470,6 +563,29 @@ def build_opf_multistep(
         )
 
     _validate_temporal_delta(delta)
+
+    builders = _get_multistep_builders()
+    if formulation not in builders:
+        raise ValueError(
+            f"Unknown formulation '{formulation}'. "
+            f"Supported: {sorted(builders.keys())}"
+        )
+
+    load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(
+        case, df_P, df_Q, loads, df_load_p, df_load_q, T, formulation
+    )
+    if formulation in {"lossy_dc", "singlenode_dc"} and (
+        (not explicit_load_mode and df_Q is not None)
+        or (explicit_load_mode and df_load_q is not None)
+    ):
+        source = "df_load_q" if explicit_load_mode else "df_Q"
+        warnings.warn(
+            f"{source} is retained as reactive load input metadata for "
+            f"formulation={formulation!r}, but reactive power is not used "
+            "in the DC optimization.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Normalize ND availability once at the public API boundary.
     if nondispatchable:
@@ -538,12 +654,6 @@ def build_opf_multistep(
         df_hvdc_min = None
         df_hvdc_max = None
 
-    builders = _get_multistep_builders()
-    if formulation not in builders:
-        raise ValueError(
-            f"Unknown formulation '{formulation}'. "
-            f"Supported: {sorted(builders.keys())}"
-        )
     normalized_case = (
         _case_with_generators(case, generators)
         if generators is not None else case
@@ -552,7 +662,8 @@ def build_opf_multistep(
         normalized_case, df_P, df_Q, T, options, coupling_constraints,
         storage, delta, nondispatchable, df_nd,
         hvdc=hvdc, df_hvdc_min=df_hvdc_min, df_hvdc_max=df_hvdc_max,
-        generators=generators,
+        generators=generators, loads=loads, load_inputs=load_inputs,
+        load_participates_when_empty=explicit_load_mode,
     )
 
 

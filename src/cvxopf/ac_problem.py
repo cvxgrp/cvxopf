@@ -57,7 +57,7 @@ from cvxopf._component_adapters import (
     NondispatchableInputs,
     component_requests,
 )
-from cvxopf.load import loads_from_matpower
+from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -324,6 +324,8 @@ def _parse_case(
     hvdc_inputs: HVDCInputs | None = None,
     load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
+    loads: list[Load] | None = None,
+    load_participates_when_empty: bool = False,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
@@ -343,7 +345,8 @@ def _parse_case(
     branch_to_bus_external = (
         np.asarray(case["branch"])[:, T_BUS].astype(int).copy()
     )
-    loads = loads_from_matpower(case["bus"])
+    if loads is None:
+        loads = loads_from_matpower(case["bus"])
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
@@ -410,6 +413,7 @@ def _parse_case(
         generators=generators,
         load_units=loads,
         load_inputs=load_inputs,
+        load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -421,6 +425,16 @@ def _parse_case(
         hvdc_inputs=hvdc_inputs,
     )
     components = prepare_components(requests, "ac", preparation)
+    load_p_mw = (
+        np.asarray(components.flat_data["load_p_mw"], dtype=float)
+        if load_inputs is None else load_inputs.p_mw[0]
+    )
+    load_q_mvar = (
+        np.asarray(components.flat_data["load_q_mvar"], dtype=float)
+        if load_inputs is None else load_inputs.q_mvar[0]
+    )
+    Pd = np.asarray(components.flat_data["Cload"]) @ load_p_mw / baseMVA
+    Qd = np.asarray(components.flat_data["Cload"]) @ load_q_mvar / baseMVA
 
     formulation_data = dict(
         case=case, baseMVA=baseMVA,
@@ -622,12 +636,15 @@ def _build_ac_single(
     *,
     hvdc=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
 ) -> "OPFBuild":
     """Build a single time-step AC-OPF problem."""
     from cvxopf.problem import OPFBuild
 
     d = _parse_case(
-        case, options, storage, delta, nondispatchable, hvdc, generators
+        case, options, storage, delta, nondispatchable, hvdc, generators,
+        loads=loads,
+        load_participates_when_empty=loads is not None,
     )
 
     # Create step variables
@@ -777,16 +794,21 @@ def _build_ac_multistep(
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs | None = None,
+    load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
 
-    Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
-    if Pd_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-        )
-    base_mva = float(case["baseMVA"])
+    if load_inputs is None:
+        Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
+        if Pd_series.shape[0] != T:
+            raise ValueError(
+                f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
+            )
+        base_mva = float(case["baseMVA"])
+        load_inputs = LoadInputs(Pd_series * base_mva, Qd_series * base_mva)
     d = _parse_case(
         case,
         options,
@@ -807,12 +829,13 @@ def _build_ac_multistep(
                 df_hvdc_max.to_numpy(dtype=float),
             )
         ),
-        load_inputs=LoadInputs(
-            Pd_series * base_mva,
-            Qd_series * base_mva,
-        ),
+        load_inputs=load_inputs,
         is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
     )
+    Pd_series = load_inputs.p_mw @ d["Cload"].T / d["baseMVA"]
+    Qd_series = load_inputs.q_mvar @ d["Cload"].T / d["baseMVA"]
 
     # Initialize lists for variables
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []

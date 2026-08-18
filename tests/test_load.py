@@ -1,10 +1,12 @@
 """Tests for the Milestone 19 Stage 1 fixed-load device boundary."""
 
 import cvxpy as cp
+from contextlib import nullcontext
 import numpy as np
+import pandas as pd
 import pytest
 
-from cvxopf import Load, build_opf, extract_results
+from cvxopf import Load, build_opf, build_opf_multistep, extract_results
 from cvxopf._component_adapter import (
     ACNetworkState,
     DCNetworkState,
@@ -202,6 +204,166 @@ class TestLoadPreparation:
             [True, False],
         )
         assert prepared["load_shedding_cost_per_mwh"][1] == 5000.0
+
+
+class TestExplicitLoadAPI:
+    @staticmethod
+    def _loads():
+        return [
+            Load(5, 10.0, "industrial", q_load_mvar=None),
+            Load(7, 20.0, "residential", q_load_mvar=4.0),
+        ]
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_single_step_explicit_loads_replace_matpower_loads(
+        self, formulation
+    ):
+        build = build_opf(
+            case9(), formulation=formulation, loads=self._loads()
+        )
+
+        np.testing.assert_array_equal(
+            build.data["load_device_ids"],
+            ["industrial", "residential"],
+        )
+        np.testing.assert_allclose(
+            build.expressions["p_load"].value, [10.0, 20.0]
+        )
+        if formulation == "singlenode_dc":
+            assert build.data["Pd_total"] == pytest.approx(0.3)
+        else:
+            expected = np.zeros(9)
+            expected[[4, 6]] = [0.1, 0.2]
+            np.testing.assert_allclose(build.data["Pd"], expected)
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_identity_aligned_frames_are_reordered_and_static_q_can_be_replaced(
+        self, formulation
+    ):
+        loads = self._loads()
+        p = pd.DataFrame(
+            {"residential": [22.0, 24.0], "industrial": [11.0, 12.0]}
+        )
+        q = pd.DataFrame(
+            {"residential": [5.0, 6.0], "industrial": [-1.0, -2.0]}
+        )
+        warning = pytest.warns(UserWarning, match="retained.*not used")
+        context = warning if formulation != "ac" else nullcontext()
+        with context:
+            build = build_opf_multistep(
+                case9(),
+                T=2,
+                formulation=formulation,
+                loads=loads,
+                df_load_p=p,
+                df_load_q=q,
+            )
+
+        np.testing.assert_allclose(
+            [item.value for item in build.expressions["p_load"]],
+            [[11.0, 22.0], [12.0, 24.0]],
+        )
+        np.testing.assert_allclose(
+            [item.value for item in build.expressions["q_load"]],
+            [[-1.0, 5.0], [-2.0, 6.0]],
+        )
+        assert build.data["load_has_reactive"].tolist() == [True, True]
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_explicit_empty_loads_publish_complete_empty_schema(self, formulation):
+        build = build_opf_multistep(
+            case9(), T=1, formulation=formulation, loads=[]
+        )
+
+        assert build.data["nload"] == 0
+        assert build.data["load_has_reactive"].shape == (0,)
+        assert build.data["Cload"].shape == (
+            1 if formulation == "singlenode_dc" else 9,
+            0,
+        )
+        assert len(build.expressions["p_load"]) == 1
+        assert build.expressions["p_load"][0].shape == (0,)
+        assert build.data["Pd_series"].shape == (
+            (1,) if formulation == "singlenode_dc" else (1, 9)
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            (
+                {"loads": [Load(5, 1.0, "x")], "df_P": pd.DataFrame([[1]])},
+                "does not accept legacy",
+            ),
+            (
+                {"df_load_p": pd.DataFrame({"x": [1.0]})},
+                "require explicit loads",
+            ),
+            ({}, "requires df_P"),
+        ],
+    )
+    def test_input_modes_are_mutually_exclusive_before_case_dispatch(
+        self, kwargs, message
+    ):
+        malformed_case = {"baseMVA": 100.0}
+        with pytest.raises(ValueError, match=message):
+            build_opf_multistep(malformed_case, T=1, **kwargs)
+
+    @pytest.mark.parametrize("frame_name", ["df_load_p", "df_load_q"])
+    def test_explicit_frames_require_exact_finite_identity_set(self, frame_name):
+        frame = pd.DataFrame({"wrong": [np.nan]})
+        with pytest.raises(ValueError, match="columns must match"):
+            build_opf_multistep(
+                case9(),
+                T=1,
+                loads=self._loads(),
+                **{frame_name: frame},
+            )
+
+    def test_explicit_frame_rejects_nonfinite_value_after_alignment(self):
+        frame = pd.DataFrame(
+            {"industrial": [np.nan], "residential": [2.0]}
+        )
+        with pytest.raises(ValueError, match="non-finite value"):
+            build_opf_multistep(
+                case9(), T=1, loads=self._loads(), df_load_p=frame
+            )
+
+    def test_explicit_frame_rejects_wrong_horizon_length(self):
+        frame = pd.DataFrame(
+            {"industrial": [1.0, 2.0], "residential": [3.0, 4.0]}
+        )
+        with pytest.raises(ValueError, match="2 rows but T=1"):
+            build_opf_multistep(
+                case9(), T=1, loads=self._loads(), df_load_p=frame
+            )
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_multistep_t1_retains_time_axis_and_matches_single_step(
+        self, formulation
+    ):
+        loads = self._loads()
+        single = build_opf(case9(), formulation=formulation, loads=loads)
+        multi = build_opf_multistep(
+            case9(), T=1, formulation=formulation, loads=loads
+        )
+        single.solve()
+        multi.solve()
+
+        assert multi.data["T"] == 1
+        assert multi.data["load_has_reactive"].tolist() == [False, True]
+        assert len(multi.expressions["p_load"]) == 1
+        assert extract_results(multi)["p_load"].shape == (1, 2)
+        assert multi.prob.value == pytest.approx(
+            single.prob.value, rel=2e-5, abs=2e-3
+        )
 
 
 @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])

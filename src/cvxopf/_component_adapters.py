@@ -77,6 +77,14 @@ def _load_prepare(
         )
     if not np.all(np.isfinite(p_mw)) or not np.all(np.isfinite(q_mvar)):
         raise ValueError("load input channels must contain only finite values")
+    if inputs is not None and inputs.has_reactive is not None:
+        if inputs.has_reactive.shape != (len(units),):
+            raise ValueError(
+                "load reactive-channel metadata must have shape "
+                f"({len(units)},), got {inputs.has_reactive.shape}"
+            )
+        prepared = dict(prepared)
+        prepared["load_has_reactive"] = inputs.has_reactive
     prepared["_load_p_mw_by_step"] = np.array(p_mw, copy=True)
     prepared["_load_q_mvar_by_step"] = np.array(q_mvar, copy=True)
     return prepared
@@ -168,10 +176,11 @@ LOAD_ACTIVE = FormulationAdapter[Load](
 
 @dataclass(frozen=True)
 class LoadInputs:
-    """Normalized engineering-unit load channels in device order."""
+    """Normalized load channels and effective reactive definition by device."""
 
     p_mw: np.ndarray
     q_mvar: np.ndarray
+    has_reactive: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -180,6 +189,12 @@ class LoadInputs:
         object.__setattr__(
             self, "q_mvar", np.array(self.q_mvar, dtype=float, copy=True)
         )
+        if self.has_reactive is not None:
+            object.__setattr__(
+                self,
+                "has_reactive",
+                np.array(self.has_reactive, dtype=bool, copy=True),
+            )
 
 
 LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
@@ -826,6 +841,7 @@ def component_requests(
     generators: Sequence[DispatchableGenerator],
     load_units: Sequence[Load] = (),
     load_inputs: LoadInputs | None = None,
+    load_participates_when_empty: bool = False,
     storage_units: Sequence[StorageUnitIdeal] = (),
     nondispatchable_units: Sequence[NondispatchableUnit] = (),
     nondispatchable_inputs: NondispatchableInputs | None = None,
@@ -849,6 +865,7 @@ def component_requests(
             tuple(load_units),
             load_inputs,
             required_capability=FormulationCapability.ACTIVE,
+            participates_when_empty=load_participates_when_empty,
         ),
         ComponentRequest(
             STORAGE_ADAPTER,

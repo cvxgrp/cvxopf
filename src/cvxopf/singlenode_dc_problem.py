@@ -93,7 +93,7 @@ from cvxopf._component_adapters import (
     NondispatchableInputs,
     component_requests,
 )
-from cvxopf.load import loads_from_matpower
+from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -171,6 +171,8 @@ def _parse_singlenode_dc_case(
     nd_available_mw: np.ndarray | None = None,
     load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
+    loads: list[Load] | None = None,
+    load_participates_when_empty: bool = False,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -209,7 +211,8 @@ def _parse_singlenode_dc_case(
     # Get external bus IDs for validation (before reindexing)
     original_bus = case["bus"]
     ext_bus_ids = set(original_bus[:, BUS_I].astype(int).tolist())
-    loads = loads_from_matpower(original_bus)
+    if loads is None:
+        loads = loads_from_matpower(original_bus)
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
 
@@ -243,6 +246,7 @@ def _parse_singlenode_dc_case(
         generators=generators,
         load_units=loads,
         load_inputs=load_inputs,
+        load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -255,6 +259,11 @@ def _parse_singlenode_dc_case(
     components = prepare_components(
         requests, "singlenode_dc", preparation
     )
+    load_p_mw = (
+        np.asarray(components.flat_data["load_p_mw"], dtype=float)
+        if load_inputs is None else load_inputs.p_mw[0]
+    )
+    Pd_total = float(np.sum(load_p_mw) / baseMVA)
 
     formulation_data = {
         "baseMVA": baseMVA,
@@ -278,6 +287,7 @@ def _build_singlenode_dc_single(
     *,
     hvdc=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
 ) -> "OPFBuild":
     """
     Build a single time-step single-node DC dispatch problem.
@@ -312,6 +322,8 @@ def _build_singlenode_dc_single(
         nondispatchable,
         generators,
         hvdc=hvdc,
+        loads=loads,
+        load_participates_when_empty=loads is not None,
     )
 
     step_context = StepContext(
@@ -414,6 +426,9 @@ def _build_singlenode_dc_multistep(
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs | None = None,
+    load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """
     Build a multi-step single-node DC dispatch problem.
@@ -456,29 +471,21 @@ def _build_singlenode_dc_multistep(
     OPFBuild
         Problem container with formulation="singlenode_dc", is_convex=True.
     """
-    import warnings
-
     from cvxopf.problem import OPFBuild
-
-    # Retain df_Q for portable reporting; exclude it from DC optimization.
-    if df_Q is not None:
-        warnings.warn(
-            "df_Q is retained as reactive load input metadata for "
-            "formulation='singlenode_dc', but reactive power is not used "
-            "in the DC optimization.",
-            UserWarning,
-            stacklevel=3,
+    if load_inputs is None:
+        Pd_nodal_series, Qd_nodal_series = load_timeseries_from_dataframe(
+            df_P, df_Q, case
         )
-
-    Pd_nodal_series, Qd_nodal_series = load_timeseries_from_dataframe(
-        df_P, df_Q, case
-    )
-    if Pd_nodal_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_nodal_series.shape[0]} rows; "
-            "they must match."
+        if Pd_nodal_series.shape[0] != T:
+            raise ValueError(
+                f"T={T} but df_P has {Pd_nodal_series.shape[0]} rows; "
+                "they must match."
+            )
+        base_mva = float(case["baseMVA"])
+        load_inputs = LoadInputs(
+            Pd_nodal_series * base_mva,
+            Qd_nodal_series * base_mva,
         )
-    base_mva = float(case["baseMVA"])
 
     # Parse the case
     d = _parse_singlenode_dc_case(
@@ -493,22 +500,14 @@ def _build_singlenode_dc_multistep(
         nd_available_mw=(
             None if df_nd is None else df_nd.to_numpy(dtype=float)
         ),
-        load_inputs=LoadInputs(
-            Pd_nodal_series * base_mva,
-            Qd_nodal_series * base_mva,
-        ),
+        load_inputs=load_inputs,
         is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
     )
 
-    # Validate df_P column count before summing
-    if df_P.shape[1] != d["source_nb"]:
-        raise ValueError(
-            f"df_P has {df_P.shape[1]} columns but case has "
-            f"{d['source_nb']} source buses."
-        )
-
     # Retain the legacy aggregate load metadata in per unit.
-    Pd_series = Pd_nodal_series.sum(axis=1)
+    Pd_series = load_inputs.p_mw.sum(axis=1) / d["baseMVA"]
 
     # Accumulators
     component_steps = []

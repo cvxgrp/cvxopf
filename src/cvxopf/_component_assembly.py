@@ -40,6 +40,7 @@ class ComponentRequest:
     units: tuple[Any, ...]
     inputs: Any = None
     required_capability: FormulationCapability | None = None
+    participates_when_empty: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "units", tuple(self.units))
@@ -76,7 +77,7 @@ def prepare_components(
     components: dict[str, PreparedComponent[Any, Any]] = {}
     flat_data: dict[str, object] = {}
     for request in requests:
-        if not request.units:
+        if not request.units and not request.participates_when_empty:
             continue
         adapter = request.adapter
         if adapter.name in components:

@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–2 complete
+**Status:** implementation in progress; Stages 0–3 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -656,7 +656,7 @@ Verification at the S1 stopping point:
 
 ### Stage 2 — Complete legacy conversion and shared assembly migration
 
-**Status:** complete — checkpoint commit pending
+**Status:** complete — checkpoint commit `29202d3`
 
 - Convert case bus `PD`/`QD` into internal loads.
 - Convert legacy positional multistep `df_P`/`df_Q` into the same prepared
@@ -704,6 +704,8 @@ Verification at the S2 stopping point:
 
 ### Stage 3 — Identity-aligned explicit-load time series
 
+**Status:** complete — checkpoint commit pending
+
 - Make legacy `df_P` and `df_Q` optional in the public callable signature.
 - Implement and validate the two input modes defined in Section 3.2.
 - Add the approved identity-aligned time-series surface for explicit loads.
@@ -723,6 +725,38 @@ Verification at the S2 stopping point:
   preparation and metadata publication even when its collection is empty.
   Choose the narrow shared-assembly mechanism only after testing whether the
   ordinary explicit-load request can satisfy that requirement.
+
+As built, the public boundary selects exactly one load-input mode before any
+formulation builder is invoked. ``loads=None`` retains the positional
+MATPOWER-compatible path; supplying a load sequence, including ``loads=[]``,
+selects identity-aligned explicit-load mode and rejects legacy ``df_P`` and
+``df_Q``. Missing explicit trajectories fall back to tiled static device
+values, while supplied frames are reordered by unique ``Load.device_id`` and
+validated for exact identity, finite values, and horizon length.
+
+One narrow private assembly flag, ``ComponentRequest.participates_when_empty``,
+allows an explicitly selected empty component family to run preparation and
+publish its complete zero-length schema. It does not change the default rule
+that absent empty collections are skipped. Compatibility ``Pd``, ``Qd``,
+``Pd_total``, and multistep load-series metadata are derived from the selected
+first-class load inputs, so explicit loads replace rather than supplement the
+MATPOWER bus demand. Explicit reactive trajectories are portable across all
+formulations; the DC formulations retain and report them with a warning but do
+not include them in optimization.
+
+Verification at the S3 stopping point:
+
+- all three public load states (fallback, explicit nonempty, and explicit
+  empty) are distinguished and retain their documented schemas;
+- identity reordering, static fallback, a time-varying reactive channel with
+  no static fallback, finite-value and horizon validation, and mixed-mode
+  rejection pass;
+- multistep ``T=1`` retains its time dimension and matches the corresponding
+  single-step objective in all three formulations;
+- 19 focused S3 API tests were added;
+- 1,558 full-suite tests passed;
+- Ruff and strict mypy passed; and
+- ``git diff --check`` passed.
 
 ### Stage 4 — Activate the sheddable-load feasible set and cost
 
