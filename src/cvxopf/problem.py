@@ -172,6 +172,12 @@ class OPFBuild:
                  storage_initial_soc, storage_delta, storage_aging_weight,
                  storage_terminal_soc, storage_terminal_constraint,
                  storage_terminal_cost, storage_terminal_weight
+        Imported first-class loads always add: nload, nsheddable, Cload,
+                 load_device_ids, load_bus_external, load_bus_internal,
+                 load_has_reactive, load_is_sheddable,
+                 sheddable_load_indices, sheddable_load_device_ids,
+                 load_max_shed_fraction, and
+                 load_shedding_cost_per_mwh.
 
     formulation : str
         The formulation used to build this problem.
@@ -196,6 +202,10 @@ class OPFBuild:
         are scalar horizon totals in both modes. Horizon-boundary expressions,
         including ``storage_terminal_cost``, are scalar expressions published
         once and are not multiplied by ``delta``.
+        Fixed loads publish per-step ``p_load``, ``q_load``, and
+        ``p_load_served`` expressions in engineering units. AC also publishes
+        ``q_load_served``; DC formulations retain reactive input only for
+        portable reporting.
     """
     prob:        cp.Problem
     variables:   dict
@@ -322,7 +332,8 @@ def build_opf(
             flows, no reactive power. Collapses all buses to one node and
             enforces scalar real power balance. Convex QP solved by CLARABEL.
             Accepts storage= and nondispatchable= in the same way as
-            'lossy_dc'. df_Q is accepted but ignored in build_opf_multistep.
+            'lossy_dc'. Multistep df_Q is retained for load reporting but is
+            not used in DC optimization.
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
     storage : list[StorageUnitIdeal] | None, optional
@@ -403,14 +414,16 @@ def build_opf_multistep(
     df_P : pd.DataFrame, shape (T, nb)
         Active load time series in MW.
     df_Q : pd.DataFrame, shape (T, nb)
-        Reactive load time series in MVAr. Used for formulation="ac" only.
-        For formulation='lossy_dc' or formulation='singlenode_dc', df_Q is
-        accepted but ignored and a UserWarning is emitted.
+        Reactive load time series in MVAr. It enters optimization only for
+        formulation="ac". For formulation="lossy_dc" or
+        formulation="singlenode_dc", it is retained as reactive load input
+        metadata and reporting but is not used in optimization; a UserWarning
+        is emitted.
     T : int
         Number of time steps. Must equal df_P.shape[0].
     formulation : str
         Same options as build_opf, including "singlenode_dc"
-        (single-node copper-plate DC dispatch; df_Q ignored).
+        (single-node copper-plate DC dispatch; df_Q reporting-only).
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
     coupling_constraints : list of cp.Constraint, optional

@@ -175,7 +175,7 @@ def validate_case(case: dict) -> None:
 
 def load_timeseries_from_dataframe(
     df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_Q: pd.DataFrame | None,
     case: dict,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -185,8 +185,10 @@ def load_timeseries_from_dataframe(
     ----------
     df_P : pd.DataFrame, shape (T, nb)
         Active load time series in MW. Columns should correspond to buses.
-    df_Q : pd.DataFrame, shape (T, nb)
+    df_Q : pd.DataFrame or None, shape (T, nb)
         Reactive load time series in MVAr. Columns should correspond to buses.
+        ``None`` preserves the legacy DC convention by supplying a zero
+        reactive reporting channel.
     case : dict
         MATPOWER-format case dict. Used to read baseMVA and nb.
 
@@ -205,6 +207,13 @@ def load_timeseries_from_dataframe(
     """
     baseMVA = float(case["baseMVA"])
     nb      = case["bus"].shape[0]
+
+    if df_Q is None:
+        df_Q = pd.DataFrame(
+            np.zeros_like(df_P.to_numpy()),
+            index=df_P.index,
+            columns=df_P.columns,
+        )
 
     if df_P.shape[1] != nb:
         raise ValueError(

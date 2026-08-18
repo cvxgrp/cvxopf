@@ -1135,6 +1135,7 @@ def test_common_registry_has_one_order_for_every_formulation():
         )
         assert tuple(request.adapter.name for request in requests) == (
             "generator",
+            "load",
             "storage",
             "nondispatchable",
             "hvdc",

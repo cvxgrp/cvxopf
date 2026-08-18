@@ -16,6 +16,11 @@ import cvxpy as cp
 import numpy as np
 
 
+BUS_I = 0
+PD = 2
+QD = 3
+
+
 @dataclass
 class Load:
     """One active/reactive load channel with optional future shedding policy.
@@ -106,6 +111,19 @@ def make_load_incidence(
     return incidence
 
 
+def loads_from_matpower(bus: np.ndarray) -> list[Load]:
+    """Convert MATPOWER bus rows to one deterministic load per bus."""
+    return [
+        Load(
+            bus=int(row[BUS_I]),
+            p_load_mw=float(row[PD]),
+            q_load_mvar=float(row[QD]),
+            device_id=f"load_bus_{int(row[BUS_I])}",
+        )
+        for row in np.asarray(bus)
+    ]
+
+
 def _prepare_data(
     loads: list[Load],
     nb: int,
@@ -174,7 +192,21 @@ def _prepare_data(
 
 def _build_metadata(prepared: dict[str, object]) -> dict[str, object]:
     """Return static load fields published through ``OPFBuild.data``."""
-    return dict(prepared)
+    keys = (
+        "nload",
+        "nsheddable",
+        "Cload",
+        "load_device_ids",
+        "load_bus_external",
+        "load_bus_internal",
+        "load_has_reactive",
+        "load_is_sheddable",
+        "sheddable_load_indices",
+        "sheddable_load_device_ids",
+        "load_max_shed_fraction",
+        "load_shedding_cost_per_mwh",
+    )
+    return {key: prepared[key] for key in keys}
 
 
 def ac_injections(
@@ -197,6 +229,21 @@ def dc_injections(
     inv_base_mva = cp.Parameter(nonneg=True, name="load_inv_base_mva")
     p_pu = cp.multiply(inv_base_mva, -(incidence @ p_load_mw))
     return p_pu, None, inv_base_mva
+
+
+def ac_operating_constraints() -> list[cp.Constraint]:
+    """Return the empty fixed-load AC feasible set."""
+    return []
+
+
+def dc_operating_constraints() -> list[cp.Constraint]:
+    """Return the empty fixed-load DC feasible set."""
+    return []
+
+
+def coupling_constraints() -> list[cp.Constraint]:
+    """Return the empty fixed-load temporal contribution."""
+    return []
 
 
 def fixed_expressions(

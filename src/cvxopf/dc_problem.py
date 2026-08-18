@@ -23,9 +23,13 @@ G and the weighted loss proxy are stage-cost rates. Terminal cost is a
 once-per-horizon boundary term and is not multiplied by delta.
 
 Constraints:
-    A @ p_flows + Cg @ Pg == Pd    flow conservation at every bus
-    |p_flows[e]| <= f_max[e]       branch flow limits
+    A @ p_flows + p_components == 0  flow conservation at every bus
+    |p_flows[e]| <= f_max[e]         branch flow limits
     Pgmin <= Pg <= Pgmax
+
+Here ``p_components`` is the generic aggregate of generator, load, and other
+device injections. Loads enter with their device-owned negative injection
+sign rather than through formulation-local subtraction.
 
 This is a convex QP; the default solver is CLARABEL (nlp=False).
 
@@ -72,9 +76,11 @@ from cvxopf._component_assembly import (
 )
 from cvxopf._component_adapters import (
     HVDCInputs,
+    LoadInputs,
     NondispatchableInputs,
     component_requests,
 )
+from cvxopf.load import loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -113,6 +119,7 @@ def _parse_dc_case(
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
     hvdc_inputs: HVDCInputs | None = None,
+    load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
 ) -> dict:
     """
@@ -120,6 +127,7 @@ def _parse_dc_case(
     Returns a flat dict consumed by the DC single-step and multistep builders.
     """
     validate_case(case)
+    loads = loads_from_matpower(case["bus"])
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
@@ -184,6 +192,8 @@ def _parse_dc_case(
     requests = component_requests(
         "lossy_dc",
         generators=generators,
+        load_units=loads,
+        load_inputs=load_inputs,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -215,13 +225,12 @@ def _make_dc_step_constraints(
     p_flows,
     component_injection,
     A,
-    Pd,
     f_max,
     component_operating_constraints,
 ) -> tuple[list, cp.Expression]:
     """Build one DC step's constraints and modeled net bus injection."""
     # Section 1: Nodal real power balance
-    p_net = component_injection - Pd
+    p_net = component_injection
     constr = [A @ p_flows + p_net == 0]
 
     # Section 2: Branch flow limits
@@ -289,7 +298,7 @@ def _build_lossy_dc_single(
     constr, p_net_expr = _make_dc_step_constraints(
         p_flows,
         step_aggregate.injection.p_pu,
-        d["A"], d["Pd"], d["f_max"],
+        d["A"], d["f_max"],
         step_aggregate.operating_constraints,
     )
     constr.extend(step_aggregate.network_constraints)
@@ -381,8 +390,9 @@ def _build_lossy_dc_multistep(
 
     if df_Q is not None:
         warnings.warn(
-            "df_Q is ignored for formulation='lossy_dc'. "
-            "Reactive power is not modelled in the DC formulation.",
+            "df_Q is retained as reactive load input metadata for "
+            "formulation='lossy_dc', but reactive power is not used in "
+            "the DC optimization.",
             UserWarning,
             stacklevel=3,
         )
@@ -397,12 +407,14 @@ def _build_lossy_dc_multistep(
             stacklevel=3,
         )
 
-    # Use df_P only for load; construct a dummy df_Q with zeros for the
-    # shared timeseries loader (which expects matching shapes).
-    df_Q_dummy = pd.DataFrame(
-        np.zeros_like(df_P.to_numpy()), columns=df_P.columns
+    Pd_series, Qd_series = load_timeseries_from_dataframe(
+        df_P, df_Q, case
     )
-
+    if Pd_series.shape[0] != T:
+        raise ValueError(
+            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
+        )
+    base_mva = float(case["baseMVA"])
     d = _parse_dc_case(
         case,
         options,
@@ -423,14 +435,12 @@ def _build_lossy_dc_multistep(
                 df_hvdc_max.to_numpy(dtype=float),
             )
         ),
+        load_inputs=LoadInputs(
+            Pd_series * base_mva,
+            Qd_series * base_mva,
+        ),
         is_multistep=True,
     )
-    Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
-
-    if Pd_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-        )
 
     p_flows_list    = []
     component_steps = []
@@ -460,7 +470,7 @@ def _build_lossy_dc_multistep(
         step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t,
             step_aggregate.injection.p_pu,
-            d["A"], Pd_series[t], d["f_max"],
+            d["A"], d["f_max"],
             step_aggregate.operating_constraints,
         )
         step_constr.extend(step_aggregate.network_constraints)

@@ -12,7 +12,7 @@ from cvxopf._component_adapter import (
     PreparationContext,
     StepContext,
 )
-from cvxopf._component_adapters import LOAD_ADAPTER
+from cvxopf._component_adapters import LOAD_ADAPTER, LoadInputs
 from cvxopf._component_assembly import (
     ComponentRequest,
     assemble_component_horizon,
@@ -27,6 +27,7 @@ def _context(
     formulation,
     *,
     single_node=False,
+    horizon_steps=1,
 ):
     case = case9()
     external = frozenset(case["bus"][:, 0].astype(int))
@@ -43,7 +44,7 @@ def _context(
         nb=nb,
         ext_to_int=ext_to_int,
         ext_bus_ids=external,
-        horizon_steps=1,
+        horizon_steps=horizon_steps,
         delta=1.0,
     )
     step = StepContext(
@@ -314,6 +315,56 @@ def test_shedding_configuration_is_valid_but_temporarily_rejected_by_adapter():
 
     with pytest.raises(NotImplementedError, match="Milestone 19 Stage 4"):
         LOAD_ADAPTER.prepare((unit,), None, preparation)
+
+
+def test_normalized_load_inputs_are_selected_by_step():
+    preparation, _ = _context("lossy_dc", horizon_steps=2)
+    unit = Load(5, 10.0, "load-5", q_load_mvar=2.0)
+    prepared = LOAD_ADAPTER.prepare(
+        (unit,),
+        LoadInputs(
+            p_mw=np.array([[10.0], [-4.0]]),
+            q_mvar=np.array([[2.0], [-1.0]]),
+        ),
+        preparation,
+    )
+    binding = LOAD_ADAPTER.formulations["lossy_dc"]
+    assert binding.injections is not None
+    assert binding.step_expressions is not None
+
+    for step_index, expected_p in enumerate((10.0, -4.0)):
+        step = StepContext(
+            "lossy_dc",
+            step_index,
+            100.0,
+            preparation.ext_to_int,
+            DCNetworkState(),
+        )
+        injection = binding.injections((unit,), prepared, {}, step)
+        injection.inv_base_mva.value = 0.01
+        expected = np.zeros(preparation.nb)
+        expected[preparation.ext_to_int[5]] = -expected_p / 100.0
+        np.testing.assert_array_equal(injection.p_pu.value, expected)
+        expressions = binding.step_expressions((unit,), prepared, {}, step)
+        np.testing.assert_array_equal(
+            expressions["p_load"].value, [expected_p]
+        )
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        LoadInputs(np.ones((1, 1)), np.ones((2, 1))),
+        LoadInputs(np.ones((2, 2)), np.ones((2, 2))),
+        LoadInputs(np.array([[1.0], [np.nan]]), np.ones((2, 1))),
+    ],
+)
+def test_load_adapter_rejects_invalid_normalized_channels(inputs):
+    preparation, _ = _context("ac", horizon_steps=2)
+    unit = Load(5, 10.0, "load-5")
+
+    with pytest.raises(ValueError, match="load input channels"):
+        LOAD_ADAPTER.prepare((unit,), inputs, preparation)
 
 
 @pytest.mark.parametrize("formulation", ["ac", "lossy_dc", "singlenode_dc"])

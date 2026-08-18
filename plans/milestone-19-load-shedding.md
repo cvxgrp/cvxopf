@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–1 complete
+**Status:** implementation in progress; Stages 0–2 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -605,7 +605,7 @@ Verification at the S0 stopping point:
 
 ### Stage 1 — First-class fixed-load model
 
-**Status:** complete — checkpoint commit pending
+**Status:** complete — checkpoint commit `481643c`
 
 - Add the complete approved `Load` dataclass, including the future shedding
   policy fields, and stabilize its validation now.
@@ -656,6 +656,8 @@ Verification at the S1 stopping point:
 
 ### Stage 2 — Complete legacy conversion and shared assembly migration
 
+**Status:** complete — checkpoint commit pending
+
 - Convert case bus `PD`/`QD` into internal loads.
 - Convert legacy positional multistep `df_P`/`df_Q` into the same prepared
   load representation.
@@ -671,6 +673,34 @@ Verification at the S1 stopping point:
 The conversion and removal of `Pd`, `Qd`, and `Pd_total` subtraction are one
 atomic change. No checkpoint may leave multistep builders without a valid load
 injection source.
+
+As built, the MATPOWER compatibility converter creates one fixed `Load` per
+original bus row, including zero-demand rows, with deterministic identity
+`load_bus_<external_id>`. Static and legacy positional multistep channels are
+normalized in engineering units before component preparation. Existing
+per-unit `Pd`, `Qd`, `Pd_total`, and `Pd_series` fields remain available as
+compatibility metadata but no longer participate independently in balance
+construction.
+
+All formulation balance helpers now receive only the generic aggregate
+component injection. The common registry contains the load adapter once, and
+AC, lossy DC, and single-node DC publish fixed load expressions through the
+shared expression channel. For backward compatibility, lossy and single-node
+DC continue accepting legacy `df_Q=None`; that absence is represented by a
+zero reactive reporting trajectory and remains absent from optimization.
+
+Verification at the S2 stopping point:
+
+- pre-M19 objectives and dispatch baselines are unchanged within their frozen
+  solver tolerances in all three formulations and both horizon modes;
+- signed active and reactive channels, nonconsecutive external identities,
+  positional multistep alignment, and intentional multistep `T=1` pass;
+- static architecture gates prove formulation balance helpers contain no
+  independent `Pd`, `Qd`, or `Pd_total` arithmetic;
+- 15 focused S2 migration tests were added;
+- 1,539 full-suite tests passed;
+- Ruff and strict mypy passed; and
+- `git diff --check` passed.
 
 ### Stage 3 — Identity-aligned explicit-load time series
 

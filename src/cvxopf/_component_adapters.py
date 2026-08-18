@@ -42,7 +42,7 @@ def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
 
 def _load_prepare(
     units: Sequence[Load],
-    inputs: None,
+    inputs: "LoadInputs | None",
     context: PreparationContext,
 ) -> Mapping[str, object]:
     """Prepare fixed loads while S1 shedding semantics remain inactive."""
@@ -51,12 +51,35 @@ def _load_prepare(
             "sheddable Load optimization is not implemented until "
             "Milestone 19 Stage 4; set shedding_cost_per_mwh=None"
         )
-    return load._prepare_data(
+    prepared = load._prepare_data(
         list(units),
         context.nb,
         dict(context.ext_to_int),
         set(context.ext_bus_ids),
     )
+    if inputs is None:
+        p_mw = np.tile(
+            _array(prepared, "load_p_mw"),
+            (context.horizon_steps, 1),
+        )
+        q_mvar = np.tile(
+            _array(prepared, "load_q_mvar"),
+            (context.horizon_steps, 1),
+        )
+    else:
+        p_mw = inputs.p_mw
+        q_mvar = inputs.q_mvar
+    expected_shape = (context.horizon_steps, len(units))
+    if p_mw.shape != expected_shape or q_mvar.shape != expected_shape:
+        raise ValueError(
+            "load input channels must both have shape "
+            f"{expected_shape}, got {p_mw.shape} and {q_mvar.shape}"
+        )
+    if not np.all(np.isfinite(p_mw)) or not np.all(np.isfinite(q_mvar)):
+        raise ValueError("load input channels must contain only finite values")
+    prepared["_load_p_mw_by_step"] = np.array(p_mw, copy=True)
+    prepared["_load_q_mvar_by_step"] = np.array(q_mvar, copy=True)
+    return prepared
 
 
 def _load_metadata(
@@ -80,12 +103,12 @@ def _load_injections(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> InjectionContribution:
-    p_load = _array(prepared, "load_p_mw")
+    p_load = _array(prepared, "_load_p_mw_by_step")[context.step]
     incidence = _array(prepared, "Cload")
     if context.formulation == "ac":
         p_pu, q_pu, inv_base_mva = load.ac_injections(
             p_load,
-            _array(prepared, "load_q_mvar"),
+            _array(prepared, "_load_q_mvar_by_step")[context.step],
             incidence,
         )
     else:
@@ -101,7 +124,12 @@ def _load_operating_constraints(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> tuple[cp.Constraint, ...]:
-    return ()
+    constraint_method = (
+        load.ac_operating_constraints
+        if context.formulation == "ac"
+        else load.dc_operating_constraints
+    )
+    return tuple(constraint_method())
 
 
 def _load_step_expressions(
@@ -111,8 +139,8 @@ def _load_step_expressions(
     context: StepContext,
 ) -> Mapping[str, cp.Expression]:
     return load.fixed_expressions(
-        _array(prepared, "load_p_mw"),
-        _array(prepared, "load_q_mvar"),
+        _array(prepared, "_load_p_mw_by_step")[context.step],
+        _array(prepared, "_load_q_mvar_by_step")[context.step],
         reactive_service=context.formulation == "ac",
     )
 
@@ -123,7 +151,9 @@ def _load_horizon(
     variable_history: Mapping[str, Sequence[cp.Variable]],
     context: HorizonContext,
 ) -> HorizonContribution:
-    return HorizonContribution()
+    return HorizonContribution(
+        constraints=tuple(load.coupling_constraints())
+    )
 
 
 LOAD_ACTIVE = FormulationAdapter[Load](
@@ -134,7 +164,25 @@ LOAD_ACTIVE = FormulationAdapter[Load](
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
 )
-LOAD_ADAPTER = ComponentAdapter[Load, None](
+
+
+@dataclass(frozen=True)
+class LoadInputs:
+    """Normalized engineering-unit load channels in device order."""
+
+    p_mw: np.ndarray
+    q_mvar: np.ndarray
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "p_mw", np.array(self.p_mw, dtype=float, copy=True)
+        )
+        object.__setattr__(
+            self, "q_mvar", np.array(self.q_mvar, dtype=float, copy=True)
+        )
+
+
+LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
     name="load",
     prepare=_load_prepare,
     metadata=_load_metadata,
@@ -776,6 +824,8 @@ def component_requests(
     formulation: Formulation,
     *,
     generators: Sequence[DispatchableGenerator],
+    load_units: Sequence[Load] = (),
+    load_inputs: LoadInputs | None = None,
     storage_units: Sequence[StorageUnitIdeal] = (),
     nondispatchable_units: Sequence[NondispatchableUnit] = (),
     nondispatchable_inputs: NondispatchableInputs | None = None,
@@ -792,6 +842,12 @@ def component_requests(
         ComponentRequest(
             GENERATOR_ADAPTER,
             tuple(generators),
+            required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            LOAD_ADAPTER,
+            tuple(load_units),
+            load_inputs,
             required_capability=FormulationCapability.ACTIVE,
         ),
         ComponentRequest(

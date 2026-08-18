@@ -711,6 +711,9 @@ class TestStorageTerminalPolicy:
             "soc",
             "storage_cost",
             "storage_terminal_deviation",
+            "p_load",
+            "q_load",
+            "p_load_served",
         }
         if formulation == "ac":
             expected |= {
@@ -718,6 +721,7 @@ class TestStorageTerminalPolicy:
                 "branch_p_from", "branch_q_from",
                 "branch_p_to", "branch_q_to",
                 "branch_s_from", "branch_s_to",
+                "q_load_served",
             }
         elif formulation == "lossy_dc":
             expected.add("p_flows")

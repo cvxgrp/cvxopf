@@ -53,9 +53,11 @@ from cvxopf._component_assembly import (
 )
 from cvxopf._component_adapters import (
     HVDCInputs,
+    LoadInputs,
     NondispatchableInputs,
     component_requests,
 )
+from cvxopf.load import loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -320,6 +322,7 @@ def _parse_case(
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
     hvdc_inputs: HVDCInputs | None = None,
+    load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
 ) -> dict:
     """
@@ -340,6 +343,7 @@ def _parse_case(
     branch_to_bus_external = (
         np.asarray(case["branch"])[:, T_BUS].astype(int).copy()
     )
+    loads = loads_from_matpower(case["bus"])
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
@@ -404,6 +408,8 @@ def _parse_case(
     requests = component_requests(
         "ac",
         generators=generators,
+        load_units=loads,
+        load_inputs=load_inputs,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -489,7 +495,7 @@ def _make_step_constraints(
     G, B, E, Z,
     rows, cols, G_vec, B_vec, Rp,
     component_injection_p, component_injection_q,
-    Pd, Qd, ref,
+    ref,
     component_operating_constraints,
     component_network_constraints,
     branch_flow_defining_constraints,
@@ -582,12 +588,8 @@ def _make_step_constraints(
     # Exactly one p== and one q== constraint.
     # Active component injections are composed before entering this function.
     # ------------------------------------------------------------------
-    constr.append(
-        p == component_injection_p - Pd
-    )
-    constr.append(
-        q == component_injection_q - Qd
-    )
+    constr.append(p == component_injection_p)
+    constr.append(q == component_injection_q)
 
     # ------------------------------------------------------------------
     # Section 5: Formulation-owned network operating constraints.
@@ -673,7 +675,7 @@ def _build_ac_single(
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
         step_aggregate.injection.p_pu,
         step_aggregate.injection.q_pu,
-        d["Pd"], d["Qd"], d["ref"],
+        d["ref"],
         step_aggregate.operating_constraints,
         step_aggregate.network_constraints,
         branch_flow_defining_constraints,
@@ -779,6 +781,12 @@ def _build_ac_multistep(
     """Build a T-step AC-OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
 
+    Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
+    if Pd_series.shape[0] != T:
+        raise ValueError(
+            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
+        )
+    base_mva = float(case["baseMVA"])
     d = _parse_case(
         case,
         options,
@@ -799,14 +807,12 @@ def _build_ac_multistep(
                 df_hvdc_max.to_numpy(dtype=float),
             )
         ),
+        load_inputs=LoadInputs(
+            Pd_series * base_mva,
+            Qd_series * base_mva,
+        ),
         is_multistep=True,
     )
-    Pd_series, Qd_series = load_timeseries_from_dataframe(df_P, df_Q, case)
-
-    if Pd_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-        )
 
     # Initialize lists for variables
     theta_list, v_list, PQ_P_list, PQ_Q_list = [], [], [], []
@@ -874,7 +880,7 @@ def _build_ac_multistep(
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
             step_aggregate.injection.p_pu,
             step_aggregate.injection.q_pu,
-            Pd_series[t], Qd_series[t], d["ref"],
+            d["ref"],
             step_aggregate.operating_constraints,
             step_aggregate.network_constraints,
             branch_flow_defining_constraints,

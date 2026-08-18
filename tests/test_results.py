@@ -382,6 +382,9 @@ class TestEdgeCases:
             "soc",
             "storage_cost",
             "storage_terminal_deviation",
+            "p_load",
+            "q_load",
+            "p_load_served",
         }
         assert results["status"] == cp.INFEASIBLE
         assert np.isnan(results["objective"])
@@ -401,7 +404,15 @@ class TestEdgeCases:
         build.solve()
 
         results = extract_results(build)
-        assert set(results) == {"status", "objective", "Pg", "p_net"}
+        assert set(results) == {
+            "status",
+            "objective",
+            "Pg",
+            "p_net",
+            "p_load",
+            "q_load",
+            "p_load_served",
+        }
         assert results["status"] == cp.INFEASIBLE
         assert np.isnan(results["objective"])
         assert results["Pg"] is None

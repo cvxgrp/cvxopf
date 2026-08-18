@@ -1,4 +1,4 @@
-"""Pre-M19 characterization gates for formulation-owned load handling."""
+"""M19 compatibility gates for legacy and first-class load handling."""
 
 import warnings
 
@@ -12,11 +12,8 @@ from cvxopf.testcases import case9
 
 
 FORMULATIONS = ("ac", "lossy_dc", "singlenode_dc")
-FUTURE_LOAD_KEYS = {
-    "p_load",
-    "q_load",
-    "p_load_served",
-    "q_load_served",
+FIXED_LOAD_EXPRESSIONS = {"p_load", "q_load", "p_load_served"}
+SHEDDING_KEYS = {
     "p_load_shed",
     "q_load_shed",
     "load_shed_fraction",
@@ -24,6 +21,20 @@ FUTURE_LOAD_KEYS = {
     "energy_not_served_by_load",
     "energy_not_served",
     "load_shedding_cost",
+}
+LOAD_METADATA = {
+    "nload",
+    "nsheddable",
+    "Cload",
+    "load_device_ids",
+    "load_bus_external",
+    "load_bus_internal",
+    "load_has_reactive",
+    "load_is_sheddable",
+    "sheddable_load_indices",
+    "sheddable_load_device_ids",
+    "load_max_shed_fraction",
+    "load_shedding_cost_per_mwh",
 }
 CURRENT_RESULT_KEYS = {
     "ac": {
@@ -41,9 +52,19 @@ CURRENT_RESULT_KEYS = {
         "branch_q_to",
         "branch_s_from",
         "branch_s_to",
+        "p_load",
+        "q_load",
+        "p_load_served",
+        "q_load_served",
     },
-    "lossy_dc": {"status", "objective", "Pg", "p_flows", "p_net"},
-    "singlenode_dc": {"status", "objective", "Pg", "p_net"},
+    "lossy_dc": {
+        "status", "objective", "Pg", "p_flows", "p_net",
+        "p_load", "q_load", "p_load_served",
+    },
+    "singlenode_dc": {
+        "status", "objective", "Pg", "p_net",
+        "p_load", "q_load", "p_load_served",
+    },
 }
 
 BASELINE = {
@@ -182,11 +203,22 @@ def _build(formulation, multistep):
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)
 @pytest.mark.parametrize("multistep", [False, True])
-def test_pre_m19_load_schema(formulation, multistep):
+def test_m19_s2_load_schema(formulation, multistep):
     build = _build(formulation, multistep)
 
-    assert FUTURE_LOAD_KEYS.isdisjoint(build.variables)
-    assert FUTURE_LOAD_KEYS.isdisjoint(build.expressions)
+    assert SHEDDING_KEYS.isdisjoint(build.variables)
+    assert SHEDDING_KEYS.isdisjoint(build.expressions)
+    expected_expressions = set(FIXED_LOAD_EXPRESSIONS)
+    if formulation == "ac":
+        expected_expressions.add("q_load_served")
+    assert expected_expressions <= set(build.expressions)
+    assert LOAD_METADATA <= set(build.data)
+    assert build.data["nload"] == 9
+    assert build.data["nsheddable"] == 0
+    np.testing.assert_array_equal(
+        build.data["load_device_ids"],
+        [f"load_bus_{bus}" for bus in range(1, 10)],
+    )
     if multistep:
         assert "Pd" not in build.data
         assert "Pd_total" not in build.data
@@ -211,7 +243,9 @@ def test_pre_m19_load_schema(formulation, multistep):
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)
 @pytest.mark.parametrize("multistep", [False, True])
-def test_pre_m19_numerical_and_balance_baseline(formulation, multistep):
+def test_s2_preserves_pre_m19_numerical_and_balance_baseline(
+    formulation, multistep
+):
     build = _build(formulation, multistep)
     build.solve()
     results = extract_results(build)
@@ -225,7 +259,14 @@ def test_pre_m19_numerical_and_balance_baseline(formulation, multistep):
         results["Pg"], expected["Pg"], rtol=1e-4, atol=5e-2
     )
     assert set(results) == CURRENT_RESULT_KEYS[formulation]
-    assert FUTURE_LOAD_KEYS.isdisjoint(results)
+    assert SHEDDING_KEYS.isdisjoint(results)
+    expected_p = (
+        np.asarray([expression.value for expression in build.expressions["p_load"]])
+        if multistep
+        else build.expressions["p_load"].value
+    )
+    np.testing.assert_array_equal(results["p_load"], expected_p)
+    np.testing.assert_array_equal(results["p_load_served"], expected_p)
     if formulation == "ac":
         np.testing.assert_allclose(
             results["Qg"], expected["Qg"], rtol=1e-4, atol=2.5e-1
@@ -425,7 +466,7 @@ def test_legacy_positional_columns_and_zero_static_load(formulation):
         )
 
 
-def test_unsuccessful_result_retains_build_load_data_only():
+def test_unsuccessful_result_retains_exogenous_and_fixed_served_load():
     case = case9()
     case["bus"][:, 2] *= 100.0
     build = build_opf(case, formulation="singlenode_dc")
@@ -433,11 +474,14 @@ def test_unsuccessful_result_retains_build_load_data_only():
     build.solve()
     results = extract_results(build)
 
-    assert results == {
-        "status": "infeasible",
-        "objective": pytest.approx(float("nan"), nan_ok=True),
-        "Pg": None,
-        "p_net": None,
-    }
+    assert results["status"] == "infeasible"
+    assert np.isnan(results["objective"])
+    assert results["Pg"] is None
+    assert results["p_net"] is None
+    np.testing.assert_array_equal(results["p_load"], case["bus"][:, 2])
+    np.testing.assert_array_equal(results["q_load"], case["bus"][:, 3])
+    np.testing.assert_array_equal(
+        results["p_load_served"], case["bus"][:, 2]
+    )
     assert build.data["Pd_total"] == pytest.approx(315.0)
-    assert FUTURE_LOAD_KEYS.isdisjoint(results)
+    assert SHEDDING_KEYS.isdisjoint(results)
