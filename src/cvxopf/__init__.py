@@ -56,6 +56,7 @@ from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, hvdc_from_dcline
 from cvxopf.generator import DispatchableGenerator, gen_from_matpower
+from cvxopf.load import Load
 from cvxopf.testcases import make_singlenode_case
 
 __all__ = [
@@ -71,5 +72,6 @@ __all__ = [
     "hvdc_from_dcline",
     "DispatchableGenerator",
     "gen_from_matpower",
+    "Load",
     "make_singlenode_case",
 ]

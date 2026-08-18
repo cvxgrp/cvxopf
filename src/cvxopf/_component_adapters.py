@@ -13,7 +13,7 @@ from typing import Mapping, Sequence, cast
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import generator, hvdc, nondispatchable, storage
+from cvxopf import generator, hvdc, load, nondispatchable, storage
 from cvxopf._component_adapter import (
     ACNetworkState,
     ComponentAdapter,
@@ -30,6 +30,7 @@ from cvxopf._component_adapter import (
 from cvxopf._component_assembly import ComponentRequest
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.hvdc import HVDCLink
+from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
 
@@ -37,6 +38,112 @@ from cvxopf.storage import StorageUnitIdeal
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
     """Return one prepared numerical array under the typed adapter contract."""
     return cast(np.ndarray, prepared[key])
+
+
+def _load_prepare(
+    units: Sequence[Load],
+    inputs: None,
+    context: PreparationContext,
+) -> Mapping[str, object]:
+    """Prepare fixed loads while S1 shedding semantics remain inactive."""
+    if any(unit.shedding_cost_per_mwh is not None for unit in units):
+        raise NotImplementedError(
+            "sheddable Load optimization is not implemented until "
+            "Milestone 19 Stage 4; set shedding_cost_per_mwh=None"
+        )
+    return load._prepare_data(
+        list(units),
+        context.nb,
+        dict(context.ext_to_int),
+        set(context.ext_bus_ids),
+    )
+
+
+def _load_metadata(
+    prepared: Mapping[str, object],
+    formulation: Formulation,
+) -> Mapping[str, object]:
+    return load._build_metadata(dict(prepared))
+
+
+def _load_variable_specs(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    context: StepContext,
+) -> tuple[VariableSpec, ...]:
+    return ()
+
+
+def _load_injections(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> InjectionContribution:
+    p_load = _array(prepared, "load_p_mw")
+    incidence = _array(prepared, "Cload")
+    if context.formulation == "ac":
+        p_pu, q_pu, inv_base_mva = load.ac_injections(
+            p_load,
+            _array(prepared, "load_q_mvar"),
+            incidence,
+        )
+    else:
+        p_pu, q_pu, inv_base_mva = load.dc_injections(
+            p_load, incidence
+        )
+    return InjectionContribution(p_pu, q_pu, inv_base_mva)
+
+
+def _load_operating_constraints(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> tuple[cp.Constraint, ...]:
+    return ()
+
+
+def _load_step_expressions(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> Mapping[str, cp.Expression]:
+    return load.fixed_expressions(
+        _array(prepared, "load_p_mw"),
+        _array(prepared, "load_q_mvar"),
+        reactive_service=context.formulation == "ac",
+    )
+
+
+def _load_horizon(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variable_history: Mapping[str, Sequence[cp.Variable]],
+    context: HorizonContext,
+) -> HorizonContribution:
+    return HorizonContribution()
+
+
+LOAD_ACTIVE = FormulationAdapter[Load](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_load_variable_specs,
+    injections=_load_injections,
+    operating_constraints=_load_operating_constraints,
+    step_expressions=_load_step_expressions,
+    horizon=_load_horizon,
+)
+LOAD_ADAPTER = ComponentAdapter[Load, None](
+    name="load",
+    prepare=_load_prepare,
+    metadata=_load_metadata,
+    formulations={
+        "ac": LOAD_ACTIVE,
+        "lossy_dc": LOAD_ACTIVE,
+        "singlenode_dc": LOAD_ACTIVE,
+    },
+)
 
 
 def _generator_prepare(

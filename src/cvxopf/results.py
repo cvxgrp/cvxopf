@@ -28,6 +28,11 @@ Storage terminal-policy results (all formulations, when configured):
     storage_terminal_deviation (signed, MWh; negative means shortfall)
     storage_terminal_cost (scalar, soft terminal policies only)
 
+First-class load results (when ``"nload"`` is present in build data):
+    p_load, q_load, p_load_served (MW/MVAr device arrays)
+    q_load_served (AC only)
+Fixed-load inputs and served values remain available without a primal solve.
+
 The result schema is determined by the built model, not by solve success.
 When no primal solution is available, configured array-valued and derived
 quantities are ``None`` while scalar objective and cost quantities are NaN.
@@ -115,6 +120,13 @@ def _initialize_results(build: OPFBuild) -> dict:
         results["p_hvdc_out"] = None
         results["hvdc_loss"] = None
 
+    if "nload" in build.data:
+        results["p_load"] = None
+        results["q_load"] = None
+        results["p_load_served"] = None
+        if build.formulation == "ac":
+            results["q_load_served"] = None
+
     return results
 
 
@@ -191,11 +203,28 @@ def _add_hvdc_results(results: dict, build: OPFBuild) -> None:
     )
 
 
+def _add_load_results(results: dict, build: OPFBuild) -> None:
+    """Add exogenous and fixed served-load values without requiring primals."""
+    if "nload" not in build.data:
+        return
+    results["p_load"] = _solved_expression_values(build, "p_load")
+    results["q_load"] = _solved_expression_values(build, "q_load")
+    if int(build.data["nsheddable"]) == 0:
+        results["p_load_served"] = _solved_expression_values(
+            build, "p_load_served"
+        )
+        if build.formulation == "ac":
+            results["q_load_served"] = _solved_expression_values(
+                build, "q_load_served"
+            )
+
+
 def _add_device_results(results: dict, build: OPFBuild) -> None:
     """Add every optional device's reported values."""
     _add_storage_results(results, build)
     _add_nd_results(results, build)
     _add_hvdc_results(results, build)
+    _add_load_results(results, build)
 
 
 def _add_ac_branch_results(results: dict, build: OPFBuild) -> None:

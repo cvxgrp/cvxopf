@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** planned; design ready for review
+**Status:** implementation in progress; Stages 0–1 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -605,12 +605,54 @@ Verification at the S0 stopping point:
 
 ### Stage 1 — First-class fixed-load model
 
-- Add `Load` and device-level validation.
+**Status:** complete — checkpoint commit pending
+
+- Add the complete approved `Load` dataclass, including the future shedding
+  policy fields, and stabilize its validation now.
+- At the S1 preparation/adapter boundary, raise a clear temporary
+  `NotImplementedError` whenever `shedding_cost_per_mwh is not None`; do not
+  place this guard in `Load` construction and do not silently treat a
+  configured sheddable load as fixed.
 - Add static preparation, incidence, and engineering-unit injections.
 - Add fixed-load adapter capabilities for AC, lossy DC, and single-node DC.
-- Add metadata and reporting expressions.
+- Use prepared load data as the source of truth for metadata and constant
+  reporting expressions.
+- Publish `p_load`, `q_load`, and `p_load_served` in every formulation; publish
+  `q_load_served` only in AC.
+- Preserve fixed served-load values during unsuccessful extraction without
+  requiring a primal solution.
+- Distinguish undefined reactive load (`q_load_mvar=None`, numerical zero,
+  `load_has_reactive=False`) from explicitly configured zero reactive load
+  (`q_load_mvar=0.0`, numerical zero, `load_has_reactive=True`).
+- Keep single-node reporting device-level while aggregating only the network
+  injection.
+- Support an empty sequence in direct device and adapter functions with
+  correctly shaped zero-length outputs; do not change shared empty-request
+  assembly behavior in S1.
 - Prove DCP conformance per expression and constraint.
 - Unit-test active and reactive sign conventions.
+
+As built, `Load` exposes the complete approved public field set, including
+the dormant shedding policy. Field-local validation occurs during object
+construction; case-relative bus membership and collection-wide identity
+uniqueness are validated during preparation. The private adapter rejects a
+configured shedding cost with the temporary S1 `NotImplementedError`, so no
+approved shedding configuration can be silently interpreted as fixed load.
+
+The adapter remains intentionally absent from the centralized production
+registry in S1. Direct adapter assembly proves fixed active and reactive
+withdrawal signs, engineering-unit scaling, device-level reporting, empty
+device-vector behavior, and empty horizon contributions in AC, lossy DC, and
+single-node DC. Consequently, S1 adds the device contract without changing
+existing builder algebra, public build inputs, or legacy result schemas.
+
+Verification at the S1 stopping point:
+
+- 23 focused fixed-load tests passed;
+- 1,524 full-suite tests passed;
+- Ruff passed;
+- strict mypy passed with `load.py` added to the checked surface; and
+- `git diff --check` passed.
 
 ### Stage 2 — Complete legacy conversion and shared assembly migration
 
@@ -644,10 +686,18 @@ injection source.
 - Reject mixed explicit and legacy inputs before private-builder dispatch.
 - Update typing and all three private builder surfaces.
 - Verify multistep `T=1` remains intentionally multistep.
+- Distinguish all three public states: `loads=None` selects legacy MATPOWER
+  fallback; `loads=[]` selects explicit zero-load mode with complete empty-load
+  metadata; and `loads=[...]` selects explicit first-class loads.
+- Require an explicitly selected component family to participate in
+  preparation and metadata publication even when its collection is empty.
+  Choose the narrow shared-assembly mechanism only after testing whether the
+  ordinary explicit-load request can satisfy that requirement.
 
-### Stage 4 — Sheddable-load feasible set and cost
+### Stage 4 — Activate the sheddable-load feasible set and cost
 
-- Add the optional shedding policy fields.
+- Remove the temporary S1 adapter guard and activate the already-defined
+  shedding policy fields.
 - Create builder-owned shedding variables through `VariableSpec`.
 - Add served/shed active and reactive expressions.
 - Prepare an always-present exogenous eligibility mask $m_{t,i}$ and
