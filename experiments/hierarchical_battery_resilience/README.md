@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** protocol drafted for review; S0 characterization has not begun
+**Status:** S0 characterization implemented and verified; review pending
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -24,6 +24,7 @@ scale. It is larger than a unit or integration test.
 experiments/hierarchical_battery_resilience/
     README.md
     protocol.md
+    S0_REPORT.md
     manual_runner.py
     runner.py
     analysis.py

@@ -72,6 +72,9 @@ length.
 - Under `frozen`, the inherited signpost is `e_dc[0][k + W_k]`.
 - Under `replan_every_step`, the inherited signpost is `e_dc[k][W_k]`.
 - Both policy-specific expressions refer to global boundary `k + W_k`.
+- Current `extract_results()` storage trajectories contain post-step states
+  only. Conceptual local boundary 0 is `storage_initial_soc`; boundary
+  `ell >= 1` is `results["soc"][ell - 1]`.
 - The AC solve predicts `W_k` actions, but only `b_ac[k]`, its first action,
   is executed.
 - For the current ideal-storage model,
@@ -104,7 +107,9 @@ device identity and is rejected at the M17 boundary.
 
 For intervals `0, 1, 2`, the frozen plan created at iteration 0 has local
 boundary states `e_dc[0][0], ..., e_dc[0][3]`. A replanned outer solve at
-iteration `k` instead has local boundaries `0, ..., H-k`.
+iteration `k` instead has local boundaries `0, ..., H-k`. In the current
+result schema, the corresponding post-step SoC array indices are one less than
+each positive boundary index.
 
 | `k` | AC intervals | `W_k` | Global endpoint | Frozen signpost | Replanned signpost | Executed action |
 |---:|---|---:|---:|---|---|---|
@@ -197,8 +202,35 @@ initial value; 50% of capacity is the provisional standard configuration.
 
 ## 7. Solve acceptance and failure behavior
 
-No action is executed unless the solve has the package-defined usable primal
-state and all required first-action and first-post-step SoC values are finite.
+No action is executed unless the solve satisfies the M17 baseline
+accepted-primal rule and all required first-action and first-post-step SoC
+values are finite.
+For the baseline, a controlling attempt is executable only when:
+
+- raw status is `optimal` or `optimal_inaccurate`;
+- every field required to execute and audit the first interval is present and
+  finite; and
+- storage recurrence, power balance, voltage, both-terminal thermal, and
+  terminal-policy residuals satisfy their frozen tolerances.
+
+`user_limit`, solver exceptions, and incomplete or nonfinite primals are
+diagnostic only and are never executed. `optimal_inaccurate` remains eligible
+only after the same explicit residual checks; its raw status is retained.
+
+The minimum required fields depend on solve role:
+
+| Solve role | Required fields |
+|---|---|
+| Outer `lossy_dc` | `b`, `soc`, `Pg`, `p_net`, `p_flows`, fixed load inputs and served load, and every applicable component output and DC diagnostic needed by the frozen residual checks |
+| Inner AC | `b`, `soc`, `b_q`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`, all four signed branch-terminal power arrays and both apparent-power arrays, fixed load inputs and served load, and every applicable component output needed for execution and audit |
+| Both | finite first action, finite first post-step SoC, matching explicit storage IDs, finite objective and raw status metadata, and every terminal deviation or terminal-cost quantity required by the selected policy |
+
+Conditional devices extend the required set. Nondispatchable generation adds
+its active output, curtailment, and AC reactive output; HVDC adds both terminal
+injections and loss; sheddable load, if enabled in a later study, adds served
+and shed active/reactive power, fractions, per-load and aggregate ENS, and
+shedding cost. A result is not executable merely because its battery fields
+are present while a required network or participating-device field is missing.
 
 Each individual solve attempt has exactly one outcome:
 

@@ -97,6 +97,9 @@ The state and window recurrence is:
   boundary `j + ell`;
 - `frozen` uses `e_dc[0][k + W_k]`, while `replan_every_step` uses
   `e_dc[k][W_k]`; both refer to global boundary `k + W_k`;
+- current results omit the initial boundary: local boundary 0 comes from
+  `storage_initial_soc`, while boundary `ell >= 1` comes from SoC result index
+  `ell - 1`;
 - only the first AC action `b_ac[k]` is executed; and
 - for ideal storage, `e_{k+1} = e_k - delta * b_ac[k]`.
 
@@ -289,3 +292,36 @@ P1 is prerequisite device-API hardening, not hierarchical-controller
 implementation. S3 results must be reviewed before S4 freezes public defaults.
 No scientific protocol is revised merely to make the S5 implementation appear
 successful.
+
+### S0 stopping point
+
+**Complete; checkpoint commit pending.**
+
+S0 records the current contract in
+`experiments/hierarchical_battery_resilience/S0_REPORT.md` and
+`tests/test_m17_characterization.py`:
+
+- storage SoC results contain `T` post-step states and omit the initial
+  boundary;
+- conceptual local boundary 0 comes from `storage_initial_soc`, while boundary
+  `ell >= 1` maps to result index `ell - 1`;
+- solved single-step and multistep `T=1` result schemas remain intentionally
+  distinct and satisfy the same one-interval recurrence and terminal policy;
+- the ideal-storage recurrence and global terminal equality agree across AC,
+  lossy DC, and single-node DC;
+- shortened replans restart their local boundary index at zero;
+- unsolved builds retain schema and exogenous inputs but have no usable storage
+  primal; and
+- storage has no stable identity metadata, confirming P1 as a real
+  prerequisite.
+
+The package has no centralized accepted-primal predicate. The approved manual
+runner rule executes an action only for `optimal` or `optimal_inaccurate`, with
+every required field finite and all frozen physical and policy residual checks
+satisfied. The role-specific minimum field table is frozen in the S0 report;
+conditional devices extend the required set. `user_limit` and incomplete
+primals are diagnostic only.
+
+Verification: 10 focused tests and the complete 1,637-test suite passed. Ruff,
+configured strict mypy, and `git diff --check` passed. S0 changes no production
+implementation.

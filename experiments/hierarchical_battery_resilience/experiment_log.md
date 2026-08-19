@@ -86,3 +86,30 @@ every storage device ends the global horizon at its realized initial level,
 `e_H = e_0`. Every shortened replan retains that same absolute target at the
 original boundary `H`. The prepared scenario will freeze the initial value;
 50% of capacity is the provisional and familiar practical choice.
+
+## 2026-08-19 — S0 characterization run
+
+S0 added no production implementation. Ten focused tests characterized all
+three formulations, single-step versus multistep `T=1`, three-step ideal SoC
+dynamics, shortened replan indexing, global terminal equality, and unsolved
+result behavior. The full suite passed with 1,637 tests; Ruff, strict mypy, and
+the diff check also passed.
+
+The principal indexing result is that reported `soc` contains post-step states
+only. Conceptual boundary 0 is the configured initial SoC, and local boundary
+`ell >= 1` is result index `ell - 1`. The run also confirmed that storage has
+no published identity metadata and that result extraction has no shared
+accepted-primal predicate.
+
+The proposed manual-runner rule is to execute only `optimal` or
+`optimal_inaccurate` results with complete finite required fields and accepted
+physical and policy residuals. `user_limit`, exceptions, and incomplete
+primals remain diagnostic outcomes. This rule awaits review before S2.
+
+### S0 acceptance-policy decision
+
+The proposed conservative rule is approved. A controlling action may be
+executed only for raw status `optimal` or `optimal_inaccurate`, complete finite
+required fields, and accepted storage, balance, voltage, thermal, and terminal
+policy residuals. `user_limit`, solver exceptions, and incomplete or nonfinite
+primals are retained for diagnosis but never executed. S0 is complete.
