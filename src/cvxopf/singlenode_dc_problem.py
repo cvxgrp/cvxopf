@@ -59,11 +59,7 @@ import pandas as pd
 import cvxpy as cp
 
 from cvxopf.network import reindex_case_to_consecutive
-from cvxopf.data import (
-    load_timeseries_from_dataframe,
-    validate_branch_status,
-    validate_case_identifiers,
-)
+from cvxopf.data import validate_branch_status, validate_case_identifiers
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
@@ -412,8 +408,8 @@ def _build_singlenode_dc_single(
 
 def _build_singlenode_dc_multistep(
     case: dict,
-    df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
     T: int,
     options,
     coupling_constraints: list,
@@ -427,7 +423,7 @@ def _build_singlenode_dc_multistep(
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
     loads: list[Load] | None = None,
-    load_inputs: LoadInputs | None = None,
+    load_inputs: LoadInputs,
     load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """
@@ -472,21 +468,6 @@ def _build_singlenode_dc_multistep(
         Problem container with formulation="singlenode_dc", is_convex=True.
     """
     from cvxopf.problem import OPFBuild
-    if load_inputs is None:
-        Pd_nodal_series, Qd_nodal_series = load_timeseries_from_dataframe(
-            df_P, df_Q, case
-        )
-        if Pd_nodal_series.shape[0] != T:
-            raise ValueError(
-                f"T={T} but df_P has {Pd_nodal_series.shape[0]} rows; "
-                "they must match."
-            )
-        base_mva = float(case["baseMVA"])
-        load_inputs = LoadInputs(
-            Pd_nodal_series * base_mva,
-            Qd_nodal_series * base_mva,
-        )
-
     # Parse the case
     d = _parse_singlenode_dc_case(
         case,

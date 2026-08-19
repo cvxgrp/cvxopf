@@ -26,6 +26,7 @@ from cvxopf.load import (
     _PreparedLoadParameters,
     _build_metadata,
     _prepare_data,
+    ac_operating_constraints,
     fixed_expressions,
 )
 from cvxopf.testcases import case9
@@ -320,6 +321,12 @@ class TestExplicitLoadAPI:
         with pytest.raises(ValueError, match=message):
             build_opf_multistep(malformed_case, T=1, **kwargs)
 
+    def test_imported_ac_mode_requires_reactive_trajectory(self):
+        active = pd.DataFrame(np.zeros((1, 9)))
+
+        with pytest.raises(ValueError, match="AC mode requires df_Q"):
+            build_opf_multistep(case9(), active, T=1, formulation="ac")
+
     @pytest.mark.parametrize("frame_name", ["df_load_p", "df_load_q"])
     def test_explicit_frames_require_exact_finite_identity_set(self, frame_name):
         frame = pd.DataFrame({"wrong": [np.nan]})
@@ -563,6 +570,36 @@ def test_atomic_active_load_update_crosses_zero_without_partial_assignment():
         parameters.update_active(np.array([[np.nan], [1.0], [2.0]]))
     for parameter, expected in zip(tracked, before, strict=True):
         np.testing.assert_array_equal(parameter.value, expected)
+
+
+@pytest.mark.parametrize(
+    ("p_values", "q_values", "message"),
+    [
+        (np.ones((1, 1)), np.ones((2, 1)), "must match active load shape"),
+        (np.ones((1, 1)), np.array([[np.nan]]), "must be finite"),
+        (np.ones(1), np.ones(1), "must be two-dimensional"),
+    ],
+)
+def test_prepared_load_parameters_reject_invalid_initial_channels(
+    p_values, q_values, message
+):
+    with pytest.raises(ValueError, match=message):
+        _PreparedLoadParameters.create(p_values, q_values)
+
+
+def test_atomic_active_load_update_rejects_shape_change():
+    parameters = _PreparedLoadParameters.create(
+        np.ones((1, 1)), np.zeros((1, 1))
+    )
+
+    with pytest.raises(ValueError, match="must have shape"):
+        parameters.update_active(np.ones((2, 1)))
+
+
+def test_load_operating_constraints_validate_complete_shedding_inputs():
+    assert ac_operating_constraints() == []
+    with pytest.raises(ValueError, match="require maximum_fraction"):
+        ac_operating_constraints(cp.Variable(1), np.ones(1), None)
 
 
 def test_atomic_updates_preserve_parameter_objects_across_sign_transitions():
@@ -930,6 +967,17 @@ def test_load_adapter_rejects_invalid_normalized_channels(inputs):
     unit = Load(5, 10.0, "load-5")
 
     with pytest.raises(ValueError, match="load input channels"):
+        LOAD_ADAPTER.prepare((unit,), inputs, preparation)
+
+
+def test_load_adapter_rejects_misaligned_reactive_channel_metadata():
+    preparation, _ = _context("ac", horizon_steps=2)
+    unit = Load(5, 10.0, "load-5")
+    inputs = LoadInputs(
+        np.ones((2, 1)), np.ones((2, 1)), np.array([True, False])
+    )
+
+    with pytest.raises(ValueError, match="reactive-channel metadata"):
         LOAD_ADAPTER.prepare((unit,), inputs, preparation)
 
 

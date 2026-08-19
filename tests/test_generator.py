@@ -401,6 +401,13 @@ class TestMaximumGenerationMarginalCost:
 
         assert max_generation_marginal_cost([generator]) == 0.0
 
+    def test_fixed_output_generator_contributes_no_marginal_interval(self):
+        generator = DispatchableGenerator(
+            1, 10.0, p_min_mw=10.0, cost_coeffs=(0.0, 100.0)
+        )
+
+        assert max_generation_marginal_cost([generator]) == 0.0
+
     def test_piecewise_linear_returns_largest_segment_slope(self):
         generator = DispatchableGenerator(
             1,
@@ -426,6 +433,23 @@ class TestMaximumGenerationMarginalCost:
         [
             ([], "at least one"),
             ([DispatchableGenerator(1, 10.0, status=0)], "no active"),
+            ([DispatchableGenerator(1, 10.0, status=2)], "status"),
+            (
+                [DispatchableGenerator(1, float("inf"))],
+                "power bounds must be finite",
+            ),
+            (
+                [DispatchableGenerator(1, 5.0, p_min_mw=10.0)],
+                "p_min_mw must be <= p_max_mw",
+            ),
+            (
+                [DispatchableGenerator(1, 10.0, cost_coeffs=(0, 1, 2, 3))],
+                "unsupported polynomial",
+            ),
+            (
+                [DispatchableGenerator(1, 10.0, cost_coeffs=(0, 1, -1))],
+                "must be convex",
+            ),
             (
                 [DispatchableGenerator(1, 10.0, cost_coeffs=(0, -1))],
                 "nondecreasing",
@@ -458,6 +482,39 @@ class TestMaximumGenerationMarginalCost:
                         1,
                         10.0,
                         cost_type="piecewise_linear",
+                        cost_points=None,
+                    )
+                ],
+                "at least two points",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_type="piecewise_linear",
+                        cost_points=((0.0, 0.0, 0.0), (10.0, 10.0, 1.0)),
+                    )
+                ],
+                "invalid piecewise-linear",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_type="piecewise_linear",
+                        cost_points=((0.0, 0.0), (0.0, 1.0)),
+                    )
+                ],
+                "strictly increasing",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_type="piecewise_linear",
                         cost_points=((0, 0), (5, 10), (10, 15)),
                     )
                 ],
@@ -473,6 +530,10 @@ class TestMaximumGenerationMarginalCost:
                     )
                 ],
                 "cover the feasible",
+            ),
+            (
+                [DispatchableGenerator(1, 10.0, cost_type="unsupported")],
+                "unsupported cost_type",
             ),
         ],
     )

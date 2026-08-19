@@ -49,7 +49,7 @@ from cvxopf.network import (
     reindex_case_to_consecutive,
     make_branch_node_incidence_matrix,
 )
-from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.data import validate_case
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
@@ -382,8 +382,8 @@ def _build_lossy_dc_single(
 
 def _build_lossy_dc_multistep(
     case: dict,
-    df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
     T: int,
     options,
     coupling_constraints: list,
@@ -397,7 +397,7 @@ def _build_lossy_dc_multistep(
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
     loads: list[Load] | None = None,
-    load_inputs: LoadInputs | None = None,
+    load_inputs: LoadInputs,
     load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """Build a T-step lossy DC OPF problem as a single cp.Problem."""
@@ -413,16 +413,6 @@ def _build_lossy_dc_multistep(
             stacklevel=3,
         )
 
-    if load_inputs is None:
-        Pd_series, Qd_series = load_timeseries_from_dataframe(
-            df_P, df_Q, case
-        )
-        if Pd_series.shape[0] != T:
-            raise ValueError(
-                f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-            )
-        base_mva = float(case["baseMVA"])
-        load_inputs = LoadInputs(Pd_series * base_mva, Qd_series * base_mva)
     d = _parse_dc_case(
         case,
         options,

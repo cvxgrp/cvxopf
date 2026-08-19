@@ -849,6 +849,21 @@ def test_named_component_costs_require_stable_cost_availability():
         )
 
 
+def test_named_component_costs_require_stable_expression_names():
+    first = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+        cost_expression_name="first_cost",
+    )
+    second = replace(first, cost_expression_name="second_cost")
+
+    with pytest.raises(ValueError, match="inconsistent step-cost expression"):
+        integrate_component_stage_costs(
+            ({"toy": first}, {"toy": second}), 1.0
+        )
+
+
 def test_adapter_cost_name_override_reaches_integrated_expression():
     adapter = replace(TOY_ADAPTER, cost_expression_name="precise_toy_cost")
     prepared = prepare_components(
