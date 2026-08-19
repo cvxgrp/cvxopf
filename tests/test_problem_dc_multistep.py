@@ -151,8 +151,8 @@ class TestInputValidation:
                 ppc, df_P, df_Q, T=3, formulation="lossy_dc"
             )
 
-    def test_df_Q_ignored_with_warning(self):
-        """df_Q should be accepted but trigger a UserWarning."""
+    def test_df_Q_retained_for_reporting_with_warning(self):
+        """df_Q is retained for reporting but not used by DC physics."""
         df_P, df_Q = _flat_load_dfs(case9, 1)
         with pytest.warns(UserWarning, match="retained as reactive load"):
             build_opf_multistep(
