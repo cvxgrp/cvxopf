@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import cvxpy as cp
 
+from cvxopf import Load
 from cvxopf.testcases import case9, case14
 from cvxopf.problem import (
     OPFBuild,
@@ -16,6 +17,29 @@ from cvxopf.problem import (
     build_opf_multistep,
 )
 from cvxopf.results import extract_results, compare_to_reference
+
+
+def _mixed_load_fleet():
+    """Return one fixed and two heterogeneous sheddable case9 loads."""
+    return [
+        Load(
+            5,
+            90.0,
+            "load-5",
+            q_load_mvar=30.0,
+            shedding_cost_per_mwh=5000.0,
+            max_shed_fraction=0.5,
+        ),
+        Load(7, 100.0, "load-7", q_load_mvar=35.0),
+        Load(
+            9,
+            125.0,
+            "load-9",
+            q_load_mvar=-50.0,
+            shedding_cost_per_mwh=7000.0,
+            max_shed_fraction=0.25,
+        ),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +406,9 @@ class TestEdgeCases:
             "soc",
             "storage_cost",
             "storage_terminal_deviation",
+            "p_load",
+            "q_load",
+            "p_load_served",
         }
         assert results["status"] == cp.INFEASIBLE
         assert np.isnan(results["objective"])
@@ -401,7 +428,15 @@ class TestEdgeCases:
         build.solve()
 
         results = extract_results(build)
-        assert set(results) == {"status", "objective", "Pg", "p_net"}
+        assert set(results) == {
+            "status",
+            "objective",
+            "Pg",
+            "p_net",
+            "p_load",
+            "q_load",
+            "p_load_served",
+        }
         assert results["status"] == cp.INFEASIBLE
         assert np.isnan(results["objective"])
         assert results["Pg"] is None
@@ -609,3 +644,211 @@ class TestEdgeCases:
             results[field] is None
             for field in expected - scalar_nan_fields - {"status"}
         )
+
+
+class TestSheddableLoadResults:
+    """Stage 5 result schemas, units, and unavailable-primal behavior."""
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    def test_successful_result_values_and_shapes(
+        self, formulation, multistep
+    ):
+        loads = _mixed_load_fleet()
+        delta = 0.5
+        if multistep:
+            build = build_opf_multistep(
+                case9(),
+                T=2,
+                formulation=formulation,
+                loads=loads,
+                delta=delta,
+            )
+        else:
+            build = build_opf(
+                case9(),
+                formulation=formulation,
+                loads=loads,
+                delta=delta,
+            )
+        build.solve()
+        results = extract_results(build)
+
+        interval_shape = (2, 3) if multistep else (3,)
+        shed_shape = (2, 2) if multistep else (2,)
+        total_shape = (2,) if multistep else ()
+        assert results["p_load"].shape == interval_shape
+        assert results["q_load"].shape == interval_shape
+        assert results["p_load_served"].shape == interval_shape
+        assert results["p_load_shed"].shape == shed_shape
+        assert results["load_shed_fraction"].shape == shed_shape
+        assert np.shape(results["p_load_shed_total"]) == total_shape
+        assert results["energy_not_served_by_load"].shape == (2,)
+        assert np.ndim(results["energy_not_served"]) == 0
+        assert np.ndim(results["load_shedding_cost"]) == 0
+
+        expected_p = np.array([90.0, 100.0, 125.0])
+        expected_q = np.array([30.0, 35.0, -50.0])
+        if multistep:
+            expected_p = np.tile(expected_p, (2, 1))
+            expected_q = np.tile(expected_q, (2, 1))
+        np.testing.assert_allclose(results["p_load"], expected_p)
+        np.testing.assert_allclose(results["q_load"], expected_q)
+
+        shed_indices = np.array([0, 2])
+        np.testing.assert_allclose(
+            results["p_load_served"][..., shed_indices]
+            + results["p_load_shed"],
+            results["p_load"][..., shed_indices],
+        )
+        np.testing.assert_allclose(
+            results["p_load_served"][..., 1],
+            results["p_load"][..., 1],
+        )
+        np.testing.assert_allclose(
+            results["p_load_shed_total"],
+            np.sum(results["p_load_shed"], axis=-1),
+        )
+        if formulation == "ac":
+            assert results["q_load_served"].shape == interval_shape
+            assert results["q_load_shed"].shape == shed_shape
+            np.testing.assert_allclose(
+                results["q_load_served"][..., shed_indices]
+                + results["q_load_shed"],
+                results["q_load"][..., shed_indices],
+            )
+            np.testing.assert_allclose(
+                results["q_load_served"][..., 1],
+                results["q_load"][..., 1],
+            )
+        else:
+            assert "q_load_served" not in results
+            assert "q_load_shed" not in results
+
+        shed_by_step = np.atleast_2d(results["p_load_shed"])
+        expected_ens_by_load = delta * np.sum(shed_by_step, axis=0)
+        np.testing.assert_allclose(
+            results["energy_not_served_by_load"], expected_ens_by_load
+        )
+        assert results["energy_not_served"] == pytest.approx(
+            np.sum(expected_ens_by_load)
+        )
+        assert results["load_shedding_cost"] == pytest.approx(
+            np.dot(np.array([5000.0, 7000.0]), expected_ens_by_load)
+        )
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    def test_no_primal_retains_inputs_and_conditional_schema(
+        self, formulation, multistep
+    ):
+        loads = _mixed_load_fleet()
+        if multistep:
+            build = build_opf_multistep(
+                case9(), T=2, formulation=formulation, loads=loads
+            )
+            expected_p = np.tile([90.0, 100.0, 125.0], (2, 1))
+            expected_q = np.tile([30.0, 35.0, -50.0], (2, 1))
+        else:
+            build = build_opf(case9(), formulation=formulation, loads=loads)
+            expected_p = np.array([90.0, 100.0, 125.0])
+            expected_q = np.array([30.0, 35.0, -50.0])
+
+        results = extract_results(build)
+
+        assert results["status"] is None
+        np.testing.assert_allclose(results["p_load"], expected_p)
+        np.testing.assert_allclose(results["q_load"], expected_q)
+        unavailable = {
+            "p_load_served",
+            "p_load_shed",
+            "load_shed_fraction",
+            "p_load_shed_total",
+            "energy_not_served_by_load",
+            "energy_not_served",
+        }
+        if formulation == "ac":
+            unavailable |= {"q_load_served", "q_load_shed"}
+        else:
+            assert "q_load_served" not in results
+            assert "q_load_shed" not in results
+        assert all(results[name] is None for name in unavailable)
+        assert np.isnan(results["load_shedding_cost"])
+
+        expected_metadata = {
+            "nload",
+            "nsheddable",
+            "Cload",
+            "load_device_ids",
+            "load_bus_external",
+            "load_bus_internal",
+            "load_has_reactive",
+            "load_is_sheddable",
+            "sheddable_load_indices",
+            "sheddable_load_device_ids",
+            "load_max_shed_fraction",
+            "load_shedding_cost_per_mwh",
+        }
+        assert expected_metadata <= build.data.keys()
+
+    def test_partial_multistep_fraction_discards_complete_derived_arrays(self):
+        build = build_opf_multistep(
+            case9(), T=2, formulation="ac", loads=_mixed_load_fleet()
+        )
+        build.variables["load_shed_fraction"][0].value = [0.1, 0.2]
+
+        results = extract_results(build)
+
+        np.testing.assert_allclose(
+            results["p_load"],
+            np.tile([90.0, 100.0, 125.0], (2, 1)),
+        )
+        for name in (
+            "p_load_served",
+            "q_load_served",
+            "p_load_shed",
+            "q_load_shed",
+            "load_shed_fraction",
+            "p_load_shed_total",
+            "energy_not_served_by_load",
+            "energy_not_served",
+        ):
+            assert results[name] is None
+        assert np.isnan(results["load_shedding_cost"])
+
+    @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+    def test_solver_certified_infeasibility_retains_load_inputs(
+        self, formulation
+    ):
+        load = Load(
+            5,
+            10_000.0,
+            "oversized",
+            q_load_mvar=2500.0,
+            shedding_cost_per_mwh=5000.0,
+            max_shed_fraction=0.1,
+        )
+        build = build_opf(case9(), formulation=formulation, loads=[load])
+        build.solve()
+
+        results = extract_results(build)
+
+        assert results["status"] == cp.INFEASIBLE
+        np.testing.assert_array_equal(results["p_load"], [10_000.0])
+        np.testing.assert_array_equal(results["q_load"], [2500.0])
+        for name in (
+            "p_load_served",
+            "p_load_shed",
+            "load_shed_fraction",
+            "p_load_shed_total",
+            "energy_not_served_by_load",
+            "energy_not_served",
+        ):
+            assert results[name] is None
+        assert "q_load_served" not in results
+        assert "q_load_shed" not in results
+        assert np.isnan(results["load_shedding_cost"])

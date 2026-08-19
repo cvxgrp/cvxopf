@@ -29,9 +29,15 @@ CORE_EXPRESSIONS = {
         "p_net", "q_net", "generator_cost",
         "branch_p_from_pu", "branch_q_from_pu",
         "branch_p_to_pu", "branch_q_to_pu",
+        "p_load", "q_load", "p_load_served", "q_load_served",
     },
-    "lossy_dc": {"p_net", "generator_cost", "dc_loss_cost"},
-    "singlenode_dc": {"p_net", "generator_cost"},
+    "lossy_dc": {
+        "p_net", "generator_cost", "dc_loss_cost",
+        "p_load", "q_load", "p_load_served",
+    },
+    "singlenode_dc": {
+        "p_net", "generator_cost", "p_load", "q_load", "p_load_served",
+    },
 }
 PER_STEP_EXPRESSIONS = {
     "p_net",
@@ -40,6 +46,17 @@ PER_STEP_EXPRESSIONS = {
     "branch_q_from_pu",
     "branch_p_to_pu",
     "branch_q_to_pu",
+    "p_load",
+    "q_load",
+    "p_load_served",
+    "q_load_served",
+}
+LOAD_DATA = {
+    "nload", "nsheddable", "Cload", "load_device_ids",
+    "load_bus_external", "load_bus_internal", "load_has_reactive",
+    "load_is_sheddable", "sheddable_load_indices",
+    "sheddable_load_device_ids", "load_max_shed_fraction",
+    "load_shedding_cost_per_mwh",
 }
 CORE_DATA = {
     "ac": {
@@ -61,6 +78,8 @@ CORE_DATA = {
         "Pgmin", "Pgmax", "gencost",
     },
 }
+for _formulation_data in CORE_DATA.values():
+    _formulation_data.update(LOAD_DATA)
 
 STORAGE_DATA = {
     "ns", "Cs", "storage_bus", "storage_apparent_power_rating",

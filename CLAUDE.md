@@ -292,12 +292,16 @@ capability explicitly on every component adapter.
 ```python
 build_opf(case, *, formulation="ac", options=None,
           storage=None, delta=1.0,
-          nondispatchable=None) -> OPFBuild
+          nondispatchable=None, hvdc=None, generators=None,
+          loads=None) -> OPFBuild
 
-build_opf_multistep(case, df_P, df_Q, *, T, formulation="ac",
+build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     options=None, coupling_constraints=None,
                     storage=None, delta=1.0,
-                    nondispatchable=None, df_nd=None) -> OPFBuild
+                    nondispatchable=None, df_nd=None,
+                    hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
+                    generators=None, loads=None,
+                    df_load_p=None, df_load_q=None) -> OPFBuild
 ```
 
 ### Deprecated aliases (will be removed in a future release)
@@ -334,7 +338,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
 | `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
-| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are treated as absent and never write zero-count keys. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 
@@ -366,6 +370,23 @@ columns that exactly match unique, nonempty unit `device_id` values. Column
 order is arbitrary and is aligned to device-list order. If `nondispatchable`
 is not None but `df_nd` is None, `p_available` is tiled across all T steps and
 a `UserWarning` is emitted; static fallback does not require IDs.
+
+### `Load` fields and multistep input modes
+
+`Load` is a first-class fixed active/reactive demand channel with required
+external `bus`, signed `p_load_mw`, and unique nonempty `device_id` fields.
+`q_load_mvar=None` denotes an undefined reactive channel and is reported as
+numerical zero while remaining distinguishable in metadata. A finite positive
+`shedding_cost_per_mwh` activates a builder-owned interruption fraction bounded
+by `max_shed_fraction` and the current positive-demand eligibility mask.
+
+For multistep builds, `loads=None` selects the legacy MATPOWER-compatible mode
+and requires positional `df_P` (plus `df_Q` for AC). Supplying `loads`, including
+`loads=[]`, selects explicit-load mode: legacy frames are rejected, and
+`df_load_p`/`df_load_q` columns must exactly match `Load.device_id` values.
+Omitted explicit trajectories use tiled static device values. DC formulations
+retain explicit reactive trajectories for reporting, emit a warning, and do
+not use reactive power in optimization.
 
 ---
 
@@ -700,7 +721,7 @@ is present.
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components), M12 (terminal-SoC hard/soft machinery), and M4 (AC branch-flow limits for the network-executability claim). See `plans/milestone-17-hierarchical-dc-ac.md`. |
 | 18 — Convex lossy storage | 🔲 Future | Separate charge/discharge powers, asymmetric efficiency, and storage loss while retaining a convex primary model. Positive throughput regularization plus zero-cost renewable curtailment excludes simultaneous operation under stated assumptions; relax-round-polish remains an explicit fallback. See `plans/milestone-18-lossy-storage.md`. |
-| 19 — Explicit load shedding | 🔲 Future | First-class generator-like load-relief devices capped by contemporaneous nodal load, with AC power-factor relief, linear value-of-lost-load cost, energy-not-served results, and exact-penalty phase-transition tests. See `plans/milestone-19-load-shedding.md`. |
+| 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
 
 ---
 

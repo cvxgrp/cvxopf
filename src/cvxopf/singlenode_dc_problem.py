@@ -32,7 +32,7 @@ Stage-cost rates are integrated over time. Terminal cost is a once-per-horizon
 boundary term and is not multiplied by delta.
 
 Constraints:
-    sum(Pg) + (1/baseMVA)*sum(b) + (1/baseMVA)*sum(p_nd) == Pd_total
+    p_components == 0
     Pgmin[k] <= Pg[k] <= Pgmax[k]
     -S_max[s] <= b[s] <= S_max[s]           (storage power bounds)
     0 <= soc[s] <= capacity[s]              (storage SoC bounds)
@@ -40,7 +40,10 @@ Constraints:
     0 <= p_nd[n] <= R_t[n]                  (ND availability bound)
     p_nd[n] <= S_max[n]                     (ND converter rating)
 
-where Pd_total = sum(bus[:, PD]) / baseMVA  (scalar, all buses summed).
+Here ``p_components`` is the generic one-node aggregate of generator, load,
+storage, and nondispatchable injections. Device-level loads are collapsed only
+when their bus injections enter this balance. ``Pd_total`` remains available
+as compatibility metadata.
 
 No branch flows, no line losses, no reactive power.
 
@@ -82,9 +85,11 @@ from cvxopf._component_assembly import (
     publish_component_variables,
 )
 from cvxopf._component_adapters import (
+    LoadInputs,
     NondispatchableInputs,
     component_requests,
 )
+from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -102,7 +107,6 @@ PD = 2
 
 def _make_singlenode_dc_step_constraints(
     component_injection,
-    Pd_total_t: float,
     component_operating_constraints,
 ) -> tuple[list, cp.Expression]:
     """
@@ -112,8 +116,6 @@ def _make_singlenode_dc_step_constraints(
     ----------
     component_injection : cp.Expression
         Aggregate one-node component injection in per-unit.
-    Pd_total_t : float
-        Total load for this time step (scalar, per-unit).
     component_operating_constraints : tuple[cp.Constraint, ...]
         Ordered operating constraints from all active components.
 
@@ -125,7 +127,7 @@ def _make_singlenode_dc_step_constraints(
     constr = []
 
     # Section 1: Power balance (exactly one equality constraint)
-    p_net = component_injection[0] - Pd_total_t
+    p_net = component_injection[0]
     constr.append(p_net == 0)
 
     # Section 2: Ordered component operating constraints
@@ -163,7 +165,10 @@ def _parse_singlenode_dc_case(
     hvdc=None,
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
+    load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
+    loads: list[Load] | None = None,
+    load_participates_when_empty: bool = False,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -202,6 +207,8 @@ def _parse_singlenode_dc_case(
     # Get external bus IDs for validation (before reindexing)
     original_bus = case["bus"]
     ext_bus_ids = set(original_bus[:, BUS_I].astype(int).tolist())
+    if loads is None:
+        loads = loads_from_matpower(original_bus)
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
 
@@ -233,6 +240,9 @@ def _parse_singlenode_dc_case(
     requests = component_requests(
         "singlenode_dc",
         generators=generators,
+        load_units=loads,
+        load_inputs=load_inputs,
+        load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -245,6 +255,11 @@ def _parse_singlenode_dc_case(
     components = prepare_components(
         requests, "singlenode_dc", preparation
     )
+    load_p_mw = (
+        np.asarray(components.flat_data["load_p_mw"], dtype=float)
+        if load_inputs is None else load_inputs.p_mw[0]
+    )
+    Pd_total = float(np.sum(load_p_mw) / baseMVA)
 
     formulation_data = {
         "baseMVA": baseMVA,
@@ -268,6 +283,7 @@ def _build_singlenode_dc_single(
     *,
     hvdc=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
 ) -> "OPFBuild":
     """
     Build a single time-step single-node DC dispatch problem.
@@ -302,6 +318,8 @@ def _build_singlenode_dc_single(
         nondispatchable,
         generators,
         hvdc=hvdc,
+        loads=loads,
+        load_participates_when_empty=loads is not None,
     )
 
     step_context = StepContext(
@@ -317,7 +335,6 @@ def _build_singlenode_dc_single(
 
     constr, p_net_expr = _make_singlenode_dc_step_constraints(
         component_injection=step_aggregate.injection.p_pu,
-        Pd_total_t=d["Pd_total"],
         component_operating_constraints=(
             step_aggregate.operating_constraints
         ),
@@ -391,8 +408,8 @@ def _build_singlenode_dc_single(
 
 def _build_singlenode_dc_multistep(
     case: dict,
-    df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
     T: int,
     options,
     coupling_constraints: list,
@@ -405,6 +422,9 @@ def _build_singlenode_dc_multistep(
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs,
+    load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """
     Build a multi-step single-node DC dispatch problem.
@@ -447,19 +467,7 @@ def _build_singlenode_dc_multistep(
     OPFBuild
         Problem container with formulation="singlenode_dc", is_convex=True.
     """
-    import warnings
-
     from cvxopf.problem import OPFBuild
-
-    # df_Q is ignored for the DC formulation
-    if df_Q is not None:
-        warnings.warn(
-            "df_Q is ignored for formulation='singlenode_dc'. "
-            "Reactive power is not modelled in the DC formulation.",
-            UserWarning,
-            stacklevel=3,
-        )
-
     # Parse the case
     d = _parse_singlenode_dc_case(
         case,
@@ -473,22 +481,14 @@ def _build_singlenode_dc_multistep(
         nd_available_mw=(
             None if df_nd is None else df_nd.to_numpy(dtype=float)
         ),
+        load_inputs=load_inputs,
         is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
     )
 
-    # Validate df_P column count before summing
-    if df_P.shape[1] != d["source_nb"]:
-        raise ValueError(
-            f"df_P has {df_P.shape[1]} columns but case has "
-            f"{d['source_nb']} source buses."
-        )
-
-    # Compute total load per step (scalar per step, not per-bus)
-    Pd_series = df_P.values.sum(axis=1) / d["baseMVA"]  # shape (T,)
-    if Pd_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-        )
+    # Retain the legacy aggregate load metadata in per unit.
+    Pd_series = load_inputs.p_mw.sum(axis=1) / d["baseMVA"]
 
     # Accumulators
     component_steps = []
@@ -515,7 +515,6 @@ def _build_singlenode_dc_multistep(
 
         step_constr, p_net_expr_t = _make_singlenode_dc_step_constraints(
             component_injection=step_aggregate.injection.p_pu,
-            Pd_total_t=float(Pd_series[t]),
             component_operating_constraints=(
                 step_aggregate.operating_constraints
             ),

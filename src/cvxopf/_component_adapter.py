@@ -217,6 +217,7 @@ class StepContribution:
     operating_constraints: tuple[cp.Constraint, ...] = ()
     network_constraints: tuple[cp.Constraint, ...] = ()
     cost: cp.Expression | None = None
+    cost_expression_name: str | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -312,7 +313,7 @@ class StepCostHook(Protocol[UnitT_contra]):
         prepared: Mapping[str, object],
         variables: Mapping[str, cp.Variable],
         context: StepContext,
-    ) -> cp.Expression: ...
+    ) -> cp.Expression | None: ...
 
 
 class StepExpressionHook(Protocol[UnitT_contra]):
@@ -387,10 +388,21 @@ class ComponentAdapter(Generic[UnitT, InputT]):
     prepare: PrepareHook[UnitT, InputT]
     metadata: MetadataHook
     formulations: Mapping[Formulation, FormulationAdapter[UnitT]]
+    cost_expression_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("component adapter name must be nonempty")
+        if (
+            self.cost_expression_name is not None
+            and (
+                not isinstance(self.cost_expression_name, str)
+                or not self.cost_expression_name
+            )
+        ):
+            raise ValueError(
+                "component cost expression name must be a nonempty string"
+            )
         expected = {"ac", "lossy_dc", "singlenode_dc"}
         if set(self.formulations) != expected:
             raise ValueError(

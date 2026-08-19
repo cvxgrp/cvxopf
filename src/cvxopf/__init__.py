@@ -55,7 +55,12 @@ from cvxopf.results import extract_results, compare_to_reference
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, hvdc_from_dcline
-from cvxopf.generator import DispatchableGenerator, gen_from_matpower
+from cvxopf.generator import (
+    DispatchableGenerator,
+    gen_from_matpower,
+    max_generation_marginal_cost,
+)
+from cvxopf.load import Load
 from cvxopf.testcases import make_singlenode_case
 
 __all__ = [
@@ -71,5 +76,7 @@ __all__ = [
     "hvdc_from_dcline",
     "DispatchableGenerator",
     "gen_from_matpower",
+    "max_generation_marginal_cost",
+    "Load",
     "make_singlenode_case",
 ]

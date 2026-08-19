@@ -1,0 +1,22 @@
+[
+  {
+    "scaling": "inv_base_mva_parameter",
+    "is_dcp": true,
+    "is_dpp": false,
+    "first_end_to_end_seconds": 0.007707167067565024,
+    "updated_end_to_end_seconds": 0.0039027909515425563,
+    "status": "optimal",
+    "objective": 2257509.0333361165,
+    "identities_unchanged": true
+  },
+  {
+    "scaling": "immutable_base_scalar",
+    "is_dcp": true,
+    "is_dpp": true,
+    "first_end_to_end_seconds": 0.0049395839450880885,
+    "updated_end_to_end_seconds": 0.0005359579809010029,
+    "status": "optimal",
+    "objective": 2257509.0333361165,
+    "identities_unchanged": true
+  }
+]

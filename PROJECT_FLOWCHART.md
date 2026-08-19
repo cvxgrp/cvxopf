@@ -1,8 +1,9 @@
 # cvxopf software architecture
 
-This diagram records the software structure implemented by API hardening and
-Milestone 16+. It describes the current problem-construction and result paths
-before the Milestone 17 hierarchical DC/AC controller is added.
+This diagram records the software structure implemented by API hardening,
+Milestone 16+, and Milestone 19. It describes the current problem-construction
+and result paths before the Milestone 17 hierarchical DC/AC controller is
+added.
 
 ```mermaid
 flowchart TD
@@ -36,6 +37,7 @@ flowchart TD
         gen["<b>Dispatchable generation</b><br/>active and reactive dispatch<br/>operating limits · production cost"]
         storage["<b>Storage</b><br/>active and reactive power · SoC<br/>cycling cost · horizon coupling<br/>terminal constraints and costs"]
         nd["<b>Nondispatchable generation</b><br/>availability-limited active power<br/>inverter reactive support<br/>curtailment reporting"]
+        load["<b>Loads</b><br/>signed active/reactive demand · stable identity<br/>optional served fraction · VOLL cost<br/>ENS and service reporting"]
         hvdc["<b>HVDC</b><br/>two-terminal active-power transfer<br/>bounds · losses · transfer cost<br/>explicit single-node null model"]
     end
 
@@ -49,7 +51,7 @@ flowchart TD
         convex["<b>Convex solver</b><br/>lossy and single-node DC"]
         extract["<b>Extract results</b><br/>schema initialized from built model"]
         success["<b>Usable core primal solution</b><br/>populate available arrays and scalar costs"]
-        unsuccessful["<b>No usable core primal solution</b><br/>preserve configured-device keys<br/>arrays = None · scalar costs = NaN"]
+        unsuccessful["<b>No usable core primal solution</b><br/>retain known exogenous inputs and device keys<br/>primal arrays = None · scalar costs = NaN"]
         results["<b>Stable results</b><br/>formulation-aware result dictionary"]
     end
 
@@ -65,10 +67,12 @@ flowchart TD
     registry -. selects hooks .-> gen
     registry -. selects hooks .-> storage
     registry -. selects hooks .-> nd
+    registry -. selects hooks .-> load
     registry -. selects hooks .-> hvdc
     gen --> step
     storage --> step
     nd --> step
+    load --> step
     hvdc --> step
     step --> scale --> horizon --> publish
 
@@ -99,7 +103,7 @@ flowchart TD
     class api,validation,dispatch public
     class ac,ldc,sn,compose,objective formulation
     class requests,prepare,registry,step,scale,horizon,publish assembly
-    class gen,storage,nd,hvdc component
+    class gen,storage,nd,load,hvdc component
     class build,solver,ipopt,convex,extract,success,unsuccessful,results output
 ```
 

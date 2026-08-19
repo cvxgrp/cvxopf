@@ -11,10 +11,11 @@ import pytest
 from cvxopf import (
     DispatchableGenerator,
     HVDCLink,
+    Load,
     NondispatchableUnit,
     StorageUnitIdeal,
 )
-from cvxopf import generator, hvdc, nondispatchable, storage
+from cvxopf import generator, hvdc, load, nondispatchable, storage
 from cvxopf import _component_adapters as component_adapters
 from cvxopf._component_adapters import HVDC_ADAPTER
 from cvxopf.problem import build_opf, build_opf_multistep
@@ -23,7 +24,7 @@ from cvxopf.testcases import case9
 
 
 def test_all_components_expose_network_and_temporal_interface():
-    for module in (generator, storage, nondispatchable, hvdc):
+    for module in (generator, storage, nondispatchable, hvdc, load):
         assert callable(module.ac_injections)
         assert callable(module.dc_injections)
         assert callable(module.ac_operating_constraints)
@@ -76,6 +77,15 @@ def test_all_component_injection_methods_return_fixed_three_tuple():
     hvdc_ac = hvdc.ac_injections([link], p_in, p_out, ext_to_int)
     hvdc_dc = hvdc.dc_injections([link], p_in, p_out, ext_to_int)
 
+    demand = Load(bus=1, p_load_mw=10.0, device_id="load-1")
+    load_incidence = load.make_load_incidence(
+        [demand], 2, ext_to_int
+    )
+    load_ac = load.ac_injections(
+        np.array([10.0]), np.array([2.0]), load_incidence
+    )
+    load_dc = load.dc_injections(np.array([10.0]), load_incidence)
+
     for result in (
         generator_ac,
         generator_dc,
@@ -85,6 +95,8 @@ def test_all_component_injection_methods_return_fixed_three_tuple():
         nd_dc,
         hvdc_ac,
         hvdc_dc,
+        load_ac,
+        load_dc,
     ):
         assert isinstance(result, tuple)
         assert len(result) == 3

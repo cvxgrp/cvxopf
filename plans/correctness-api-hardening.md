@@ -186,7 +186,7 @@ Before implementation, classify every objective coefficient by units:
 | DC line loss term | `loss_weight * r*p_t^2` | weighted power loss, not inherently currency/hour |
 | Storage cycling | `aging_weight * abs(b_t)` | formerly objective units/MW per interval |
 | HVDC cost | polynomial in `abs(p_in_t)` | coefficient-dependent, conventionally currency/hour |
-| Future load shedding (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
+| Future sheddable loads (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
 | Terminal linear | `rho * abs(q_T-target)` | objective units |
 | Terminal quadratic | `rho * square(q_T-target)` | objective units |
 
@@ -235,7 +235,7 @@ device is active, and must always be finite and strictly positive.
 | Storage cycling | `aging_weight * abs(b_MW)` | `aging_weight`: `U/MWh` of one-way throughput | `delta * aging_weight * abs(b_MW)` in `U` |
 | HVDC polynomial cost | `h(abs(p_in_MW))` | polynomial coefficients chosen so `h` is `U/hour` | `delta * h(abs(p_in_MW))` in `U` |
 | DC flow-loss regularizer | `loss_weight * sum(r_pu * p_flow_pu^2)` | `loss_weight`: `(U/hour)` per numerical unit of the per-unit loss proxy | `delta * loss_weight * L` in `U` |
-| Future load shedding | `value_of_lost_load * p_shed_MW` | `value_of_lost_load`: `U/MWh` | `delta * VOLL * p_shed_MW` in `U` |
+| Future sheddable loads | `value_of_lost_load * p_shed_MW` | `value_of_lost_load`: `U/MWh` | `delta * VOLL * p_shed_MW` in `U` |
 | Terminal linear | `rho_1 * abs(q_T-target)` | `rho_1`: `U/MWh` | once-per-horizon `U` |
 | Terminal quadratic | `rho_2 * square(q_T-target)` | `rho_2`: `U/MWh^2` | once-per-horizon `U` |
 
@@ -271,7 +271,7 @@ The following are resolved:
 - `delta` scales every stage contribution automatically.
 - storage cycling is charged on energy throughput,
   `aging_weight * delta * abs(b_t)`;
-- future M19 load shedding uses
+- future M19 sheddable loads use
   `delta * value_of_lost_load * p_shed_t`;
 - MATPOWER `gencost` output is treated as a stage cost rate;
 - single- and multistep objectives both report total objective units over
@@ -435,27 +435,29 @@ The README and objective docstrings record the intentional behavior change;
 All acceptance gates are covered by unit, formulation-level, and
 cross-resolution regression tests.
 
-### Future application: Milestone 19 load shedding
+### Future application: Milestone 19 first-class loads and load shedding
 
 The objective-units decision is a prerequisite for
-`milestone-19-load-shedding.md`. Load shedding will be an explicit
-generator-like positive injection with a high linear value-of-lost-load cost
-and a per-step cap derived from nodal load. Its coefficient should have a
-stable physical interpretation across time resolutions.
+`milestone-19-load-shedding.md`. Loads will become first-class components;
+selected loads will expose an affine served-fraction feasible set with a high
+linear value-of-lost-load cost. Each shedding bound is derived from that
+load's active input at the current step, and its coefficient has a stable
+physical interpretation across time resolutions.
 
 The hardening work should keep the following future requirements possible
 without implementing M19 here:
 
-- component-owned positive active and reactive balance contributions;
+- component-owned fixed and served active/reactive load contributions;
 - a named, typed per-stage load-shedding cost contribution;
-- conditional result keys for configured shedding devices in both successful
+- conditional result keys for configured sheddable loads in both successful
   and no-primal outcomes;
 - energy-not-served accounting using `delta`; and
 - exact-penalty studies in which the finite shedding coefficient crosses the
   relevant marginal service-cost threshold.
 
-Do not add an anonymous feasibility slack during hardening. Absence of an
-explicit M19 device must continue to mean that load shedding is unavailable.
+Do not add an anonymous feasibility slack during hardening. A load without an
+explicit shedding policy must remain fixed and fully served whenever the
+problem is feasible.
 
 This track is decided and must be implemented before Milestone 17.
 Implementation may follow M16+ because central stage-cost assembly makes the

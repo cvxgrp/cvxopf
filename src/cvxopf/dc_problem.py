@@ -23,9 +23,13 @@ G and the weighted loss proxy are stage-cost rates. Terminal cost is a
 once-per-horizon boundary term and is not multiplied by delta.
 
 Constraints:
-    A @ p_flows + Cg @ Pg == Pd    flow conservation at every bus
-    |p_flows[e]| <= f_max[e]       branch flow limits
+    A @ p_flows + p_components == 0  flow conservation at every bus
+    |p_flows[e]| <= f_max[e]         branch flow limits
     Pgmin <= Pg <= Pgmax
+
+Here ``p_components`` is the generic aggregate of generator, load, and other
+device injections. Loads enter with their device-owned negative injection
+sign rather than through formulation-local subtraction.
 
 This is a convex QP; the default solver is CLARABEL (nlp=False).
 
@@ -45,7 +49,7 @@ from cvxopf.network import (
     reindex_case_to_consecutive,
     make_branch_node_incidence_matrix,
 )
-from cvxopf.data import validate_case, load_timeseries_from_dataframe
+from cvxopf.data import validate_case
 from cvxopf.generator import (
     DispatchableGenerator,
     gen_from_matpower,
@@ -72,9 +76,11 @@ from cvxopf._component_assembly import (
 )
 from cvxopf._component_adapters import (
     HVDCInputs,
+    LoadInputs,
     NondispatchableInputs,
     component_requests,
 )
+from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
@@ -113,13 +119,18 @@ def _parse_dc_case(
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
     hvdc_inputs: HVDCInputs | None = None,
+    load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
+    loads: list[Load] | None = None,
+    load_participates_when_empty: bool = False,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
     Returns a flat dict consumed by the DC single-step and multistep builders.
     """
     validate_case(case)
+    if loads is None:
+        loads = loads_from_matpower(case["bus"])
     if generators is None:
         generators = gen_from_matpower(case["gen"], case["gencost"])
     case, ext_to_int = reindex_case_to_consecutive(case)
@@ -184,6 +195,9 @@ def _parse_dc_case(
     requests = component_requests(
         "lossy_dc",
         generators=generators,
+        load_units=loads,
+        load_inputs=load_inputs,
+        load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
@@ -195,6 +209,11 @@ def _parse_dc_case(
         hvdc_inputs=hvdc_inputs,
     )
     components = prepare_components(requests, "lossy_dc", preparation)
+    load_p_mw = (
+        np.asarray(components.flat_data["load_p_mw"], dtype=float)
+        if load_inputs is None else load_inputs.p_mw[0]
+    )
+    Pd = np.asarray(components.flat_data["Cload"]) @ load_p_mw / baseMVA
 
     formulation_data = dict(
         case=case, baseMVA=baseMVA,
@@ -215,13 +234,12 @@ def _make_dc_step_constraints(
     p_flows,
     component_injection,
     A,
-    Pd,
     f_max,
     component_operating_constraints,
 ) -> tuple[list, cp.Expression]:
     """Build one DC step's constraints and modeled net bus injection."""
     # Section 1: Nodal real power balance
-    p_net = component_injection - Pd
+    p_net = component_injection
     constr = [A @ p_flows + p_net == 0]
 
     # Section 2: Branch flow limits
@@ -256,6 +274,7 @@ def _build_lossy_dc_single(
     *,
     hvdc=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
 ) -> "OPFBuild":
     """Build a single time-step lossy DC OPF problem."""
     from cvxopf.problem import OPFBuild
@@ -271,7 +290,9 @@ def _build_lossy_dc_single(
         )
 
     d = _parse_dc_case(
-        case, options, storage, delta, nondispatchable, hvdc, generators
+        case, options, storage, delta, nondispatchable, hvdc, generators,
+        loads=loads,
+        load_participates_when_empty=loads is not None,
     )
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
@@ -289,7 +310,7 @@ def _build_lossy_dc_single(
     constr, p_net_expr = _make_dc_step_constraints(
         p_flows,
         step_aggregate.injection.p_pu,
-        d["A"], d["Pd"], d["f_max"],
+        d["A"], d["f_max"],
         step_aggregate.operating_constraints,
     )
     constr.extend(step_aggregate.network_constraints)
@@ -361,8 +382,8 @@ def _build_lossy_dc_single(
 
 def _build_lossy_dc_multistep(
     case: dict,
-    df_P: pd.DataFrame,
-    df_Q: pd.DataFrame,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
     T: int,
     options,
     coupling_constraints: list,
@@ -375,17 +396,12 @@ def _build_lossy_dc_multistep(
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs,
+    load_participates_when_empty: bool = False,
 ) -> "OPFBuild":
     """Build a T-step lossy DC OPF problem as a single cp.Problem."""
     from cvxopf.problem import OPFBuild
-
-    if df_Q is not None:
-        warnings.warn(
-            "df_Q is ignored for formulation='lossy_dc'. "
-            "Reactive power is not modelled in the DC formulation.",
-            UserWarning,
-            stacklevel=3,
-        )
 
     # Emit warning if storage is present in DC formulation
     if storage:
@@ -396,12 +412,6 @@ def _build_lossy_dc_multistep(
             UserWarning,
             stacklevel=3,
         )
-
-    # Use df_P only for load; construct a dummy df_Q with zeros for the
-    # shared timeseries loader (which expects matching shapes).
-    df_Q_dummy = pd.DataFrame(
-        np.zeros_like(df_P.to_numpy()), columns=df_P.columns
-    )
 
     d = _parse_dc_case(
         case,
@@ -423,14 +433,12 @@ def _build_lossy_dc_multistep(
                 df_hvdc_max.to_numpy(dtype=float),
             )
         ),
+        load_inputs=load_inputs,
         is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
     )
-    Pd_series, _ = load_timeseries_from_dataframe(df_P, df_Q_dummy, case)
-
-    if Pd_series.shape[0] != T:
-        raise ValueError(
-            f"T={T} but df_P has {Pd_series.shape[0]} rows; they must match."
-        )
+    Pd_series = load_inputs.p_mw @ d["Cload"].T / d["baseMVA"]
 
     p_flows_list    = []
     component_steps = []
@@ -460,7 +468,7 @@ def _build_lossy_dc_multistep(
         step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t,
             step_aggregate.injection.p_pu,
-            d["A"], Pd_series[t], d["f_max"],
+            d["A"], d["f_max"],
             step_aggregate.operating_constraints,
         )
         step_constr.extend(step_aggregate.network_constraints)

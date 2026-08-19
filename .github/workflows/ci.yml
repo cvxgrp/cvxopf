@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -22,9 +26,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install IPOPT and linear algebra system libraries
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            update
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install -y \
             coinor-libipopt-dev \
             liblapack-dev \
             libblas-dev \

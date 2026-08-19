@@ -53,6 +53,11 @@ EXAMPLE_GROUPS = {
         "case9_multistep_nondispatchable_ac.py",
         "case9_nondispatchable_dc.py",
     ],
+    "Loads and Reliability": [
+        "case9_first_class_loads.py",
+        "singlenode_load_shedding_phase_transition.py",
+        "case9_multistep_load_shedding.py",
+    ],
     "HVDC Transmission": [
         "case9_hvdc_ac.py",
         "case9_hvdc_dc.py",

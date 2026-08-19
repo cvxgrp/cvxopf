@@ -40,6 +40,7 @@ class ComponentRequest:
     units: tuple[Any, ...]
     inputs: Any = None
     required_capability: FormulationCapability | None = None
+    participates_when_empty: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "units", tuple(self.units))
@@ -76,7 +77,7 @@ def prepare_components(
     components: dict[str, PreparedComponent[Any, Any]] = {}
     flat_data: dict[str, object] = {}
     for request in requests:
-        if not request.units:
+        if not request.units and not request.participates_when_empty:
             continue
         adapter = request.adapter
         if adapter.name in components:
@@ -349,6 +350,9 @@ def assemble_component_step(
             operating_constraints=operating_constraints,
             network_constraints=network_constraints,
             cost=cost,
+            cost_expression_name=(
+                None if cost is None else component.adapter.cost_expression_name
+            ),
             expressions=expressions,
         )
     return MappingProxyType(contributions)
@@ -571,7 +575,22 @@ def integrate_component_stage_costs(
                 f"component {component_name!r} has inconsistent step-cost "
                 "availability across the horizon"
             )
-        costs[f"{component_name}_cost"] = integrate_stage_cost_rates(
+        names = {
+            step[component_name].cost_expression_name
+            for step in step_contributions
+        }
+        if len(names) != 1:
+            raise ValueError(
+                f"component {component_name!r} has inconsistent step-cost "
+                "expression names across the horizon"
+            )
+        expression_name = names.pop() or f"{component_name}_cost"
+        if expression_name in costs:
+            raise ValueError(
+                f"component {component_name!r} requested duplicate integrated "
+                f"cost expression {expression_name!r}"
+            )
+        costs[expression_name] = integrate_stage_cost_rates(
             cast(list[cp.Expression], rates),
             delta,
         )

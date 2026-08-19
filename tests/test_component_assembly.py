@@ -198,6 +198,12 @@ TOY_ADAPTER = ComponentAdapter[_ToyUnit, None](
 )
 
 
+@pytest.mark.parametrize("name", ["", 3])
+def test_component_adapter_rejects_invalid_cost_expression_name(name):
+    with pytest.raises(ValueError, match="must be a nonempty string"):
+        replace(TOY_ADAPTER, cost_expression_name=name)
+
+
 _VECTOR_SCALE = cp.Parameter(2)
 _UNUSED_SCALE = cp.Parameter(nonneg=True)
 
@@ -843,6 +849,104 @@ def test_named_component_costs_require_stable_cost_availability():
         )
 
 
+def test_named_component_costs_require_stable_expression_names():
+    first = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+        cost_expression_name="first_cost",
+    )
+    second = replace(first, cost_expression_name="second_cost")
+
+    with pytest.raises(ValueError, match="inconsistent step-cost expression"):
+        integrate_component_stage_costs(
+            ({"toy": first}, {"toy": second}), 1.0
+        )
+
+
+def test_adapter_cost_name_override_reaches_integrated_expression():
+    adapter = replace(TOY_ADAPTER, cost_expression_name="precise_toy_cost")
+    prepared = prepare_components(
+        (ComponentRequest(adapter, (_ToyUnit(2, 20.0),)),),
+        "lossy_dc",
+        _preparation(),
+    )
+    step = assemble_component_step(
+        prepared,
+        StepContext(
+            "lossy_dc", 0, 100.0, {1: 0, 2: 1}, DCNetworkState()
+        ),
+    )
+
+    costs = integrate_component_stage_costs((step,), 0.5)
+
+    assert tuple(costs) == ("precise_toy_cost",)
+    assert "toy_cost" not in costs
+
+
+def test_adapter_default_cost_name_remains_component_name_cost():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(2.0),
+    )
+
+    costs = integrate_component_stage_costs(({"toy": contribution},), 0.5)
+
+    assert tuple(costs) == ("toy_cost",)
+
+
+def test_cost_name_override_is_absent_without_stage_cost():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost_expression_name="unused_cost",
+    )
+
+    costs = integrate_component_stage_costs(({"toy": contribution},), 1.0)
+
+    assert costs == {}
+
+
+def test_integrated_cost_name_collision_is_rejected():
+    contribution = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+        cost_expression_name="shared_cost",
+    )
+
+    with pytest.raises(ValueError, match="duplicate integrated cost"):
+        integrate_component_stage_costs(
+            ({"first": contribution, "second": contribution},), 1.0
+        )
+
+
+def test_integrated_cost_override_collides_with_step_expression_safely():
+    component = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        cost=cp.Constant(1.0),
+        cost_expression_name="shared_name",
+    )
+    integrated = integrate_component_stage_costs(
+        ({"toy": component},), 1.0
+    )
+    aggregate = StepContribution(
+        variables={},
+        injection=InjectionContribution(None, None),
+        expressions={"shared_name": cp.Constant(2.0)},
+    )
+
+    with pytest.raises(ValueError, match="collide with formulation compatibility"):
+        publish_component_expressions(
+            [aggregate],
+            HorizonContribution(),
+            integrated,
+            multistep=False,
+        )
+
+
 def test_expression_publication_rejects_inconsistent_multistep_keys():
     first = StepContribution(
         variables={},
@@ -1135,6 +1239,7 @@ def test_common_registry_has_one_order_for_every_formulation():
         )
         assert tuple(request.adapter.name for request in requests) == (
             "generator",
+            "load",
             "storage",
             "nondispatchable",
             "hvdc",

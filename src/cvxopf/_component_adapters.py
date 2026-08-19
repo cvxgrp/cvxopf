@@ -13,7 +13,7 @@ from typing import Mapping, Sequence, cast
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import generator, hvdc, nondispatchable, storage
+from cvxopf import generator, hvdc, load, nondispatchable, storage
 from cvxopf._component_adapter import (
     ACNetworkState,
     ComponentAdapter,
@@ -30,6 +30,7 @@ from cvxopf._component_adapter import (
 from cvxopf._component_assembly import ComponentRequest
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.hvdc import HVDCLink
+from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
 
@@ -37,6 +38,260 @@ from cvxopf.storage import StorageUnitIdeal
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
     """Return one prepared numerical array under the typed adapter contract."""
     return cast(np.ndarray, prepared[key])
+
+
+def _load_prepare(
+    units: Sequence[Load],
+    inputs: "LoadInputs | None",
+    context: PreparationContext,
+) -> Mapping[str, object]:
+    """Prepare fixed or sheddable loads and synchronized exogenous data."""
+    prepared = load._prepare_data(
+        list(units),
+        context.nb,
+        dict(context.ext_to_int),
+        set(context.ext_bus_ids),
+    )
+    if inputs is None:
+        p_mw = np.tile(
+            _array(prepared, "load_p_mw"),
+            (context.horizon_steps, 1),
+        )
+        q_mvar = np.tile(
+            _array(prepared, "load_q_mvar"),
+            (context.horizon_steps, 1),
+        )
+    else:
+        p_mw = inputs.p_mw
+        q_mvar = inputs.q_mvar
+    expected_shape = (context.horizon_steps, len(units))
+    if p_mw.shape != expected_shape or q_mvar.shape != expected_shape:
+        raise ValueError(
+            "load input channels must both have shape "
+            f"{expected_shape}, got {p_mw.shape} and {q_mvar.shape}"
+        )
+    if not np.all(np.isfinite(p_mw)) or not np.all(np.isfinite(q_mvar)):
+        raise ValueError("load input channels must contain only finite values")
+    if inputs is not None and inputs.has_reactive is not None:
+        if inputs.has_reactive.shape != (len(units),):
+            raise ValueError(
+                "load reactive-channel metadata must have shape "
+                f"({len(units)},), got {inputs.has_reactive.shape}"
+            )
+        prepared = dict(prepared)
+        prepared["load_has_reactive"] = inputs.has_reactive
+    prepared["_load_p_mw_by_step"] = np.array(p_mw, copy=True)
+    prepared["_load_q_mvar_by_step"] = np.array(q_mvar, copy=True)
+    prepared["_load_parameters"] = (
+        None
+        if cast(int, prepared["nsheddable"]) == 0
+        else load._PreparedLoadParameters.create(p_mw, q_mvar)
+    )
+    return prepared
+
+
+def _load_metadata(
+    prepared: Mapping[str, object],
+    formulation: Formulation,
+) -> Mapping[str, object]:
+    return load._build_metadata(dict(prepared))
+
+
+def _load_variable_specs(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    context: StepContext,
+) -> tuple[VariableSpec, ...]:
+    nsheddable = cast(int, prepared["nsheddable"])
+    if nsheddable == 0:
+        return ()
+    return (VariableSpec("load_shed_fraction", (nsheddable,)),)
+
+
+def _load_step_channels(
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> Mapping[str, cp.Expression]:
+    """Return all load input, served, and conditional shed channels."""
+    parameters = cast(
+        load._PreparedLoadParameters | None, prepared["_load_parameters"]
+    )
+    if parameters is None:
+        p_load = cp.Constant(
+            _array(prepared, "_load_p_mw_by_step")[context.step]
+        )
+        q_load = cp.Constant(
+            _array(prepared, "_load_q_mvar_by_step")[context.step]
+        )
+        p_eligible = cp.Constant(np.empty(0))
+    else:
+        p_load = parameters.p_load_mw[context.step]
+        q_load = parameters.q_load_mvar[context.step]
+        p_eligible = parameters.p_eligible_mw[context.step]
+    channels = load.served_and_shed_expressions(
+        p_load,
+        q_load,
+        p_eligible,
+        variables.get("load_shed_fraction"),
+        _array(prepared, "sheddable_load_indices"),
+        cast(int, prepared["nload"]),
+    )
+    if context.formulation != "ac":
+        channels.pop("q_load_served", None)
+        channels.pop("q_load_shed", None)
+    return channels
+
+
+def _load_injections(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> InjectionContribution:
+    channels = _load_step_channels(prepared, variables, context)
+    incidence = _array(prepared, "Cload")
+    if context.formulation == "ac":
+        p_pu, q_pu, inv_base_mva = load.ac_injections(
+            channels["p_load_served"],
+            channels["q_load_served"],
+            incidence,
+        )
+    else:
+        p_pu, q_pu, inv_base_mva = load.dc_injections(
+            channels["p_load_served"], incidence
+        )
+    return InjectionContribution(p_pu, q_pu, inv_base_mva)
+
+
+def _load_operating_constraints(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> tuple[cp.Constraint, ...]:
+    fraction = variables.get("load_shed_fraction")
+    if fraction is None:
+        return ()
+    parameters = cast(
+        load._PreparedLoadParameters, prepared["_load_parameters"]
+    )
+    indices = _array(prepared, "sheddable_load_indices")
+    maximum_fraction = _array(prepared, "load_max_shed_fraction")[indices]
+    constraint_method = (
+        load.ac_operating_constraints
+        if context.formulation == "ac"
+        else load.dc_operating_constraints
+    )
+    return tuple(
+        constraint_method(
+            fraction,
+            maximum_fraction,
+            parameters.eligibility_mask[context.step, indices],
+        )
+    )
+
+
+def _load_step_cost(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> cp.Expression | None:
+    channels = _load_step_channels(prepared, variables, context)
+    p_shed = channels.get("p_load_shed")
+    if p_shed is None:
+        return None
+    indices = _array(prepared, "sheddable_load_indices")
+    costs = _array(prepared, "load_shedding_cost_per_mwh")[indices]
+    return load.shedding_cost_rate(p_shed, costs)
+
+
+def _load_step_expressions(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> Mapping[str, cp.Expression]:
+    return _load_step_channels(prepared, variables, context)
+
+
+def _load_horizon(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variable_history: Mapping[str, Sequence[cp.Variable]],
+    context: HorizonContext,
+) -> HorizonContribution:
+    if cast(int, prepared["nsheddable"]) == 0:
+        return HorizonContribution(
+            constraints=tuple(load.coupling_constraints())
+        )
+    parameters = cast(
+        load._PreparedLoadParameters, prepared["_load_parameters"]
+    )
+    indices = _array(prepared, "sheddable_load_indices")
+    fractions = variable_history["load_shed_fraction"]
+    shed_by_step = [
+        cp.multiply(
+            fractions[step],
+            parameters.p_eligible_mw[step, indices],
+        )
+        for step in range(context.horizon_steps)
+    ]
+    ens_by_load = cp.multiply(context.delta, sum(shed_by_step))
+    return HorizonContribution(
+        expressions={
+            "energy_not_served_by_load": ens_by_load,
+            "energy_not_served": cp.sum(ens_by_load),
+        }
+    )
+
+
+LOAD_ACTIVE = FormulationAdapter[Load](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_load_variable_specs,
+    injections=_load_injections,
+    operating_constraints=_load_operating_constraints,
+    step_cost=_load_step_cost,
+    step_expressions=_load_step_expressions,
+    horizon=_load_horizon,
+)
+
+
+@dataclass(frozen=True)
+class LoadInputs:
+    """Normalized load channels and effective reactive definition by device."""
+
+    p_mw: np.ndarray
+    q_mvar: np.ndarray
+    has_reactive: np.ndarray | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "p_mw", np.array(self.p_mw, dtype=float, copy=True)
+        )
+        object.__setattr__(
+            self, "q_mvar", np.array(self.q_mvar, dtype=float, copy=True)
+        )
+        if self.has_reactive is not None:
+            object.__setattr__(
+                self,
+                "has_reactive",
+                np.array(self.has_reactive, dtype=bool, copy=True),
+            )
+
+
+LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
+    name="load",
+    prepare=_load_prepare,
+    metadata=_load_metadata,
+    formulations={
+        "ac": LOAD_ACTIVE,
+        "lossy_dc": LOAD_ACTIVE,
+        "singlenode_dc": LOAD_ACTIVE,
+    },
+    cost_expression_name="load_shedding_cost",
+)
 
 
 def _generator_prepare(
@@ -669,6 +924,9 @@ def component_requests(
     formulation: Formulation,
     *,
     generators: Sequence[DispatchableGenerator],
+    load_units: Sequence[Load] = (),
+    load_inputs: LoadInputs | None = None,
+    load_participates_when_empty: bool = False,
     storage_units: Sequence[StorageUnitIdeal] = (),
     nondispatchable_units: Sequence[NondispatchableUnit] = (),
     nondispatchable_inputs: NondispatchableInputs | None = None,
@@ -686,6 +944,13 @@ def component_requests(
             GENERATOR_ADAPTER,
             tuple(generators),
             required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            LOAD_ADAPTER,
+            tuple(load_units),
+            load_inputs,
+            required_capability=FormulationCapability.ACTIVE,
+            participates_when_empty=load_participates_when_empty,
         ),
         ComponentRequest(
             STORAGE_ADAPTER,

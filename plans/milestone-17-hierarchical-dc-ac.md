@@ -190,6 +190,13 @@ those become controlled resilience-study extensions.
 - SoC signpost deviation is reported as inter-layer disagreement.
 - Results do not claim general resilience until disturbances and resilience
   outcomes such as unserved energy are explicitly modeled.
+- In later extensions that enable M19 sheddable loads, an AC window that uses
+  corrective shedding is not reported merely as “AC feasible.” Retain
+  DC-planned demand; AC input and served demand; corrective active and
+  reactive shedding; and aggregate and per-load energy not served as separate
+  outcomes so shedding cannot conceal failure of the upper-layer plan. When a
+  no-shedding counterfactual is explicitly run, also report whether that AC
+  window would have been infeasible or target-inconsistent.
 
 ### Required experiment layout
 
