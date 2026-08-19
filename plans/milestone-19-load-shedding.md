@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–6 complete
+**Status:** complete; Stages 0–7 implemented and verified
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -924,7 +924,7 @@ Verification at the S5 stopping point:
 
 ### Stage 6 — Scientific and formulation verification
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `56552fb`.**
 
 - Prove the single-node phase transition numerically.
 - Demonstrate below-threshold economic shedding.
@@ -996,6 +996,8 @@ Verification at the S6 stopping point:
 
 ### Stage 7 — Documentation, examples, and roadmap handoff
 
+**Complete; checkpoint commit pending.**
+
 - Add a first-class-load example.
 - Add a single-node phase-transition example.
 - Add a networked multistep storage and renewable example with partial
@@ -1006,6 +1008,66 @@ Verification at the S6 stopping point:
   extensions.
 - Add the M17 anti-concealment reporting gate from Section 10.
 - Record the as-built public and internal contracts in this plan.
+
+**As-built documentation and examples:** the top-level README now presents
+loads as first-class component-owned models, explains MATPOWER fallback and
+explicit identity-aligned inputs, and documents the optional affine shedding
+policy, VOLL calibration limits, proportional AC reactive relief, interval
+interpretation, conditional results, and delta-integrated ENS. It explicitly
+distinguishes zero-cost renewable curtailment as a metric of interest from
+penalized load shedding as a reliability outcome. The compact and full
+architecture diagrams now include load ownership and retain known exogenous
+inputs on unsuccessful solves.
+
+Three executable examples have distinct teaching roles:
+
+1. `case9_first_class_loads.py` proves that automatic MATPOWER conversion and
+   equivalent explicit load objects produce identical AC active/reactive load,
+   generation, and objective results while exposing different stable IDs.
+2. `singlenode_load_shedding_phase_transition.py` reproduces the controlled
+   9, 12.1, 24, and 60 objective-unit/MWh sweep and states the assumptions that
+   make the generator-only bound scientifically valid in that case.
+3. `case9_multistep_load_shedding.py` uses identity-aligned pandas trajectories
+   in a networked lossy-DC solve. Storage absorbs 20 MWh of early solar energy,
+   later discharges while retaining a 20 MWh terminal reserve, and the result
+   reports 135 MWh ENS, 675,000 objective units of shedding cost, and zero
+   renewable curtailment.
+
+The generated examples catalog classifies these scripts under **Loads and
+Reliability** and records their actual output. The M17 plan now requires
+DC-planned demand, AC input and served demand, corrective active and reactive
+shedding, per-load and aggregate ENS, and any explicitly run no-shedding
+counterfactual to remain separate. Corrective shedding therefore cannot turn
+failure of the upper-layer plan into an unqualified statement of AC
+feasibility.
+
+**Final public contract:** `Load` owns signed active demand, optional reactive
+demand, stable identity, and an optional shedding policy. `loads=None` imports
+MATPOWER bus demand; explicit `loads`, `df_load_p`, and `df_load_q` select the
+identity-aligned mode. Only a finite positive `shedding_cost_per_mwh` creates a
+shedding variable. The public result and metadata names, units, shapes,
+conditionality, and unavailable-primal behavior are those locked in Section
+6. `max_generation_marginal_cost(...)` remains a generator-only diagnostic and
+never selects VOLL automatically.
+
+**Final internal contract:** `load.py` owns validation, incidence, signed
+engineering-unit channels, served/shed algebra, the explicit eligibility
+inequalities, and the linear shedding cost rate. The private load adapter owns
+preparation, synchronized active-load parameters, formulation capabilities,
+variables, injections, reporting expressions, and once-per-horizon ENS.
+Shared component assembly creates variables, binds inverse-base scaling,
+integrates the stage-cost rate by delta exactly once, publishes
+`load_shedding_cost`, and invokes the horizon contribution once. Formulation
+builders contain no independent load or shedding mathematics.
+
+Verification at the S7 stopping point:
+
+- the documentation generator executed all 23 examples successfully and
+  regenerated `examples/README.md` from the final sources;
+- the complete suite passed with 1,609 tests;
+- Ruff, configured strict mypy, and `git diff --check` passed; and
+- S7 changed documentation and executable examples only; the production model
+  and its test count are unchanged from the verified S6 checkpoint.
 
 ## 9. Verification matrix
 
@@ -1171,5 +1233,5 @@ success.
   served-load keys always exist.
 - `max_generation_marginal_cost(...)` returns a directly multiplicable scalar
   generation-only reference bound. It does not select or certify VOLL.
-- The AC DNLP representation of shedding bounds is selected only after the
-  Stage 4 structural experiment.
+- The AC DNLP representation uses explicit lower and eligibility-scaled upper
+  inequalities, selected by the Stage 4 structural experiment.

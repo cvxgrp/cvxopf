@@ -67,6 +67,8 @@ with appropriate solvers. It is designed to:
   coupling and configurable terminal policies
 - Model nondispatchable generators (wind, solar, run-of-river hydro) with
   curtailable output and reactive power support
+- Model loads as first-class, identity-aligned devices with optional
+  single-solve shedding and energy-not-served reporting
 
 ### Methodology
 
@@ -90,6 +92,13 @@ inverter apparent-power region in AC and to separate availability and rating
 bounds in DC. This preserves the converter-capacity limit without adding
 nonconvexity.
 
+Loads follow the same component boundary. MATPOWER bus demand is converted
+automatically, while explicit `Load` objects provide stable identity for
+time-series alignment and optional interruption policies. Shedding is an
+affine extension of the load feasible set with a high linear value-of-lost-load
+cost in the original optimization problem; it is not a lexicographic pass, an
+anonymous balance slack, or a second feasibility-restoration solve.
+
 The implementation follows the same separation of responsibilities. Public
 build APIs select formulation-owned network physics, while a shared typed
 assembly layer obtains variables, injections, feasible sets, costs, and
@@ -103,7 +112,7 @@ flowchart LR
 
     api --> physics["Formulation-owned network physics<br/>AC · lossy DC · single-node DC"]
     api --> assembly["Shared typed component assembly"]
-    devices["Component-owned models<br/>generation · storage<br/>nondispatchable · HVDC"] --> assembly
+    devices["Component-owned models<br/>generation · storage · loads<br/>nondispatchable · HVDC"] --> assembly
     assembly --> physics
 
     physics --> build["OPFBuild<br/>problem · variables · data · expressions"]
@@ -414,6 +423,66 @@ Terminal storage penalties occur once and are not multiplied by `delta`.
 objective composition can be audited. This corrects the former unscaled
 per-step sum for `delta != 1`; `delta=1` results are unchanged.
 
+## First-class loads and explicit load shedding
+
+With `loads=None`, MATPOWER `PD` and `QD` columns are converted automatically
+to fixed `Load` devices, so existing case-file workflows remain unchanged.
+Supplying explicit loads gives each demand channel a stable `device_id` and
+allows multistep active and reactive trajectories to be aligned by pandas
+column name rather than by bus-table position. An explicit `loads=[...]`
+argument replaces the entire MATPOWER load fleet; it does not supplement or
+override only the listed buses. Include every load that should participate in
+the model.
+
+```python
+from cvxopf import Load, build_opf, extract_results
+from cvxopf.testcases import case9
+
+ppc = case9()
+
+# This illustrative two-device fleet replaces all MATPOWER PD/QD demand.
+loads = [
+    Load(bus=5, p_load_mw=90.0, q_load_mvar=30.0, device_id="load-5"),
+    Load(
+        bus=7,
+        p_load_mw=100.0,
+        q_load_mvar=35.0,
+        device_id="interruptible-7",
+        shedding_cost_per_mwh=5000.0,
+        max_shed_fraction=0.5,
+    ),
+]
+
+build = build_opf(ppc, formulation="ac", loads=loads)
+build.solve()
+results = extract_results(build)
+print(results["p_load_served"])
+print(results["p_load_shed"])
+print(results["energy_not_served"])
+```
+
+Only loads with a finite positive `shedding_cost_per_mwh` are interruptible.
+The coefficient is normally chosen sufficiently above relevant marginal
+operating costs, but remains explicit because congestion, storage opportunity
+value, terminal policies, and heterogeneous priorities prevent a universal
+automatic choice. `max_generation_marginal_cost(...)` is a convenient
+generator-only diagnostic under its documented convex monotone assumptions;
+it is not a system-wide sufficiency certificate.
+
+One interruption fraction applies to both active and reactive service in AC,
+preserving the configured reactive sign and ratio. DC formulations optimize
+active service only while retaining reactive input as metadata. Shedding is an
+interval-average power decision under the piecewise-constant model. Per-load
+and aggregate energy not served are integrated once using `delta`, and the
+linear VOLL contribution is reported as `load_shedding_cost`.
+
+Renewable curtailment deliberately remains zero-cost: it is a metric of
+interest to report, not an objective to distort. Load shedding is separately
+and explicitly penalized as a reliability outcome. See
+[`case9_first_class_loads.py`](examples/case9_first_class_loads.py),
+[`singlenode_load_shedding_phase_transition.py`](examples/singlenode_load_shedding_phase_transition.py),
+and [`case9_multistep_load_shedding.py`](examples/case9_multistep_load_shedding.py).
+
 ## Battery storage example
 
 Battery state-of-charge evolves across timesteps, coupling decisions made
@@ -662,7 +731,7 @@ package environment.
 - [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
-- [ ] First-class loads and explicit load shedding: identity-aligned
+- [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently
   large linear value-of-lost-load cost, and energy-not-served reporting (see
   `plans/milestone-19-load-shedding.md`)
