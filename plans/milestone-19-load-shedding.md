@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–5 complete
+**Status:** implementation in progress; Stages 0–6 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -760,7 +760,7 @@ Verification at the S3 stopping point:
 
 ### Stage 4 — Activate the sheddable-load feasible set and cost
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `79d0e8c`.**
 
 **Scaling decision:** retain the established builder-bound
 ``inv_base_mva`` parameter contract in M19. The S4 spike demonstrated that an
@@ -875,7 +875,7 @@ technical debt rather than unfinished S4 work.
 
 ### Stage 5 — Results and unsuccessful-solve behavior
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `3ac344a`.**
 
 - Implement the exact result and expression names locked in Section 6.
 - Extract input, served, and shed quantities.
@@ -924,6 +924,8 @@ Verification at the S5 stopping point:
 
 ### Stage 6 — Scientific and formulation verification
 
+**Complete; checkpoint commit pending.**
+
 - Prove the single-node phase transition numerically.
 - Demonstrate below-threshold economic shedding.
 - Demonstrate invariance above the sufficient threshold.
@@ -933,6 +935,64 @@ Verification at the S5 stopping point:
 - Exercise single-node aggregation.
 - Exercise storage, nondispatchable generation, and terminal policies over
   multiple intervals.
+
+**As-built scientific evidence:** the controlled single-node quadratic case
+uses one generator with
+
+$$
+C(P)=2P+0.05P^2,
+\qquad
+C'(P)=2+0.1P,
+$$
+
+an 80 MW feasible load, and a generator-only maximum marginal-cost bound of
+12 objective units/MWh. At a shedding coefficient of 9, the optimum is the
+analytic interior point: 70 MW generated and 10 MW not served. At 12.1, the
+load is fully served. Coefficients of 24 and 60—two and five times the
+diagnostic bound—leave dispatch, service, and operating objective invariant
+within solver tolerance. The test states and enforces the theorem's controlled
+assumptions; it does not promote this generator-only diagnostic to a universal
+network or intertemporal certificate.
+
+A separate two-generator PWL case verifies the fleet value-function
+interpretation. Its supported slopes are 5 and 10 objective units/MWh. At a
+shedding coefficient of 9, the 50 MW low-cost segment is filled and 30 MW is
+not served rather than using the second segment. At 10.1, all 80 MW is served;
+a coefficient of 30 leaves that result invariant. A supply-adequacy case
+separately proves that fixed 100 MW demand is infeasible against 60 MW of
+capacity, while the identical explicitly sheddable demand solves with 40 MWh
+of reported ENS in a one-hour interval.
+
+Network evidence uses nonzero shedding rather than solve status alone. In AC
+case9 with total real generation capped at 250 MW, bus-5 shedding is about
+66.7 MW and reactive relief is about 22.2 MVAr, preserving the configured
+one-third reactive-to-active ratio and reconstructing both input channels. In
+a two-bus 50 MW/MVA transfer case, identical 80 MW load is fully served at the
+generator bus. At the remote bus, lossy DC binds at 50 MW and sheds 30 MW;
+full AC binds the from-terminal apparent-power limit at 50 MVA and sheds about
+30.2 MW. Thus location matters under congestion in both network formulations.
+
+The multistep interaction case contains one fixed and one sheddable load, one
+dispatchable generator, one zero-cost nondispatchable source, and one ideal
+storage device. Nondispatchable availability is fully used in the first
+low-scarcity interval; storage remains at 40 MWh, then discharges 20 MWh in the
+second interval. A 20 MWh hard terminal equality is met and the remaining
+second-interval shortfall is reported as 20 MWh ENS. Without the terminal
+reserve requirement, storage discharges to zero and ENS is zero. Device-level
+served-load results sum exactly to the single-node balance in both intervals,
+so reduced dispatch is never presented without its reliability outcome.
+
+Verification at the S6 stopping point:
+
+- seven deterministic scientific tests cover the quadratic and PWL phase
+  transitions, adequacy restoration, AC active/reactive relief, AC and
+  lossy-DC congestion/location, single-node aggregation, and multistep
+  storage/nondispatchable/terminal interaction;
+- 699 broader load, result, storage, nondispatchable, single-node, AC, and DC
+  formulation tests passed;
+- the complete suite passed with 1,609 tests;
+- Ruff, configured strict mypy, and `git diff --check` passed; and
+- no production implementation change was required by S6.
 
 ### Stage 7 — Documentation, examples, and roadmap handoff
 
