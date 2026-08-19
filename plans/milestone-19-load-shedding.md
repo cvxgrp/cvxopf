@@ -704,7 +704,7 @@ Verification at the S2 stopping point:
 
 ### Stage 3 — Identity-aligned explicit-load time series
 
-**Status:** complete — checkpoint commit pending
+**Status:** complete — checkpoint commit `80221b0`
 
 - Make legacy `df_P` and `df_Q` optional in the public callable signature.
 - Implement and validate the two input modes defined in Section 3.2.

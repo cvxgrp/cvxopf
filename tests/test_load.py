@@ -810,7 +810,7 @@ def test_shedding_reconstruction_agrees_across_all_adapter_hooks(
         Load(
             5,
             100.0,
-            "shed-leading",
+            "shed-lagging",
             q_load_mvar=20.0,
             shedding_cost_per_mwh=1000.0,
             max_shed_fraction=0.5,
@@ -819,7 +819,7 @@ def test_shedding_reconstruction_agrees_across_all_adapter_hooks(
         Load(
             7,
             80.0,
-            "shed-lagging",
+            "shed-leading",
             q_load_mvar=-16.0,
             shedding_cost_per_mwh=3000.0,
             max_shed_fraction=0.25,
