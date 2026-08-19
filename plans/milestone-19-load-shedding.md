@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–4 complete
+**Status:** implementation in progress; Stages 0–5 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -875,6 +875,8 @@ technical debt rather than unfinished S4 work.
 
 ### Stage 5 — Results and unsuccessful-solve behavior
 
+**Complete; checkpoint commit pending.**
+
 - Implement the exact result and expression names locked in Section 6.
 - Extract input, served, and shed quantities.
 - Add aggregate shed power, energy not served, and cost.
@@ -882,6 +884,43 @@ technical debt rather than unfinished S4 work.
 - Retain exogenous input arrays and metadata after unsuccessful solves.
 - Verify partial-primal and no-primal behavior.
 - Verify engineering units and single-/multistep shapes.
+
+**As built:** result extraction is conditional on the built load model, not
+solver status. Exogenous `p_load` and `q_load` values are read from their
+parameter or constant expressions and remain populated without a primal
+solution. Fixed-load served values remain available as known constants. When
+`nsheddable > 0`, served, shed, fraction, per-interval total, and ENS values
+are extracted only from complete expression values; a missing value at any
+step makes the corresponding complete array unavailable rather than mixing
+known and unknown rows or intervals.
+
+The conditional schema exactly follows Section 6. AC publishes signed
+reactive served and shed quantities; lossy DC and single-node DC retain only
+the exogenous reactive input. `energy_not_served_by_load` is a horizon MWh
+vector, `energy_not_served` is its scalar sum, and `load_shedding_cost` is the
+integrated scalar objective contribution. Without a usable shedding primal,
+the two ENS results are `None` and the scalar shedding cost is `NaN`, matching
+the package-wide unavailable-cost policy. Load identity, location, channel,
+and shedding-policy metadata remains available in `OPFBuild.data` and is not
+duplicated into the numerical result dictionary.
+
+Verification at the S5 stopping point:
+
+- successful single- and multistep extraction passes for AC, lossy DC, and
+  single-node DC, including exact shapes and engineering-unit reconstruction;
+- fixed and sheddable alignment, signed reactive reconstruction, per-interval
+  totals, per-load/aggregate ENS, and heterogeneous integrated cost pass;
+- unsolved builds preserve exogenous inputs and the complete metadata schema
+  while returning the locked conditional unavailable values;
+- a deliberately partial multistep shedding primal cannot publish incomplete
+  served, shed, fraction, cost, or ENS results;
+- 396 focused result, load, characterization, migration, component-contract,
+  and formulation tests passed;
+- solver-certified infeasibility in both convex formulations retains load
+  inputs while withholding all unavailable served, shed, fraction, cost, and
+  ENS values;
+- the complete suite passed with 1,602 tests;
+- Ruff, configured strict mypy, and `git diff --check` passed.
 
 ### Stage 6 — Scientific and formulation verification
 

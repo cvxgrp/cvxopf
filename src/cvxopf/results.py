@@ -31,6 +31,10 @@ Storage terminal-policy results (all formulations, when configured):
 First-class load results (when ``"nload"`` is present in build data):
     p_load, q_load, p_load_served (MW/MVAr device arrays)
     q_load_served (AC only)
+When one or more loads are sheddable:
+    p_load_shed, load_shed_fraction, p_load_shed_total,
+    energy_not_served_by_load, energy_not_served, load_shedding_cost
+    q_load_shed (AC only)
 Fixed-load inputs and served values remain available without a primal solve.
 
 The result schema is determined by the built model, not by solve success.
@@ -126,6 +130,15 @@ def _initialize_results(build: OPFBuild) -> dict:
         results["p_load_served"] = None
         if build.formulation == "ac":
             results["q_load_served"] = None
+        if int(build.data["nsheddable"]) > 0:
+            results["p_load_shed"] = None
+            if build.formulation == "ac":
+                results["q_load_shed"] = None
+            results["load_shed_fraction"] = None
+            results["p_load_shed_total"] = None
+            results["energy_not_served_by_load"] = None
+            results["energy_not_served"] = None
+            results["load_shedding_cost"] = float("nan")
 
     return results
 
@@ -204,7 +217,7 @@ def _add_hvdc_results(results: dict, build: OPFBuild) -> None:
 
 
 def _add_load_results(results: dict, build: OPFBuild) -> None:
-    """Add exogenous and fixed served-load values without requiring primals."""
+    """Add exogenous inputs and conditional served/shedding results."""
     if "nload" not in build.data:
         return
     results["p_load"] = _solved_expression_values(build, "p_load")
@@ -217,6 +230,36 @@ def _add_load_results(results: dict, build: OPFBuild) -> None:
             results["q_load_served"] = _solved_expression_values(
                 build, "q_load_served"
             )
+        return
+
+    results["p_load_served"] = _solved_expression_values(
+        build, "p_load_served"
+    )
+    results["p_load_shed"] = _solved_expression_values(
+        build, "p_load_shed"
+    )
+    results["load_shed_fraction"] = _solved_expression_values(
+        build, "load_shed_fraction"
+    )
+    results["p_load_shed_total"] = _solved_expression_values(
+        build, "p_load_shed_total"
+    )
+    if build.formulation == "ac":
+        results["q_load_served"] = _solved_expression_values(
+            build, "q_load_served"
+        )
+        results["q_load_shed"] = _solved_expression_values(
+            build, "q_load_shed"
+        )
+    results["energy_not_served_by_load"] = _solved_expression_values(
+        build, "energy_not_served_by_load"
+    )
+    results["energy_not_served"] = _solved_expression_values(
+        build, "energy_not_served"
+    )
+    results["load_shedding_cost"] = _solved_expression_value(
+        build, "load_shedding_cost"
+    )
 
 
 def _add_device_results(results: dict, build: OPFBuild) -> None:
@@ -327,8 +370,19 @@ def extract_results(build: OPFBuild) -> dict:
 
         Singlenode DC multi-step: Pg is (T, ng); p_net is (T,).
 
+        First-class loads always add ``p_load``, ``q_load``, and
+        ``p_load_served`` in MW/MVAr with shape ``(nload,)`` or
+        ``(T, nload)``. AC also adds ``q_load_served``. When one or more
+        loads are sheddable, ``p_load_shed`` and ``load_shed_fraction`` have
+        shape ``(nsheddable,)`` or ``(T, nsheddable)``; AC also adds signed
+        ``q_load_shed``. ``p_load_shed_total`` is scalar or ``(T,)``.
+        ``energy_not_served_by_load`` is a horizon ``(nsheddable,)`` MWh
+        vector; ``energy_not_served`` and ``load_shedding_cost`` are horizon
+        scalars.
+
         Configured keys remain present when no primal solution is available.
-        Array-valued primal and derived quantities are then None; scalar
+        Exogenous load inputs and fixed served loads remain available.
+        Array-valued primal and derived quantities are otherwise None; scalar
         objective and cost quantities are NaN. Inspect status first.
 
     Raises
