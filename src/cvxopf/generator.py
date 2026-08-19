@@ -127,6 +127,130 @@ class DispatchableGenerator:
     vg: float = 1.0
 
 
+def max_generation_marginal_cost(
+    generators: list[DispatchableGenerator],
+) -> float:
+    """Return the largest supported marginal cost of an active convex fleet.
+
+    The returned scalar has cost-per-energy units implied by the generator
+    data (typically ``$/MWh`` when power is MW and cost is ``$/h``).
+    This is a generator-only calibration diagnostic, not a system-wide
+    value-of-lost-load sufficiency certificate. It assumes convex,
+    nondecreasing costs over each active generator's feasible real-power
+    interval and returns no policy multiplier or floor.
+    """
+    if not generators:
+        raise ValueError("generators must contain at least one generator")
+    bounds: list[float] = []
+    active_count = 0
+    for index, generator in enumerate(generators):
+        if generator.status not in (0, 1):
+            raise ValueError(
+                f"Generator {index}: status must be exactly 0 or 1"
+            )
+        if (
+            generator.cost_type == "polynomial"
+            and generator.cost_points is not None
+        ):
+            raise ValueError(
+                f"Generator {index}: cost_points is only valid when "
+                "cost_type='piecewise_linear'"
+            )
+        if (
+            generator.cost_type == "piecewise_linear"
+            and generator.cost_coeffs is not None
+        ):
+            raise ValueError(
+                f"Generator {index}: cost_coeffs is only valid when "
+                "cost_type='polynomial'"
+            )
+        if generator.status == 0:
+            continue
+        active_count += 1
+        if not np.isfinite(generator.p_min_mw) or not np.isfinite(
+            generator.p_max_mw
+        ):
+            raise ValueError(
+                f"Generator {index}: power bounds must be finite"
+            )
+        if generator.p_min_mw > generator.p_max_mw:
+            raise ValueError(
+                f"Generator {index}: p_min_mw must be <= p_max_mw"
+            )
+        if generator.p_min_mw == generator.p_max_mw:
+            continue
+        if generator.cost_type == "polynomial":
+            coeffs = (
+                (0.0,)
+                if generator.cost_coeffs is None
+                else tuple(float(value) for value in generator.cost_coeffs)
+            )
+            if not coeffs or len(coeffs) > 3 or not np.all(np.isfinite(coeffs)):
+                raise ValueError(
+                    f"Generator {index}: unsupported polynomial cost"
+                )
+            c1 = 0.0 if len(coeffs) < 2 else coeffs[1]
+            c2 = 0.0 if len(coeffs) < 3 else coeffs[2]
+            if c2 < 0:
+                raise ValueError(
+                    f"Generator {index}: polynomial cost must be convex"
+                )
+            minimum_slope = 2.0 * c2 * generator.p_min_mw + c1
+            if minimum_slope < 0:
+                raise ValueError(
+                    f"Generator {index}: polynomial cost must be "
+                    "nondecreasing over its feasible interval"
+                )
+            bounds.append(2.0 * c2 * generator.p_max_mw + c1)
+            continue
+        if generator.cost_type == "piecewise_linear":
+            if generator.cost_points is None or len(generator.cost_points) < 2:
+                raise ValueError(
+                    f"Generator {index}: piecewise-linear cost requires "
+                    "at least two points"
+                )
+            points = np.asarray(generator.cost_points, dtype=float)
+            if points.ndim != 2 or points.shape[1] != 2 or not np.all(
+                np.isfinite(points)
+            ):
+                raise ValueError(
+                    f"Generator {index}: invalid piecewise-linear cost points"
+                )
+            powers = points[:, 0]
+            if np.any(np.diff(powers) <= 0):
+                raise ValueError(
+                    f"Generator {index}: piecewise-linear power points must "
+                    "be strictly increasing"
+                )
+            if (
+                generator.p_min_mw < powers[0]
+                or generator.p_max_mw > powers[-1]
+            ):
+                raise ValueError(
+                    f"Generator {index}: piecewise-linear points must cover "
+                    "the feasible power interval"
+                )
+            slopes = np.diff(points[:, 1]) / np.diff(powers)
+            if np.any(slopes < 0) or np.any(np.diff(slopes) < -1e-12):
+                raise ValueError(
+                    f"Generator {index}: piecewise-linear cost must be "
+                    "convex and nondecreasing"
+                )
+            supported = (
+                (powers[:-1] < generator.p_max_mw)
+                & (powers[1:] > generator.p_min_mw)
+            )
+            bounds.append(float(np.max(slopes[supported])))
+            continue
+        raise ValueError(
+            f"Generator {index}: unsupported cost_type "
+            f"{generator.cost_type!r}"
+        )
+    if active_count == 0:
+        raise ValueError("generator fleet has no active generators")
+    return 0.0 if not bounds else float(max(bounds))
+
+
 def _validate_generators(gens: list, ext_bus_ids: set) -> None:
     """
     Validate a list of DispatchableGenerator objects.

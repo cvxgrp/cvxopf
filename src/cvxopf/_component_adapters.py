@@ -45,12 +45,7 @@ def _load_prepare(
     inputs: "LoadInputs | None",
     context: PreparationContext,
 ) -> Mapping[str, object]:
-    """Prepare fixed loads while S1 shedding semantics remain inactive."""
-    if any(unit.shedding_cost_per_mwh is not None for unit in units):
-        raise NotImplementedError(
-            "sheddable Load optimization is not implemented until "
-            "Milestone 19 Stage 4; set shedding_cost_per_mwh=None"
-        )
+    """Prepare fixed or sheddable loads and synchronized exogenous data."""
     prepared = load._prepare_data(
         list(units),
         context.nb,
@@ -87,6 +82,11 @@ def _load_prepare(
         prepared["load_has_reactive"] = inputs.has_reactive
     prepared["_load_p_mw_by_step"] = np.array(p_mw, copy=True)
     prepared["_load_q_mvar_by_step"] = np.array(q_mvar, copy=True)
+    prepared["_load_parameters"] = (
+        None
+        if cast(int, prepared["nsheddable"]) == 0
+        else load._PreparedLoadParameters.create(p_mw, q_mvar)
+    )
     return prepared
 
 
@@ -102,7 +102,45 @@ def _load_variable_specs(
     prepared: Mapping[str, object],
     context: StepContext,
 ) -> tuple[VariableSpec, ...]:
-    return ()
+    nsheddable = cast(int, prepared["nsheddable"])
+    if nsheddable == 0:
+        return ()
+    return (VariableSpec("load_shed_fraction", (nsheddable,)),)
+
+
+def _load_step_channels(
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> Mapping[str, cp.Expression]:
+    """Return all load input, served, and conditional shed channels."""
+    parameters = cast(
+        load._PreparedLoadParameters | None, prepared["_load_parameters"]
+    )
+    if parameters is None:
+        p_load = cp.Constant(
+            _array(prepared, "_load_p_mw_by_step")[context.step]
+        )
+        q_load = cp.Constant(
+            _array(prepared, "_load_q_mvar_by_step")[context.step]
+        )
+        p_eligible = cp.Constant(np.empty(0))
+    else:
+        p_load = parameters.p_load_mw[context.step]
+        q_load = parameters.q_load_mvar[context.step]
+        p_eligible = parameters.p_eligible_mw[context.step]
+    channels = load.served_and_shed_expressions(
+        p_load,
+        q_load,
+        p_eligible,
+        variables.get("load_shed_fraction"),
+        _array(prepared, "sheddable_load_indices"),
+        cast(int, prepared["nload"]),
+    )
+    if context.formulation != "ac":
+        channels.pop("q_load_served", None)
+        channels.pop("q_load_shed", None)
+    return channels
 
 
 def _load_injections(
@@ -111,17 +149,17 @@ def _load_injections(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> InjectionContribution:
-    p_load = _array(prepared, "_load_p_mw_by_step")[context.step]
+    channels = _load_step_channels(prepared, variables, context)
     incidence = _array(prepared, "Cload")
     if context.formulation == "ac":
         p_pu, q_pu, inv_base_mva = load.ac_injections(
-            p_load,
-            _array(prepared, "_load_q_mvar_by_step")[context.step],
+            channels["p_load_served"],
+            channels["q_load_served"],
             incidence,
         )
     else:
         p_pu, q_pu, inv_base_mva = load.dc_injections(
-            p_load, incidence
+            channels["p_load_served"], incidence
         )
     return InjectionContribution(p_pu, q_pu, inv_base_mva)
 
@@ -132,12 +170,41 @@ def _load_operating_constraints(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> tuple[cp.Constraint, ...]:
+    fraction = variables.get("load_shed_fraction")
+    if fraction is None:
+        return ()
+    parameters = cast(
+        load._PreparedLoadParameters, prepared["_load_parameters"]
+    )
+    indices = _array(prepared, "sheddable_load_indices")
+    maximum_fraction = _array(prepared, "load_max_shed_fraction")[indices]
     constraint_method = (
         load.ac_operating_constraints
         if context.formulation == "ac"
         else load.dc_operating_constraints
     )
-    return tuple(constraint_method())
+    return tuple(
+        constraint_method(
+            fraction,
+            maximum_fraction,
+            parameters.eligibility_mask[context.step, indices],
+        )
+    )
+
+
+def _load_step_cost(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> cp.Expression | None:
+    channels = _load_step_channels(prepared, variables, context)
+    p_shed = channels.get("p_load_shed")
+    if p_shed is None:
+        return None
+    indices = _array(prepared, "sheddable_load_indices")
+    costs = _array(prepared, "load_shedding_cost_per_mwh")[indices]
+    return load.shedding_cost_rate(p_shed, costs)
 
 
 def _load_step_expressions(
@@ -146,11 +213,7 @@ def _load_step_expressions(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> Mapping[str, cp.Expression]:
-    return load.fixed_expressions(
-        _array(prepared, "_load_p_mw_by_step")[context.step],
-        _array(prepared, "_load_q_mvar_by_step")[context.step],
-        reactive_service=context.formulation == "ac",
-    )
+    return _load_step_channels(prepared, variables, context)
 
 
 def _load_horizon(
@@ -159,8 +222,28 @@ def _load_horizon(
     variable_history: Mapping[str, Sequence[cp.Variable]],
     context: HorizonContext,
 ) -> HorizonContribution:
+    if cast(int, prepared["nsheddable"]) == 0:
+        return HorizonContribution(
+            constraints=tuple(load.coupling_constraints())
+        )
+    parameters = cast(
+        load._PreparedLoadParameters, prepared["_load_parameters"]
+    )
+    indices = _array(prepared, "sheddable_load_indices")
+    fractions = variable_history["load_shed_fraction"]
+    shed_by_step = [
+        cp.multiply(
+            fractions[step],
+            parameters.p_eligible_mw[step, indices],
+        )
+        for step in range(context.horizon_steps)
+    ]
+    ens_by_load = cp.multiply(context.delta, sum(shed_by_step))
     return HorizonContribution(
-        constraints=tuple(load.coupling_constraints())
+        expressions={
+            "energy_not_served_by_load": ens_by_load,
+            "energy_not_served": cp.sum(ens_by_load),
+        }
     )
 
 
@@ -169,6 +252,7 @@ LOAD_ACTIVE = FormulationAdapter[Load](
     variable_specs=_load_variable_specs,
     injections=_load_injections,
     operating_constraints=_load_operating_constraints,
+    step_cost=_load_step_cost,
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
 )
@@ -206,6 +290,7 @@ LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
         "lossy_dc": LOAD_ACTIVE,
         "singlenode_dc": LOAD_ACTIVE,
     },
+    cost_expression_name="load_shedding_cost",
 )
 
 

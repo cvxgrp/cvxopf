@@ -150,6 +150,8 @@ class OPFBuild:
         When storage is present:
             b (real power, MW), b_q (reactive power, MVAr, AC only),
             soc (state of charge, MWh)
+        When one or more loads are sheddable:
+            load_shed_fraction (dimensionless interruption fractions)
 
     data : dict
         Pre-computed numpy arrays and metadata.
@@ -206,10 +208,14 @@ class OPFBuild:
         are scalar horizon totals in both modes. Horizon-boundary expressions,
         including ``storage_terminal_cost``, are scalar expressions published
         once and are not multiplied by ``delta``.
-        Fixed loads publish per-step ``p_load``, ``q_load``, and
-        ``p_load_served`` expressions in engineering units. AC also publishes
-        ``q_load_served``; DC formulations retain reactive input only for
-        portable reporting.
+        Loads publish per-step ``p_load``, ``q_load``, and ``p_load_served``
+        expressions in engineering units. AC also publishes ``q_load_served``;
+        DC formulations retain reactive input only for portable reporting.
+        When shedding is configured, per-step expressions additionally include
+        ``p_load_shed``, conditional AC ``q_load_shed``,
+        ``load_shed_fraction``, and ``p_load_shed_total``. The integrated
+        stage cost is ``load_shedding_cost``; horizon expressions are
+        ``energy_not_served_by_load`` and ``energy_not_served``.
     """
     prob:        cp.Problem
     variables:   dict

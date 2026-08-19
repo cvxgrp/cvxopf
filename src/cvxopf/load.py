@@ -1,10 +1,10 @@
-"""First-class fixed-load model and future shedding-policy data.
+"""First-class fixed and explicitly sheddable load model.
 
 Loads use engineering units at the device boundary.  Fixed active and
 reactive withdrawals are scattered to buses with a negative injection sign;
 the shared component assembler binds the component-created ``1/baseMVA``
-parameter.  Optional shedding fields are part of the final public data model,
-but their optimization semantics are activated in Milestone 19 Stage 4.
+parameter. Optional shedding fields activate an affine interruption-fraction
+feasible set and a linear value-of-lost-load stage cost.
 """
 
 from __future__ import annotations
@@ -22,8 +22,77 @@ QD = 3
 
 
 @dataclass
+class _PreparedLoadParameters:
+    """Synchronized exogenous load parameters for one nonempty horizon."""
+
+    p_load_mw: cp.Parameter
+    p_eligible_mw: cp.Parameter
+    eligibility_mask: cp.Parameter
+    q_load_mvar: cp.Parameter
+
+    @classmethod
+    def create(
+        cls, p_load_mw: np.ndarray, q_load_mvar: np.ndarray
+    ) -> "_PreparedLoadParameters":
+        """Create parameters after validating and deriving active channels."""
+        p_values, eligible, mask = _derive_active_channels(p_load_mw)
+        q_values = np.asarray(q_load_mvar, dtype=float)
+        if q_values.shape != p_values.shape:
+            raise ValueError(
+                "reactive load trajectory must match active load shape "
+                f"{p_values.shape}, got {q_values.shape}"
+            )
+        if not np.all(np.isfinite(q_values)):
+            raise ValueError("reactive load trajectory must be finite")
+        shape = p_values.shape
+        return cls(
+            cp.Parameter(shape, value=p_values, name="load_p_mw"),
+            cp.Parameter(
+                shape, nonneg=True, value=eligible,
+                name="load_p_eligible_mw",
+            ),
+            cp.Parameter(
+                shape, nonneg=True, value=mask,
+                name="load_eligibility_mask",
+            ),
+            cp.Parameter(shape, value=q_values, name="load_q_mvar"),
+        )
+
+    def update_active(self, p_load_mw: np.ndarray) -> None:
+        """Atomically validate, derive, and assign all active-load channels."""
+        p_values, eligible, mask = _derive_active_channels(
+            p_load_mw, expected_shape=self.p_load_mw.shape
+        )
+        # All failure-prone validation occurs before the first assignment.
+        self.p_load_mw.value = p_values
+        self.p_eligible_mw.value = eligible
+        self.eligibility_mask.value = mask
+
+
+def _derive_active_channels(
+    p_load_mw: np.ndarray,
+    *,
+    expected_shape: tuple[int, ...] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Validate signed demand and derive eligible demand and its mask."""
+    values = np.asarray(p_load_mw, dtype=float)
+    if expected_shape is not None and values.shape != expected_shape:
+        raise ValueError(
+            f"active load trajectory must have shape {expected_shape}, "
+            f"got {values.shape}"
+        )
+    if values.ndim != 2:
+        raise ValueError("active load trajectory must be two-dimensional")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("active load trajectory must be finite")
+    eligible = np.maximum(values, 0.0)
+    mask = (values > 0.0).astype(float)
+    return values.copy(), eligible, mask
+
+
+@dataclass
 class Load:
-    """One active/reactive load channel with optional future shedding policy.
+    """One active/reactive load channel with an optional shedding policy.
 
     ``p_load_mw`` is signed net demand: positive values are withdrawal and
     negative values are fixed net injection.  ``q_load_mvar=None`` means that
@@ -210,8 +279,8 @@ def _build_metadata(prepared: dict[str, object]) -> dict[str, object]:
 
 
 def ac_injections(
-    p_load_mw: np.ndarray,
-    q_load_mvar: np.ndarray,
+    p_load_mw: cp.Expression | np.ndarray,
+    q_load_mvar: cp.Expression | np.ndarray,
     incidence: np.ndarray,
 ) -> tuple[cp.Expression, cp.Expression, cp.Parameter]:
     """Return fixed signed active/reactive nodal injections for AC."""
@@ -222,7 +291,7 @@ def ac_injections(
 
 
 def dc_injections(
-    p_load_mw: np.ndarray,
+    p_load_mw: cp.Expression | np.ndarray,
     incidence: np.ndarray,
 ) -> tuple[cp.Expression, None, cp.Parameter]:
     """Return fixed signed active nodal injection and no reactive channel."""
@@ -231,14 +300,85 @@ def dc_injections(
     return p_pu, None, inv_base_mva
 
 
-def ac_operating_constraints() -> list[cp.Constraint]:
-    """Return the empty fixed-load AC feasible set."""
-    return []
+def shedding_constraints(
+    fraction: cp.Variable,
+    maximum_fraction: np.ndarray,
+    eligibility_mask: cp.Expression,
+) -> list[cp.Constraint]:
+    """Return the explicit affine interruption-fraction feasible set."""
+    upper = cp.multiply(maximum_fraction, eligibility_mask)
+    return [fraction >= 0, fraction <= upper]
 
 
-def dc_operating_constraints() -> list[cp.Constraint]:
-    """Return the empty fixed-load DC feasible set."""
-    return []
+def ac_operating_constraints(
+    fraction: cp.Variable | None = None,
+    maximum_fraction: np.ndarray | None = None,
+    eligibility_mask: cp.Expression | None = None,
+) -> list[cp.Constraint]:
+    """Return the AC load feasible set, empty when no load is sheddable."""
+    if fraction is None:
+        return []
+    if maximum_fraction is None or eligibility_mask is None:
+        raise ValueError(
+            "sheddable load constraints require maximum_fraction and "
+            "eligibility_mask"
+        )
+    return shedding_constraints(fraction, maximum_fraction, eligibility_mask)
+
+
+def dc_operating_constraints(
+    fraction: cp.Variable | None = None,
+    maximum_fraction: np.ndarray | None = None,
+    eligibility_mask: cp.Expression | None = None,
+) -> list[cp.Constraint]:
+    """Return the DC load feasible set under the same interruption policy."""
+    return ac_operating_constraints(
+        fraction, maximum_fraction, eligibility_mask
+    )
+
+
+def served_and_shed_expressions(
+    p_load_mw: cp.Expression,
+    q_load_mvar: cp.Expression,
+    p_eligible_mw: cp.Expression,
+    fraction: cp.Variable | None,
+    sheddable_indices: np.ndarray,
+    nload: int,
+) -> dict[str, cp.Expression]:
+    """Construct device-aligned served and conditional shedding channels."""
+    expressions: dict[str, cp.Expression] = {
+        "p_load": p_load_mw,
+        "q_load": q_load_mvar,
+    }
+    if fraction is None:
+        expressions["p_load_served"] = p_load_mw
+        expressions["q_load_served"] = q_load_mvar
+        return expressions
+
+    nsheddable = len(sheddable_indices)
+    scatter = np.zeros((nload, nsheddable), dtype=float)
+    scatter[sheddable_indices, np.arange(nsheddable)] = 1.0
+    p_shed = cp.multiply(fraction, p_eligible_mw[sheddable_indices])
+    q_shed = cp.multiply(fraction, q_load_mvar[sheddable_indices])
+    expressions.update(
+        {
+            "p_load_shed": p_shed,
+            "q_load_shed": q_shed,
+            "load_shed_fraction": fraction,
+            "p_load_shed_total": cp.sum(p_shed),
+            "p_load_served": p_load_mw - scatter @ p_shed,
+            "q_load_served": q_load_mvar - scatter @ q_shed,
+        }
+    )
+    return expressions
+
+
+def shedding_cost_rate(
+    p_load_shed: cp.Expression,
+    cost_per_mwh: np.ndarray,
+) -> cp.Expression:
+    """Return the linear value-of-lost-load stage-cost rate."""
+    return cp.sum(cp.multiply(cost_per_mwh, p_load_shed))
 
 
 def coupling_constraints() -> list[cp.Constraint]:

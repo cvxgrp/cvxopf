@@ -376,8 +376,9 @@ a `UserWarning` is emitted; static fallback does not require IDs.
 `Load` is a first-class fixed active/reactive demand channel with required
 external `bus`, signed `p_load_mw`, and unique nonempty `device_id` fields.
 `q_load_mvar=None` denotes an undefined reactive channel and is reported as
-numerical zero while remaining distinguishable in metadata. The optional
-shedding-policy fields are validated but remain inactive until M19 Stage 4.
+numerical zero while remaining distinguishable in metadata. A finite positive
+`shedding_cost_per_mwh` activates a builder-owned interruption fraction bounded
+by `max_shed_fraction` and the current positive-demand eligibility mask.
 
 For multistep builds, `loads=None` selects the legacy MATPOWER-compatible mode
 and requires positional `df_P` (plus `df_Q` for AC). Supplying `loads`, including

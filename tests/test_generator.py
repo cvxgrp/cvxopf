@@ -20,6 +20,7 @@ from cvxopf.generator import (
     dc_injections,
     dc_network_constraints,
     make_generator_incidence,
+    max_generation_marginal_cost,
 )
 from cvxopf.ac_problem import _parse_case as _parse_ac_case
 from cvxopf.problem import OPFOptions, build_opf, build_opf_multistep
@@ -379,3 +380,104 @@ def test_piecewise_linear_generator_cost_delegates_to_cost_module():
 def test_validation_rejects_invalid_generator(generator, message):
     with pytest.raises(ValueError, match=message):
         _validate_generators([generator], {1})
+
+
+class TestMaximumGenerationMarginalCost:
+    def test_polynomial_fleet_returns_largest_supported_slope(self):
+        generators = [
+            DispatchableGenerator(
+                1, 100.0, cost_coeffs=(10.0, 2.0, 0.05)
+            ),
+            DispatchableGenerator(2, 80.0, cost_coeffs=(0.0, 20.0)),
+            DispatchableGenerator(
+                3, 1000.0, status=0, cost_coeffs=(0.0, 1000.0)
+            ),
+        ]
+
+        assert max_generation_marginal_cost(generators) == pytest.approx(20.0)
+
+    def test_constant_cost_returns_zero(self):
+        generator = DispatchableGenerator(1, 10.0, cost_coeffs=(25.0,))
+
+        assert max_generation_marginal_cost([generator]) == 0.0
+
+    def test_piecewise_linear_returns_largest_segment_slope(self):
+        generator = DispatchableGenerator(
+            1,
+            100.0,
+            cost_type="piecewise_linear",
+            cost_points=((0.0, 0.0), (40.0, 80.0), (100.0, 380.0)),
+        )
+
+        assert max_generation_marginal_cost([generator]) == pytest.approx(5.0)
+
+    def test_piecewise_linear_ignores_segments_above_generator_maximum(self):
+        generator = DispatchableGenerator(
+            1,
+            40.0,
+            cost_type="piecewise_linear",
+            cost_points=((0.0, 0.0), (40.0, 80.0), (100.0, 6080.0)),
+        )
+
+        assert max_generation_marginal_cost([generator]) == pytest.approx(2.0)
+
+    @pytest.mark.parametrize(
+        ("generators", "message"),
+        [
+            ([], "at least one"),
+            ([DispatchableGenerator(1, 10.0, status=0)], "no active"),
+            (
+                [DispatchableGenerator(1, 10.0, cost_coeffs=(0, -1))],
+                "nondecreasing",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_points=((0.0, 0.0), (10.0, 10.0)),
+                    )
+                ],
+                "cost_points is only valid",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_type="piecewise_linear",
+                        cost_coeffs=(0.0, 1.0),
+                        cost_points=((0.0, 0.0), (10.0, 10.0)),
+                    )
+                ],
+                "cost_coeffs is only valid",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        10.0,
+                        cost_type="piecewise_linear",
+                        cost_points=((0, 0), (5, 10), (10, 15)),
+                    )
+                ],
+                "convex and nondecreasing",
+            ),
+            (
+                [
+                    DispatchableGenerator(
+                        1,
+                        20.0,
+                        cost_type="piecewise_linear",
+                        cost_points=((0, 0), (10, 20)),
+                    )
+                ],
+                "cover the feasible",
+            ),
+        ],
+    )
+    def test_rejects_unsupported_calibration_assumptions(
+        self, generators, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            max_generation_marginal_cost(generators)

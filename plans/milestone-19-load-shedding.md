@@ -1,6 +1,6 @@
 # Milestone 19 — First-class loads and explicit load shedding
 
-**Status:** implementation in progress; Stages 0–3 complete
+**Status:** implementation in progress; Stages 0–4 complete
 
 **Depends on:** Milestone 16 and M16+ component ownership and shared assembly;
 the objective-time-units decision in `correctness-api-hardening.md`
@@ -760,6 +760,17 @@ Verification at the S3 stopping point:
 
 ### Stage 4 — Activate the sheddable-load feasible set and cost
 
+**Complete; checkpoint commit pending.**
+
+**Scaling decision:** retain the established builder-bound
+``inv_base_mva`` parameter contract in M19. The S4 spike demonstrated that an
+immutable build-time base scalar makes the convex load-shedding path DPP and
+improves repeated small-case solves, but a load-only exception would create an
+inconsistent cross-device scaling boundary. Graph identity is preserved;
+CVXPY canonicalization is not cached through DPP under the retained
+parameter-product representation. A DPP-oriented change is deferred to a
+separate review of all engineering-unit devices.
+
 - Remove the temporary S1 adapter guard and activate the already-defined
   shedding policy fields.
 - Create builder-owned shedding variables through `VariableSpec`.
@@ -795,6 +806,72 @@ Verification at the S3 stopping point:
 - Confirm fixed loads add no optimization variables.
 - Add and test the scalar `max_generation_marginal_cost(...)` analysis helper
   without coupling it to build-time validation or automatic policy selection.
+
+**As built:** only configured sheddable loads receive one builder-owned
+interruption-fraction variable per step. Production uses the fully explicit
+affine inequalities
+
+$$
+\alpha_{t,i} \geq 0,
+\qquad
+\alpha_{t,i} \leq \rho_i m_{t,i}.
+$$
+
+Signed active demand, eligible active demand, and the eligibility mask are
+held by one private synchronized parameter controller. Its atomic update
+derives the latter two channels from signed demand before assigning any
+parameter. Active shedding is
+
+$$
+P^{\mathrm{shed}}_{t,i}
+=
+\alpha_{t,i}\max(P^{\mathrm{load}}_{t,i},0).
+$$
+
+AC reactive relief uses the same fraction and preserves the sign of the
+configured reactive channel.
+Reactive-only, zero-active, and negative-active loads therefore remain fixed.
+
+The load adapter publishes the integrated stage cost as
+`load_shedding_cost`; `load_cost` is not part of the schema. It publishes
+device-level and aggregate ENS exactly once through the horizon hook. The
+public `max_generation_marginal_cost(...)` helper is a generator-only
+diagnostic in cost-per-energy units. It neither selects VOLL nor introduces a
+load-to-generator build dependency.
+
+The representation spike and its reproducible artifacts are recorded in
+`experiments/load_shedding_s4/`. Explicit inequalities and leaf bounds were
+numerically equivalent in AC, lossy DC, and single-node DC, with no meaningful
+leaf-bound performance advantage. Graph identities survive atomic trajectory
+updates, but the retained cross-device `inv_base_mva` parameter product is not
+DPP; M19 therefore makes no cached-fast-resolve claim.
+
+Verification at the S4 stopping point:
+
+- positive, zero, negative, leading/lagging reactive, reactive-only, mixed
+  fixed/sheddable, and fractional-cap behavior pass;
+- stage cost and per-device/aggregate ENS are integrated by `delta` exactly
+  once, and fixed-load builds remain variable-free;
+- the cost-name override, default, absence, and collision paths pass generic
+  component-assembly tests;
+- the marginal-cost helper covers active feasible polynomial and PWL
+  intervals, constant cost, inactive generators, and unsupported assumptions;
+- 437 focused characterization, API, component-contract, result-schema, and
+  AC DNLP tests passed;
+- the complete suite passed with 1,587 tests;
+- Ruff, configured strict mypy, and `git diff --check` passed.
+
+The present hook contract reconstructs algebraically identical load
+served/shed expressions for injection, cost, and reporting. All copies share
+the same variables and synchronized parameters, and numerical reconstruction
+is tested. Avoiding those duplicate expression nodes would require a shared
+per-step derived-expression channel in the M16+ contract; it is recorded as
+contract-level technical debt rather than addressed with an S4 cache or
+device-specific workaround. As an explicit maintenance guardrail, any future
+edit to one of these reconstructed formulas must update the corresponding
+injection, cost, and reporting paths together and preserve the cross-hook
+reconstruction tests. With that guardrail, the duplication is accepted narrow
+technical debt rather than unfinished S4 work.
 
 ### Stage 5 — Results and unsuccessful-solve behavior
 
