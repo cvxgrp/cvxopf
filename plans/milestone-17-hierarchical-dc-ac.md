@@ -590,11 +590,11 @@ reproduction. This is not a universal default across networks or solver stacks.
 
 ### S4 typed public contract — draft for review
 
-**In progress.** S4 defines the public types and validation contract before S5
-implements orchestration. It must not import experiment modules or silently
-turn the S2/S3b runner into production code. The public implementation will
-reconstruct the reviewed mathematics from existing public OPF builders and
-prove equivalence in S7.
+**Typed module implemented; verification and review in progress.** S4 defines
+the public types and validation contract before S5 implements orchestration.
+It does not import experiment modules or silently turn the S2/S3b runner into
+production code. The public implementation will reconstruct the reviewed
+mathematics from existing public OPF builders and prove equivalence in S7.
 
 #### Proposed public entry point
 
@@ -612,10 +612,19 @@ solve_hierarchical_opf(
 `delta`, explicit device fleets, and identity-aligned load,
 nondispatchable-generation, and HVDC trajectory tables. The first public M17
 path requires explicit first-class loads and explicit storage IDs; it does not
-add a second legacy positional-load compatibility surface. Existing MATPOWER
-conversion remains available before constructing the bundle. Inputs are
-defensively copied or normalized at the controller boundary so the run cannot
-observe caller mutation.
+add a second legacy positional-load compatibility surface. At least one
+explicit generator is also required; an empty tuple never falls back silently
+to the MATPOWER case fleet. Existing MATPOWER conversion remains available
+before constructing the bundle.
+
+Construction defensively copies and validates the physical inputs, isolating
+the bundle from later mutation of the caller's original objects. The frozen
+container is structurally read-only, but its stored pandas frames, device
+objects, and `OPFOptions` retain their normal mutable Python APIs. S5 must take
+one new private execution snapshot before the first builder call and use only
+that snapshot throughout the run. This is the point at which the controller
+guarantees that subsequent public-bundle mutation cannot affect execution; S4
+does not claim deep runtime immutability for `HierarchicalInputs` itself.
 
 This bundle is preferred to mirroring the full `build_opf_multistep()`
 signature. Physical inputs and controller decisions remain separate, and new
@@ -696,6 +705,18 @@ applicable finite-field, identity, and residual gate to pass. `user_limit`,
 raw infeasibility statuses, and all other outcomes remain diagnostic and can
 never supply an executed action.
 
+The solve-outcome classifier is closed: an exception is `solver_failure`;
+`infeasible` or `infeasible_inaccurate` is
+`solver_certified_infeasible`; an eligible status with every finite-field,
+identity, and applicable residual gate satisfied is `accepted`; and every
+remaining nonexception outcome is `unusable_primal`. Raw audit construction
+enforces the status/exception portion, while `HierarchicalResult` completes the
+classification using its policy-specific residual thresholds.
+
+Residual thresholds likewise cannot be loosened through policy. The public
+`HierarchicalAcceptanceTolerances` value permits the reviewed thresholds or
+stricter values for diagnostic studies; any larger threshold is rejected.
+
 The outer terminal obligation remains device-configured; the controller does
 not duplicate storage terminal semantics. M17 preserves the supported storage
 configuration, including no terminal obligation. When a target or terminal
@@ -705,6 +726,12 @@ mode, and cost policy. The frozen reference workflow specifically requires the
 reviewed equality target at the global boundary; that experiment choice is not
 promoted to a universal controller requirement.
 
+Each outer-plan record retains the effective terminal mode for every storage
+ID. Accepted-plan residual requirements follow those modes: no terminal
+residual for `none`, `terminal_soc_mwh_abs` for equality or reserve-floor
+constraints, and `soft_terminal_cost_abs` for linear or quadratic terminal
+costs. Mixed fleets require the union of their applicable checks.
+
 #### Proposed records
 
 The public result is a typed audit tree rather than only a final trajectory:
@@ -712,10 +739,13 @@ The public result is a typed audit tree rather than only a final trajectory:
 - `HierarchicalSolveAudit`: raw status, accepted-primal outcome, missing or
   nonfinite fields, residuals, exception, solver timing, and iterations;
 - `OuterPlanRecord`: stable plan ID, local/global boundary indices, aligned
-  storage IDs and signposts, build, extracted result, and audit;
+  storage IDs, per-device terminal modes and signposts, build, extracted
+  result, and audit;
 - `ACAttemptRecord`: stable attempt ID, closed slot state, registered role and
-  transformation, source attempt ID, local/global window, exact target,
-  conditionally retained build and assigned model start, canonicalized
+  transformation, closed initialization-source kind and optional source
+  attempt ID, local/global window, exact target,
+  ordered storage IDs, realized initial SoC, terminal deviation, conditionally
+  retained build, raw transformed start, assigned model start, canonicalized
   IPOPT-start evidence when applicable, result, audit, reason, and whether it
   supplied the executed action;
 - `ExecutedIntervalRecord`: only the accepted first action and its realized
@@ -735,14 +765,64 @@ including skipped and unavailable dependencies. `flat_only` registers exactly
 one controlling slot. Policy-opportunity counts include construction failures;
 actual solver-call counts include only attempts that reached the solver.
 
+The result validates this registry against the selected initialization policy.
+`flat_only` has exactly one ordinal-zero flat primary slot per attempted
+window, and every executed flat-only slot records a newly generated flat start
+rather than a prior attempt. `shifted_with_recovery` retains the complete
+ordered nine-slot S3b registry, including all three perturbation scales for
+each of the target-free and causal centers, whether executed or explicitly
+skipped. Generated-flat sources are confined to iteration zero.
+
+Initialization provenance distinguishes `generated_flat` from `attempt`.
+Executed attempt-derived starts require a known, causally prior, accepted
+source record. A first-window causal perturbation may instead name
+`generated_flat` and carry no attempt ID. Slots that were unavailable or no
+longer needed may leave both source fields absent; they must not invent an
+accepted source that was never constructed. Accepted target-free recovery
+solves satisfy the common AC physics residual gate but, by definition, do not
+carry a hard-terminal or soft-terminal-cost residual.
+
+In later shifted windows, the primary, target-free, and causal-centered
+perturbation slots may all reference the preceding accepted controlling
+attempt because they reuse that shifted causal start. The source must be from
+exactly the immediately preceding iteration, not merely any earlier accepted
+window. A copied target-free start and target-free-centered perturbations
+instead reference the accepted target-free solve in their own window.
+
+Every attempt retains the result's configured inner terminal policy, including
+target-free attempts where that policy is temporarily removed only for
+initialization construction. Under `frozen`, all attempts reference the single
+iteration-zero outer plan. Under `replan_every_step`, each attempt references
+the unique plan created at its own iteration and retained outer-plan creation
+indices are consecutive from zero.
+
+Every referenced outer plan has an accepted primal. An unsuccessful outer plan
+is retained only as the terminal plan of an incomplete run and has no AC
+attempts. For every registered AC window, the device-aligned initial SoC equals
+the realized state at that iteration and the target SoC equals the referenced
+outer plan's boundary row at the global window endpoint.
+
+Exactly one accepted controlling attempt supplies each executed interval; a
+failed window supplies none. Once a controlling attempt is accepted, every
+later registered slot in that window is retained as
+`not_needed_after_acceptance`, so the audit tree records the predeclared
+registry without implying that post-acceptance solves occurred.
+
+For an incomplete run, an accepted outer plan at the termination iteration
+requires the complete policy-selected AC attempt registry for that iteration,
+even if the primary slot records an immediate construction error. The registry
+may be absent only when the retained terminal outer plan failed. A future
+pre-plan-construction failure path requires its own explicit public record; it
+is not silently represented by omitting both plan and attempts in S4.
+
 `AttemptSlotState` is the closed literal
 `Literal["executed", "construction_error", "source_unavailable",
 "not_needed_after_acceptance"]`. The state determines the valid payload:
 
-| Slot state | Build | Assigned model start | Solver/`x0` evidence | Extracted result | Audit | Reason |
+| Slot state | Build | Raw/assigned model starts | Solver/`x0` evidence | Extracted result | Audit | Reason |
 |---|---|---|---|---|---|---|
-| `executed` | required | required, including the generated flat start | required; complete `x0` and mapping retained | required, including unsuccessful schema-stable extraction | required | optional |
-| `construction_error` | optional | optional | absent | absent | absent | required |
+| `executed` | required | both required, including the generated flat start | required; complete `x0` and mapping retained | required, including unsuccessful schema-stable extraction | required | optional |
+| `construction_error` | optional | either may exist when reached | absent | absent | absent | required |
 | `source_unavailable` | absent | absent | absent | absent | absent | required |
 | `not_needed_after_acceptance` | absent | absent | absent | absent | absent | required |
 
@@ -758,6 +838,37 @@ No final `HierarchicalResult` contains a `pending` slot. Pending is permitted
 only as private transient orchestration state before a registered slot is
 resolved to one of the four public states. Record validation rejects every
 state/payload combination not allowed by the table.
+
+#### As-built S4 module boundary
+
+`src/cvxopf/hierarchical.py` now owns and exports the aliases and frozen typed
+records described above. Configuration and audit mappings and arrays are
+read-only after normalization; the physical input qualification above and the
+intentionally retained live `OPFBuild` objects are explicit exceptions:
+
+- policy/configuration: `HierarchicalAcceptanceTolerances`,
+  `ShiftedRecoveryConfig`, `HierarchicalPolicy`, `LayerSolveConfig`,
+  `HierarchicalSolveConfig`, and `HierarchicalInputs`;
+- audit evidence: `IPOPTStartEvidence` and `HierarchicalSolveAudit`;
+- retained records: `OuterPlanRecord`, `ACAttemptRecord`,
+  `ExecutedIntervalRecord`, `HierarchicalProvenance`, and
+  `HierarchicalResult`; and
+- closed aliases: `OuterPolicy`, `InnerTerminalPolicy`,
+  `InitializationPolicy`, `AttemptSlotState`, `AttemptRole`,
+  `AttemptSourceKind`, `OuterTerminalMode`, and `AttemptOutcome`.
+
+The module is included in the strict mypy surface and re-exported from the
+package root. `solve_hierarchical_opf` is the locked S5 entry-point name but is
+not published as a nonfunctional stub in S4. Constructor-only tests exercise
+copying, structural immutability, policy combinations, solver-option
+allow-lists, stable identity, trajectory alignment, complete IPOPT layout accounting, attempt
+state/payload rules, and cross-record execution linkage without running a
+scientific controller trajectory. The S4 stopping-point verification is 64
+focused constructor tests, strict mypy, Ruff, and the complete 1,784-test
+suite. The adjacent historical-diagnostic fixture is normalized to the current
+source-tree fingerprint only inside its synthetic integrity-gate test; the
+production S3 provenance check remains strict and continues to reject source
+drift.
 
 #### Exact termination and execution contract
 
@@ -783,12 +894,12 @@ state/payload combination not allowed by the table.
 
 - [x] Accept the S3b evidence and select `shifted_with_recovery` for the M17
   reference workflow while retaining `flat_only`.
-- [ ] Approve the input-bundle boundary instead of a mirrored builder
+- [x] Approve the input-bundle boundary instead of a mirrored builder
   signature.
-- [ ] Approve explicit recovery parameters in the immutable policy bundle.
-- [ ] Approve retaining `OPFBuild` objects in the initial public audit tree.
-- [ ] Lock exact public type, field, and exported function names.
-- [ ] Lock validation and conditional-record rules for all supported devices.
+- [x] Approve explicit recovery parameters in the immutable policy bundle.
+- [x] Approve retaining `OPFBuild` objects in the initial public audit tree.
+- [x] Lock exact public type, field, and exported function names.
+- [x] Lock validation and conditional-record rules for all supported devices.
 - [x] Separate immutable outer and AC solver configurations and retain their
   normalized values in result provenance.
 - [x] Make the initialization policy authoritative by rejecting
@@ -798,6 +909,8 @@ state/payload combination not allowed by the table.
 - [x] Define the closed AC-attempt slot states and their conditional payloads.
 - [x] Label hard shifted recovery as S3b-validated and soft shifted recovery
   as a supported extrapolation pending a dedicated experiment.
-- [ ] Add the typed module and constructor-only tests without implementing the
+- [x] Prevent tolerance configuration from weakening the reviewed accepted-
+  primal residual gate.
+- [x] Add the typed module and constructor-only tests without implementing the
   solve loop.
 - [ ] Review and checkpoint S4 before S5 orchestration begins.

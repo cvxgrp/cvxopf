@@ -71,6 +71,14 @@ def test_canonical_registry_is_fixed_before_execution():
 
 def test_integrity_gate_checks_sources_and_artifact_hashes(tmp_path):
     tracked = json.loads(diagnostic.AUTHORITATIVE_MANIFEST.read_text())
+    # This test isolates artifact and source-gate behavior using the current
+    # tree. The committed S3 manifest intentionally retains its historical
+    # fingerprint and production verification must reject later source edits.
+    tracked["execution_source"]["source_fingerprints"][
+        "cvxopf_python_tree_sha256"
+    ] = diagnostic._source_fingerprint(
+        sorted((diagnostic.REPOSITORY_ROOT / "src/cvxopf").rglob("*.py"))
+    )
     results = tmp_path / "results"
     results.mkdir()
     for name in (

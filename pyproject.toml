@@ -86,6 +86,7 @@ files = [
     "src/cvxopf/_component_adapters.py",
     "src/cvxopf/_component_assembly.py",
     "src/cvxopf/load.py",
+    "src/cvxopf/hierarchical.py",
 ]
 check_untyped_defs = true
 disallow_untyped_defs = true
