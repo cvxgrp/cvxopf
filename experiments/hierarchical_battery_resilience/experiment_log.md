@@ -186,3 +186,61 @@ materialization, temporal and identity
 alignment, reviewed energy totals, reactive-load construction, policy and
 network choices, case-array identity, and deliberate artifact-drift failure.
 The complete 1,661-test suite passed; Ruff and the diff check were clean.
+
+## 2026-08-20 — S2 manual reference runner
+
+S2 implements the auditable experiment runner without introducing a public or
+reusable controller. The runner consumes the single verified
+`load_frozen_scenario()` boundary and calls only the existing public multistep
+OPF builder. It retains complete outer plans once under stable IDs and links
+every controlling or diagnostic AC attempt to the applicable plan, local and
+global endpoint, storage-ID order, solve outcome, solver statistics, and
+independently reconstructed residuals.
+
+The implementation work first locked the asymmetric indexing rule: a frozen
+plan created at global iteration zero selects local boundary `k + W_k`, while
+a replan created at iteration `k` selects local boundary `W_k`; both denote
+the same global endpoint. Focused synthetic tests exercise `T=3, W=2`, the
+final `W=1` window, and the difference between one retained frozen plan and
+one remaining-horizon plan per replan iteration. No state advances after a
+failed controlling solve. A target-free diagnostic is retained for diagnosis,
+but it never becomes an executed fallback.
+
+The runner reconstructs the frozen AC and lossy-DC diagnostics rather than
+using solver status alone. DC injection-reporting consistency remains distinct
+from nodal balance. Realized operating totals use only accepted first
+intervals, so overlapping AC predictions and repeated outer replans cannot
+double-count cost, cycling, curtailment, loss, or terminal penalties.
+
+Review then identified that the first S2 summary exposed only additive
+operating totals. The output contract was completed with maximum
+executed-interval voltage and both dimensional and normalized thermal
+violations, cumulative absolute accepted-window signpost deviation, and total
+wall time over all retained outer, controlling, and diagnostic solves. These
+are calculated by the runner so S3 does not need to reconstruct protocol
+semantics from raw attempts.
+
+A second auditability review found an asymmetric failure path: sequential
+execution retained an unaccepted outer plan, while endpoint realization raised
+before returning its plan. Endpoint realization now returns a study-level
+record in all outer-solve outcomes. An unaccepted outer plan remains fully
+inspectable and is accompanied by zero AC realizations and an explicit
+termination reason.
+
+As an implementation smoke test, the frozen 96-step lossy-DC outer problem and
+the first five-step hard-equality AC window both solved with accepted primals
+and passed every frozen residual check. These solves were used only to verify
+the runner boundary; the full endpoint and sequential S3 studies have not yet
+been run or scientifically interpreted.
+
+The endpoint-realization pair was subsequently approved as the two prior
+18-hour sections `[32, 50)` and `[60, 78)`. They are frozen under the names
+`crosses_saturation_boundary_32_50` and `within_regime_60_78`. The first spans
+a storage saturation boundary in the inherited DC trajectory; the second
+remains within one decoupled operating regime. Equal durations and common
+scenario data make the boundary geometry, rather than window length or data
+selection, the intended contrast.
+
+Verification passed 33 focused S0–S2 tests and the complete 1,673-test suite.
+Ruff and `git diff --check` were clean. The only warnings were the repository's
+previously characterized solver/runtime and model-reporting warnings.

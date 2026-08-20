@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience protocol
 
-**Status:** S1 scenario and protocol frozen; manual runner not yet implemented
+**Status:** S2 manual reference runner implemented; S3 execution pending
 
 This file defines the experimental contract shared by:
 
@@ -168,10 +168,20 @@ off-by-one signpost cannot hide inside a longer window.
 
 ### 4.1 Endpoint realization
 
-Solve one long DC plan. Select one aligned subsection and give one AC window
-the DC states at both boundaries. This tests whether the endpoint-conditioned
-AC problem can realize the same energy transfer while independently choosing
-its network dispatch. It is one handoff, not a trajectory replay.
+Solve one long DC plan. The normative study uses two reviewed, equal-length
+half-open subsections:
+
+- `crosses_saturation_boundary_32_50`: intervals `[32, 50)`, crossing a
+  storage saturation boundary in the inherited DC trajectory; and
+- `within_regime_60_78`: intervals `[60, 78)`, remaining within one of the
+  trajectory's decoupled operating regimes.
+
+Each 18-hour AC window receives the DC states at both boundaries. The paired
+design tests whether endpoint-conditioned AC can realize the same energy
+transfer both across and within the storage trajectory's geometric regimes,
+while independently choosing its network dispatch. This is a comparison of
+two individual handoffs, not a trajectory replay. The cases were selected from
+the prior battery-terminal analysis before the M17 results were observed.
 
 ### 4.2 Open-loop sequential execution
 
@@ -470,7 +480,9 @@ Retain, for every outer plan and AC attempt:
 Store each complete outer plan exactly once under a stable `outer_plan_id`.
 Each AC attempt references that ID plus its selected local and global boundary
 indices; it does not copy the outer signpost trajectory into every window
-record.
+record. An unaccepted endpoint-study outer solve is returned in the endpoint
+study record with zero AC realizations and an explicit termination reason; it
+is never hidden by raising before the audit record reaches the caller.
 
 ### 9.1 Realized accounting
 
@@ -501,6 +513,15 @@ Trajectory summaries include realized generation cost, cycling cost,
 renewable curtailment, and active loss; maximum voltage violation; maximum
 thermal residual; cumulative absolute signpost deviation; runtime; termination
 iteration; completed-interval coverage; and completion status.
+
+Maximum voltage and thermal violations are taken over the executed first
+interval of every accepted controlling AC window, consistent with the realized
+accounting rule. Both dimensional MVA and normalized squared thermal maxima
+are retained. Cumulative absolute signpost deviation sums the absolute,
+device-aligned terminal deviations of accepted controlling windows; diagnostic
+attempts do not contribute. Runtime sums every retained outer-plan and AC-solve
+wall time, including failed controlling and diagnostic attempts, so it records
+the actual computational work performed before completion or termination.
 
 ## 10. Acceptance tolerances
 

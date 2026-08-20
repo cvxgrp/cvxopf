@@ -347,7 +347,7 @@ characterization, M17-characterization, and result tests passed. The complete
 
 ### S1 stopping point
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `47345dc`.**
 
 The normative checked-in scenario is `tracy_high_96h_v1`: the reviewed
 96-hour sustained-energy-deficit Tracy window, scaled and spatially allocated
@@ -381,3 +381,59 @@ matrix reconstructed in original branch-row order.
 
 Verification: 11 S1 scenario tests and the complete 1,661-test suite passed.
 Ruff and `git diff --check` passed.
+
+### S2 stopping point
+
+**Implementation complete; checkpoint commit pending.**
+
+`experiments/hierarchical_battery_resilience/manual_runner.py` is the
+auditable pre-public-controller reference implementation. It consumes only
+the verified `load_frozen_scenario()` contract and the existing public
+multistep OPF builder. It introduces no reusable controller abstraction.
+
+The runner implements endpoint realization, frozen-plan sequential execution,
+and `replan_every_step` sequential execution. Hard-equality and quadratic-soft
+inner policies remain separate predeclared runs. Every outer plan is retained
+once under a stable ID; every controlling and target-free diagnostic AC
+attempt references that plan and retains its complete build, result, status,
+timing, identity, boundary-index, policy, and residual record.
+
+The normative endpoint pair is frozen as the two equal-length 18-hour
+sections `[32, 50)` and `[60, 78)`, named
+`crosses_saturation_boundary_32_50` and `within_regime_60_78`. The comparison
+tests endpoint realization across a storage saturation boundary and within one
+decoupled operating regime, using cases selected from the prior
+battery-terminal analysis before M17 outcomes were observed.
+
+The implementation distinguishes globally indexed frozen signposts from
+locally indexed shortened replans, including intentional `W=1` and final
+window truncation. State is aligned by explicit storage ID and advances only
+from the first action of an accepted controlling AC solve. Failed controlling
+solves retain a diagnostic attempt and terminate without advancing state; no
+fallback action or anonymous relaxation is introduced.
+
+Endpoint realization returns a study-level record that owns its single outer
+plan. If that plan is unaccepted, the complete failed plan and audit remain
+available with zero AC realizations and an explicit termination reason; the
+runner does not raise away the evidence.
+
+Frozen AC and DC residuals are independently reconstructed. Realized
+accounting uses only executed first intervals, integrates generation cost,
+storage cycling cost, curtailment, and branch-terminal active loss exactly once
+by `delta`, and retains the system-injection loss cross-check. Overlapping
+predicted-window objectives and terminal penalties remain solve diagnostics
+and are never summed as realized operating cost.
+
+The trajectory summary also retains maximum executed-interval voltage and
+thermal violations, cumulative absolute accepted-window signpost deviation,
+and total wall time across every outer, controlling, and diagnostic solve.
+These aggregations are produced by the runner rather than delegated to S3.
+
+Focused orchestration tests cover identity alignment, local/global signpost
+selection, `T=3, W=2`, `W=1`, final truncation, frozen versus replanned plan
+counts, failed-action nonexecution, endpoint-plan reuse, distinct DC reporting
+and nodal-balance diagnostics, and realized accounting. A real frozen outer
+solve and first five-step hard-target AC window pass the complete audit
+contract. Full S3 trajectories have deliberately not yet been run or
+interpreted. Verification: 33 focused S0–S2 tests and the complete 1,673-test
+suite passed; Ruff and `git diff --check` were clean.

@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** S0, P1, and S1 complete; manual reference runner is next
+**Status:** S0, P1, S1, and S2 complete; S3 experiment execution is next
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -41,8 +41,8 @@ experiments/hierarchical_battery_resilience/
         .gitignore
 ```
 
-The frozen scenario loader and prepared arrays are implemented. No manual
-runner or public controller is implemented yet.
+The frozen scenario loader, prepared arrays, and auditable manual reference
+runner are implemented. No reusable public controller is implemented yet.
 
 `load_frozen_scenario()` is the canonical build-ready boundary: it verifies
 the artifacts and current case9 network and materializes `OPFOptions`, every
@@ -51,7 +51,10 @@ configuration. Later runners do not interpret manifest field names directly.
 
 ## Immediate next step
 
-Implement the auditable manual reference runner against the frozen protocol.
+Run and review the S3 endpoint, frozen-plan, and stepwise-replanned studies.
+The endpoint pair is frozen as the equal-length sections `[32, 50)` and
+`[60, 78)`, respectively crossing a storage saturation boundary and remaining
+within one decoupled operating regime.
 
 The normative scenario uses checked-in Tracy-derived prepared arrays. The
 source dataset was assembled from public sources, and the project owner has
