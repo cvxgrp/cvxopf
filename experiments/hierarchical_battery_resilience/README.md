@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** S0–S2 complete; preliminary S3 results ready for policy review
+**Status:** S0–S3 complete; authoritative results ready for policy review
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -57,8 +57,10 @@ extension. The frozen experiment has been run without policy relaxation or
 solver retuning. Its two fixed-plan variants completed; the two replanned
 variants exposed distinct target-conditioned and recursive-feasibility failure
 paths that must not be hidden by selecting only successful results.
-The authoritative S3 rerun remains gated on checkpointing the provenance-aware
-artifact infrastructure and running it from a clean commit.
+The authoritative run was executed from a clean, recorded source commit. Its
+machine-readable provenance and result summary are preserved in
+[`S3_RESULTS_METADATA.json`](S3_RESULTS_METADATA.json); the complete detailed
+artifacts remain local and ignored.
 
 The normative scenario uses checked-in Tracy-derived prepared arrays. The
 source dataset was assembled from public sources, and the project owner has

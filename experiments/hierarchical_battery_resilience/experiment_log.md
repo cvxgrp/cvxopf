@@ -327,3 +327,32 @@ the 1.10 p.u. voltage upper bound at buses 6 and 8, so it does not establish a
 fully interior feasible neighborhood. Physical infeasibility has neither been
 demonstrated nor excluded; a matched-state and alternate-initialization study
 is required before assigning the failure primarily to the solver.
+
+## 2026-08-20 — Authoritative clean-source S3 run
+
+The provenance-aware experiment infrastructure was committed as
+`0cd65b1a1c809b81813389f58fde6559a161d147`. The authoritative experiment was
+then run in a fresh output directory without `--resume`. `git status
+--porcelain` was empty before and after execution, and no execution or model
+source was edited while the run was in progress.
+
+The clean run reproduced the preliminary scientific findings. Both endpoint
+realizations were accepted with zero terminal SoC error. Both frozen policies
+completed all 96 intervals; hard equality returned to 500.0 MWh, while the
+quadratic-soft policy ended at 344.4 MWh. Hard stepwise replanning again
+terminated at interval 35 with a target-conditioned AC failure, and soft
+stepwise replanning again reached interval 95 before the remaining outer
+problem became infeasible.
+
+The tracked `S3_RESULTS_METADATA.json` is the machine-readable provenance and
+summary record. It contains the execution commit and clean status, source
+fingerprints, scenario hash, software versions, creation time, artifact names,
+sizes and SHA-256 hashes, and trajectory-summary values. The artifact hashes
+identify and verify this particular run; they are not a claim that a separate
+execution will create byte-identical gzip files.
+
+The inner solver stack was IPOPT 3.14.19 through cyipopt 1.7.0. The original
+artifacts did not retain the outer solver name. Immediately after the run, the
+unchanged frozen outer problem was reconstructed in the recorded environment;
+it used CLARABEL 0.11.1 and reproduced the artifact's 15-iteration count. This
+is recorded as a post-run identification, not direct artifact provenance.

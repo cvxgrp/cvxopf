@@ -440,7 +440,7 @@ suite passed; Ruff and `git diff --check` were clean.
 
 ### S3 review point
 
-**Preliminary frozen experiment executed; clean authoritative rerun pending.**
+**Authoritative frozen experiment complete; public-policy review pending.**
 
 The complete scientific record is in
 `experiments/hierarchical_battery_resilience/S3_REPORT.md`. Both reviewed
@@ -462,13 +462,14 @@ default. Review must decide whether remaining-horizon viability protection is
 part of M17 or a separately staged extension; the frozen baseline remains
 unchanged either way.
 
-The initial run was produced from an uncommitted S3 working tree based on S2
-commit `52c2896`. Its artifacts are internally hash-consistent, but its
-metadata did not identify the exact source tree. The corrected infrastructure
-records Git commit and dirty state plus deterministic source fingerprints,
-validates resume schemas and prior hashes, and writes every artifact
-atomically. S3 closes only after this infrastructure is checkpointed and the
-experiment is rerun from a clean commit.
+The authoritative experiment was executed from clean infrastructure commit
+`0cd65b1a1c809b81813389f58fde6559a161d147`; the tree was clean before and
+after execution, and the execution/model sources were unchanged during the
+run. The tracked
+`experiments/hierarchical_battery_resilience/S3_RESULTS_METADATA.json` records
+the source fingerprints, software and scenario context, artifact integrity
+identifiers, and result summary. The numerical findings reproduced the
+preliminary run without changing the frozen protocol.
 
 Verification: 40 focused M17 characterization, scenario, runner, and artifact
 tests and the complete 1,680-test suite passed. Ruff and `git diff --check`

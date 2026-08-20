@@ -6,14 +6,20 @@ The frozen manual experiment has been executed and its results are ready for
 scientific and policy review. No public hierarchical-controller abstraction
 has been implemented.
 
-The numerical run reported below was produced from an uncommitted S3 working
-tree based on S2 commit `52c2896`. Its artifact hashes are internally
-consistent, but the original metadata recorded only package versions and not
-the exact source tree. It is therefore preliminary evidence rather than the
-authoritative reproducibility run. The S3 infrastructure now records Git
-commit and dirty state plus deterministic fingerprints of the experiment and
-`src/cvxopf` sources. After this infrastructure is checkpointed, the normative
-experiment must be rerun from a clean commit before S3 is closed.
+The numerical results below are the authoritative clean-source run executed
+from commit `0cd65b1a1c809b81813389f58fde6559a161d147`. The working tree was
+clean before and after execution, and no execution or model source changed
+during the run. The tracked
+[result manifest](S3_RESULTS_METADATA.json) is the machine-readable source for
+the exact source fingerprints, software environment, scenario hash, artifact
+integrity identifiers, and summary values.
+
+The solver stack was IPOPT 3.14.19 through cyipopt 1.7.0 for the inner AC
+problems. The outer solver name was not retained in the authoritative artifact;
+an immediate reconstruction of the unchanged frozen outer problem identified
+CLARABEL 0.11.1 and reproduced its recorded 15 iterations. The manifest labels
+that outer-solver identification as post-run reconstruction rather than direct
+artifact provenance.
 
 ## Main findings
 
@@ -185,8 +191,9 @@ artifact hashes, scenario, software, Git, and source-fingerprint checks pass.
 All artifact writes are atomic. Unavailable nonfinite result fields are
 encoded as JSON `null` while their audit classification is retained.
 
-The local ignored artifact directory contains compressed complete extracted
-results for every outer plan and AC attempt, a trajectory summary, and hashes.
-The preliminary run used Python 3.13.2, CVXPY 1.9.2, NumPy 2.5.1, and pandas
-3.0.3. The frozen scenario-manifest SHA-256 was
-`46ae15be4f56681416423f17d9374c95a8f5274010319c552ce5308bf7cbc80b`.
+The local ignored artifact directory contains complete compressed results for
+every outer plan and AC attempt plus the trajectory summary. Their sizes and
+SHA-256 hashes are recorded in the tracked
+[result manifest](S3_RESULTS_METADATA.json). These are integrity identifiers
+for this run; they do not promise that an independent rerun will produce
+byte-identical gzip files.
