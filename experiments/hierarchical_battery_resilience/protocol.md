@@ -1,7 +1,6 @@
 # Hierarchical battery-resilience protocol
 
-**Status:** draft for review; scenario-specific numerical choices remain open
-before S1 is frozen
+**Status:** S1 scenario and protocol frozen; manual runner not yet implemented
 
 This file defines the experimental contract shared by:
 
@@ -56,7 +55,44 @@ The frozen scenario manifest records:
 - confirmation that every load is nonsheddable;
 - SHA-256 hashes of the final active-load, reactive-load, and
   nondispatchable-availability arrays; and
-- package and solver versions used for the accepted reference run.
+- package versions used to prepare the artifacts. Each later accepted reference
+  run separately records its actual package and solver versions.
+
+### 2.1 Frozen scenario
+
+The normative scenario is `tracy_high_96h_v1`, the existing sustained-energy-
+deficit window from `2021-12-18 00:00:00-08:00` through
+`2021-12-21 23:00:00-08:00`. It contains 96 one-hour intervals. The checked-in
+active-load, reactive-load, and nondispatchable arrays live in
+`prepared_scenario/`; `scenario.py` verifies their shapes, column order,
+timestamps, cadence, and both file and canonical numeric-array hashes.
+
+The source-to-case factor is `315 / 1138.7624473656565`; all load and resource
+stress multipliers are one, load shift and spatial noise are zero, and random
+seed zero is recorded even though the zero-noise allocation consumes no random
+variation. Loads retain the case9 proportions at buses 5, 7, and 9. Utility
+solar is placed at buses 1 and 2, wind at buses 2 and 3, and distributed solar
+at buses 5, 7, and 9. Renewable inverter ratings retain the prior experiment's
+joint sizing across the low, moderate, and high windows; selecting one
+normative trajectory therefore does not alter the reviewed physical fleet.
+
+The ignored raw composite is optional provenance input. A clean checkout uses
+only the prepared arrays. Maintainers possessing the raw file with SHA-256
+`45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f`
+can reproduce the artifacts with:
+
+```bash
+uv run python -m experiments.hierarchical_battery_resilience.prepare_scenario \
+  path/to/9q9wtp_gen_and_load.csv
+```
+
+`load_frozen_scenario()` is the sole scenario-materialization boundary. It
+verifies the current case9 `baseMVA`, bus array, and branch array against the
+manifest and returns the verified case, `OPFOptions`, typed generator, load,
+nondispatchable, storage, and HVDC fleets, aligned frames, and typed horizon,
+policy, status, and tolerance configuration. S2 must consume that object; it
+must not independently translate descriptive manifest fields into constructor
+arguments.
 
 ## 3. Indexed state and window contract
 
@@ -165,8 +201,9 @@ The initial comparison includes two predeclared policies:
 - `quadratic_soft`: the same signed endpoint deviation enters once as the
   existing two-sided quadratic terminal cost.
 
-The quadratic weight and its engineering interpretation must be fixed in the
-scenario manifest before accepted runs. A nonzero soft deviation is a
+The quadratic weight is fixed at `0.05` objective units/MWh², the previously
+approved battery-terminal value whose marginal penalty is 25 objective
+units/MWh at a 250 MWh deviation. A nonzero soft deviation is a
 successful solve with inter-layer disagreement, not a failed solve.
 
 The baseline has no automatic hard-to-soft retry. Hard and soft are separate
@@ -278,6 +315,132 @@ The initial experiment baseline uses:
 - identical perfect forecasts for frozen and replanned comparisons; and
 - no contingencies, topology changes, or corrective load shedding.
 
+The horizon is `H=96` and the nominal AC window is `W=5`, with the final four
+windows truncated according to `W_k = min(5, 96-k)`. Five steps are used
+because that length already passed the prior synthesized-network AC smoke
+test recorded in the battery-terminal
+[experiment log](../battery_terminal/experiment_log.md#2026-07-27--five-step-ac-network-smoke-test).
+This is a predeclared computational choice, not a value tuned against M17
+outcomes. Inner solves use the project-default flat initialization.
+
+The frozen acceptance tolerances are: `1e-4` MWh for SoC recurrence, `1e-3`
+MWh for hard terminal equality, `1e-6` objective units for soft-terminal cost
+reconstruction, `1e-6` p.u. for AC active/reactive balance and DC nodal
+balance, `1e-4` MW for DC injection-reporting consistency, `1e-6` p.u. for
+voltage bounds, `1e-4` MVA for branch limits, and `1e-7` for normalized
+squared branch-limit residuals. Both the dimensional and normalized branch
+checks must pass.
+
+### 8.1 Frozen residual definitions
+
+Every maximum below is taken over all predicted steps and the indicated
+device, bus, or branch indices. Equality residuals use absolute tolerance
+only; no relative tolerance is added to a quantity whose reference value is
+zero.
+
+For storage ID `s`, the ideal-state residual is
+
+$$
+r^{soc}_{0,s} = e_{0,s} - e^{initial}_s
+                 + \Delta t\,b_{0,s},
+$$
+
+and, for subsequent predicted steps,
+
+$$
+r^{soc}_{t,s} = e_{t,s} - e_{t-1,s}
+                 + \Delta t\,b_{t,s}.
+$$
+
+The reported SoC-recurrence metric is `max(abs(r_soc))` over steps and storage
+IDs.
+
+For each bus, independently reconstruct total device injection in MW/MVAr from
+reported generator, storage, nondispatchable, HVDC, and served-load values.
+The reconstruction preserves the package's injection sign convention:
+generation and discharging storage are positive; served load is negative.
+
+For AC, both the independently reconstructed device injection and reported
+`p_net`/`q_net` are initially in engineering units. Divide **both sides** by
+`baseMVA` before comparing them. Denoting these per-unit quantities by
+`p_device_pu` and `p_net_pu`, and similarly for reactive power, the AC balance
+metrics are
+
+$$
+\max_{t,i}\left|p^{device}_{t,i}-p^{net}_{t,i}\right|,
+\qquad
+\max_{t,i}\left|q^{device}_{t,i}-q^{net}_{t,i}\right|.
+$$
+
+Because AC `p_net` and `q_net` are network-side injections constrained equal to
+component injections, these independently extracted comparisons audit the AC
+nodal equalities. They use the AC per-unit balance tolerances.
+
+For lossy DC, reported `p_net` is itself the component-injection expression.
+The engineering-unit reporting-consistency diagnostic is therefore kept
+separate:
+
+$$
+\max_{t,i}\left|p^{device,MW}_{t,i}-p^{net,MW}_{t,i}\right|.
+$$
+
+This check uses the DC injection-reporting tolerance and is not evidence of
+nodal balance. To audit the DC balance independently, reconstruct the
+`(n_b,n_l)` incidence matrix from the frozen case in original branch-row
+order, with `A[i,e] = -1` at branch `e`'s from-bus and `+1` at its to-bus.
+Using reported MW flows and injections, the physical/model balance metric is
+
+$$
+\max_{t,i}\left|
+\frac{(A p^{flow}_t)_i+p^{net}_{t,i}}{\mathrm{baseMVA}}
+\right|.
+$$
+
+This check uses the DC per-unit nodal-balance tolerance. Reporting consistency
+and nodal balance are retained as distinct diagnostics; neither may silently
+substitute for the other.
+
+For bus voltage bounds from the frozen case, the violation is
+
+$$
+\max_{t,i}\max\left(
+V_{t,i}-V_i^{max},\;V_i^{min}-V_{t,i},\;0
+\right).
+$$
+
+For every in-service branch with a finite positive enforced `rateA`, and for
+both terminals, let `S` be `hypot(P,Q)` and `r_A` the MVA rating. The
+dimensional and normalized squared violations are respectively
+
+$$
+\max\max(S-r_A,0),
+$$
+
+and
+
+$$
+\max\max\left(\frac{S^2-r_A^2}{r_A^2},0\right).
+$$
+
+Branches without a positive enforced rating are excluded rather than assigned
+an artificial denominator. The maxima preserve both-terminal and original
+branch-row identity in the retained diagnostics.
+
+For a hard terminal policy, the residual is the maximum absolute endpoint
+difference after aligning target and result by explicit storage ID:
+
+$$
+\max_s\left|e^{AC}_{end,s}-e^{target}_s\right|.
+$$
+
+For the quadratic-soft policy, endpoint deviation has no acceptance threshold.
+Every aligned deviation must be finite, and the reported terminal cost must be
+finite and agree, within the frozen absolute cost tolerance, with
+
+$$
+w\sum_s\left(e^{AC}_{end,s}-e^{target}_s\right)^2.
+$$
+
 The baseline must be feasible without M19 shedding. Later resilience studies
 may enable shedding, but must separately report planned demand, AC input and
 served demand, active and reactive shedding, per-load and aggregate ENS, and
@@ -367,8 +530,10 @@ S1 produces:
 - a short hand-verification table for `T=3, W=2` and `W=1`; and
 - an appended experiment-log entry recording the freeze decision.
 
-## 12. Decisions required before S1 freeze
+## 12. S1 freeze decision
 
-1. After the prepared scenario is selected: exact horizon, nominal window
-   length, AC terminal soft weight, solver initialization, and acceptance
-   tolerances.
+The exact horizon, nominal window, terminal policies and weight, solver
+initialization, physical fleet, and acceptance tolerances above are frozen for
+the manual reference study. Any later change is a new protocol version and
+must be appended to `experiment_log.md`; it must not overwrite the S1
+artifacts or be justified from favorable controller results.

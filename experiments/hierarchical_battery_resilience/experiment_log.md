@@ -134,3 +134,55 @@ The focused P1 verification passed 337 tests across all three formulations,
 single-step and intentional multistep `T=1`, explicit and fallback identity,
 collision handling, and unavailable-primal results. The complete suite passed
 1,650 tests; Ruff, configured strict mypy, and the diff check were clean.
+
+## 2026-08-19 — S1 scenario freeze
+
+The normative scenario is frozen as `tracy_high_96h_v1`: 96 hourly intervals
+from `2021-12-18 00:00:00-08:00` through `2021-12-21 23:00:00-08:00`. This is
+the previously reviewed sustained-energy-deficit Tracy window. It contains
+30,224.2 MWh of load and 7,510.0 MWh of available nondispatchable energy
+before OPF curtailment. The source-to-case scale, spatial fractions, zero-noise
+configuration, and renewable ratings jointly sized over the prior three-
+window study are retained without retuning.
+
+The physical and controller-independent choices are `H=96`, nominal `W=5`,
+the reviewed 350 MW dispatchable fleet, fixed nonsheddable loads, seven
+nondispatchable sites, and one bus-7 storage device named `battery_bus_7` with
+150 MVA power, 1,000 MWh capacity, and 500 MWh initial energy. The outer
+terminal policy is the approved hard equality at 500 MWh at global boundary
+96. Inner hard equality and quadratic-soft policies remain separate runs; the
+soft weight is the previously approved `0.05` objective units/MWh². AC branch
+limits are enabled, forecasts are identical and perfect, and no fallback or
+load shedding is permitted.
+
+The checked-in prepared arrays are the normative clean-checkout inputs. The
+manifest records complete device definitions, ordered identities, options,
+transformations, tolerances, hashes, and preparation environment. The raw
+BM-authored composite remains optional and ignored; its recorded SHA-256 is
+used only by the regeneration path. This freezes the study before any manual
+hierarchical result is observed.
+
+Review identified that verified CSV frames alone would force S2 to duplicate
+manifest interpretation. S1 was tightened so `load_frozen_scenario()` returns
+one build-ready typed contract: verified case9 data, options, every device
+fleet, aligned trajectories, and controller configuration. Case hashes and
+identity/trajectory alignment are enforced by the loader itself rather than
+only by tests. The residual contract now defines every maximum and formula,
+uses absolute tolerances for zero-reference equalities, and treats soft
+endpoint deviation as a reported outcome rather than a pass/fail threshold.
+
+A subsequent review caught a formulation-specific distinction in that
+residual contract. AC `p_net`/`q_net` are engineering-unit network injections,
+so both the independently reconstructed device side and reported network side
+are divided by `baseMVA`. Lossy-DC `p_net` is instead the component-injection
+expression itself: device-versus-`p_net` agreement is only a MW reporting
+diagnostic. The actual DC nodal audit independently reconstructs the signed
+branch incidence matrix in original row order and evaluates
+`(A @ p_flows + p_net) / baseMVA`. The two DC diagnostics now have separate
+names and tolerances.
+
+Eleven focused S1 tests verify clean-checkout loading, build-ready
+materialization, temporal and identity
+alignment, reviewed energy totals, reactive-load construction, policy and
+network choices, case-array identity, and deliberate artifact-drift failure.
+The complete 1,661-test suite passed; Ruff and the diff check were clean.

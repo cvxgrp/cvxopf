@@ -328,7 +328,7 @@ implementation.
 
 ### P1 storage-identity prerequisite
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `24b5aa5`.**
 
 `StorageUnitIdeal.device_id` is an optional final field, preserving existing
 positional construction. Preparation validates supplied IDs as unique,
@@ -344,3 +344,40 @@ Verification: 337 focused storage, component-contract, adapter-
 characterization, M17-characterization, and result tests passed. The complete
 1,650-test suite passed, together with Ruff, configured strict mypy, and
 `git diff --check`.
+
+### S1 stopping point
+
+**Complete; checkpoint commit pending.**
+
+The normative checked-in scenario is `tracy_high_96h_v1`: the reviewed
+96-hour sustained-energy-deficit Tracy window, scaled and spatially allocated
+by the existing deterministic battery-terminal procedure. The experiment
+freezes `H=96`, `W=5`, the 150 MVA / 1,000 MWh bus-7 battery with explicit ID
+`battery_bus_7`, 500 MWh initial and global terminal energy, separate hard-
+equality and quadratic-soft inner policies, quadratic weight `0.05`, the two
+approved outer policies, fixed nonsheddable first-class loads, enforced AC
+`rateA` limits, and explicit residual tolerances.
+
+The three prepared arrays and a complete machine-readable manifest are
+committed under `experiments/hierarchical_battery_resilience/prepared_scenario`.
+Their loader verifies timestamps, cadence, shapes, column order, and file and
+numeric-array SHA-256 hashes. The optional regeneration script verifies the
+authorized raw composite's recorded hash before applying the documented
+transformation. The ignored raw source is not required for a clean-checkout
+run.
+
+The scenario loader is also the single build-ready materialization boundary.
+It verifies the live case9 `baseMVA`, bus, and branch data against the manifest
+and constructs the case, options, all typed device fleets, aligned trajectory
+frames, and typed horizon/policy/tolerance configuration. S2 therefore owns no
+parallel manifest-to-model translation.
+
+The frozen audit contract distinguishes AC component-to-network balance from
+lossy-DC reporting consistency and nodal balance. AC scales both reconstructed
+device injections and reported `p_net`/`q_net` to per unit. DC separately
+checks device injection against reported `p_net` in MW and independently
+checks `(A @ p_flows + p_net) / baseMVA` using a duplicate-safe incidence
+matrix reconstructed in original branch-row order.
+
+Verification: 11 S1 scenario tests and the complete 1,661-test suite passed.
+Ruff and `git diff --check` passed.

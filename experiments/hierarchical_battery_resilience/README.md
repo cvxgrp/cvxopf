@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** S0 characterization implemented and verified; review pending
+**Status:** S0, P1, and S1 complete; manual reference runner is next
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -25,6 +25,13 @@ experiments/hierarchical_battery_resilience/
     README.md
     protocol.md
     S0_REPORT.md
+    scenario.py
+    prepare_scenario.py
+    prepared_scenario/
+        manifest.json
+        load_p.csv
+        load_q.csv
+        nondispatchable.csv
     manual_runner.py
     runner.py
     analysis.py
@@ -34,35 +41,31 @@ experiments/hierarchical_battery_resilience/
         .gitignore
 ```
 
-Only the documentation and results-directory stub exist initially. Python
-modules should be created when their corresponding phase begins; no manual
+The frozen scenario loader and prepared arrays are implemented. No manual
 runner or public controller is implemented yet.
+
+`load_frozen_scenario()` is the canonical build-ready boundary: it verifies
+the artifacts and current case9 network and materializes `OPFOptions`, every
+typed device fleet, aligned trajectories, and the frozen controller
+configuration. Later runners do not interpret manifest field names directly.
 
 ## Immediate next step
 
-Review and freeze `protocol.md` before implementing the manual runner. The
-current draft defines the state recurrence, study types, failure taxonomy,
-recorded diagnostics, and reproducibility requirements. It still requires
-selection of:
+Implement the auditable manual reference runner against the frozen protocol.
 
-- scenario-specific horizons, soft weight, initialization, and tolerances
-  after S0 characterization.
-
-The normative scenario will use checked-in Tracy-derived prepared arrays. The
+The normative scenario uses checked-in Tracy-derived prepared arrays. The
 source dataset was assembled from public sources, and the project owner has
-confirmed authority to republish the derived inputs. The prepared arrays will
-carry timestamps, transformation provenance, and hashes; the large raw source
+confirmed authority to republish the derived inputs. The prepared arrays carry
+timestamps, transformation provenance, and hashes; the large raw source
 file remains unnecessary for reproduction.
 
 The baseline uses separate hard and soft runs with no automatic fallback.
-Stable storage identity is a prerequisite implementation slice after S0 and
-before scenario freeze; every storage unit participating in M17 must provide
-an explicit unique ID.
+Every storage unit participating in M17 provides an explicit unique ID.
 
 The standard outer policy is the hard energy-neutral equality `e_H = e_0` for
 every storage device. Every shortened replan retains that same absolute target
-at the original global boundary. The scenario will freeze the initial value;
-50% of capacity is the provisional configuration.
+at the original global boundary. The frozen initial and terminal value is
+500 MWh, or 50% of capacity.
 
 The initial outer-policy comparison is fixed as `frozen` versus
 `replan_every_step`. The former is the less computationally intensive
