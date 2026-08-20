@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience protocol
 
-**Status:** S2 manual reference runner implemented; S3 execution pending
+**Status:** S3 frozen experiment executed; policy review pending
 
 This file defines the experimental contract shared by:
 

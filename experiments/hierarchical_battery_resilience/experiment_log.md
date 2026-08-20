@@ -244,3 +244,86 @@ selection, the intended contrast.
 Verification passed 33 focused S0–S2 tests and the complete 1,673-test suite.
 Ruff and `git diff --check` were clean. The only warnings were the repository's
 previously characterized solver/runtime and model-reporting warnings.
+
+## 2026-08-20 — S3 frozen manual experiment
+
+The two endpoint-realization cases both returned accepted AC solutions with
+exact inherited terminal SoC and all frozen residuals inside tolerance. The AC
+interior trajectories differed from DC: the saturation-crossing case had a
+maximum 2.90 MW battery-power difference and 3.44 MWh SoC difference, while
+the within-regime case differed by 4.53 MW and 13.70 MWh. Crossing the
+saturation boundary was therefore not an obstacle to endpoint realization in
+this pair.
+
+Both fixed-plan sequential variants completed 96 intervals. Hard equality
+returned the battery from 500.0 MWh to 500.0 MWh. Quadratic soft finished at
+344.4 MWh; 92 of 96 windows used material endpoint deviation, with a mean
+absolute deviation of 161.5 MWh. The frozen weight is thus genuinely soft and
+changes the global energy outcome rather than acting like a numerical
+relaxation of equality.
+
+The replanned hard-equality run terminated before executing interval 35. Its
+new outer plan was accepted and selected 850.0 MWh at the five-hour endpoint
+from a realized 515.1 MWh start. The target-conditioned AC solve returned
+`infeasible`, while the retained target-free diagnostic returned an accepted
+solution. This supports the frozen `target_conditioned_failure`
+classification. It does not prove global infeasibility of the nonconvex AC
+problem or distinguish network limitation from local solver behavior.
+
+The replanned quadratic-soft run executed 95 intervals and reached 371.9 MWh.
+The final outer problem then had to charge 128.1 MWh in one hour to retain the
+500.0 MWh global terminal equality. Aggregate final-interval headroom was only
+about 123.6 MW, so the outer problem was infeasible even before AC network
+physics. This is a direct recursive-feasibility failure caused by accumulated
+soft inner deviations.
+
+The run therefore does not justify an unqualified policy default. Fixed hard
+targets completed this deterministic case but are open-loop; hard replanning
+encountered a target-conditioned AC failure; and soft replanning preserved AC
+actions longer while eventually leaving the remaining outer problem
+infeasible. The S4 design question is whether a remaining-horizon viability
+guard belongs inside M17 or should be staged separately. No fallback, target
+relaxation, solver retuning, or result-driven protocol change was applied.
+
+The first reproduction attempt also exposed an artifact-only failure: strict
+JSON rejected a retained `NaN` from an unavailable result. The writer now
+encodes unavailable nonfinite values as `null`, writes atomically, and supports
+resuming complete readable cases. The final artifact manifest records hashes
+for every compressed raw-result file and summary table; `analysis.py` verifies
+them before use.
+
+Verification passed 40 focused M17 characterization, scenario, runner, and
+artifact tests and the complete 1,680-test suite. Ruff and `git diff --check`
+were clean, and the local S3 artifacts passed their recorded size and SHA-256
+checks.
+
+### S3 provenance and interpretation review
+
+Review correctly identified that readable JSON was not sufficient for safe
+resume: a modified artifact could be reused and then receive a new hash in the
+final metadata. Resume validation now checks artifact schema, study and policy
+identity, endpoint identities, completion and termination consistency, plan,
+attempt, executed-interval, and state-history counts, and the prior size and
+SHA-256 whenever completed metadata exists. Invalid cases are recomputed
+rather than re-blessed.
+
+The run context now records the Git commit and dirty state, individual hashes
+of the experiment execution and artifact modules, and combined deterministic
+fingerprints of all Python sources under `src/cvxopf`. Context, CSV, compressed
+JSON, and final metadata writes all use temporary-file replacement. Analysis
+also verifies that the run context agrees with the completed metadata.
+
+The initial numerical run predated these provenance fields and came from an
+uncommitted S3 tree based on S2 commit `52c2896`. Its internally verified
+artifacts remain preliminary evidence. The authoritative run will be repeated
+after checkpointing this infrastructure and returning to a clean tree.
+
+The hard-target wording was also narrowed. A 1.63 MWh starting-state
+difference separated the failed replanned window from the successful frozen
+window with essentially the same target. Aggregate power, storage, generator,
+reactive-generator, and thermal margins do not explain the failure, making
+local solver sensitivity plausible. However, the successful solution reached
+the 1.10 p.u. voltage upper bound at buses 6 and 8, so it does not establish a
+fully interior feasible neighborhood. Physical infeasibility has neither been
+demonstrated nor excluded; a matched-state and alternate-initialization study
+is required before assigning the failure primarily to the solver.

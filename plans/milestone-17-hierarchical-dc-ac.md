@@ -384,7 +384,7 @@ Ruff and `git diff --check` passed.
 
 ### S2 stopping point
 
-**Implementation complete; checkpoint commit pending.**
+**Complete; checkpoint commit `52c2896`.**
 
 `experiments/hierarchical_battery_resilience/manual_runner.py` is the
 auditable pre-public-controller reference implementation. It consumes only
@@ -437,3 +437,40 @@ solve and first five-step hard-target AC window pass the complete audit
 contract. Full S3 trajectories have deliberately not yet been run or
 interpreted. Verification: 33 focused S0–S2 tests and the complete 1,673-test
 suite passed; Ruff and `git diff --check` were clean.
+
+### S3 review point
+
+**Preliminary frozen experiment executed; clean authoritative rerun pending.**
+
+The complete scientific record is in
+`experiments/hierarchical_battery_resilience/S3_REPORT.md`. Both reviewed
+18-hour DC endpoint pairs were realized by accepted AC solves with exact
+terminal SoC while allowing different interior trajectories. Both fixed-plan
+96-hour variants completed. The hard variant returned to 500.0 MWh; the
+quadratic-soft variant finished at 344.4 MWh.
+
+Neither stepwise-replanned variant completed. The hard-target run terminated
+at interval 35 after a target-conditioned AC solve returned infeasible while
+the target-free diagnostic solved. This does not distinguish true nonconvex AC
+infeasibility from local solver behavior. The soft-target run reached interval
+95, where accumulated energy deviations made the final outer hard terminal
+equality infeasible even at the aggregate power-adequacy level.
+
+The result demonstrates that replanning alone does not provide recursive
+feasibility. S4 should not hide one tested combination as an unqualified
+default. Review must decide whether remaining-horizon viability protection is
+part of M17 or a separately staged extension; the frozen baseline remains
+unchanged either way.
+
+The initial run was produced from an uncommitted S3 working tree based on S2
+commit `52c2896`. Its artifacts are internally hash-consistent, but its
+metadata did not identify the exact source tree. The corrected infrastructure
+records Git commit and dirty state plus deterministic source fingerprints,
+validates resume schemas and prior hashes, and writes every artifact
+atomically. S3 closes only after this infrastructure is checkpointed and the
+experiment is rerun from a clean commit.
+
+Verification: 40 focused M17 characterization, scenario, runner, and artifact
+tests and the complete 1,680-test suite passed. Ruff and `git diff --check`
+were clean. Local result artifacts passed their recorded size and SHA-256
+checks.

@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** S0, P1, S1, and S2 complete; S3 experiment execution is next
+**Status:** S0–S2 complete; preliminary S3 results ready for policy review
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -51,10 +51,14 @@ configuration. Later runners do not interpret manifest field names directly.
 
 ## Immediate next step
 
-Run and review the S3 endpoint, frozen-plan, and stepwise-replanned studies.
-The endpoint pair is frozen as the equal-length sections `[32, 50)` and
-`[60, 78)`, respectively crossing a storage saturation boundary and remaining
-within one decoupled operating regime.
+Review the [S3 report](S3_REPORT.md) and decide whether remaining-horizon
+viability protection belongs in M17 or in a separately staged controller
+extension. The frozen experiment has been run without policy relaxation or
+solver retuning. Its two fixed-plan variants completed; the two replanned
+variants exposed distinct target-conditioned and recursive-feasibility failure
+paths that must not be hidden by selecting only successful results.
+The authoritative S3 rerun remains gated on checkpointing the provenance-aware
+artifact infrastructure and running it from a clean commit.
 
 The normative scenario uses checked-in Tracy-derived prepared arrays. The
 source dataset was assembled from public sources, and the project owner has
@@ -79,3 +83,15 @@ is deferred.
 The endpoint-fixed DC subsection and AC realization study in
 `experiments/battery_terminal` is prior evidence, not a substitute for the
 closed-loop companion experiment.
+
+## Reproduce S3
+
+```bash
+uv run python -m experiments.hierarchical_battery_resilience.reproduce
+```
+
+Use `--resume` after interruption to retain complete readable artifacts and
+rerun missing or incomplete cases. Resume first verifies the scenario and
+software context. Results are written under the ignored `results/s3_manual`
+directory; `analysis.py` validates their recorded hashes before loading
+summary tables.
