@@ -475,3 +475,15 @@ Verification: 40 focused M17 characterization, scenario, runner, and artifact
 tests and the complete 1,680-test suite passed. Ruff and `git diff --check`
 were clean. Local result artifacts passed their recorded size and SHA-256
 checks.
+
+### S3 hard-replanning diagnostic gate
+
+The authoritative S3 baseline is closed and remains unchanged. Before S4
+selects public defaults, the interval-35 hard-target event receives the named,
+predeclared follow-up in
+`experiments/hierarchical_battery_resilience/S3_HARD_REPLAN_DIAGNOSTIC_PLAN.md`.
+The study separates exact-problem initialization dependence from nearby
+state/target sensitivity. Any accepted solve of the exact archived
+replanned-state and `849.9999996548939` MWh target proves modeled feasibility;
+repeated local failures remain inconclusive. This is a policy gate, not an S3
+baseline replacement.

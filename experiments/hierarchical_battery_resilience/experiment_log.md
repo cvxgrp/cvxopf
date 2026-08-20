@@ -364,3 +364,23 @@ Resume validation was made total over malformed JSON, and failed endpoint
 studies now validate under their separate zero-realization contract. These
 changes occurred after the authoritative run and do not change its execution
 source or results.
+
+## 2026-08-20 — Interval-35 diagnostic planning
+
+The authoritative S3 record and post-run artifact hardening were committed
+separately. The unresolved hard-replanning event will be studied before S4
+selects public defaults, without altering the frozen S3 baseline.
+
+The retained values are 516.7309542175291 MWh for the successful frozen state
+and 515.0979097002988 MWh for the failed replanned state. Their recorded
+targets differ by only 2.591324e-7 MWh around 850.0 MWh. Strict causal testing
+therefore retains the archived replanned target `849.9999996548939` MWh for
+every alternate-initialization attempt. Exactly 850.0 MWh remains a secondary
+normalization check.
+
+The proposed protocol freezes a six-row state/target matrix and exact
+initialization rules for the project flat start, the successful frozen state,
+the target-free state, the shifted preceding window, and three deterministic
+perturbations. Only an accepted solve of the exact replanned-state and archived
+target can establish modeled feasibility of the original event. Repeated
+failure remains inconclusive.
