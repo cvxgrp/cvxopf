@@ -405,3 +405,30 @@ window shifting, SoC realignment, deterministic perturbations, completeness
 classification, and atomic artifact persistence. Fifteen focused tests use only
 synthetic problems or checked-in fingerprints. No frozen interval-35
 diagnostic problem has been solved during implementation.
+
+## 2026-08-20 — First diagnostic invocation stopped before IPOPT
+
+The committed runner was invoked from clean commit `71b3f7a` in the frozen
+solver environment. All eight independent source/control records stopped at
+the `x0` interface gate before IPOPT executed; the six dependent records were
+retained as `source_unavailable`. The artifact correctly classified the run as
+incomplete with 14 records, zero solver calls, and zero verified starts. It is
+an infrastructure observation, not a scientific diagnostic result.
+
+The gate had compared the 745 entries of the original CVXPY leaf variables
+with IPOPT's 930-entry reduced vector. CVXPY had inserted 185 canonicalization
+auxiliaries. The corrected invariant verifies every original variable in its
+identified slice and independently verifies the complete reduced vector
+against the reduced problem values. The full IPOPT vector and variable layout
+are retained in each attempt record for audit.
+
+The revised no-solve interception test characterizes 745 model-owned
+coordinates and 185 reduction-introduced coordinates in the frozen 930-entry
+IPOPT vector. All named model values map exactly to their reduced offsets. The
+normalized layout signature and auxiliary starting values are deterministic
+across repeated construction. When the complete model-owned starting point is
+deterministically perturbed, five auxiliary coordinates also change, with a
+maximum change of $10^{-5}$ in this characterization. This dependence is
+captured by retaining the complete vector and coordinate map for every
+attempt. The test ends through the dedicated `X0InterceptionComplete` sentinel
+before the original IPOPT interface is called.

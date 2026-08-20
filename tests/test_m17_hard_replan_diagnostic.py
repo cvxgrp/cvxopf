@@ -27,6 +27,11 @@ def _source_record(values):
         initialization=diagnostic.InitializationSpec("A_flat"),
         solver_executed=True,
         x0_verified=True,
+        solver_x0=[0.0],
+        solver_x0_layout=(),
+        solver_x0_layout_signature="synthetic",
+        model_x0_count=1,
+        auxiliary_x0_count=0,
         source_classification="reproduced_authoritative_source",
         source_differences=(),
         starting_values={},
@@ -188,24 +193,117 @@ def test_synthetic_dnlp_receives_assigned_value_as_actual_x0():
     variable.value = np.array(0.375)
     build = _synthetic_build(variable)
 
-    starts, verified, executed, before, after, exception, _elapsed = (
-        diagnostic._run_build_with_verified_x0(build)
-    )
+    run = diagnostic._run_build_with_verified_x0(build)
 
-    assert exception is None
-    assert verified
-    assert executed
-    assert before == after
-    assert set(before) == {"variables", "constraints", "parameters"}
-    assert starts["x"] == pytest.approx(0.375)
+    assert run.exception is None
+    assert run.x0_verified
+    assert run.solver_executed
+    assert not run.intercepted_before_ipopt
+    assert run.object_ids_before == run.object_ids_after
+    assert set(run.object_ids_before) == {
+        "variables",
+        "constraints",
+        "parameters",
+    }
+    assert run.starting_values["x"] == pytest.approx(0.375)
+    assert run.solver_x0 == pytest.approx([0.375])
+    assert run.solver_x0_layout[0]["name"] == "x"
+    assert run.solver_x0_layout[0]["is_original_variable"] is True
 
 
 def test_record_payload_retains_before_and_after_object_identities():
     payload = diagnostic.record_payload(_source_record({}))
 
+    assert payload["solver_x0"] == [0.0]
+    assert payload["solver_x0_layout_signature"] == "synthetic"
+    assert payload["model_x0_count"] == 1
+    assert payload["auxiliary_x0_count"] == 0
     assert payload["object_ids_before"] == {"variables": [1]}
     assert payload["object_ids_after"] == {"variables": [1]}
     assert payload["object_identity_preserved"] is True
+
+
+def _auxiliary_x0(run):
+    return np.concatenate(
+        [
+            run.solver_x0[item["start"] : item["stop"]]
+            for item in run.solver_x0_layout
+            if not item["is_original_variable"]
+        ]
+    )
+
+
+def test_x0_interception_characterizes_reduction_without_calling_ipopt():
+    scenario = load_frozen_scenario()
+    build = diagnostic._build_problem(scenario, diagnostic.MATCHED_PROBLEMS[1])
+    run = diagnostic._run_build_with_verified_x0(
+        build, intercept_before_ipopt=True
+    )
+
+    assert run.exception == (
+        "X0InterceptionComplete: verified IPOPT x0; "
+        "stopped before solver execution"
+    )
+    assert run.x0_verified
+    assert not run.solver_executed
+    assert run.intercepted_before_ipopt
+    assert len(run.solver_x0) == 930
+    assert run.model_x0_count == 745
+    assert run.auxiliary_x0_count == 185
+    assert sum(
+        item["stop"] - item["start"]
+        for item in run.solver_x0_layout
+        if item["is_original_variable"]
+    ) == 745
+
+    for item in run.solver_x0_layout:
+        if not item["is_original_variable"]:
+            continue
+        expected = run.starting_values[item["name"]].flatten(order="F")
+        assert run.solver_x0[item["start"] : item["stop"]] == pytest.approx(
+            expected
+        )
+
+
+def test_auxiliary_initialization_is_deterministic_and_dependence_is_captured():
+    scenario = load_frozen_scenario()
+    first_build = diagnostic._build_problem(
+        scenario, diagnostic.MATCHED_PROBLEMS[1]
+    )
+    repeated_build = diagnostic._build_problem(
+        scenario, diagnostic.MATCHED_PROBLEMS[1]
+    )
+    changed_build = diagnostic._build_problem(
+        scenario, diagnostic.MATCHED_PROBLEMS[1]
+    )
+    diagnostic._complete_start(changed_build)
+    for index, variable in enumerate(
+        diagnostic._variables_by_name(changed_build).values(), start=1
+    ):
+        value = np.asarray(variable.value, dtype=float)
+        change = index * 1e-6 * np.maximum(1.0, np.abs(value))
+        variable.value = variable.project(value + change)
+
+    first = diagnostic._run_build_with_verified_x0(
+        first_build, intercept_before_ipopt=True
+    )
+    repeated = diagnostic._run_build_with_verified_x0(
+        repeated_build, intercept_before_ipopt=True
+    )
+    changed = diagnostic._run_build_with_verified_x0(
+        changed_build, intercept_before_ipopt=True
+    )
+
+    assert first.solver_x0_layout_signature == repeated.solver_x0_layout_signature
+    assert first.solver_x0_layout_signature == changed.solver_x0_layout_signature
+    assert _auxiliary_x0(first) == pytest.approx(_auxiliary_x0(repeated))
+    auxiliary_change = _auxiliary_x0(changed) - _auxiliary_x0(first)
+    assert np.count_nonzero(auxiliary_change) == 5
+    assert np.max(np.abs(auxiliary_change)) == pytest.approx(1e-5)
+    assert any(
+        first.starting_values[name] != pytest.approx(value)
+        for name, value in changed.starting_values.items()
+    )
 
 
 def test_incomplete_dependency_keeps_record_cardinality_and_blocks_all_failed():

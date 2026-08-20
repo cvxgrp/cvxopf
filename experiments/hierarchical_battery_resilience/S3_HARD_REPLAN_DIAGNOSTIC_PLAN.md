@@ -243,11 +243,19 @@ The installed CVXPY IPOPT interface explicitly does not use its `warm_start`
 argument. The experiment therefore does not pass or rely on that flag.
 Initialization is controlled by assigning CVXPY variable values before the
 DNLP reduction constructs `data["x0"]`; IPOPT then receives that vector as its
-primal starting point. Before execution, an implementation test must assert
-that the flattened assigned values and the actual `data["x0"]` agree exactly
-in CVXPY's variable order. If that cannot be verified, the experiment stops
-and records the interface limitation rather than claiming to test alternate
-initializations.
+primal starting point. The reduction may insert auxiliary variables that are
+not part of the public build. Before execution, an implementation test must
+assert both that every assigned original variable agrees exactly with its
+identified slice of `data["x0"]` and that the complete reduced vector agrees
+with the reduced problem's variable values. The attempt record retains the
+complete vector, stable layout signature, original named arrays, model-owned
+coordinate count, and auxiliary-coordinate count. A dedicated implementation
+interception raises `X0InterceptionComplete` after these checks and before the
+original IPOPT interface is called. Repeated interception must also establish
+that auxiliary initialization is deterministic and characterize whether it
+depends on the model-owned starting values. If an equality cannot be verified,
+the experiment stops and records the interface limitation rather than claiming
+to test alternate initializations.
 
 Every solve uses the complete S3 accepted-primal predicate and frozen residual
 tolerances. Solver `infeasible`, `user_limit`, or failure is recorded exactly

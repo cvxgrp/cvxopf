@@ -123,6 +123,11 @@ class DiagnosticRecord:
     initialization: InitializationSpec
     solver_executed: bool
     x0_verified: bool
+    solver_x0: list[float] | None
+    solver_x0_layout: tuple[Mapping[str, object], ...] | None
+    solver_x0_layout_signature: str | None
+    model_x0_count: int | None
+    auxiliary_x0_count: int | None
     source_classification: str | None
     source_differences: tuple[str, ...]
     starting_values: dict[str, object]
@@ -135,6 +140,29 @@ class DiagnosticRecord:
     terminal_deviation_mwh: Mapping[str, float] | None
     scientific_classification: str
     solution_values: dict[str, np.ndarray] | None = None
+
+
+class X0InterceptionComplete(RuntimeError):
+    """Stop after CVXPY constructs the verified IPOPT starting vector."""
+
+
+@dataclass(frozen=True)
+class X0RunRecord:
+    """Auditable result of constructing and optionally executing IPOPT x0."""
+
+    starting_values: dict[str, np.ndarray]
+    x0_verified: bool
+    solver_executed: bool
+    intercepted_before_ipopt: bool
+    solver_x0: np.ndarray | None
+    solver_x0_layout: tuple[dict[str, object], ...] | None
+    solver_x0_layout_signature: str | None
+    model_x0_count: int | None
+    auxiliary_x0_count: int | None
+    object_ids_before: dict[str, tuple[int, ...]]
+    object_ids_after: dict[str, tuple[int, ...]]
+    exception: str | None
+    elapsed_seconds: float
 
 
 MATCHED_PROBLEMS = (
@@ -369,15 +397,6 @@ def _complete_start(build: OPFBuild) -> dict[str, np.ndarray]:
     return values
 
 
-def _flatten_start(build: OPFBuild) -> np.ndarray:
-    return np.concatenate(
-        [
-            np.asarray(variable.value, dtype=float).flatten(order="F")
-            for variable in build.prob.variables()
-        ]
-    )
-
-
 def _assign_complete_start(
     build: OPFBuild,
     values: Mapping[str, np.ndarray],
@@ -475,34 +494,110 @@ def _object_ids(build: OPFBuild) -> dict[str, tuple[int, ...]]:
     }
 
 
+def _x0_layout_signature(layout: tuple[Mapping[str, object], ...]) -> str:
+    """Hash the stable coordinate structure without process-local CVXPY IDs."""
+    normalized = []
+    auxiliary_index = 0
+    for item in layout:
+        is_original = bool(item["is_original_variable"])
+        if is_original:
+            label = str(item["name"])
+        else:
+            label = f"auxiliary_{auxiliary_index}"
+            auxiliary_index += 1
+        normalized.append(
+            {
+                "label": label,
+                "shape": item["shape"],
+                "start": item["start"],
+                "stop": item["stop"],
+                "is_original_variable": is_original,
+            }
+        )
+    encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
 def _run_build_with_verified_x0(
     build: OPFBuild,
-) -> tuple[
-    dict[str, np.ndarray],
-    bool,
-    bool,
-    dict[str, tuple[int, ...]],
-    dict[str, tuple[int, ...]],
-    str | None,
-    float,
-]:
+    *,
+    intercept_before_ipopt: bool = False,
+) -> X0RunRecord:
     """Solve one build while verifying the actual IPOPT starting vector."""
     starts = _complete_start(build)
-    expected_x0 = _flatten_start(build)
+    original_variables = {variable.id: variable for variable in build.prob.variables()}
     before_ids = _object_ids(build)
     captured_x0: np.ndarray | None = None
+    captured_layout: tuple[dict[str, object], ...] | None = None
+    captured_layout_signature: str | None = None
+    model_x0_count: int | None = None
+    auxiliary_x0_count: int | None = None
     x0_verified = False
     solver_executed = False
+    intercepted = False
     original = IPOPT.solve_via_data
 
     def capturing_solve(
         self, data, warm_start, verbose, solver_opts, solver_cache=None
     ):
-        nonlocal captured_x0, x0_verified, solver_executed
+        nonlocal captured_x0, captured_layout, captured_layout_signature
+        nonlocal model_x0_count, auxiliary_x0_count
+        nonlocal x0_verified, solver_executed, intercepted
         captured_x0 = np.asarray(data["x0"], dtype=float).copy()
-        x0_verified = np.array_equal(captured_x0, expected_x0)
+        reduced_variables = data["problem"].variables()
+        reduced_expected = np.concatenate(
+            [
+                np.asarray(variable.value, dtype=float).flatten(order="F")
+                for variable in reduced_variables
+            ]
+        )
+        layout = []
+        original_ids_seen = set()
+        original_values_match = True
+        offset = 0
+        for variable in reduced_variables:
+            stop = offset + variable.size
+            is_original = variable.id in original_variables
+            if is_original:
+                original_ids_seen.add(variable.id)
+                expected = np.asarray(
+                    original_variables[variable.id].value, dtype=float
+                ).flatten(order="F")
+                original_values_match &= np.array_equal(
+                    captured_x0[offset:stop], expected
+                )
+            layout.append(
+                {
+                    "name": variable.name(),
+                    "variable_id": variable.id,
+                    "shape": tuple(variable.shape),
+                    "start": offset,
+                    "stop": stop,
+                    "is_original_variable": is_original,
+                }
+            )
+            offset = stop
+        captured_layout = tuple(layout)
+        captured_layout_signature = _x0_layout_signature(captured_layout)
+        model_x0_count = sum(
+            int(item["stop"]) - int(item["start"])
+            for item in captured_layout
+            if item["is_original_variable"]
+        )
+        auxiliary_x0_count = captured_x0.size - model_x0_count
+        x0_verified = (
+            offset == captured_x0.size
+            and np.array_equal(captured_x0, reduced_expected)
+            and original_ids_seen == set(original_variables)
+            and original_values_match
+        )
         if not x0_verified:
             raise RuntimeError("Assigned CVXPY values do not match IPOPT x0")
+        if intercept_before_ipopt:
+            intercepted = True
+            raise X0InterceptionComplete(
+                "verified IPOPT x0; stopped before solver execution"
+            )
         solver_executed = True
         return original(
             self,
@@ -524,14 +619,20 @@ def _run_build_with_verified_x0(
         IPOPT.solve_via_data = original
     elapsed = perf_counter() - started
     after_ids = _object_ids(build)
-    return (
-        starts,
-        captured_x0 is not None and x0_verified,
-        solver_executed,
-        before_ids,
-        after_ids,
-        exception,
-        elapsed,
+    return X0RunRecord(
+        starting_values=starts,
+        x0_verified=captured_x0 is not None and x0_verified,
+        solver_executed=solver_executed,
+        intercepted_before_ipopt=intercepted,
+        solver_x0=captured_x0,
+        solver_x0_layout=captured_layout,
+        solver_x0_layout_signature=captured_layout_signature,
+        model_x0_count=model_x0_count,
+        auxiliary_x0_count=auxiliary_x0_count,
+        object_ids_before=before_ids,
+        object_ids_after=after_ids,
+        exception=exception,
+        elapsed_seconds=elapsed,
     )
 
 
@@ -545,15 +646,7 @@ def _solve_with_verified_x0(
     build = _build_problem(scenario, spec)
     if values is not None:
         _assign_complete_start(build, values)
-    (
-        starts,
-        x0_verified,
-        solver_executed,
-        object_ids_before,
-        object_ids_after,
-        exception,
-        elapsed,
-    ) = _run_build_with_verified_x0(build)
+    x0_run = _run_build_with_verified_x0(build)
     results = extract_results(build)
     required = AC_REQUIRED_FIELDS
     missing = _finite_fields(results, required)
@@ -577,8 +670,8 @@ def _solve_with_verified_x0(
         scenario,
         build,
         results,
-        exception,
-        elapsed,
+        x0_run.exception,
+        x0_run.elapsed_seconds,
         required,
         residuals,
         _identity_error(scenario, build, results),
@@ -597,11 +690,21 @@ def _solve_with_verified_x0(
         input_hashes=_problem_input_hashes(scenario, spec),
         solver_context=SOLVER_CONTEXT,
         initialization=initialization,
-        solver_executed=solver_executed,
-        x0_verified=x0_verified,
+        solver_executed=x0_run.solver_executed,
+        x0_verified=x0_run.x0_verified,
+        solver_x0=(
+            None if x0_run.solver_x0 is None else x0_run.solver_x0.tolist()
+        ),
+        solver_x0_layout=x0_run.solver_x0_layout,
+        solver_x0_layout_signature=x0_run.solver_x0_layout_signature,
+        model_x0_count=x0_run.model_x0_count,
+        auxiliary_x0_count=x0_run.auxiliary_x0_count,
         source_classification=None,
         source_differences=(),
-        starting_values={name: value.tolist() for name, value in starts.items()},
+        starting_values={
+            name: value.tolist()
+            for name, value in x0_run.starting_values.items()
+        },
         raw_perturbations=(
             None
             if raw_perturbations is None
@@ -610,9 +713,11 @@ def _solve_with_verified_x0(
                 for name, value in raw_perturbations.items()
             }
         ),
-        object_ids_before=object_ids_before,
-        object_ids_after=object_ids_after,
-        object_identity_preserved=object_ids_before == object_ids_after,
+        object_ids_before=x0_run.object_ids_before,
+        object_ids_after=x0_run.object_ids_after,
+        object_identity_preserved=(
+            x0_run.object_ids_before == x0_run.object_ids_after
+        ),
         results=results,
         audit=audit,
         terminal_deviation_mwh=deviations,
@@ -792,6 +897,11 @@ def unavailable_record(
         initialization=initialization,
         solver_executed=False,
         x0_verified=False,
+        solver_x0=None,
+        solver_x0_layout=None,
+        solver_x0_layout_signature=None,
+        model_x0_count=None,
+        auxiliary_x0_count=None,
         source_classification="source_unavailable",
         source_differences=(reason,),
         starting_values={},
