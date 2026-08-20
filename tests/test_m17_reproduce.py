@@ -102,6 +102,29 @@ def test_resume_rejects_readable_but_incomplete_or_rehashed_artifact(tmp_path):
     ) is None
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        KeyError("key"),
+        TypeError("type"),
+        ValueError("value"),
+        AttributeError("attribute"),
+    ],
+)
+def test_resume_treats_validator_exceptions_as_invalid(tmp_path, error):
+    path = tmp_path / "study.json.gz"
+    reproduce._write_gzip_json(path, {"readable": True})
+
+    def invalid_validator(_payload):
+        raise error
+
+    assert reproduce._reusable_payload(
+        path,
+        prior_metadata=None,
+        validator=invalid_validator,
+    ) is None
+
+
 def test_sequential_resume_schema_checks_policy_and_trajectory_counts():
     audit = {
         "status": "optimal",
@@ -171,6 +194,27 @@ def test_sequential_resume_schema_checks_policy_and_trajectory_counts():
         inner_policy="hard_equality",
         horizon_steps=1,
     )
+    for key in ("executed_intervals", "executed_b_mw", "realized_soc_mwh"):
+        valid_value = payload[key]
+        payload[key] = None
+        assert not reproduce._valid_sequential_payload(
+            payload,
+            outer_policy="frozen",
+            inner_policy="hard_equality",
+            horizon_steps=1,
+        )
+        payload[key] = valid_value
+    payload["completed"] = False
+    payload["termination_iteration"] = 1
+    payload["termination_reason"] = None
+    assert not reproduce._valid_sequential_payload(
+        payload,
+        outer_policy="frozen",
+        inner_policy="hard_equality",
+        horizon_steps=1,
+    )
+    payload["completed"] = True
+    payload["termination_iteration"] = None
     payload["executed_intervals"] = []
     assert not reproduce._valid_sequential_payload(
         payload,
@@ -178,6 +222,38 @@ def test_sequential_resume_schema_checks_policy_and_trajectory_counts():
         inner_policy="hard_equality",
         horizon_steps=1,
     )
+
+
+def test_failed_endpoint_outer_plan_is_complete_and_reusable():
+    audit = {
+        "status": "infeasible",
+        "outcome": "solver_certified_infeasible",
+        "accepted_primal": False,
+        "missing_or_nonfinite_fields": [],
+        "residuals": {},
+        "wall_time_seconds": 1.0,
+    }
+    payload = {
+        "artifact_schema_version": reproduce.ARTIFACT_SCHEMA_VERSION,
+        "study": "endpoint_realization",
+        "completed": False,
+        "termination_reason": "outer_solver_certified_infeasible",
+        "outer_plan": {
+            "outer_plan_id": "outer-000",
+            "created_iteration": 0,
+            "global_interval_start": 0,
+            "global_interval_stop": 96,
+            "local_boundary_indices": list(range(97)),
+            "global_boundary_indices": list(range(97)),
+            "storage_device_ids": ["battery"],
+            "boundary_soc_mwh": None,
+            "results": {},
+            "audit": audit,
+        },
+        "realizations": [],
+    }
+
+    assert reproduce._valid_endpoint_payload(payload)
 
 
 def test_run_context_identifies_git_state_and_source_tree():

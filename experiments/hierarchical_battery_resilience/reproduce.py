@@ -313,7 +313,21 @@ def _valid_endpoint_payload(payload: object) -> bool:
         return False
     if expected_completed != (payload["termination_reason"] is None):
         return False
-    return actual_cases == expected_cases
+    if not expected_completed and not isinstance(
+        payload["termination_reason"], str
+    ):
+        return False
+    if not outer_accepted:
+        return payload["termination_reason"] == (
+            f"outer_{payload['outer_plan']['audit']['outcome']}"
+        )
+    expected_reason = (
+        None if expected_completed else "one_or_more_endpoint_attempts_failed"
+    )
+    return (
+        actual_cases == expected_cases
+        and payload["termination_reason"] == expected_reason
+    )
 
 
 def _valid_sequential_payload(
@@ -352,9 +366,16 @@ def _valid_sequential_payload(
     ):
         return False
     completed = payload["completed_intervals"]
-    if not isinstance(completed, int) or not 0 <= completed <= horizon_steps:
+    if (
+        isinstance(completed, bool)
+        or not isinstance(completed, int)
+        or not 0 <= completed <= horizon_steps
+    ):
         return False
-    if len(payload["executed_intervals"]) != completed:
+    if (
+        not isinstance(payload["executed_intervals"], list)
+        or len(payload["executed_intervals"]) != completed
+    ):
         return False
     if not all(
         isinstance(interval, dict)
@@ -362,11 +383,23 @@ def _valid_sequential_payload(
         for interval in payload["executed_intervals"]
     ):
         return False
-    if len(payload["executed_b_mw"]) != completed:
+    if (
+        not isinstance(payload["executed_b_mw"], list)
+        or len(payload["executed_b_mw"]) != completed
+    ):
         return False
-    if len(payload["realized_soc_mwh"]) != completed + 1:
+    if (
+        not isinstance(payload["realized_soc_mwh"], list)
+        or len(payload["realized_soc_mwh"]) != completed + 1
+    ):
         return False
-    if not np.isclose(payload["completion_fraction"], completed / horizon_steps):
+    completion_fraction = payload["completion_fraction"]
+    if (
+        isinstance(completion_fraction, bool)
+        or not isinstance(completion_fraction, (int, float))
+        or not np.isfinite(completion_fraction)
+        or not np.isclose(completion_fraction, completed / horizon_steps)
+    ):
         return False
     if payload["completed"] != (completed == horizon_steps):
         return False
@@ -380,6 +413,10 @@ def _valid_sequential_payload(
         if payload["termination_reason"] is not None:
             return False
     elif payload["termination_iteration"] != completed:
+        return False
+    if not payload["completed"] and not isinstance(
+        payload["termination_reason"], str
+    ):
         return False
     plans = payload["outer_plans"]
     attempts = payload["ac_attempts"]
@@ -434,7 +471,12 @@ def _reusable_payload(
     if not _matches_prior_metadata(path, prior_metadata):
         return None
     payload = _read_gzip_json(path)
-    return payload if payload is not None and validator(payload) else None
+    if payload is None:
+        return None
+    try:
+        return payload if validator(payload) else None
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
 
 
 def _sha256(path: Path) -> str:

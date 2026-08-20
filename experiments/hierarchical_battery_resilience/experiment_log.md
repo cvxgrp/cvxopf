@@ -356,3 +356,11 @@ artifacts did not retain the outer solver name. Immediately after the run, the
 unchanged frozen outer problem was reconstructed in the recorded environment;
 it used CLARABEL 0.11.1 and reproduced the artifact's 15-iteration count. This
 is recorded as a post-run identification, not direct artifact provenance.
+
+A final resume review found two infrastructure edge cases. Validators could
+raise on arbitrary decoded JSON types instead of rejecting the artifact, and a
+complete audited endpoint failure with zero realizations was always recomputed.
+Resume validation was made total over malformed JSON, and failed endpoint
+studies now validate under their separate zero-realization contract. These
+changes occurred after the authoritative run and do not change its execution
+source or results.

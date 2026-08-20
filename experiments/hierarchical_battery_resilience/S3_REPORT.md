@@ -197,3 +197,10 @@ SHA-256 hashes are recorded in the tracked
 [result manifest](S3_RESULTS_METADATA.json). These are integrity identifiers
 for this run; they do not promise that an independent rerun will produce
 byte-identical gzip files.
+
+After the authoritative execution, resume validation was hardened further so
+arbitrary malformed decoded JSON is rejected rather than allowed to raise from
+the validator. A complete retained endpoint study whose outer solve failed is
+also reusable under its explicit zero-realization contract. These post-run
+infrastructure changes do not alter the recorded model, execution source, or
+scientific results.
