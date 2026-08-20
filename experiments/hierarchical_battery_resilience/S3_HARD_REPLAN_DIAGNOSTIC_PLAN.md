@@ -1,7 +1,8 @@
 # S3 follow-up: interval-35 hard-replanning diagnostic
 
-**Status:** protocol checkpointed; runner implementation under review; no
-diagnostic solve executed
+**Status:** authoritative diagnostic executed from clean commit `8dff8d1`;
+exact-problem feasibility established; protocol incomplete because one source
+reconstruction reached a different accepted basin
 
 ## Purpose
 

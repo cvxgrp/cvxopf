@@ -432,3 +432,35 @@ maximum change of $10^{-5}$ in this characterization. This dependence is
 captured by retaining the complete vector and coordinate map for every
 attempt. The test ends through the dedicated `X0InterceptionComplete` sentinel
 before the original IPOPT interface is called.
+
+## 2026-08-20 — Authoritative interval-35 diagnostic
+
+The reviewed runner was committed as `8dff8d1` and executed through `uv` from a
+clean tree into a fresh output directory. All 14 registered solver calls ran,
+all 14 production starting vectors passed the 745-model / 185-auxiliary mapping
+gate, and the participating source hashes remained unchanged.
+
+The exact archived replanned-state problem returned `infeasible` from the
+project flat start. All six alternate initializations returned accepted
+solutions of that same problem with zero terminal error and residuals within
+the frozen gates. The exact problem is therefore modeled-feasible, and the S3
+failure is initialization-dependent local-solver behavior in this frozen
+formulation/interface/solver stack rather than physical infeasibility. This is
+not a claim of a universal IPOPT defect.
+
+The flat start also solved when the terminal target was rounded from
+849.9999996548939 MWh to 850.0 MWh, a difference of only
+$3.45\times10^{-7}$ MWh. The named starting arrays and complete 930-coordinate
+IPOPT starting vector were identical between these two attempts. This is
+nearby-problem sensitivity evidence; the alternate-start solves provide the
+decisive evidence because they retain the exact archived target.
+
+The diagnostic's protocol-complete flag is false. The preceding-window source
+reconstruction was accepted but reached a different public solution basin than
+the archived solve. Its 5.7e-14 MWh initial-state representation difference is
+treated as numerically identical and is not the basis for that classification.
+The basin language records an observed accepted-solution difference rather
+than proving globally distinct mathematical basins. The shifted-preceding
+attempt inherits that provenance. The frozen and target-free sources
+reproduced, and the B, C, and E attempts independently establish exact-problem
+feasibility from reproduced sources.
