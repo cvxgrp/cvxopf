@@ -384,3 +384,24 @@ the target-free state, the shifted preceding window, and three deterministic
 perturbations. Only an accepted solve of the exact replanned-state and archived
 target can establish modeled feasibility of the original event. Repeated
 failure remains inconclusive.
+
+## 2026-08-20 — Interval-35 runner implementation
+
+The reviewed protocol was checkpointed in commit `426b966`. Implementation is
+proceeding against a canonical 14-record registry created before any solve.
+Dependency failures therefore retain explicit records rather than changing the
+artifact schema or attempt count.
+
+Code inspection confirmed that CVXPY's DNLP path preserves assigned variable
+`.value` entries, completes only unset values, flattens the result in Fortran
+order into `data["x0"]`, and passes that exact vector to IPOPT. The IPOPT
+interface's `warm_start` argument is unused, so the experiment does not rely on
+it. A synthetic DNLP test captures the actual solver-boundary `x0` and verifies
+exact equality with the assigned vector.
+
+The implementation now includes source and artifact integrity gates, public
+source-equivalence classification, explicit dependency states, suffix-aware
+window shifting, SoC realignment, deterministic perturbations, completeness
+classification, and atomic artifact persistence. Fifteen focused tests use only
+synthetic problems or checked-in fingerprints. No frozen interval-35
+diagnostic problem has been solved during implementation.

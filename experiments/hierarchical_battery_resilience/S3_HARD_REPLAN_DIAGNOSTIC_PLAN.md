@@ -1,6 +1,7 @@
 # S3 follow-up: interval-35 hard-replanning diagnostic
 
-**Status:** protocol proposed; no diagnostic solve executed
+**Status:** protocol checkpointed; runner implementation under review; no
+diagnostic solve executed
 
 ## Purpose
 
@@ -317,6 +318,9 @@ S4 default selection remains paused until this follow-up is reviewed.
 - If A fails and any B–E attempt accepts the exact archived problem, the event
   is modeled-feasible and initialization-dependent. S4 must then decide whether
   explicit initialization policy belongs in the public controller.
+- An accepted B–E solve proves modeled feasibility even if A was unavailable,
+  but it does not prove initialization dependence. That outcome is classified
+  as `modeled_feasible_alternate_initialization_incomplete_control`.
 - If A accepts the exact archived problem, modeled feasibility is demonstrated,
   but the difference is classified as run-to-run or backend sensitivity rather
   than attributed to a particular alternate initialization.
@@ -335,4 +339,13 @@ initialization-construction error, interface-verification failure, or missing
 record makes the diagnostic `incomplete`; it is not counted as a failed solve.
 An accepted but nonequivalent source basin is retained under that explicit
 label and may support separately labeled exploratory attempts, but the frozen
-diagnostic remains incomplete.
+diagnostic remains incomplete. Protocol completeness additionally requires all
+14 canonical records to execute with verified `x0` values and preserved object
+identities.
+
+Feasibility evidence is reported independently of protocol completeness. An
+accepted solve of the exact archived problem still proves modeled feasibility
+when another record or source-equivalence gate is incomplete; the summary then
+uses an explicit `*_incomplete_protocol` classification rather than suppressing
+the feasibility conclusion. The incomplete-control classification above is
+already explicit and is not given a redundant second suffix.
