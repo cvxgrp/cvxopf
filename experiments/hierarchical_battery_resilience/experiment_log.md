@@ -504,3 +504,24 @@ IPOPT executes and retain the previously characterized 745 model-owned and 185
 reduction-added starting coordinates. These are structural tests only. No S3b
 scientific trajectory has been run; execution remains gated on review and a
 clean committed worktree.
+
+## 2026-08-20 — S3b causal recovery completed the frozen trajectory
+
+The reviewed runner was committed as `6c4214c` and executed from a clean
+worktree without resume. Source stability was verified after execution. The
+causal hard-target policy completed all 96 intervals using 98 AC solver calls.
+The first flat attempt and 94 of 95 later shifted-primary attempts supplied the
+executed actions, for a 98.9% later-window shifted success rate.
+
+Only interval 80 required recovery. Its shifted hard attempt returned
+`user_limit` and was rejected with a 0.0101 pu active-balance residual. A
+target-free solve from the identical named and complete IPOPT start was
+accepted, and copying that solution into a fresh hard-target problem produced
+an accepted controlling solve. No perturbation attempt was executed. The
+trajectory ended with zero voltage violation, a maximum branch residual of
+1.17e-10 MVA, and cumulative absolute hard-signpost deviation of 1.12e-7 MWh.
+
+The result supports `shifted_with_recovery` for this frozen scenario and solver
+stack. It does not establish a universal policy or a general IPOPT claim. The
+full interpretation and tracked integrity record are in `S3B_REPORT.md` and
+`S3B_RESULTS_METADATA.json`.

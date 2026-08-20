@@ -556,8 +556,7 @@ truncated windows, multiple storage units, and changed constraint structures.
 
 ### S3b causal recovery gate
 
-**Protocol complete; reference runner implementation is in progress and no
-S3b scientific solve has been executed.** The
+**Reference experiment complete; results await final review.** The
 candidate causal study is specified in
 `experiments/hierarchical_battery_resilience/S3B_CAUSAL_RECOVERY_PROTOCOL.md`.
 It repeats the complete frozen `replan_every_step` hard-target trajectory using
@@ -573,3 +572,12 @@ accept the first shifted start. Perturbations use the accepted target-free
 center first and the original causal flat/shifted center second, at scales
 `1e-4`, `1e-3`, and `1e-2`. Seeds follow the frozen arithmetic rule in the
 protocol.
+
+The clean execution from commit `6c4214c` completed all 96 intervals. The
+shifted primary attempt controlled 94 of 95 later windows; interval 80 recovered
+through one accepted target-free solve followed by one accepted copied-start
+hard solve. No perturbation was required. See
+`experiments/hierarchical_battery_resilience/S3B_REPORT.md` and
+`S3B_RESULTS_METADATA.json` for interpretation and provenance. These results
+support, subject to review, the candidate policy for the frozen reference
+workflow rather than as a universal default.
