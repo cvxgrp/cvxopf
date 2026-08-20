@@ -338,7 +338,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
 | `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
-| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
 | `formulation` | str | `"ac"` or `"lossy_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 
@@ -351,6 +351,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | `capacity` | float | required | Energy capacity Q (MWh) |
 | `initial_soc` | float | required | Initial state of charge (MWh); 0 ≤ initial_soc ≤ capacity |
 | `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ (objective units/MWh); 0.0 = zero-cost storage |
+| `device_id` | str or None | None | Stable cross-build identity when supplied. Omitted IDs receive collision-safe build-local positional labels and are marked non-explicit in metadata. |
 
 `delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
 global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).

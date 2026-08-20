@@ -513,6 +513,7 @@ unit = StorageUnitIdeal(
     capacity=100.0,              # MWh
     initial_soc=50.0,            # MWh
     aging_weight=1e-2,           # objective units/MWh
+    device_id="battery-5",       # stable cross-build identity
 )
 
 build = build_opf_multistep(
@@ -525,6 +526,12 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
+
+An explicit, unique `device_id` provides stable storage identity across
+independently built problems, which is important for receding-horizon state
+handoffs. If it is omitted, the build publishes a convenience label such as
+`storage_0`; that label is tied to the current fleet ordering and must not be
+used as cross-build identity.
 
 Each storage unit may optionally configure one terminal policy. Hard policies
 use `terminal_constraint="equality"` to fix the final post-step SoC or

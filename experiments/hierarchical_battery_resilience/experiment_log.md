@@ -113,3 +113,24 @@ executed only for raw status `optimal` or `optimal_inaccurate`, complete finite
 required fields, and accepted storage, balance, voltage, thermal, and terminal
 policy residuals. `user_limit`, solver exceptions, and incomplete or nonfinite
 primals are retained for diagnosis but never executed. S0 is complete.
+
+## 2026-08-19 — P1 storage identity
+
+P1 adds an optional final `device_id` field to `StorageUnitIdeal`, preserving
+the existing positional constructor. Explicit IDs are validated as unique,
+nonempty strings within each fleet and are published in aligned order through
+both build metadata and extracted results. Identity metadata remains available
+even when no primal solution exists.
+
+Legacy builds may continue to omit IDs. Preparation assigns collision-safe
+labels derived from fleet position and publishes a parallel explicitness mask.
+These labels are useful inside one build but deliberately carry no claim of
+cross-build stability. The M17 runner will therefore require explicit identity
+for every participating storage device and align state by ID rather than array
+position. Exact fleet matching belongs at that orchestration boundary, not in
+ordinary OPF construction.
+
+The focused P1 verification passed 337 tests across all three formulations,
+single-step and intentional multistep `T=1`, explicit and fallback identity,
+collision handling, and unavailable-primal results. The complete suite passed
+1,650 tests; Ruff, configured strict mypy, and the diff check were clean.

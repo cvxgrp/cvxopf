@@ -120,8 +120,12 @@ def test_single_and_multistep_t1_storage_schemas_remain_distinct(formulation):
 
     for build in (single, multi):
         np.testing.assert_array_equal(build.data["storage_initial_soc"], [50.0])
-        # Pre-P1 characterization: stable storage identity is not yet published.
-        assert "storage_device_ids" not in build.data
+        np.testing.assert_array_equal(
+            build.data["storage_device_ids"], ["storage_0"]
+        )
+        np.testing.assert_array_equal(
+            build.data["storage_device_id_is_explicit"], [False]
+        )
 
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)

@@ -102,6 +102,12 @@ def _initialize_results(build: OPFBuild) -> dict:
     }
 
     if "ns" in build.data:
+        results["storage_device_ids"] = np.asarray(
+            build.data["storage_device_ids"], dtype=object
+        ).copy()
+        results["storage_device_id_is_explicit"] = np.asarray(
+            build.data["storage_device_id_is_explicit"], dtype=bool
+        ).copy()
         results["b"] = None
         if "b_q" in build.variables:
             results["b_q"] = None
@@ -382,6 +388,7 @@ def extract_results(build: OPFBuild) -> dict:
 
         Configured keys remain present when no primal solution is available.
         Exogenous load inputs and fixed served loads remain available.
+        Storage identity and its explicitness mask likewise remain available.
         Array-valued primal and derived quantities are otherwise None; scalar
         objective and cost quantities are NaN. Inspect status first.
 

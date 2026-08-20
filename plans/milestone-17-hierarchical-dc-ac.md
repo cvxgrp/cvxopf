@@ -295,7 +295,7 @@ successful.
 
 ### S0 stopping point
 
-**Complete; checkpoint commit pending.**
+**Complete; checkpoint commit `1f3efaf`.**
 
 S0 records the current contract in
 `experiments/hierarchical_battery_resilience/S0_REPORT.md` and
@@ -312,8 +312,8 @@ S0 records the current contract in
 - shortened replans restart their local boundary index at zero;
 - unsolved builds retain schema and exogenous inputs but have no usable storage
   primal; and
-- storage has no stable identity metadata, confirming P1 as a real
-  prerequisite.
+- pre-P1 storage had no stable identity metadata, confirming P1 as a real
+  prerequisite rather than protocol polish.
 
 The package has no centralized accepted-primal predicate. The approved manual
 runner rule executes an action only for `optimal` or `optimal_inaccurate`, with
@@ -325,3 +325,22 @@ primals are diagnostic only.
 Verification: 10 focused tests and the complete 1,637-test suite passed. Ruff,
 configured strict mypy, and `git diff --check` passed. S0 changes no production
 implementation.
+
+### P1 storage-identity prerequisite
+
+**Complete; checkpoint commit pending.**
+
+`StorageUnitIdeal.device_id` is an optional final field, preserving existing
+positional construction. Preparation validates supplied IDs as unique,
+nonempty strings and publishes aligned `storage_device_ids` plus
+`storage_device_id_is_explicit` through `OPFBuild.data` and extracted results,
+including unsuccessful or unsolved builds. Omitted IDs receive collision-safe
+build-local positional labels; those labels are explicitly not stable
+cross-build identity. M17 will require the explicitness mask to be true for
+every participating storage unit and will perform set matching and ID-based
+alignment at its orchestration boundary.
+
+Verification: 337 focused storage, component-contract, adapter-
+characterization, M17-characterization, and result tests passed. The complete
+1,650-test suite passed, together with Ruff, configured strict mypy, and
+`git diff --check`.

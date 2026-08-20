@@ -90,6 +90,12 @@ class StorageUnitIdeal:
         Positive terminal-cost weight. Required exactly when
         ``terminal_cost`` is configured. Linear weights have objective
         units/MWh; quadratic weights have objective units/MWh^2.
+    device_id : str | None
+        Optional stable device identity. Explicit nonempty IDs are suitable
+        for alignment across independently built problems. When omitted, the
+        builder publishes a collision-safe positional label such as
+        ``"storage_0"``; that label is local to the build and is not a claim
+        of stable cross-build identity.
     """
     bus:                   int
     apparent_power_rating: float
@@ -100,6 +106,7 @@ class StorageUnitIdeal:
     terminal_constraint:   str | None = None
     terminal_cost:         str | None = None
     terminal_weight:       float | None = None
+    device_id:             str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +142,24 @@ def _validate_storage(
     if storage_units is None or len(storage_units) == 0:
         return
     
+    explicit_ids: set[str] = set()
     for i, unit in enumerate(storage_units):
+        if unit.device_id is not None:
+            if (
+                not isinstance(unit.device_id, str)
+                or not unit.device_id.strip()
+            ):
+                raise ValueError(
+                    f"Storage unit {i}: device_id must be a nonempty string "
+                    "when supplied"
+                )
+            if unit.device_id in explicit_ids:
+                raise ValueError(
+                    f"Storage unit {i}: duplicate device_id "
+                    f"{unit.device_id!r}"
+                )
+            explicit_ids.add(unit.device_id)
+
         numeric_fields = {
             "apparent_power_rating": unit.apparent_power_rating,
             "capacity": unit.capacity,
@@ -153,7 +177,6 @@ def _validate_storage(
                 f"Storage unit {i}: apparent_power_rating must be > 0, "
                 f"got {unit.apparent_power_rating}"
             )
-        
         # Check capacity
         if unit.capacity <= 0:
             raise ValueError(
@@ -250,6 +273,44 @@ def _validate_storage(
             )
 
 
+def _storage_device_identity(
+    storage_units: list[StorageUnitIdeal],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resolve aligned IDs and mark which identities were supplied explicitly.
+
+    Generated labels are deterministic only for the current ordered fleet.
+    They are collision-safe convenience labels, not stable device identity.
+    """
+    reserved = {
+        unit.device_id
+        for unit in storage_units
+        if unit.device_id is not None
+    }
+    used = set(reserved)
+    resolved: list[str] = []
+    explicit: list[bool] = []
+    for index, unit in enumerate(storage_units):
+        if unit.device_id is not None:
+            resolved.append(unit.device_id)
+            explicit.append(True)
+            continue
+
+        base = f"storage_{index}"
+        candidate = base
+        suffix = 1
+        while candidate in used:
+            candidate = f"{base}_legacy_{suffix}"
+            suffix += 1
+        used.add(candidate)
+        resolved.append(candidate)
+        explicit.append(False)
+
+    return (
+        np.asarray(resolved, dtype=object),
+        np.asarray(explicit, dtype=bool),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Incidence matrix construction
 # ---------------------------------------------------------------------------
@@ -341,6 +402,9 @@ def _prepare_data(
 ) -> dict:
     """Validate and prepare formulation-independent storage data."""
     _validate_storage(storage_units, ext_bus_ids)
+    device_ids, device_id_is_explicit = _storage_device_identity(
+        storage_units
+    )
     return {
         "ns": len(storage_units),
         "Cs": _make_storage_incidence_matrix(
@@ -349,6 +413,8 @@ def _prepare_data(
         "storage_bus": np.array(
             [ext_to_int[unit.bus] for unit in storage_units], dtype=int
         ),
+        "storage_device_ids": device_ids,
+        "storage_device_id_is_explicit": device_id_is_explicit,
         **_storage_static_data(storage_units),
     }
 
@@ -359,6 +425,8 @@ def _build_metadata(prepared: dict) -> dict:
         "ns",
         "Cs",
         "storage_bus",
+        "storage_device_ids",
+        "storage_device_id_is_explicit",
         "storage_apparent_power_rating",
         "storage_capacity",
         "storage_initial_soc",

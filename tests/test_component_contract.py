@@ -164,7 +164,8 @@ def test_device_metadata_publication_is_device_owned():
     storage_data["storage_delta"] = 1.0
     assert set(storage._build_metadata(storage_data)) == {
         "ns", "Cs", "storage_bus", "storage_apparent_power_rating",
-        "storage_capacity", "storage_initial_soc", "storage_delta",
+        "storage_capacity", "storage_initial_soc", "storage_device_ids",
+        "storage_device_id_is_explicit", "storage_delta",
         "storage_aging_weight",
         "storage_terminal_soc", "storage_terminal_constraint",
         "storage_terminal_cost", "storage_terminal_weight",

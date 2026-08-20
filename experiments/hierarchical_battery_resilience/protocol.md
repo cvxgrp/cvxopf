@@ -90,9 +90,8 @@ checked against the first post-step SoC returned by the AC build.
 
 Every cross-layer state vector is keyed and aligned by stable storage
 `device_id`. Array position is an implementation detail, not the handoff
-contract. `StorageUnitIdeal` does not yet expose `device_id`; S0 must
-characterize that gap, and the storage-identity prerequisite slice immediately
-after S0 must implement it before the scenario or manual runner is frozen.
+contract. P1 adds this identity to `StorageUnitIdeal` and publishes both the
+aligned IDs and an explicitness mask through builds and results.
 Every storage unit participating in M17 requires an explicit, unique, nonempty
 ID, including a one-battery experiment. The first scientific scenario may
 contain one storage device, but S6 must verify at least two devices in

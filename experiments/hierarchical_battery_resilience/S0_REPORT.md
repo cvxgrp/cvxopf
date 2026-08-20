@@ -140,6 +140,10 @@ P1 must therefore:
 
 The P1 slice should land before scenario freeze and before the manual runner.
 
+This is a chronological S0 finding. P1 subsequently adds the identity fields;
+the absence characterized here is therefore expected to expire rather than
+remain a regression assertion.
+
 ## Characterization evidence
 
 `tests/test_m17_characterization.py` freezes:

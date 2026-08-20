@@ -1,5 +1,6 @@
 """Test suite for Milestone 5 battery storage model."""
 
+from dataclasses import replace
 import warnings
 import numpy as np
 import pandas as pd
@@ -258,6 +259,7 @@ class TestStorageUnitIdeal:
         assert hasattr(unit, "terminal_constraint")
         assert hasattr(unit, "terminal_cost")
         assert hasattr(unit, "terminal_weight")
+        assert hasattr(unit, "device_id")
 
     def test_default_aging_weight_is_1e_2(self):
         unit = StorageUnitIdeal(bus=1, apparent_power_rating=50.0,
@@ -281,6 +283,20 @@ class TestStorageUnitIdeal:
         assert unit.terminal_constraint is None
         assert unit.terminal_cost is None
         assert unit.terminal_weight is None
+        assert unit.device_id is None
+
+    def test_device_id_is_appended_without_breaking_positional_construction(self):
+        unit = StorageUnitIdeal(
+            1, 50.0, 100.0, 50.0, 0.2, None, None, None, None,
+            "battery-west",
+        )
+        assert unit.device_id == "battery-west"
+
+    def test_dataclass_replace_preserves_device_id(self):
+        unit = _default_unit(device_id="battery-west")
+        derived = replace(unit, initial_soc=25.0)
+        assert derived.device_id == "battery-west"
+        assert derived.initial_soc == pytest.approx(25.0)
 
 
 class TestStorageValidation:
@@ -347,6 +363,78 @@ class TestStorageValidation:
                                  capacity=100.0, initial_soc=50.0)
         with pytest.raises(ValueError, match="bus"):
             build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize("device_id", ["", "   ", 12])
+    def test_invalid_device_id_raises(self, device_id):
+        unit = _default_unit(device_id=device_id)
+        with pytest.raises(ValueError, match="device_id"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    def test_duplicate_explicit_device_ids_raise(self):
+        units = [
+            _default_unit(bus=1, device_id="battery"),
+            _default_unit(bus=2, device_id="battery"),
+        ]
+        with pytest.raises(ValueError, match="duplicate device_id"):
+            build_opf(case9(), formulation="ac", storage=units)
+
+    def test_legacy_labels_are_build_local_and_collision_safe(self):
+        units = [
+            _default_unit(bus=1),
+            _default_unit(bus=2, device_id="storage_0"),
+            _default_unit(bus=3),
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(), formulation="lossy_dc", storage=units
+            )
+
+        np.testing.assert_array_equal(
+            build.data["storage_device_ids"],
+            ["storage_0_legacy_1", "storage_0", "storage_2"],
+        )
+        np.testing.assert_array_equal(
+            build.data["storage_device_id_is_explicit"],
+            [False, True, False],
+        )
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    def test_explicit_identity_is_published_in_build_and_unsolved_results(
+        self, formulation, multistep
+    ):
+        units = [
+            _default_unit(bus=1, device_id="battery-west"),
+            _default_unit(bus=2, device_id="battery-east"),
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            if multistep:
+                df_P, df_Q = _flat_load_dfs(case9, 1)
+                build = build_opf_multistep(
+                    case9(), df_P, df_Q, T=1,
+                    formulation=formulation, storage=units
+                )
+            else:
+                build = build_opf(
+                    case9(), formulation=formulation, storage=units
+                )
+
+        results = extract_results(build)
+        expected = ["battery-west", "battery-east"]
+        np.testing.assert_array_equal(
+            build.data["storage_device_ids"], expected
+        )
+        np.testing.assert_array_equal(
+            results["storage_device_ids"], expected
+        )
+        np.testing.assert_array_equal(
+            results["storage_device_id_is_explicit"], [True, True]
+        )
+        assert results["b"] is None
 
     @pytest.mark.parametrize("mode", ["invalid", "", "reserve_floor"])
     def test_invalid_terminal_constraint_raises(self, mode):
@@ -710,6 +798,8 @@ class TestStorageTerminalPolicy:
             "b",
             "soc",
             "storage_cost",
+            "storage_device_ids",
+            "storage_device_id_is_explicit",
             "storage_terminal_deviation",
             "p_load",
             "q_load",
