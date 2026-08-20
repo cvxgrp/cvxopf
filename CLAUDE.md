@@ -178,6 +178,15 @@ Variables: `theta`, `v`, `p`, `q`, `Pg`, `Qg`, and either:
 - Nodal balance modified: `p = Cg @ Pg - Pd + (1/baseMVA) * Cs @ b_t`
 - Reactive balance modified: `q = Cg @ Qg - Qd + (1/baseMVA) * Cs @ b_q_t`
 
+Voltage magnitude and reactive dispatch currently enter the physical AC
+equations and operating limits but ordinarily have no separate objective
+preference. A value at a voltage or reactive bound may therefore be physically
+required, economically nonunique, or selected by a local nonlinear solve; do
+not assume it is a defect or add an ad hoc penalty. Milestone 20 will
+characterize the distinction before adding any optional voltage/reactive
+regularization. See
+`plans/milestone-20-ac-voltage-reactive-regularization.md`.
+
 **Nondispatchable variables** (present only when `nondispatchable` is not None):
 - `p_nd` — real power (nnd,) MW, non-negative, bounded above by available power
 - `q_nd` — reactive power (nnd,) MVAr
@@ -723,6 +732,7 @@ is present.
 | 17 — Hierarchical DC→AC receding-horizon dispatch | 🔲 Future | The capstone: long-horizon `lossy_dc` plan passes **SoC signposts only** (not other setpoints) into the terminal cost/constraint of a short 3–5 step AC-OPF, slid forward as a receding horizon. The true implementation of the project vision. Depends on M16 (shared components), M12 (terminal-SoC hard/soft machinery), and M4 (AC branch-flow limits for the network-executability claim). See `plans/milestone-17-hierarchical-dc-ac.md`. |
 | 18 — Convex lossy storage | 🔲 Future | Separate charge/discharge powers, asymmetric efficiency, and storage loss while retaining a convex primary model. Positive throughput regularization plus zero-cost renewable curtailment excludes simultaneous operation under stated assumptions; relax-round-polish remains an explicit fallback. See `plans/milestone-18-lossy-storage.md`. |
 | 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
+| 20 — AC voltage and reactive-dispatch regularization | 🔲 Future | Characterize whether reactive/voltage bound activity reflects physical support, unpriced nonuniqueness, or local-solver selection. Then add optional, normalized, time-integrated AC operating preferences with exact disabled-policy compatibility and measured economic displacement. No voltage-stability, market-pricing, or global-uniqueness claim. See `plans/milestone-20-ac-voltage-reactive-regularization.md`. |
 
 ---
 

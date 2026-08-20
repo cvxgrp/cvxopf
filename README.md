@@ -99,6 +99,16 @@ affine extension of the load feasible set with a high linear value-of-lost-load
 cost in the original optimization problem; it is not a lexicographic pass, an
 anonymous balance slack, or a second feasibility-restoration solve.
 
+AC voltage magnitudes and reactive dispatch are currently governed by their
+physical bounds and network equations but are generally not assigned an
+operating preference in the objective. Reactive variables can therefore reach
+a limit because support is physically required, because the economic optimum
+is nonunique in reactive coordinates, or because the nonlinear solver selects
+a particular local solution. A planned characterization and optional
+regularization milestone will distinguish these cases before introducing any
+voltage-reference or reactive-power ridge; see
+[`plans/milestone-20-ac-voltage-reactive-regularization.md`](plans/milestone-20-ac-voltage-reactive-regularization.md).
+
 The implementation follows the same separation of responsibilities. Public
 build APIs select formulation-owned network physics, while a shared typed
 assembly layer obtains variables, injections, feasible sets, costs, and
@@ -742,3 +752,8 @@ package environment.
   active/reactive demand, optional single-solve interruption with a sufficiently
   large linear value-of-lost-load cost, and energy-not-served reporting (see
   `plans/milestone-19-load-shedding.md`)
+- [ ] AC voltage and reactive-dispatch characterization and optional
+  regularization: distinguish required voltage support from unpriced
+  nonuniqueness and local-solver selection, then add only scientifically
+  justified AC operating preferences (see
+  `plans/milestone-20-ac-voltage-reactive-regularization.md`)
