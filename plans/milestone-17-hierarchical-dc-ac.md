@@ -225,19 +225,24 @@ resilience-study extensions.
   a successful soft solve with nonzero deviation remain distinct outcomes.
 - AC initialization is selected through an explicit typed policy. The
   reproducibility policy `flat_only` performs exactly the historical project
-  flat start. `shifted_with_recovery` is the candidate causal policy selected
-  for S3b evaluation; it is not yet a recommended operational policy. The
-  first window begins with a target-constrained flat start. Later windows begin
-  from the preceding accepted target-constrained AC prediction, shifted one
+  flat start. `shifted_with_recovery` is the operational policy selected for
+  the hard-equality M17 reference workflow from the reviewed S3b evidence. The
+  first window begins with a controlling flat start carrying the configured
+  inner terminal policy. Later windows begin from the preceding accepted
+  controlling AC prediction, shifted one
   step and reconciled with the newly realized SoC. After an unaccepted
-  controlling attempt, the policy may solve the corresponding target-free
-  problem from that same causal start, copy an accepted target-free solution
-  into a new target-constrained attempt, and apply only the predeclared
+  controlling attempt, the policy may solve the corresponding
+  terminal-policy-free problem from that same causal start, copy an accepted
+  solution into a new controlling attempt carrying the configured inner
+  terminal policy, and
+  apply only the predeclared
   deterministic perturbations of explicitly named causal sources.
 - Every initialization attempt retains its source, complete attempt outcome,
-  solver status, residuals, and runtime. A target-free solve supplies an
-  initialization only: its action is never executed, and the hard target is
-  never rounded, weakened, or removed from the controlling problem.
+  solver status, residuals, and runtime. A target-free solve temporarily
+  removes the hard terminal constraint or soft terminal cost solely to
+  construct an initialization. Its action is never executed, and the
+  configured terminal policy is restored unchanged in every controlling
+  attempt.
 - Exhausting an initialization policy is reported as an unresolved solve
   failure, not as physical or modeled infeasibility. Raw solver-reported
   `infeasible` status is retained without being promoted to a global
@@ -305,7 +310,7 @@ manual protocol and scientific results are accepted.
 | S4 | Define typed public controller inputs, outer/terminal/initialization policies, attempt records, and result schema. |
 | S5 | Implement hierarchical orchestration and explicit initialization recovery above the existing public builders. |
 | S6 | Verify state alignment, initialization and failure paths, multiple-storage identity, `W=1`, and final truncated windows. |
-| S7 | Re-run `flat_only` through the public API against the frozen S3 baseline, and reproduce any approved recovery policy against its separately reviewed S3b reference trajectory. |
+| S7 | Re-run hard and soft `flat_only` through the public API against their frozen S3 baselines; reproduce hard `shifted_with_recovery` against the reviewed S3b trajectory; and optionally evaluate soft shifted recovery as separately labeled evidence. |
 | S8 | Complete documentation, example, flowchart update, and milestone handoff. |
 
 P1 is prerequisite device-API hardening, not hierarchical-controller
@@ -556,7 +561,7 @@ truncated windows, multiple storage units, and changed constraint structures.
 
 ### S3b causal recovery gate
 
-**Reference experiment complete; results await final review.** The
+**Complete; checkpoint commit `2482c0d`.** The
 candidate causal study is specified in
 `experiments/hierarchical_battery_resilience/S3B_CAUSAL_RECOVERY_PROTOCOL.md`.
 It repeats the complete frozen `replan_every_step` hard-target trajectory using
@@ -579,5 +584,220 @@ through one accepted target-free solve followed by one accepted copied-start
 hard solve. No perturbation was required. See
 `experiments/hierarchical_battery_resilience/S3B_REPORT.md` and
 `S3B_RESULTS_METADATA.json` for interpretation and provenance. These results
-support, subject to review, the candidate policy for the frozen reference
-workflow rather than as a universal default.
+support `shifted_with_recovery` as the typed operational policy for the frozen
+reference workflow, while `flat_only` remains available for baseline
+reproduction. This is not a universal default across networks or solver stacks.
+
+### S4 typed public contract — draft for review
+
+**In progress.** S4 defines the public types and validation contract before S5
+implements orchestration. It must not import experiment modules or silently
+turn the S2/S3b runner into production code. The public implementation will
+reconstruct the reviewed mathematics from existing public OPF builders and
+prove equivalence in S7.
+
+#### Proposed public entry point
+
+Use one typed physical-input bundle and one typed controller-policy bundle:
+
+```python
+solve_hierarchical_opf(
+    inputs: HierarchicalInputs,
+    policy: HierarchicalPolicy,
+    solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
+) -> HierarchicalResult
+```
+
+`HierarchicalInputs` owns the network case, `OPFOptions`, horizon length,
+`delta`, explicit device fleets, and identity-aligned load,
+nondispatchable-generation, and HVDC trajectory tables. The first public M17
+path requires explicit first-class loads and explicit storage IDs; it does not
+add a second legacy positional-load compatibility surface. Existing MATPOWER
+conversion remains available before constructing the bundle. Inputs are
+defensively copied or normalized at the controller boundary so the run cannot
+observe caller mutation.
+
+This bundle is preferred to mirroring the full `build_opf_multistep()`
+signature. Physical inputs and controller decisions remain separate, and new
+device trajectories can extend one typed record without repeatedly expanding
+the controller function signature.
+
+`OPFOptions` configures model construction, not solver invocation. The
+controller-facing input therefore requires `options.init_flat is True`.
+`flat_only` and the first attempt of `shifted_with_recovery` both promise the
+historical generated flat start, so `init_flat=False` is rejected before any
+build rather than silently normalized. The initialization policy is the sole
+authority for AC starting-point behavior, and every executed attempt records
+the generated or assigned named start actually supplied.
+
+#### Per-layer solve configuration
+
+`HierarchicalSolveConfig` contains two immutable, defensively copied
+`LayerSolveConfig` values:
+
+- `outer`, defaulting to CLARABEL with convex/DCP invocation; and
+- `ac`, defaulting to IPOPT with DNLP invocation.
+
+Each layer configuration separates a solver identifier from a structurally
+read-only mapping of solver keyword arguments. The mapping cannot contain
+`solver` or `nlp`: those are normalized from the layer and solver selection so
+one setting cannot contradict another. Keys must be nonempty strings, and
+values must be defensively copied and valid for the selected solver boundary.
+S4 locks a solver-specific allow-list with value type and range checks for the
+CLARABEL and IPOPT controls exposed by M17; unknown keys are rejected before
+the first build. The public mapping is not an unchecked passthrough to
+`cp.Problem.solve()`.
+
+Before constructing the first plan, M17 verifies that both selected solvers are
+installed and compatible with their roles. The initial public contract supports
+CLARABEL for the convex lossy-DC outer layer and IPOPT for the DNLP AC layer.
+Other solver names fail clearly rather than inheriting unverified assumptions
+about nonlinear canonicalization, warm starts, or complete-`x0` mapping. This
+closed pair still permits legitimate CLARABEL and IPOPT controls such as
+iteration limits, tolerances, and verbosity through their separate mappings.
+Future solver support requires its own representation, status, and
+initialization verification.
+
+The exact normalized outer and AC solve configurations are retained once in
+`HierarchicalResult` provenance. Every plan and attempt references its layer
+configuration; records do not duplicate mutable caller dictionaries. S7 uses
+the frozen reference configurations to establish solver-stack equivalence.
+
+#### Proposed policy types
+
+The public string values are closed typed literals, consistent with existing
+device-policy conventions:
+
+- `OuterPolicy = Literal["frozen", "replan_every_step"]`;
+- `InnerTerminalPolicy = Literal["hard_equality", "quadratic_soft"]`; and
+- `InitializationPolicy = Literal["flat_only", "shifted_with_recovery"]`.
+
+`flat_only` performs one historical project flat-start attempt and no retry.
+It remains the baseline-reproduction policy. `shifted_with_recovery` implements
+the reviewed recovery sequence and is the operational policy for the M17
+reference workflow. For `hard_equality`, this designation is supported by the
+complete S3b trajectory. Applying the same initialization mechanism to
+`quadratic_soft` is a supported API extrapolation pending dedicated empirical
+validation; it does not inherit the hard-policy evidence claim. Its
+perturbation scales and deterministic seed base are explicit fields in the
+policy bundle, with the reviewed S3b values as defaults; they are never hidden
+process-global state.
+
+`HierarchicalPolicy` also owns the AC window length, quadratic-soft weight when
+applicable, and a frozen
+`HierarchicalAcceptanceTolerances` value. The controller validates policy
+combinations before any solve. In particular, a quadratic weight is required
+and finite positive only for `quadratic_soft`; no automatic hard-to-soft
+fallback is implied by either initialization policy.
+
+Accepted solver statuses are not user-configurable policy. M17 fixes the
+eligible set to `{"optimal", "optimal_inaccurate"}` and then requires every
+applicable finite-field, identity, and residual gate to pass. `user_limit`,
+raw infeasibility statuses, and all other outcomes remain diagnostic and can
+never supply an executed action.
+
+The outer terminal obligation remains device-configured; the controller does
+not duplicate storage terminal semantics. M17 preserves the supported storage
+configuration, including no terminal obligation. When a target or terminal
+cost is configured, replanning changes the observed initial state and shortened
+local horizon but retains the same global terminal boundary, target, constraint
+mode, and cost policy. The frozen reference workflow specifically requires the
+reviewed equality target at the global boundary; that experiment choice is not
+promoted to a universal controller requirement.
+
+#### Proposed records
+
+The public result is a typed audit tree rather than only a final trajectory:
+
+- `HierarchicalSolveAudit`: raw status, accepted-primal outcome, missing or
+  nonfinite fields, residuals, exception, solver timing, and iterations;
+- `OuterPlanRecord`: stable plan ID, local/global boundary indices, aligned
+  storage IDs and signposts, build, extracted result, and audit;
+- `ACAttemptRecord`: stable attempt ID, closed slot state, registered role and
+  transformation, source attempt ID, local/global window, exact target,
+  conditionally retained build and assigned model start, canonicalized
+  IPOPT-start evidence when applicable, result, audit, reason, and whether it
+  supplied the executed action;
+- `ExecutedIntervalRecord`: only the accepted first action and its realized
+  physical/economic accounting; and
+- `HierarchicalResult`: all retained plans and attempts, executed intervals,
+  aligned realized SoC and battery-power trajectories, completion coverage,
+  termination information, normalized per-layer solve provenance, and
+  non-double-counted trajectory summaries.
+
+Build objects remain retained in plan and attempt records for the initial M17
+API. This makes the public result auditable and supports S7 window-by-window
+equivalence. A later compact-retention mode may be added only after the full
+record is stable; it is not part of M17.
+
+All nine `shifted_with_recovery` slots are registered per attempted AC window,
+including skipped and unavailable dependencies. `flat_only` registers exactly
+one controlling slot. Policy-opportunity counts include construction failures;
+actual solver-call counts include only attempts that reached the solver.
+
+`AttemptSlotState` is the closed literal
+`Literal["executed", "construction_error", "source_unavailable",
+"not_needed_after_acceptance"]`. The state determines the valid payload:
+
+| Slot state | Build | Assigned model start | Solver/`x0` evidence | Extracted result | Audit | Reason |
+|---|---|---|---|---|---|---|
+| `executed` | required | required, including the generated flat start | required; complete `x0` and mapping retained | required, including unsuccessful schema-stable extraction | required | optional |
+| `construction_error` | optional | optional | absent | absent | absent | required |
+| `source_unavailable` | absent | absent | absent | absent | absent | required |
+| `not_needed_after_acceptance` | absent | absent | absent | absent | absent | required |
+
+For `construction_error`, a build may exist when initialization assignment or
+canonicalization fails, and an assigned start may exist if failure occurs after
+its construction. Neither is fabricated when failure occurs earlier. Once the
+canonicalized start has been verified and the solver interface is called, the
+slot is `executed` even if the solver errors, returns an ineligible status, or
+produces an unusable primal. Such outcomes retain their result and audit rather
+than being relabeled as construction failures.
+
+No final `HierarchicalResult` contains a `pending` slot. Pending is permitted
+only as private transient orchestration state before a registered slot is
+resolved to one of the four public states. Record validation rejects every
+state/payload combination not allowed by the table.
+
+#### Exact termination and execution contract
+
+- Only an accepted controlling AC attempt carrying the configured inner
+  terminal policy can advance realized state.
+- A target-free recovery attempt temporarily removes either the hard terminal
+  constraint or the soft terminal cost solely to construct initialization
+  data. Its result is never executed.
+- Failure of an outer plan terminates before registering an AC window.
+- Exhaustion of an AC initialization sequence retains the complete window and
+  terminates without advancing state.
+- A solver status alone never defines executability; every required
+  formulation and participating-device field must be finite and every frozen
+  residual gate must pass.
+- `solver_certified_infeasible`, `solver_failure`, `unusable_primal`,
+  `construction_error`, `source_unavailable`, and
+  `not_needed_after_acceptance` remain distinct.
+- Realized costs, curtailment, losses, and future ENS use executed first
+  intervals exactly once. Predicted window objectives and terminal penalties
+  remain attempt diagnostics.
+
+#### S4 checklist
+
+- [x] Accept the S3b evidence and select `shifted_with_recovery` for the M17
+  reference workflow while retaining `flat_only`.
+- [ ] Approve the input-bundle boundary instead of a mirrored builder
+  signature.
+- [ ] Approve explicit recovery parameters in the immutable policy bundle.
+- [ ] Approve retaining `OPFBuild` objects in the initial public audit tree.
+- [ ] Lock exact public type, field, and exported function names.
+- [ ] Lock validation and conditional-record rules for all supported devices.
+- [x] Separate immutable outer and AC solver configurations and retain their
+  normalized values in result provenance.
+- [x] Make the initialization policy authoritative by rejecting
+  controller-facing `OPFOptions(init_flat=False)`.
+- [x] Fix accepted statuses to residual-checked `optimal` and
+  `optimal_inaccurate`; do not expose them as policy.
+- [x] Define the closed AC-attempt slot states and their conditional payloads.
+- [x] Label hard shifted recovery as S3b-validated and soft shifted recovery
+  as a supported extrapolation pending a dedicated experiment.
+- [ ] Add the typed module and constructor-only tests without implementing the
+  solve loop.
+- [ ] Review and checkpoint S4 before S5 orchestration begins.
