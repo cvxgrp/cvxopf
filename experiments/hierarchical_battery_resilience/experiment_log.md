@@ -488,3 +488,19 @@ original causal flat/shifted start second, using scales `1e-4`, `1e-3`, and
 `17_000_000 + 100 * iteration + 10 * source_code + scale_index`, with explicit
 source codes and one-based scale indices defined in the protocol. The S3b
 protocol is now ready for review; no runner or scientific solve has begun.
+
+## 2026-08-20 — S3b reference-runner implementation opened
+
+After the causal protocol checkpoint at commit `399465f`, implementation began
+on an experiment-specific reference runner. The runner pre-registers all nine
+attempt slots per AC window, constructs shifted and perturbed starts according
+to the frozen rules, verifies the complete canonicalized IPOPT starting vector,
+executes only an accepted target-constrained first action, and retains runtime
+and residual diagnostics. Construction failures remain distinct from solver or
+post-solve audit outcomes.
+
+Focused implementation tests intercept the actual five-step AC problem before
+IPOPT executes and retain the previously characterized 745 model-owned and 185
+reduction-added starting coordinates. These are structural tests only. No S3b
+scientific trajectory has been run; execution remains gated on review and a
+clean committed worktree.

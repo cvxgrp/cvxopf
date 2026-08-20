@@ -556,7 +556,8 @@ truncated windows, multiple storage units, and changed constraint structures.
 
 ### S3b causal recovery gate
 
-**Protocol complete and ready for review; no S3b solve executed.** The
+**Protocol complete; reference runner implementation is in progress and no
+S3b scientific solve has been executed.** The
 candidate causal study is specified in
 `experiments/hierarchical_battery_resilience/S3B_CAUSAL_RECOVERY_PROTOCOL.md`.
 It repeats the complete frozen `replan_every_step` hard-target trajectory using
