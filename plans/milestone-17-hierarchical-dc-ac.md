@@ -223,6 +223,25 @@ resilience-study extensions.
 - No action is executed from a solve without an accepted primal result. A
   hard-target failure, target-independent AC infeasibility, solver failure, and
   a successful soft solve with nonzero deviation remain distinct outcomes.
+- AC initialization is selected through an explicit typed policy. The
+  reproducibility policy `flat_only` performs exactly the historical project
+  flat start. `shifted_with_recovery` is the candidate causal policy selected
+  for S3b evaluation; it is not yet a recommended operational policy. The
+  first window begins with a target-constrained flat start. Later windows begin
+  from the preceding accepted target-constrained AC prediction, shifted one
+  step and reconciled with the newly realized SoC. After an unaccepted
+  controlling attempt, the policy may solve the corresponding target-free
+  problem from that same causal start, copy an accepted target-free solution
+  into a new target-constrained attempt, and apply only the predeclared
+  deterministic perturbations of explicitly named causal sources.
+- Every initialization attempt retains its source, complete attempt outcome,
+  solver status, residuals, and runtime. A target-free solve supplies an
+  initialization only: its action is never executed, and the hard target is
+  never rounded, weakened, or removed from the controlling problem.
+- Exhausting an initialization policy is reported as an unresolved solve
+  failure, not as physical or modeled infeasibility. Raw solver-reported
+  `infeasible` status is retained without being promoted to a global
+  infeasibility certificate.
 - Any hard-to-soft retry is preselected, retained as a separate fallback
   attempt, and never implemented as anonymous slack or silent relaxation.
 - No stale DC SoC state is propagated after AC execution.
@@ -282,14 +301,16 @@ manual protocol and scientific results are accepted.
 | S1 | Freeze a reproducible experiment protocol and prepared scenario. |
 | S2 | Implement the auditable manual reference runner. |
 | S3 | Run the predeclared endpoint, frozen-plan, and replanned experiments; select any public defaults without changing the frozen variants. |
-| S4 | Define typed public controller inputs, policies, records, and result schema. |
-| S5 | Implement hierarchical orchestration above the existing public builders. |
-| S6 | Verify state alignment, failure paths, multiple-storage identity, `W=1`, and final truncated windows. |
-| S7 | Re-run the frozen experiment through the public API and establish window-by-window equivalence. |
+| S3b | Evaluate the candidate causal hard-target initialization-recovery policy over the complete frozen replanned trajectory. |
+| S4 | Define typed public controller inputs, outer/terminal/initialization policies, attempt records, and result schema. |
+| S5 | Implement hierarchical orchestration and explicit initialization recovery above the existing public builders. |
+| S6 | Verify state alignment, initialization and failure paths, multiple-storage identity, `W=1`, and final truncated windows. |
+| S7 | Re-run `flat_only` through the public API against the frozen S3 baseline, and reproduce any approved recovery policy against its separately reviewed S3b reference trajectory. |
 | S8 | Complete documentation, example, flowchart update, and milestone handoff. |
 
 P1 is prerequisite device-API hardening, not hierarchical-controller
-implementation. S3 results must be reviewed before S4 freezes public defaults.
+implementation. S3 and S3b results must be reviewed before S4 freezes public
+defaults.
 No scientific protocol is revised merely to make the S5 implementation appear
 successful.
 
@@ -440,7 +461,8 @@ suite passed; Ruff and `git diff --check` were clean.
 
 ### S3 review point
 
-**Authoritative frozen experiment complete; public-policy review pending.**
+**Authoritative frozen experiment and hard-replanning diagnostic complete;
+public-policy decisions recorded below.**
 
 The complete scientific record is in
 `experiments/hierarchical_battery_resilience/S3_REPORT.md`. Both reviewed
@@ -451,16 +473,22 @@ quadratic-soft variant finished at 344.4 MWh.
 
 Neither stepwise-replanned variant completed. The hard-target run terminated
 at interval 35 after a target-conditioned AC solve returned infeasible while
-the target-free diagnostic solved. This does not distinguish true nonconvex AC
-infeasibility from local solver behavior. The soft-target run reached interval
-95, where accumulated energy deviations made the final outer hard terminal
+the target-free diagnostic solved. The predeclared follow-up subsequently
+established that this exact target-constrained problem is modeled-feasible and
+that the original outcome depended on initialization in the frozen
+formulation/interface/solver stack. The soft-target run reached interval 95,
+where accumulated energy deviations made the final outer hard terminal
 equality infeasible even at the aggregate power-adequacy level.
 
 The result demonstrates that replanning alone does not provide recursive
-feasibility. S4 should not hide one tested combination as an unqualified
-default. Review must decide whether remaining-horizon viability protection is
-part of M17 or a separately staged extension; the frozen baseline remains
-unchanged either way.
+feasibility. Remaining-horizon viability protection is a separately staged
+controller extension rather than part of the initial M17 implementation: the
+experiment establishes the need but does not select among terminal-feasible
+envelopes, reserve constraints, or other viability mechanisms. M17 must expose
+realized state, signpost deviation, and outer-plan failure without claiming
+that soft tracking preserves terminal viability. It must also distinguish an
+unsuccessful local nonlinear solve from modeled infeasibility. The frozen
+baseline remains unchanged and reproducible through `flat_only`.
 
 The authoritative experiment was executed from clean infrastructure commit
 `0cd65b1a1c809b81813389f58fde6559a161d147`; the tree was clean before and
@@ -478,12 +506,69 @@ checks.
 
 ### S3 hard-replanning diagnostic gate
 
-The authoritative S3 baseline is closed and remains unchanged. Before S4
-selects public defaults, the interval-35 hard-target event receives the named,
-predeclared follow-up in
+**Complete.** The authoritative S3 baseline is closed and remains unchanged.
+The interval-35 hard-target event received the named, predeclared follow-up in
 `experiments/hierarchical_battery_resilience/S3_HARD_REPLAN_DIAGNOSTIC_PLAN.md`.
-The study separates exact-problem initialization dependence from nearby
-state/target sensitivity. Any accepted solve of the exact archived
-replanned-state and `849.9999996548939` MWh target proves modeled feasibility;
-repeated local failures remain inconclusive. This is a policy gate, not an S3
-baseline replacement.
+The tracked report and manifest are
+`experiments/hierarchical_battery_resilience/S3_HARD_REPLAN_DIAGNOSTIC_REPORT.md`
+and
+`experiments/hierarchical_battery_resilience/S3_HARD_REPLAN_DIAGNOSTIC_RESULTS.json`.
+
+All 14 registered calls used verified 930-coordinate IPOPT starting vectors.
+The project flat start returned `infeasible`, while all six alternate
+initializations produced accepted solutions of the identical archived-state,
+`849.9999996548939` MWh target problem. The successful frozen-window,
+target-free, shifted-preceding, and three deterministic-perturbation
+constructions therefore establish modeled feasibility and
+initialization-dependent behavior. An otherwise identical flat-start attempt
+also succeeded after changing only the target to canonical 850.0 MWh,
+providing separate nearby-problem sensitivity evidence. These are claims about
+the frozen formulation/interface/solver stack, not a universal IPOPT defect or
+a global characterization of the nonlinear solution set.
+
+The diagnostic fixes the following S3b evaluation contract:
+
+- `flat_only` preserves the exact no-retry scientific baseline;
+- `shifted_with_recovery` is the candidate causal policy, using only the
+  preceding accepted target-constrained AC prediction, a newly accepted
+  target-free solution, and bounded deterministic perturbations of explicitly
+  named causal sources;
+- all attempts are explicit and retained, and only an accepted solve of the
+  original target-constrained problem may provide an executed action; and
+- failure after the configured attempts is `unresolved_failure`, not a claim
+  that the requested endpoint is physically or globally infeasible.
+
+The feasibility diagnostic's successful frozen-window source and its
+perturbations are retrospective resources, not causally available controller
+inputs. They prove existence and mechanism but do not validate the candidate
+online policy. `shifted_with_recovery` becomes the recommended operational
+policy only if the predeclared full-trajectory S3b experiment supports that
+designation, and any recommendation is limited to the frozen scenario rather
+than asserted as a universal default across networks or operating conditions.
+
+The verified-start implementation spike is complete in commit `8dff8d1`. It
+proved that policy-supplied model values map into the complete canonicalized
+IPOPT starting vector, characterized the 745 model-owned and 185
+reduction-added coordinates for the frozen five-step problem, and retained the
+complete mapping. Those counts characterize this problem rather than define a
+universal API invariant. S4–S6 must validate the generated mapping for `W=1`,
+truncated windows, multiple storage units, and changed constraint structures.
+
+### S3b causal recovery gate
+
+**Protocol complete and ready for review; no S3b solve executed.** The
+candidate causal study is specified in
+`experiments/hierarchical_battery_resilience/S3B_CAUSAL_RECOVERY_PROTOCOL.md`.
+It repeats the complete frozen `replan_every_step` hard-target trajectory using
+only the project flat start, the immediately preceding accepted controlling AC
+prediction, and target-free solutions constructed at the current iteration.
+Every retry is retained, only an accepted target-constrained result may execute,
+and complete canonicalized IPOPT starts are verified.
+
+S3b excludes target rounding, hard-to-soft fallback, load shedding, solver
+retuning, and retrospective frozen-trajectory solutions. It reports both total
+runtime and attempt-type decomposition, including the fraction of windows that
+accept the first shifted start. Perturbations use the accepted target-free
+center first and the original causal flat/shifted center second, at scales
+`1e-4`, `1e-3`, and `1e-2`. Seeds follow the frozen arithmetic rule in the
+protocol.

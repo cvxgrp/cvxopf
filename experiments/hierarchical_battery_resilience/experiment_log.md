@@ -464,3 +464,27 @@ than proving globally distinct mathematical basins. The shifted-preceding
 attempt inherits that provenance. The frozen and target-free sources
 reproduced, and the B, C, and E attempts independently establish exact-problem
 feasibility from reproduced sources.
+
+## 2026-08-20 — S3b causal-recovery study opened
+
+Review of the M17 policy update identified a remaining evidence boundary. The
+interval-35 diagnostic proved feasibility and initialization sensitivity, but
+its frozen-window source and perturbations are retrospective and unavailable to
+a causal replanned controller. S4 is therefore paused for a full-trajectory
+S3b study.
+
+The draft protocol permits only the project flat start at the first window, the
+immediately preceding accepted target-constrained prediction thereafter, and
+target-free solutions constructed at the current iteration. It forbids target
+rounding, soft fallback, load shedding, solver retuning, and frozen-trajectory
+information. The study will report both completion and the operational cost of
+recovery. Perturbation centers/order and the arithmetic seed rule remain open
+for review before implementation.
+
+The perturbation decisions were subsequently closed before implementation.
+The causal ladder perturbs an accepted target-free solution first and the
+original causal flat/shifted start second, using scales `1e-4`, `1e-3`, and
+`1e-2` for each available center. Seeds are assigned by
+`17_000_000 + 100 * iteration + 10 * source_code + scale_index`, with explicit
+source codes and one-based scale indices defined in the protocol. The S3b
+protocol is now ready for review; no runner or scientific solve has begun.
