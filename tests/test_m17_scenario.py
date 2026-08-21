@@ -1,7 +1,6 @@
 """S1 reproducibility gates for the frozen M17 experiment scenario."""
 
 from copy import deepcopy
-import json
 from pathlib import Path
 import shutil
 import warnings
@@ -200,10 +199,12 @@ def test_manifest_freezes_reviewed_policy_and_network_choices():
 def test_loader_rejects_artifact_drift(tmp_path: Path):
     copied = tmp_path / "prepared_scenario"
     shutil.copytree(SCENARIO_DIR, copied)
-    manifest_path = copied / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["arrays"]["load_p"]["array_sha256"] = "0" * 64
-    manifest_path.write_text(json.dumps(manifest))
+    load_path = copied / "load_p.csv"
+    lines = load_path.read_text().splitlines()
+    fields = lines[1].split(",")
+    fields[1] = str(float(fields[1]) + 1.0)
+    lines[1] = ",".join(fields)
+    load_path.write_text("\n".join(lines) + "\n")
 
     with pytest.raises(ValueError, match="numeric-array hash mismatch"):
         load_frozen_scenario(copied)

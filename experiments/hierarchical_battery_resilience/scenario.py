@@ -26,6 +26,18 @@ from cvxopf.testcases import case9
 SCENARIO_DIR = Path(__file__).with_name("prepared_scenario")
 MANIFEST_PATH = SCENARIO_DIR / "manifest.json"
 
+# The manifest's numeric-array hashes record the original preparation
+# environment and remain unchanged because S3/S3b provenance binds that exact
+# manifest. These hashes lock the explicitly round-tripped CSV interpretation
+# used by clean checkouts on every supported platform.
+_ROUND_TRIP_ARRAY_SHA256 = {
+    "load_p": "136f926f73eb7bade8880ec260c1d175957588303f3c180d5777556e11e37554",
+    "load_q": "ce6a0b5269f186b0fe65a4b1069df97556b7a19cab5ec4e6fe17d3f1dc2d6929",
+    "nondispatchable": (
+        "e2f49a4606614b29b802a7341d72ef7442671481c05d93599eb64b2ec163b510"
+    ),
+}
+
 
 @dataclass(frozen=True)
 class FrozenControlConfig:
@@ -76,7 +88,10 @@ def file_sha256(path: Path) -> str:
 
 
 def _read_frame(path: Path) -> pd.DataFrame:
-    frame = pd.read_csv(path)
+    # The default pandas parser can differ by a few float64 ULPs across
+    # versions and platforms. Round-trip parsing is the portable contract for
+    # these checked-in decimal artifacts.
+    frame = pd.read_csv(path, float_precision="round_trip")
     if "time" not in frame:
         raise ValueError(f"Prepared scenario file has no time column: {path}")
     frame["time"] = pd.to_datetime(frame["time"])
@@ -176,7 +191,7 @@ def load_frozen_scenario(
             raise ValueError(f"Prepared {name} shape does not match manifest")
         if not np.isfinite(frame.to_numpy(dtype=float)).all():
             raise ValueError(f"Prepared {name} contains nonfinite values")
-        if array_sha256(frame.to_numpy()) != specification["array_sha256"]:
+        if array_sha256(frame.to_numpy()) != _ROUND_TRIP_ARRAY_SHA256[name]:
             raise ValueError(f"Prepared {name} numeric-array hash mismatch")
         if file_sha256(root / specification["file"]) != specification["file_sha256"]:
             raise ValueError(f"Prepared {name} file hash mismatch")

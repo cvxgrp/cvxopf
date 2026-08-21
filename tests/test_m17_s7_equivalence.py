@@ -8,6 +8,23 @@ import pytest
 from experiments.hierarchical_battery_resilience import s7_equivalence
 
 
+def _reference_artifacts_available() -> bool:
+    s3 = json.loads(s7_equivalence.S3_METADATA.read_text())
+    s3b = json.loads(s7_equivalence.S3B_METADATA.read_text())
+    return all(
+        (directory / name).is_file()
+        for directory, artifacts in (
+            (s7_equivalence.S3_DIRECTORY, s3["artifacts"]),
+            (s7_equivalence.S3B_DIRECTORY, s3b["artifacts"]),
+        )
+        for name in artifacts
+    )
+
+
+@pytest.mark.skipif(
+    not _reference_artifacts_available(),
+    reason="authoritative S3/S3b artifacts are intentionally local and ignored",
+)
 def test_s7_reference_artifacts_match_tracked_integrity_metadata():
     checks = s7_equivalence.verify_reference_integrity()
 
@@ -33,6 +50,10 @@ def test_s7_case_materialization_uses_frozen_public_contract(case_name):
     assert policy.initialization_policy == expected_initialization
 
 
+@pytest.mark.skipif(
+    not _reference_artifacts_available(),
+    reason="authoritative S3/S3b artifacts are intentionally local and ignored",
+)
 def test_s7_s3_normalization_retains_manual_only_failure_diagnostic():
     path = (
         s7_equivalence.S3_DIRECTORY

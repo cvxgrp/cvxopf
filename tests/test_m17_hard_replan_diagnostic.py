@@ -79,6 +79,13 @@ def test_integrity_gate_checks_sources_and_artifact_hashes(tmp_path):
     ] = diagnostic._source_fingerprint(
         sorted((diagnostic.REPOSITORY_ROOT / "src/cvxopf").rglob("*.py"))
     )
+    scenario_path = (
+        diagnostic.REPOSITORY_ROOT
+        / "experiments/hierarchical_battery_resilience/scenario.py"
+    )
+    tracked["execution_source"]["source_fingerprints"]["files"][
+        "experiments/hierarchical_battery_resilience/scenario.py"
+    ] = diagnostic._sha256(scenario_path)
     results = tmp_path / "results"
     results.mkdir()
     for name in (

@@ -76,6 +76,14 @@ at buses 5, 7, and 9. Renewable inverter ratings retain the prior experiment's
 joint sizing across the low, moderate, and high windows; selecting one
 normative trajectory therefore does not alter the reviewed physical fleet.
 
+The manifest's numeric-array hashes are historical preparation-provenance
+fields bound into the S3/S3b records. Redistribution integrity is enforced by
+the exact CSV file hashes. Clean checkouts parse those decimal files with
+pandas' explicit `float_precision="round_trip"` contract and validate a
+separate set of round-trip float64 hashes in `scenario.py`; this avoids the
+few-ULP platform/version drift of pandas' default parser without rewriting the
+historical manifest.
+
 The ignored raw composite is optional provenance input. A clean checkout uses
 only the prepared arrays. Maintainers possessing the raw file with SHA-256
 `45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f`

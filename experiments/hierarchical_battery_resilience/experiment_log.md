@@ -547,3 +547,18 @@ correctly exposed reviewed schema distinctions (`accepted_soft` versus
 which were then normalized explicitly before the entire study was rerun. The
 full interpretation is in `S7_REPORT.md`; tracked integrity metadata is in
 `S7_RESULTS_METADATA.json`.
+
+## 2026-08-21 — clean-checkout CI portability correction
+
+Linux Python 3.11 CI showed that pandas' default CSV parser reconstructed some
+checked-in scenario values a few float64 ULPs differently from the preparation
+workstation. The CSV file hashes still matched exactly; this was parser drift,
+not data drift. Scenario loading now requests the explicit round-trip float
+parser and validates round-trip hashes without changing the historical
+manifest bound into the S3/S3b provenance records.
+
+CI also exposed two S7 tests that assumed the ignored, workstation-local
+authoritative result payloads were present. Those integrity and normalization
+checks now skip when the payloads are absent from a clean checkout. The S7
+runner itself remains strict and will not execute without every verified
+reference artifact.
