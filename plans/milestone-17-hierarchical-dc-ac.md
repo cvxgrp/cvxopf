@@ -924,7 +924,7 @@ drift.
 
 ### S5 hierarchical orchestration
 
-**Implementation complete; review and checkpoint pending.** The public
+**Complete; checkpoint commit `d32957d`.** The public
 `solve_hierarchical_opf()` entry point is a thin typed boundary over the
 private orchestration in `src/cvxopf/_hierarchical_solver.py`. The private
 module composes `build_opf_multistep()` and `extract_results()`; it does not
@@ -990,4 +990,51 @@ hierarchical/storage/results tests, cold strict mypy over both typed modules, Ru
   relaxing a target or advancing state.
 - [x] Add focused success, recovery, and termination tests.
 - [x] Pass strict typing, lint, focused, broader, and full-suite verification.
-- [ ] Complete external review and checkpoint S5 before beginning S6.
+- [x] Complete external review and checkpoint S5 before beginning S6
+  (`d32957d`).
+
+### S6 hierarchy verification
+
+**Implementation complete; review and checkpoint pending.** S6 adds a
+separate end-to-end verification slice rather than changing the reviewed S5
+orchestration. The tests exercise the public controller and independently
+inspect its retained plans, attempts, executed actions, and summaries.
+
+The as-built verification covers:
+
+- the hand-checkable `T=3, W=2` recurrence under both frozen and per-step
+  replanned outer policies, including the final one-step truncated AC window;
+- the `W=1` boundary case under both outer policies;
+- two storage devices in deliberately non-bus-ordered fleet order, plus
+  reverse-ordered state and target mappings proving that alignment follows
+  stable device ID rather than mapping position;
+- exact agreement between every attempt's realized initial state, referenced
+  outer-plan signpost, and global AC-window endpoint;
+- shifted-preceding initialization across a shortened final-window graph,
+  including complete IPOPT-start verification and the expected reduction in
+  canonicalized dimension;
+- active nondispatchable and HVDC paths in both outer and inner solves, with
+  independently audited active/reactive balance and retained terminal loss
+  values;
+- rejection of an otherwise optimal AC primal when a required conditional
+  device output is unavailable; and
+- exact-once reconstruction of additive trajectory totals and maximum
+  executed-interval diagnostics from the retained execution records.
+
+No production defect was exposed by these gates. The stopping-point
+verification is 84 focused S4-S6 tests, cold strict mypy over the typed
+hierarchical surface, Ruff, `git diff --check`, and the complete 1,804-test
+suite.
+
+#### S6 checklist
+
+- [x] Verify two-storage identity and state alignment by explicit device ID.
+- [x] Verify `T=3, W=2` frozen and replanned signpost indexing.
+- [x] Verify `W=1` and the final truncated window.
+- [x] Verify shifted initialization across changed window structure and full
+  IPOPT starting-point capture.
+- [x] Verify conditional nondispatchable and HVDC audit paths.
+- [x] Verify missing conditional outputs prevent action execution.
+- [x] Verify executed-interval accounting and trajectory aggregation.
+- [x] Pass lint, typing, focused, and complete-suite verification.
+- [ ] Complete external review and checkpoint S6 before beginning S7.
