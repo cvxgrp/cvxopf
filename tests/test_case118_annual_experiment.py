@@ -37,7 +37,7 @@ from experiments.case118_annual_hierarchy.scenario import (
     materialize_pilot,
     select_pilot_window,
 )
-from experiments.case118_annual_hierarchy import run_s0
+from experiments.case118_annual_hierarchy import run_s0, run_s1
 
 
 EXPERIMENT_DIRECTORY = Path("experiments/case118_annual_hierarchy")
@@ -583,3 +583,195 @@ def test_s0_completion_metadata_freezes_repository_comparator_and_s1_limits():
         policy["direct_ac_24_hour_classification"]
         == "not_authorized_by_s0_resource_gate"
     )
+
+
+def test_s1_worker_registers_outer_endpoint_and_forbidden_direct_ac(
+    monkeypatch, tmp_path
+):
+    outer_soc = np.tile(np.arange(1.0, 25.0)[:, None], (1, 4))
+
+    def fake_build_and_solve(
+        network, formulation, case, storage, start, stop
+    ):
+        del network, case, storage
+        if formulation == "lossy_dc":
+            return {
+                "record_id": "outer_lossy_dc_24h",
+                "classification": "accepted",
+                "accepted_primal": True,
+            }, {"soc": outer_soc}
+        assert (start, stop) == (run_s1.AC_START, run_s1.AC_STOP)
+        return {
+            "record_id": "endpoint_ac_6h",
+            "classification": "accepted",
+            "accepted_primal": True,
+        }, {}
+
+    monkeypatch.setattr(run_s1, "_build_and_solve", fake_build_and_solve)
+    checkpoint = tmp_path / "worker.json.gz"
+    artifact = run_s1.build_worker_artifact("pglib_rated", checkpoint)
+    records = artifact["records"]
+    assert [record["record_id"] for record in records] == [
+        "outer_lossy_dc_24h",
+        "endpoint_ac_6h",
+        "direct_ac_24h",
+    ]
+    handoff = records[1]["outer_boundary_handoff"]
+    np.testing.assert_array_equal(handoff["initial_soc_mwh"], 13.0)
+    np.testing.assert_array_equal(handoff["target_soc_mwh"], 19.0)
+    assert records[2]["classification"] == (
+        "not_authorized_by_s0_resource_gate"
+    )
+    assert records[2]["builder_called"] is False
+    assert records[2]["solver_called"] is False
+    assert artifact["eligible_for_advancement"] is True
+    assert checkpoint.exists()
+
+
+def test_s1_outer_failure_retains_all_slots_without_constructing_ac(
+    monkeypatch, tmp_path
+):
+    calls = []
+
+    def fake_build_and_solve(
+        network, formulation, case, storage, start, stop
+    ):
+        del network, case, storage, start, stop
+        calls.append(formulation)
+        return {
+            "record_id": "outer_lossy_dc_24h",
+            "accepted_primal": False,
+        }, {}
+
+    monkeypatch.setattr(run_s1, "_build_and_solve", fake_build_and_solve)
+    artifact = run_s1.build_worker_artifact(
+        "pglib_rated", tmp_path / "worker.json.gz"
+    )
+    assert calls == ["lossy_dc"]
+    records = artifact["records"]
+    assert len(records) == 3
+    assert records[1]["classification"] == "source_unavailable"
+    assert records[1]["builder_called"] is False
+    assert records[1]["solver_called"] is False
+    assert artifact["eligible_for_advancement"] is False
+
+
+@pytest.mark.parametrize("classification", ["resource_limit", "worker_failure"])
+def test_s1_precheckpoint_failure_preserves_complete_registry(classification):
+    artifact = run_s1._unexecuted_worker(
+        "pglib_rated", classification, "synthetic boundary"
+    )
+    records = artifact["records"]
+    assert [record["record_id"] for record in records] == [
+        "outer_lossy_dc_24h",
+        "endpoint_ac_6h",
+        "direct_ac_24h",
+    ]
+    assert records[0]["classification"] == classification
+    assert records[1]["classification"] == "source_unavailable"
+    assert records[2]["classification"] == (
+        "not_authorized_by_s0_resource_gate"
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "exception", "accepted", "expected"),
+    [
+        ("optimal", None, True, "accepted"),
+        ("infeasible", None, False, "solver_certified_infeasible"),
+        (
+            "infeasible_inaccurate",
+            None,
+            False,
+            "solver_certified_infeasible",
+        ),
+        (None, "SolverError: failed", False, "solver_failure"),
+        ("optimal", None, False, "unusable_primal"),
+        ("user_limit", None, False, "unusable_primal"),
+    ],
+)
+def test_s1_solve_classification_is_unambiguous(
+    status, exception, accepted, expected
+):
+    assert run_s1._classify_solve(status, exception, accepted) == expected
+
+
+def test_s1_resource_limit_overrides_worker_advancement_not_solve_evidence():
+    context = {"git_commit": "abc", "source_fingerprint": "def"}
+    accepted_endpoint = {
+        "record_id": "endpoint_ac_6h",
+        "classification": "accepted",
+        "accepted_primal": True,
+    }
+    artifact = {
+        "records": [accepted_endpoint],
+        "start_context": context,
+        "end_context": context,
+    }
+    run_s1._apply_supervision_outcome(
+        artifact,
+        limit_reason="rss_limit",
+        returncode=-15,
+        expected_context=context,
+    )
+    assert accepted_endpoint["classification"] == "accepted"
+    assert artifact["worker_classification"] == "resource_limit"
+    assert artifact["eligible_for_advancement"] is False
+
+
+def test_s1_parent_rejects_worker_context_mismatch():
+    expected = {"git_commit": "abc", "source_fingerprint": "def"}
+    artifact = {
+        "records": [],
+        "start_context": expected,
+        "end_context": {**expected, "git_commit": "changed"},
+    }
+    run_s1._apply_supervision_outcome(
+        artifact,
+        limit_reason=None,
+        returncode=0,
+        expected_context=expected,
+    )
+    assert artifact["worker_classification"] == "provenance_mismatch"
+    assert artifact["eligible_for_advancement"] is False
+
+
+def test_s1_clean_worker_with_rejected_outer_is_not_eligible():
+    context = {"git_commit": "abc", "source_fingerprint": "def"}
+    artifact = run_s1._unexecuted_worker(
+        "pglib_rated",
+        "solver_certified_infeasible",
+        "synthetic infeasible outer",
+    )
+    artifact["start_context"] = context
+    artifact["end_context"] = context
+    run_s1._apply_supervision_outcome(
+        artifact,
+        limit_reason=None,
+        returncode=0,
+        expected_context=context,
+    )
+    assert artifact["worker_classification"] == "completed"
+    assert artifact["eligible_for_advancement"] is False
+
+
+@pytest.mark.parametrize(
+    ("endpoint_classification", "expected"),
+    [("pending", True), ("source_unavailable", False), ("accepted", False)],
+)
+def test_s1_ac_clock_marker_requires_pending_endpoint(
+    tmp_path, endpoint_classification, expected
+):
+    checkpoint = tmp_path / "checkpoint.json.gz"
+    run_s0._atomic_gzip_json(
+        checkpoint,
+        {
+            "records": [
+                {
+                    "record_id": "endpoint_ac_6h",
+                    "classification": endpoint_classification,
+                }
+            ]
+        },
+    )
+    assert run_s1._checkpoint_endpoint_pending(checkpoint) is expected

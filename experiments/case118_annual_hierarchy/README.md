@@ -13,11 +13,12 @@ only `rateA` set to zero. AC then omits those limits, while lossy DC uses one
 frozen, ex-post-verified finite branch-limit sentinel; this is an effectively
 unlimited rather than mathematically unconstrained control.
 
-The PGLib acquisition and deterministic case conversion are now frozen and
-hash-verified. S0 is continuing with annual input construction, deterministic
-storage and renewable placement, the predeclared pilot grid, independent
-residual audits, and machine resource budgets. No authoritative annual
-scenario or scientific streaming runner is frozen yet.
+The PGLib acquisition, deterministic case conversion, authoritative pilot,
+independent residual gates, and workstation resource limits are frozen and
+hash-verified. S0 is complete. S1 characterizes a 24-hour outer plan and one
+bounded six-hour AC endpoint realization under `S1_PROTOCOL.md`; direct
+24-hour AC is explicitly unauthorized by the S0 resource gate. No scientific
+streaming runner is frozen yet.
 
 Before week-scale execution, an experiment-owned streaming runner must pass
 short-horizon, window-by-window equivalence against the public M17 controller.
