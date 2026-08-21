@@ -1,6 +1,6 @@
 # Hierarchical battery-resilience experiment
 
-**Status:** S0–S3 complete; authoritative results ready for policy review
+**Status:** S0–S7 complete; public API reproduces the reviewed references
 
 This is the companion experiment for
 [`plans/milestone-17-hierarchical-dc-ac.md`](../../plans/milestone-17-hierarchical-dc-ac.md).
@@ -41,25 +41,25 @@ experiments/hierarchical_battery_resilience/
         .gitignore
 ```
 
-The frozen scenario loader, prepared arrays, and auditable manual reference
-runner are implemented. No reusable public controller is implemented yet.
+The frozen scenario loader, prepared arrays, auditable manual reference
+runner, causal-recovery study, and public hierarchical controller are
+implemented. S7 establishes window-by-window public/reference equivalence for
+all four S3 policies and the S3b causal-recovery policy.
 
 `load_frozen_scenario()` is the canonical build-ready boundary: it verifies
 the artifacts and current case9 network and materializes `OPFOptions`, every
 typed device fleet, aligned trajectories, and the frozen controller
 configuration. Later runners do not interpret manifest field names directly.
 
-## Immediate next step
+## Result and next step
 
-Review the [S3 report](S3_REPORT.md) and decide whether remaining-horizon
-viability protection belongs in M17 or in a separately staged controller
-extension. The frozen experiment has been run without policy relaxation or
-solver retuning. Its two fixed-plan variants completed; the two replanned
-variants exposed distinct target-conditioned and recursive-feasibility failure
-paths that must not be hidden by selecting only successful results.
-The authoritative run was executed from a clean, recorded source commit. Its
-machine-readable provenance and result summary are preserved in
-[`S3_RESULTS_METADATA.json`](S3_RESULTS_METADATA.json); the complete detailed
+The [S7 report](S7_REPORT.md) records zero failed comparisons across the five
+public/reference cases. The two frozen policies complete, the two replanned
+`flat_only` policies reproduce their reviewed failure paths, and hard
+`shifted_with_recovery` reproduces the complete 96-interval S3b trajectory and
+all 864 registered attempt slots. The next step is M17-S8 documentation and
+milestone handoff. Machine-readable S7 provenance is preserved in
+[`S7_RESULTS_METADATA.json`](S7_RESULTS_METADATA.json); complete detailed
 artifacts remain local and ignored.
 
 The normative scenario uses checked-in Tracy-derived prepared arrays. The
@@ -97,3 +97,16 @@ rerun missing or incomplete cases. Resume first verifies the scenario and
 software context. Results are written under the ignored `results/s3_manual`
 directory; `analysis.py` validates their recorded hashes before loading
 summary tables.
+
+## Reproduce S7
+
+After the reviewed S7 runner is committed and the worktree is clean:
+
+```bash
+uv run python -m experiments.hierarchical_battery_resilience.s7_equivalence
+```
+
+The runner verifies the frozen S3/S3b hashes, executes all five policies
+through `solve_hierarchical_opf()`, and writes the detailed ignored comparison
+artifact under `results/s7_public_equivalence`. It refuses a dirty worktree or
+a nonempty destination and never resumes a partial equivalence study.

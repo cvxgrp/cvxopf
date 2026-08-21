@@ -520,6 +520,12 @@ def _environment() -> dict[str, str]:
             values[package] = version(package)
         except PackageNotFoundError:
             values[package] = "unknown"
+    try:
+        from cyipopt import IPOPT_VERSION
+
+        values["ipopt"] = ".".join(str(value) for value in IPOPT_VERSION)
+    except (ImportError, TypeError):
+        values["ipopt"] = "unknown"
     return values
 
 

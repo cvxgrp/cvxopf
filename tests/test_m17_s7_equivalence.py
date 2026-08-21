@@ -80,3 +80,11 @@ def test_s7_normalizes_reviewed_cross_schema_equivalences():
     assert s7_equivalence._is_unavailable_scalar(float("nan"))
     assert not s7_equivalence._is_unavailable_scalar(0.0)
     assert s7_equivalence._array_comparison("absent", None, None).passed
+
+
+def test_s7_environment_records_both_solver_layers():
+    environment = s7_equivalence._environment()
+
+    assert environment["clarabel"] != "unknown"
+    assert environment["cyipopt"] != "unknown"
+    assert environment["ipopt"] != "unknown"

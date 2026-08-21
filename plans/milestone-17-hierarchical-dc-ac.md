@@ -1042,7 +1042,8 @@ suite.
 
 ### S7 frozen-reference equivalence
 
-**In progress.** S7 re-executes the frozen scenario through the public
+**Implementation and authoritative execution complete; review and checkpoint
+pending.** S7 re-executes the frozen scenario through the public
 hierarchical API and compares its retained audit tree and realized trajectory
 against the reviewed manual-reference records. It does not regenerate or
 reinterpret those reference records.
@@ -1085,19 +1086,30 @@ variables or constraints.
 
 #### S7 checklist
 
-- [ ] Verify reference artifact integrity and execution-source provenance.
-- [ ] Reproduce frozen hard `flat_only` against its S3 baseline.
-- [ ] Reproduce frozen quadratic-soft `flat_only` against its S3 baseline.
-- [ ] Reproduce replanned hard `flat_only` against its S3 baseline, including
+- [x] Verify reference artifact integrity and execution-source provenance.
+- [x] Reproduce frozen hard `flat_only` against its S3 baseline.
+- [x] Reproduce frozen quadratic-soft `flat_only` against its S3 baseline.
+- [x] Reproduce replanned hard `flat_only` against its S3 baseline, including
   the same terminal failure classification.
-- [ ] Reproduce replanned quadratic-soft `flat_only` against its S3 baseline.
-- [ ] Reproduce replanned hard `shifted_with_recovery` against S3b.
-- [ ] Compare every outer plan, registered AC slot, accepted first action,
+- [x] Reproduce replanned quadratic-soft `flat_only` against its S3 baseline.
+- [x] Reproduce replanned hard `shifted_with_recovery` against S3b.
+- [x] Compare every outer plan, registered AC slot, accepted first action,
   realized SoC boundary, termination record, and trajectory summary under the
   frozen absolute tolerances.
-- [ ] Retain any non-equivalence as a finding; do not weaken tolerances or
+- [x] Retain any non-equivalence as a finding; do not weaken tolerances or
   modify the frozen reference artifacts to obtain agreement.
-- [ ] Record software/source provenance and tracked integrity metadata for the
+- [x] Record software/source provenance and tracked integrity metadata for the
   S7 execution.
-- [ ] Pass focused, lint, typing, and complete-suite verification.
+- [x] Pass focused, lint, typing, and complete-suite verification.
 - [ ] Complete external review and checkpoint S7 before beginning S8.
+
+The authoritative S7 execution ran from clean commit `5fb84cf` and rebuilt all
+five trajectories without resume. All checks passed. Maximum finite absolute
+differences ranged from `9.09e-13` to `5.82e-11`, well below the frozen `1e-6`
+implementation-equivalence tolerance. The two frozen runs completed, the two
+replanned `flat_only` runs reproduced their interval-35 AC and interval-95
+outer failures, and the hard shifted-recovery run reproduced all 96 intervals
+and 864 S3b slots. See `experiments/hierarchical_battery_resilience/S7_REPORT.md`
+and `S7_RESULTS_METADATA.json` for interpretation and tracked provenance.
+The stopping-point verification is 97 focused hierarchical/S7 tests, Ruff,
+cold strict mypy, JSON and diff validation, and the complete 1,817-test suite.

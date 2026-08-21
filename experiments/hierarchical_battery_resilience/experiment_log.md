@@ -525,3 +525,25 @@ The result supports `shifted_with_recovery` for this frozen scenario and solver
 stack. It does not establish a universal policy or a general IPOPT claim. The
 full interpretation and tracked integrity record are in `S3B_REPORT.md` and
 `S3B_RESULTS_METADATA.json`.
+
+## 2026-08-20 — S7 public-reference equivalence completed
+
+The public M17 controller was run through all four frozen S3 `flat_only`
+policies and the S3b hard `shifted_with_recovery` policy. The authoritative run
+used clean commit `5fb84cf`; it rebuilt all five trajectories without resume.
+All comparisons passed under the predeclared `1e-6` absolute implementation-
+equivalence tolerance.
+
+The two completed frozen trajectories, both intentionally failed replanned
+`flat_only` trajectories, and the completed 864-slot causal-recovery trajectory
+all reproduced their reference state/action paths, plan and attempt records,
+termination classifications, and non-runtime accounting. The largest finite
+difference was `5.82e-11`, in the frozen hard case.
+
+Two prior executions were not promoted to the scientific record. The first
+produced no artifact after a comparator error on a skipped S3b slot. The second
+correctly exposed reviewed schema distinctions (`accepted_soft` versus
+`accepted`, `null` versus `NaN`, and the S3 manual-only target-free diagnostic),
+which were then normalized explicitly before the entire study was rerun. The
+full interpretation is in `S7_REPORT.md`; tracked integrity metadata is in
+`S7_RESULTS_METADATA.json`.
