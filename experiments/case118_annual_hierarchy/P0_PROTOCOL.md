@@ -157,6 +157,58 @@ resume; they are never silently blessed. Each later window must name the
 actual controlling attempt from the immediately preceding verified archive;
 the checkpoint does not trust a merely well-formed preceding-attempt ID.
 
+## Complete trajectory driver contract
+
+`streaming_driver.run_streaming_trajectory()` owns the full fresh/resumed loop
+without returning a public `HierarchicalResult`. A fresh run snapshots its
+inputs, solves and archives the outer plan once, then replaces the live outer
+build with its verified build-free signposts before constructing any AC
+window. A resumed run verifies that same outer artifact and the complete
+checkpoint/window chain before reconstructing the immediately preceding
+controller from archived named solution arrays.
+
+Every executed AC attempt reports process-memory observations immediately
+before and after model construction and solution. The driver also observes
+immediately before and after window archival and after live-build release.
+These internal observations never interrupt a solve or persistence transaction. A caller's
+resource observer receives state only at the final safe boundary, after the
+window artifact and checkpoint are durable and garbage collection has released
+the live build. Its optional reason produces an explicit
+`observer_terminated` record without advancing another interval.
+
+RSS is current resident memory, not the process-lifetime high-water mark. On
+macOS it is read in-process through `proc_pidinfo`; on Linux it is read from
+`/proc/self/statm`. Each invocation-labeled sample is written exactly once in
+an immutable, backward-linked resource chunk. The newest chunk is published
+first, and only then does one atomic checkpoint replacement make the window,
+state, and resource-chain head jointly resumable. The prior checkpoint and
+its chain remain valid until that replacement. Resume verifies the complete
+chain before adding the next invocation's samples and rejects missing,
+altered, cyclic, provenance-mismatched, count-mismatched, or
+interval-discontinuous evidence.
+
+Immediately after an accepted outer plan is archived and its live build is
+released, the driver publishes the first resource chunk and a zero-interval
+checkpoint. A crash before the first AC window therefore resumes from the
+already-audited outer plan instead of forcing an overwrite or re-solve. If
+publication is interrupted after the immutable outer plan—or after an orphaned
+initial resource chunk—but before the checkpoint appears, resume verifies the
+outer artifact against the current input, policy, solver, signpost, and storage
+contracts. It also reconstructs the complete lossy-DC audit from the archived
+finite public results and requires exact agreement among the accepted status,
+residuals, storage identities, result SoC trajectory, initial state, and hashed
+signposts. Only then does it republish a new zero-boundary resource head and
+begin AC work.
+
+Fresh mode rejects an existing outer plan or checkpoint rather than blessing
+or replacing it. Normal resume requires both; checkpoint-free zero-boundary
+recovery requires the immutable outer artifact, whose original source and
+scenario hashes must match the caller alongside its input, policy, solver,
+signpost, and storage contracts. Recovery exhaustion archives the full failed
+nine-slot window without advancing the checkpoint. Artifact failure,
+outer failure, observer termination, and successful horizon completion receive
+distinct atomic run-status records.
+
 ## S3b retrospective gate
 
 P0 also normalizes the authoritative M17 S3b recovery window and compares its

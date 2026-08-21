@@ -4,17 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import gzip
+from hashlib import sha256
 import json
 from pathlib import Path
-from typing import Mapping, Sequence
+from types import SimpleNamespace
+from typing import Mapping, Sequence, cast
 
 import numpy as np
 
 from cvxopf import ACAttemptRecord, HierarchicalInputs, HierarchicalPolicy, OPFBuild
 
+from experiments.case118_annual_hierarchy.audit import ProbeAudit, audit_probe
+from experiments.case118_annual_hierarchy.p0_fixture import policy_sha256
 from experiments.case118_annual_hierarchy.streaming_runner import (
+    CausalControllerSource,
     StreamingOuterPlan,
     StreamingWindowResult,
+    causal_source_from_attempt,
     execution_input_sha256,
     variables_by_name,
 )
@@ -83,9 +89,7 @@ def _structural_signature(build: OPFBuild) -> dict[str, object]:
     ]
     parameter_records = [
         {"name": parameter.name(), "shape": list(parameter.shape)}
-        for parameter in sorted(
-            build.prob.parameters(), key=lambda item: item.name()
-        )
+        for parameter in sorted(build.prob.parameters(), key=lambda item: item.name())
     ]
     return {
         "variables": variable_records,
@@ -134,6 +138,11 @@ def attempt_archive_payload(
             for name in sorted(attempt.raw_start)
         }
     )
+    causal_source = (
+        causal_source_from_attempt(attempt)
+        if attempt.supplied_executed_action
+        else None
+    )
     return {
         "attempt_id": attempt.attempt_id,
         "slot_state": attempt.slot_state,
@@ -141,6 +150,12 @@ def attempt_archive_payload(
         "transformation": attempt.transformation,
         "ordinal": attempt.ordinal,
         "iteration": attempt.iteration,
+        "global_interval_start": attempt.global_interval_start,
+        "global_interval_stop": attempt.global_interval_stop,
+        "outer_plan_id": attempt.outer_plan_id,
+        "storage_device_ids": list(attempt.storage_device_ids),
+        "initial_soc_mwh": dict(attempt.initial_soc_mwh),
+        "target_soc_mwh": dict(attempt.target_soc_mwh),
         "source_kind": attempt.source_kind,
         "source_attempt_id": attempt.source_attempt_id,
         "inner_terminal_policy": attempt.inner_terminal_policy,
@@ -174,12 +189,61 @@ def attempt_archive_payload(
         "result": (
             None
             if attempt.result is None
-            else _json_value(
-                attempt.result, normalize_nonfinite_scalar=True
-            )
+            else _json_value(attempt.result, normalize_nonfinite_scalar=True)
         ),
         "audit": _audit_payload(attempt),
+        "causal_source": (
+            None
+            if causal_source is None
+            else {
+                "attempt_id": causal_source.attempt_id,
+                "ordinal": causal_source.ordinal,
+                "role": causal_source.role,
+                "iteration": causal_source.iteration,
+                "global_interval_start": causal_source.global_interval_start,
+                "global_interval_stop": causal_source.global_interval_stop,
+                "outer_plan_id": causal_source.outer_plan_id,
+                "storage_device_ids": list(causal_source.storage_device_ids),
+                "initial_soc_mwh": dict(causal_source.initial_soc_mwh),
+                "first_soc_mwh": causal_source.first_soc_mwh.tolist(),
+                "first_b_mw": causal_source.first_b_mw.tolist(),
+                "solution_values": _json_value(causal_source.solution_values),
+            }
+        ),
     }
+
+
+def causal_source_from_archive(
+    attempt_payload: Mapping[str, object],
+) -> CausalControllerSource:
+    """Restore the exact build-free source needed by shifted recovery."""
+    raw = attempt_payload.get("causal_source")
+    if not isinstance(raw, Mapping):
+        raise ValueError("archived controlling attempt lacks its causal source")
+    return CausalControllerSource(
+        attempt_id=str(raw["attempt_id"]),
+        ordinal=int(raw["ordinal"]),
+        role=str(raw["role"]),
+        iteration=int(raw["iteration"]),
+        global_interval_start=int(raw["global_interval_start"]),
+        global_interval_stop=int(raw["global_interval_stop"]),
+        outer_plan_id=str(raw["outer_plan_id"]),
+        storage_device_ids=tuple(str(value) for value in raw["storage_device_ids"]),
+        initial_soc_mwh={
+            str(key): float(cast(float, value))
+            for key, value in cast(
+                Mapping[object, object], raw["initial_soc_mwh"]
+            ).items()
+        },
+        first_soc_mwh=np.asarray(raw["first_soc_mwh"], dtype=float),
+        first_b_mw=np.asarray(raw["first_b_mw"], dtype=float),
+        solution_values={
+            str(key): np.asarray(value, dtype=float)
+            for key, value in cast(
+                Mapping[object, object], raw["solution_values"]
+            ).items()
+        },
+    )
 
 
 def _result_dimensions(inputs: HierarchicalInputs) -> dict[str, int]:
@@ -209,22 +273,48 @@ def _outer_boundaries(outer: StreamingOuterPlan) -> dict[int, dict[str, float]]:
     }
 
 
+def result_dimensions(inputs: HierarchicalInputs) -> dict[str, int]:
+    """Return the trusted extracted-result dimensions for checkpoint validation."""
+    return _result_dimensions(inputs)
+
+
+def residual_tolerances(policy: HierarchicalPolicy) -> dict[str, float]:
+    """Return the frozen acceptance tolerances used by archive validation."""
+    return _residual_tolerances(policy)
+
+
+def outer_boundaries(outer: StreamingOuterPlan) -> dict[int, dict[str, float]]:
+    """Return the immutable outer SoC signposts keyed by global boundary."""
+    return _outer_boundaries(outer)
+
+
 def outer_plan_archive_payload(
-    outer: StreamingOuterPlan, *, inputs: HierarchicalInputs
+    outer: StreamingOuterPlan,
+    *,
+    inputs: HierarchicalInputs,
+    source_fingerprint: str,
+    scenario_hash: str,
 ) -> dict[str, object]:
     """Project the retained outer plan into one build-free artifact."""
     outer.verify_signpost_integrity()
+    if outer.build is None:
+        raise ValueError("only a live outer plan can be archived")
     if outer.input_fingerprint != execution_input_sha256(inputs):
         raise ValueError("outer plan does not match its archival input snapshot")
-    if outer.boundary_soc_mwh is None:
-        raise ValueError("accepted outer plan lacks SoC signposts")
-    extracted_soc = np.asarray(outer.result["soc"], dtype=float)
-    if not np.array_equal(extracted_soc, outer.boundary_soc_mwh[1:]):
-        raise ValueError("outer signposts differ from the retained outer result")
+    if not source_fingerprint.strip() or not scenario_hash.strip():
+        raise ValueError("outer provenance hashes must be nonempty")
+    if outer.accepted_primal:
+        if outer.boundary_soc_mwh is None:
+            raise ValueError("accepted outer plan lacks SoC signposts")
+        extracted_soc = np.asarray(outer.result["soc"], dtype=float)
+        if not np.array_equal(extracted_soc, outer.boundary_soc_mwh[1:]):
+            raise ValueError("outer signposts differ from the retained outer result")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "iteration": 0,
         "outer_plan_id": outer.outer_plan_id,
+        "source_fingerprint": source_fingerprint,
+        "scenario_hash": scenario_hash,
         "input_fingerprint": outer.input_fingerprint,
         "horizon_steps": outer.horizon_steps,
         "delta_hours": outer.delta_hours,
@@ -233,9 +323,11 @@ def outer_plan_archive_payload(
         "solve_config_sha256": outer.solve_config_sha256,
         "signpost_sha256": outer.signpost_sha256,
         "global_boundary_indices": outer.global_boundary_indices.tolist(),
-        "boundary_soc_mwh": outer.boundary_soc_mwh.tolist(),
+        "boundary_soc_mwh": (
+            None if outer.boundary_soc_mwh is None else outer.boundary_soc_mwh.tolist()
+        ),
         "structural_signature": _structural_signature(outer.build),
-        "result": _json_value(outer.result),
+        "result": _json_value(outer.result, normalize_nonfinite_scalar=True),
         "audit": {
             "status": outer.audit.status,
             "missing_or_nonfinite_fields": list(
@@ -252,11 +344,181 @@ def outer_plan_archive_payload(
     return payload
 
 
+def load_verified_outer_plan_archive(
+    path: Path,
+    *,
+    inputs: HierarchicalInputs,
+    policy: HierarchicalPolicy,
+    expected_solve_config_sha256: str,
+    expected_source_fingerprint: str,
+    expected_scenario_hash: str,
+    expected_artifact: WindowIndexEntry | None = None,
+) -> StreamingOuterPlan:
+    """Load the immutable outer signposts needed by a resumed trajectory."""
+    if expected_artifact is not None:
+        if (
+            path.stat().st_size != expected_artifact.bytes
+            or sha256_path(path) != expected_artifact.sha256
+        ):
+            raise ValueError("outer-plan artifact integrity check failed")
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        payload = cast(Mapping[str, object], json.load(stream))
+    required = {
+        "outer_plan_id",
+        "source_fingerprint",
+        "scenario_hash",
+        "input_fingerprint",
+        "horizon_steps",
+        "delta_hours",
+        "storage_device_ids",
+        "policy_sha256",
+        "solve_config_sha256",
+        "signpost_sha256",
+        "global_boundary_indices",
+        "boundary_soc_mwh",
+        "result",
+        "audit",
+    }
+    if not required.issubset(payload):
+        raise ValueError("outer-plan artifact is incomplete")
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("outer-plan artifact schema mismatch")
+    audit_payload = cast(Mapping[str, object], payload["audit"])
+    required_audit = {
+        "status",
+        "missing_or_nonfinite_fields",
+        "identity_error",
+        "residuals",
+        "accepted_primal",
+        "exception",
+        "wall_time_seconds",
+    }
+    if not required_audit.issubset(audit_payload):
+        raise ValueError("outer-plan audit is incomplete")
+    if (
+        audit_payload["status"] not in {"optimal", "optimal_inaccurate"}
+        or audit_payload["accepted_primal"] is not True
+        or audit_payload["exception"] is not None
+        or audit_payload["identity_error"] is not None
+        or audit_payload["missing_or_nonfinite_fields"] != []
+    ):
+        raise ValueError("outer-plan audit is not an accepted primal")
+    wall_time = audit_payload["wall_time_seconds"]
+    if (
+        not isinstance(wall_time, (int, float))
+        or not np.isfinite(wall_time)
+        or wall_time < 0
+    ):
+        raise ValueError("outer-plan audit wall time is invalid")
+    residuals = cast(Mapping[str, object], audit_payload["residuals"])
+    if not isinstance(residuals, Mapping) or any(
+        not isinstance(value, (int, float)) or not np.isfinite(value) or value < 0
+        for value in residuals.values()
+    ):
+        raise ValueError("outer-plan audit residuals are invalid")
+    result = cast(Mapping[str, object], payload["result"])
+    if not isinstance(result, Mapping):
+        raise ValueError("outer-plan result must be a mapping")
+    synthetic_build = cast(OPFBuild, SimpleNamespace(formulation="lossy_dc"))
+    recomputed = audit_probe(
+        inputs.case,
+        synthetic_build,
+        result,
+        generators=inputs.generators,
+        loads=inputs.loads,
+        nondispatchable=inputs.nondispatchable,
+        storage=inputs.storage,
+        delta=inputs.delta,
+        branch_limit_sentinel=inputs.options.branch_limit_sentinel,
+        tolerances=policy.tolerances,
+    )
+    archived_residuals = {
+        name: float(cast(float, value)) for name, value in residuals.items()
+    }
+    if (
+        not recomputed.accepted_primal
+        or recomputed.status != audit_payload["status"]
+        or recomputed.missing_or_nonfinite_fields
+        or recomputed.identity_error is not None
+        or recomputed.residuals != archived_residuals
+    ):
+        raise ValueError("outer-plan audit does not reproduce from archived results")
+    boundary = np.asarray(payload["boundary_soc_mwh"], dtype=float)
+    result_soc = np.asarray(result.get("soc"), dtype=float)
+    expected_initial = np.asarray(
+        [unit.initial_soc for unit in inputs.storage], dtype=float
+    )
+    if (
+        boundary.shape != (inputs.horizon_steps + 1, len(inputs.storage))
+        or result_soc.shape != (inputs.horizon_steps, len(inputs.storage))
+        or not np.all(np.isfinite(boundary))
+        or not np.array_equal(boundary[0], expected_initial)
+        or not np.array_equal(boundary[1:], result_soc)
+    ):
+        raise ValueError("outer-plan result and SoC signposts are inconsistent")
+    outer = StreamingOuterPlan(
+        outer_plan_id=str(payload["outer_plan_id"]),
+        build=None,
+        result=result,
+        audit=ProbeAudit(
+            status=cast(str | None, audit_payload["status"]),
+            missing_or_nonfinite_fields=tuple(
+                cast(Sequence[str], audit_payload["missing_or_nonfinite_fields"])
+            ),
+            identity_error=cast(str | None, audit_payload["identity_error"]),
+            residuals={
+                name: float(cast(float, value)) for name, value in residuals.items()
+            },
+            accepted_primal=bool(audit_payload["accepted_primal"]),
+        ),
+        exception=cast(str | None, audit_payload["exception"]),
+        wall_time_seconds=float(cast(float, audit_payload["wall_time_seconds"])),
+        storage_device_ids=tuple(cast(Sequence[str], payload["storage_device_ids"])),
+        input_fingerprint=str(payload["input_fingerprint"]),
+        horizon_steps=int(cast(int, payload["horizon_steps"])),
+        delta_hours=float(cast(float, payload["delta_hours"])),
+        policy_sha256=str(payload["policy_sha256"]),
+        solve_config_sha256=str(payload["solve_config_sha256"]),
+        signpost_sha256=str(payload["signpost_sha256"]),
+        global_boundary_indices=np.asarray(
+            payload["global_boundary_indices"], dtype=int
+        ),
+        boundary_soc_mwh=np.asarray(payload["boundary_soc_mwh"], dtype=float),
+    )
+    if outer.input_fingerprint != execution_input_sha256(inputs):
+        raise ValueError("outer-plan artifact input fingerprint mismatch")
+    if payload["source_fingerprint"] != expected_source_fingerprint:
+        raise ValueError("outer-plan artifact source fingerprint mismatch")
+    if payload["scenario_hash"] != expected_scenario_hash:
+        raise ValueError("outer-plan artifact scenario hash mismatch")
+    if outer.policy_sha256 != policy_sha256(policy):
+        raise ValueError("outer-plan artifact policy mismatch")
+    if outer.solve_config_sha256 != expected_solve_config_sha256:
+        raise ValueError("outer-plan artifact solve configuration mismatch")
+    if outer.horizon_steps != inputs.horizon_steps or outer.delta_hours != inputs.delta:
+        raise ValueError("outer-plan artifact horizon mismatch")
+    if outer.storage_device_ids != tuple(
+        str(unit.device_id) for unit in inputs.storage
+    ):
+        raise ValueError("outer-plan artifact storage identity mismatch")
+    return outer
+
+
 def write_verified_outer_plan_archive(
-    path: Path, outer: StreamingOuterPlan, *, inputs: HierarchicalInputs
+    path: Path,
+    outer: StreamingOuterPlan,
+    *,
+    inputs: HierarchicalInputs,
+    source_fingerprint: str,
+    scenario_hash: str,
 ) -> WindowIndexEntry:
     """Atomically persist and byte-verify the one retained outer plan."""
-    payload = outer_plan_archive_payload(outer, inputs=inputs)
+    payload = outer_plan_archive_payload(
+        outer,
+        inputs=inputs,
+        source_fingerprint=source_fingerprint,
+        scenario_hash=scenario_hash,
+    )
     entry = atomic_gzip_json(path, payload)
     with gzip.open(path, "rt", encoding="utf-8") as stream:
         reloaded = json.load(stream)
@@ -400,6 +662,7 @@ def persist_window_transaction(
     policy_hash: str,
     initial_soc_mwh: Sequence[float],
     completed_entries: Sequence[WindowIndexEntry],
+    advance_checkpoint: bool = True,
 ) -> PersistedWindow:
     """Archive one decision, then advance its checkpoint only after success."""
     if window.iteration != len(completed_entries):
@@ -422,17 +685,41 @@ def persist_window_transaction(
     )
     prefix = "window" if window.post_step_soc_mwh is not None else "failed-window"
     artifact_path = directory / f"{prefix}-{window.iteration:06d}.json.gz"
-    entry = write_verified_window_archive(
-        artifact_path,
-        payload,
-        inputs=inputs,
-        policy=policy,
-        outer=outer,
-    )
+    if artifact_path.exists():
+        encoded = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+        generation = sha256(encoded).hexdigest()[:16]
+        artifact_path = (
+            directory / f"{prefix}-{window.iteration:06d}-{generation}.json.gz"
+        )
+    if artifact_path.exists():
+        with gzip.open(artifact_path, "rt", encoding="utf-8") as stream:
+            existing_payload = json.load(stream)
+        if existing_payload != payload:
+            raise FileExistsError(
+                "window artifact generation contains different evidence"
+            )
+        entry = WindowIndexEntry(
+            iteration=window.iteration,
+            relative_path=artifact_path.name,
+            bytes=artifact_path.stat().st_size,
+            sha256=sha256_path(artifact_path),
+        )
+    else:
+        entry = write_verified_window_archive(
+            artifact_path,
+            payload,
+            inputs=inputs,
+            policy=policy,
+            outer=outer,
+        )
     if window.post_step_soc_mwh is None:
         return PersistedWindow(entry, None, tuple(completed_entries))
     ids = tuple(str(unit.device_id) for unit in inputs.storage)
     new_entries = (*completed_entries, entry)
+    if not advance_checkpoint:
+        return PersistedWindow(entry, None, new_entries)
     checkpoint = write_checkpoint_after_success(
         directory / "checkpoint.json",
         source_fingerprint=source_fingerprint,
@@ -450,8 +737,13 @@ def persist_window_transaction(
 __all__ = [
     "PersistedWindow",
     "attempt_archive_payload",
+    "causal_source_from_archive",
+    "load_verified_outer_plan_archive",
+    "outer_boundaries",
     "outer_plan_archive_payload",
     "persist_window_transaction",
+    "residual_tolerances",
+    "result_dimensions",
     "window_archive_payload",
     "write_checkpoint_after_success",
     "write_verified_outer_plan_archive",

@@ -101,6 +101,7 @@ def _executed_evidence(accepted, role, terminal_policy, steps):
             if terminal_policy == "hard_equality"
             else "soft_terminal_cost_abs"
         ] = 0.0
+
     def matrix(columns, value=0.0):
         return [[value] * columns for _ in range(steps)]
 
@@ -211,9 +212,33 @@ def _attempt(
         if state == "executed"
         else {}
     )
+    causal_source = (
+        {
+            "attempt_id": attempt_id(iteration, ordinal),
+            "ordinal": ordinal,
+            "role": role,
+            "iteration": iteration,
+            "global_interval_start": iteration,
+            "global_interval_stop": iteration + steps,
+            "outer_plan_id": "outer-000",
+            "storage_device_ids": ["battery"],
+            "initial_soc_mwh": {"battery": 5.0},
+            "first_soc_mwh": [5.0],
+            "first_b_mw": [0.0],
+            "solution_values": {"x": [1.0, 2.0]},
+        }
+        if controlling
+        else None
+    )
     return {
         "attempt_id": attempt_id(iteration, ordinal),
         "ordinal": ordinal,
+        "iteration": iteration,
+        "global_interval_start": iteration,
+        "global_interval_stop": iteration + steps,
+        "outer_plan_id": "outer-000",
+        "storage_device_ids": ["battery"],
+        "initial_soc_mwh": {"battery": 5.0},
         "role": role,
         "inner_terminal_policy": terminal_policy,
         "formulation": "ac",
@@ -233,6 +258,7 @@ def _attempt(
         "result": evidence.get("result"),
         "audit": evidence.get("audit"),
         "structural_signature": evidence.get("structural_signature"),
+        "causal_source": causal_source,
     }
 
 
@@ -350,9 +376,7 @@ def _load(path):
 def test_complete_window_archive_accepts_no_live_build():
     archive = _archive()
     assert _validate(archive) is archive
-    assert archive["attempts"][0]["attempt_id"] == (
-        "ac-000-00-primary_controlling"
-    )
+    assert archive["attempts"][0]["attempt_id"] == ("ac-000-00-primary_controlling")
     assert archive["attempts"][1]["source_kind"] is None
     archive["attempts"][0]["build"] = object()
     with pytest.raises(ValueError, match="must not retain a live build"):
@@ -480,7 +504,10 @@ def test_result_contract_rejects_missing_nonfinite_and_wrong_shape_fields():
     ("mutation", "match"),
     [
         (lambda attempt: attempt.update({"assigned_start": None}), "assigned start"),
-        (lambda attempt: attempt.update({"solver_x0": [9.0, 2.0, 0.5]}), "assigned start"),
+        (
+            lambda attempt: attempt.update({"solver_x0": [9.0, 2.0, 0.5]}),
+            "assigned start",
+        ),
         (
             lambda attempt: attempt["solver_evidence"].update(
                 {"model_coordinate_count": 1}
@@ -513,9 +540,7 @@ def test_executed_attempt_requires_complete_auditable_evidence(mutation, match):
     [
         (lambda audit: audit.update({"status": "infeasible"}), "eligible"),
         (
-            lambda audit: audit.update(
-                {"missing_or_nonfinite_fields": ["Pg"]}
-            ),
+            lambda audit: audit.update({"missing_or_nonfinite_fields": ["Pg"]}),
             "failed acceptance gates",
         ),
         (
@@ -529,9 +554,7 @@ def test_executed_attempt_requires_complete_auditable_evidence(mutation, match):
         (lambda audit: audit.pop("solver_num_iters"), "acceptance evidence"),
     ],
 )
-def test_controlling_audit_rejects_public_acceptance_invariant_drift(
-    mutation, match
-):
+def test_controlling_audit_rejects_public_acceptance_invariant_drift(mutation, match):
     archive = _archive()
     mutation(archive["attempts"][0]["audit"])
     with pytest.raises(ValueError, match=match):
@@ -560,9 +583,7 @@ def test_residual_gate_rejects_missing_and_excessive_accepted_residuals():
         _validate(archive)
 
     archive = _archive()
-    archive["attempts"][0]["audit"]["residuals"][
-        "ac_reactive_balance_pu_abs"
-    ] = 2e-6
+    archive["attempts"][0]["audit"]["residuals"]["ac_reactive_balance_pu_abs"] = 2e-6
     with pytest.raises(ValueError, match="exceeds frozen residual tolerances"):
         _validate(archive)
 
@@ -642,9 +663,7 @@ def test_unexecuted_target_free_cannot_fabricate_accepted_source(field):
         {"accepted_primal": True} if field == "audit" else {"soc": [5.0]}
     )
     for ordinal in range(2, 6):
-        archive["attempts"][ordinal] = _attempt(
-            0, ordinal, state="source_unavailable"
-        )
+        archive["attempts"][ordinal] = _attempt(0, ordinal, state="source_unavailable")
     with pytest.raises(ValueError, match="unexecuted slot"):
         _validate(archive)
 
@@ -716,6 +735,19 @@ def test_window_rejects_target_free_or_mismatched_controller():
     with pytest.raises(ValueError, match="target-free"):
         _validate(archive)
 
+
+@pytest.mark.parametrize("mutation", ["missing", "shape"])
+def test_window_rejects_incomplete_archived_causal_model_state(mutation):
+    archive = _archive()
+    causal = archive["attempts"][0]["causal_source"]
+    if mutation == "missing":
+        causal["solution_values"] = {"different": [1.0, 2.0]}
+    else:
+        causal["solution_values"]["x"] = [[1.0, 2.0]]
+
+    with pytest.raises(ValueError, match="structural signature"):
+        _validate(archive)
+
     archive = _archive()
     archive["executed_interval"]["controlling_attempt_id"] = "wrong"
     with pytest.raises(ValueError, match="controlling attempt mismatch"):
@@ -732,9 +764,7 @@ def test_resume_rejects_state_or_identity_discontinuity(tmp_path):
         post=3.5,
         preceding_id=preceding,
     )
-    second_entry = atomic_gzip_json(
-        tmp_path / "window_000001_identity.json.gz", second
-    )
+    second_entry = atomic_gzip_json(tmp_path / "window_000001_identity.json.gz", second)
     checkpoint = _checkpoint((first_entry, second_entry), realized=3.5)
     checkpoint_path = tmp_path / "checkpoint.json"
     atomic_json(checkpoint_path, checkpoint)

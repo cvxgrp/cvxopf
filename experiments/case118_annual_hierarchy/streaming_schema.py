@@ -35,9 +35,7 @@ SLOT_STATES = {
 }
 PERTURBATION_SCALES = (1e-4, 1e-3, 1e-2)
 ACCEPTED_SOLVER_STATUSES = frozenset({"optimal", "optimal_inaccurate"})
-CERTIFIED_INFEASIBLE_STATUSES = frozenset(
-    {"infeasible", "infeasible_inaccurate"}
-)
+CERTIFIED_INFEASIBLE_STATUSES = frozenset({"infeasible", "infeasible_inaccurate"})
 ATTEMPT_OUTCOMES = frozenset(
     {
         "accepted",
@@ -159,6 +157,22 @@ def atomic_json(path: Path, value: object) -> None:
         raise
 
 
+def atomic_immutable_json(path: Path, value: object) -> None:
+    """Atomically publish canonical JSON without replacing an existing target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(_json_bytes(value))
+        os.link(temporary_name, path)
+        Path(temporary_name).unlink()
+    except BaseException:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
 def _mapping(value: object, name: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{name} must be a mapping")
@@ -240,8 +254,7 @@ def _validate_executed_evidence(
         name = item.get("name")
         shape_raw = _sequence(item.get("shape"), f"layout[{index}].shape")
         shape = tuple(
-            _nonnegative_int(value, f"layout[{index}].shape")
-            for value in shape_raw
+            _nonnegative_int(value, f"layout[{index}].shape") for value in shape_raw
         )
         start = _nonnegative_int(item.get("start"), f"layout[{index}].start")
         stop = _nonnegative_int(item.get("stop"), f"layout[{index}].stop")
@@ -284,9 +297,7 @@ def _validate_executed_evidence(
         raise ValueError("solver_x0 layout does not cover the assigned model start")
     signature = evidence.get("layout_signature")
     expected_signature = hashlib.sha256(
-        json.dumps(
-            normalized_layout, sort_keys=True, separators=(",", ":")
-        ).encode()
+        json.dumps(normalized_layout, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     if signature != expected_signature:
         raise ValueError("solver_x0 layout signature mismatch")
@@ -312,7 +323,9 @@ def _validate_executed_evidence(
     for index, raw_variable in enumerate(structural_variables):
         variable = _mapping(raw_variable, f"structural variable {index}")
         name = variable.get("name")
-        shape_raw = _sequence(variable.get("shape"), f"structural variable {index}.shape")
+        shape_raw = _sequence(
+            variable.get("shape"), f"structural variable {index}.shape"
+        )
         shape = tuple(
             _nonnegative_int(value, f"structural variable {index}.shape")
             for value in shape_raw
@@ -373,9 +386,7 @@ def _validate_executed_evidence(
     ):
         raise ValueError("identity error must be a nonempty string or None")
     exception = audit["exception"]
-    if exception is not None and (
-        not isinstance(exception, str) or not exception
-    ):
+    if exception is not None and (not isinstance(exception, str) or not exception):
         raise ValueError("audit exception must be a nonempty string or None")
     raw_residuals = _mapping(audit["residuals"], "audit residuals")
     residuals: dict[str, float] = {}
@@ -475,9 +486,7 @@ def _validate_executed_evidence(
             continue
         array = np.asarray(value, dtype=float)
         if array.shape != shape or not np.all(np.isfinite(array)):
-            raise ValueError(
-                f"result field {name} must be finite with shape {shape}"
-            )
+            raise ValueError(f"result field {name} must be finite with shape {shape}")
     if accepted and objective is None:
         raise ValueError("accepted result objective cannot be None")
 
@@ -510,9 +519,7 @@ def validate_window_archive(
     stop = _nonnegative_int(archive.get("interval_stop"), "interval_stop")
     if stop != min(iteration + window, horizon):
         raise ValueError("interval_stop does not match frozen window geometry")
-    raw_storage_ids = tuple(
-        _sequence(archive.get("storage_device_ids"), "storage IDs")
-    )
+    raw_storage_ids = tuple(_sequence(archive.get("storage_device_ids"), "storage IDs"))
     if not raw_storage_ids or any(
         not isinstance(item, str) or not item.strip() for item in raw_storage_ids
     ):
@@ -524,9 +531,7 @@ def validate_window_archive(
     target_soc = _finite_vector(
         archive.get("target_soc_mwh"), "target SoC", len(storage_ids)
     )
-    delta = _finite_float(
-        archive.get("delta_hours"), "delta_hours", positive=True
-    )
+    delta = _finite_float(archive.get("delta_hours"), "delta_hours", positive=True)
     expected_delta = _finite_float(
         expected_delta_hours, "expected delta_hours", positive=True
     )
@@ -536,9 +541,7 @@ def validate_window_archive(
     attempts = _sequence(archive.get("attempts"), "attempts")
     if len(attempts) != 9:
         raise ValueError("shifted recovery requires exactly nine archived slots")
-    tolerance = _finite_float(
-        expected_soc_tolerance_mwh, "expected SoC tolerance"
-    )
+    tolerance = _finite_float(expected_soc_tolerance_mwh, "expected SoC tolerance")
     if tolerance < 0.0:
         raise ValueError("expected SoC tolerance must be nonnegative")
     archived_tolerance = _finite_float(
@@ -648,9 +651,10 @@ def validate_window_archive(
             raise ValueError("attempt role does not match frozen registry")
         if attempt.get("formulation") != "ac":
             raise ValueError("attempt formulation must be AC")
-        if _mapping(
-            attempt.get("result_dimensions"), "attempt result dimensions"
-        ) != dimensions:
+        if (
+            _mapping(attempt.get("result_dimensions"), "attempt result dimensions")
+            != dimensions
+        ):
             raise ValueError("attempt result dimensions differ from frozen fleet")
         if attempt.get("slot_state") not in SLOT_STATES:
             raise ValueError("unknown attempt slot state")
@@ -676,16 +680,10 @@ def validate_window_archive(
         )
         if attempt.get("transformation") != expected_transformation:
             raise ValueError("attempt transformation does not match registry")
-        expected_scale = (
-            None
-            if ordinal < 3
-            else PERTURBATION_SCALES[(ordinal - 3) % 3]
-        )
+        expected_scale = None if ordinal < 3 else PERTURBATION_SCALES[(ordinal - 3) % 3]
         if attempt.get("scale") != expected_scale:
             raise ValueError("attempt scale does not match registry")
-        expected_seed = (
-            None if ordinal < 3 else perturbation_seed(iteration, ordinal)
-        )
+        expected_seed = None if ordinal < 3 else perturbation_seed(iteration, ordinal)
         if attempt.get("seed") != expected_seed:
             raise ValueError("attempt seed does not match registry")
         state = attempt["slot_state"]
@@ -721,14 +719,14 @@ def validate_window_archive(
         if state == "executed":
             if not solver_executed:
                 raise ValueError("executed slot must record solver execution")
-            _validate_executed_evidence(
-                attempt, residual_tolerances, result_shapes
-            )
+            _validate_executed_evidence(attempt, residual_tolerances, result_shapes)
         else:
             if solver_executed or supplied:
                 raise ValueError("unexecuted slot cannot retain execution claims")
             if attempt.get("audit") is not None or attempt.get("result") is not None:
-                raise ValueError("unexecuted slot cannot retain audit or result payload")
+                raise ValueError(
+                    "unexecuted slot cannot retain audit or result payload"
+                )
         if supplied:
             if attempt["role"] == "target_free":
                 raise ValueError("target-free attempt cannot supply an action")
@@ -739,6 +737,68 @@ def validate_window_archive(
             if not isinstance(current_attempt_id, str) or not current_attempt_id:
                 raise ValueError("controlling attempt must have an ID")
             controlling_attempts.append(attempt)
+            causal = _mapping(
+                attempt.get("causal_source"), "archived causal controller source"
+            )
+            for name in (
+                "attempt_id",
+                "ordinal",
+                "role",
+                "iteration",
+                "global_interval_start",
+                "global_interval_stop",
+                "outer_plan_id",
+                "storage_device_ids",
+                "initial_soc_mwh",
+            ):
+                if causal.get(name) != attempt.get(name):
+                    raise ValueError("causal source metadata differs from controller")
+            _finite_vector(
+                causal.get("first_soc_mwh"),
+                "causal first SoC",
+                len(storage_ids),
+            )
+            _finite_vector(
+                causal.get("first_b_mw"),
+                "causal first storage power",
+                len(storage_ids),
+            )
+            solution_values = _mapping(
+                causal.get("solution_values"), "causal solution values"
+            )
+            signature = _mapping(
+                attempt.get("structural_signature"), "structural signature"
+            )
+            variable_records = _sequence(
+                signature.get("variables"), "structural variables"
+            )
+            expected_shapes: dict[str, tuple[int, ...]] = {}
+            for record_value in variable_records:
+                record = _mapping(record_value, "structural variable")
+                variable_name = record.get("name")
+                if (
+                    not isinstance(variable_name, str)
+                    or not variable_name
+                    or variable_name in expected_shapes
+                ):
+                    raise ValueError("structural variable names must be unique")
+                shape = tuple(
+                    _nonnegative_int(item, f"structural variable {variable_name} shape")
+                    for item in _sequence(record.get("shape"), "variable shape")
+                )
+                expected_shapes[variable_name] = shape
+            if set(solution_values) != set(expected_shapes):
+                raise ValueError(
+                    "causal solution variables differ from structural signature"
+                )
+            for name, expected_shape in expected_shapes.items():
+                values = _finite_array(solution_values[name], f"causal solution {name}")
+                if values.shape != expected_shape:
+                    raise ValueError(
+                        f"causal solution {name} shape differs from structural signature"
+                    )
+        elif attempt.get("causal_source") is not None:
+            raise ValueError("only the controlling attempt may retain a causal source")
         accepted = (
             state == "executed"
             and isinstance(audit_value, Mapping)
@@ -762,9 +822,10 @@ def validate_window_archive(
         first_accepted = min(accepted_controlling_ordinals)
         if len(accepted_controlling_ordinals) != 1:
             raise ValueError("window cannot retain multiple accepted controllers")
-        if len(controlling_attempts) != 1 or controlling_attempts[0][
-            "ordinal"
-        ] != first_accepted:
+        if (
+            len(controlling_attempts) != 1
+            or controlling_attempts[0]["ordinal"] != first_accepted
+        ):
             raise ValueError("first accepted controller must supply the action")
         for later in attempts[first_accepted + 1 :]:
             if _mapping(later, "later attempt").get("slot_state") != (
@@ -772,8 +833,7 @@ def validate_window_archive(
             ):
                 raise ValueError("later slots must stop after accepted controller")
     elif any(
-        _mapping(item, "attempt").get("slot_state")
-        == "not_needed_after_acceptance"
+        _mapping(item, "attempt").get("slot_state") == "not_needed_after_acceptance"
         for item in attempts
     ):
         raise ValueError("not-needed slot requires an earlier accepted controller")
@@ -965,9 +1025,7 @@ def load_verified_checkpoint(
         if archive["executed_interval"] is None:
             raise ValueError("failed window cannot advance completed trajectory")
         executed_record = cast(Mapping[str, object], archive["executed_interval"])
-        preceding_controlling_id = cast(
-            str, executed_record["controlling_attempt_id"]
-        )
+        preceding_controlling_id = cast(str, executed_record["controlling_attempt_id"])
         expected_state = _finite_vector(
             archive["post_step_soc_mwh"],
             "archive post-step SoC",
@@ -978,11 +1036,7 @@ def load_verified_checkpoint(
         "checkpoint realized SoC",
         len(checkpoint_ids),
     )
-    tolerance = (
-        0.0
-        if not checkpoint["windows"]
-        else expected_soc_tolerance_mwh
-    )
+    tolerance = 0.0 if not checkpoint["windows"] else expected_soc_tolerance_mwh
     if np.max(np.abs(final_state - expected_state)) > tolerance:
         raise ValueError("checkpoint final realized SoC mismatch")
     return checkpoint
@@ -996,6 +1050,7 @@ __all__ = [
     "WindowIndexEntry",
     "attempt_id",
     "atomic_gzip_json",
+    "atomic_immutable_json",
     "atomic_json",
     "checkpoint_payload",
     "load_verified_checkpoint",

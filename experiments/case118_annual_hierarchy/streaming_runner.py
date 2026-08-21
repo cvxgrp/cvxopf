@@ -8,7 +8,8 @@ from hashlib import sha256
 import json
 import re
 from time import perf_counter
-from typing import Any, Literal, Mapping, Sequence, cast
+from types import MappingProxyType
+from typing import Any, Callable, Literal, Mapping, Sequence, cast
 import warnings
 
 import numpy as np
@@ -49,6 +50,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 
 
 _STEP_NAME = re.compile(r"^(?P<base>.+)_(?P<step>\d+)$")
+PhaseObserver = Callable[[str, int, int], None]
 
 
 def _signpost_sha256(
@@ -57,9 +59,7 @@ def _signpost_sha256(
     boundary_soc_mwh: np.ndarray | None,
 ) -> str:
     digest = sha256()
-    digest.update(
-        json.dumps(list(storage_device_ids), separators=(",", ":")).encode()
-    )
+    digest.update(json.dumps(list(storage_device_ids), separators=(",", ":")).encode())
     for values in (global_boundary_indices, boundary_soc_mwh):
         if values is None:
             digest.update(b"none\0")
@@ -76,7 +76,7 @@ class StreamingOuterPlan:
     """One retained frozen lossy-DC plan and its global SoC boundaries."""
 
     outer_plan_id: str
-    build: OPFBuild
+    build: OPFBuild | None
     result: Mapping[str, object]
     audit: ProbeAudit
     exception: str | None
@@ -104,9 +104,7 @@ class StreamingOuterPlan:
                 raise ValueError("outer SoC signposts have the wrong shape")
             if not np.all(np.isfinite(boundary)):
                 raise ValueError("outer SoC signposts must be finite")
-        actual_hash = _signpost_sha256(
-            self.storage_device_ids, indices, boundary
-        )
+        actual_hash = _signpost_sha256(self.storage_device_ids, indices, boundary)
         if actual_hash != self.signpost_sha256:
             raise ValueError("outer signpost integrity hash mismatch")
         indices.setflags(write=False)
@@ -153,6 +151,67 @@ class StreamingWindowResult:
 
 
 @dataclass(frozen=True)
+class CausalControllerSource:
+    """Build-free preceding controller data required by shifted recovery."""
+
+    attempt_id: str
+    ordinal: int
+    role: str
+    iteration: int
+    global_interval_start: int
+    global_interval_stop: int
+    outer_plan_id: str
+    storage_device_ids: tuple[str, ...]
+    initial_soc_mwh: Mapping[str, float]
+    first_soc_mwh: np.ndarray
+    first_b_mw: np.ndarray
+    solution_values: Mapping[str, np.ndarray]
+
+    @property
+    def local_interval_start(self) -> int:
+        return 0
+
+    @property
+    def local_interval_stop(self) -> int:
+        return self.global_interval_stop - self.global_interval_start
+
+    def __post_init__(self) -> None:
+        ids = tuple(self.storage_device_ids)
+        initial = {name: float(value) for name, value in self.initial_soc_mwh.items()}
+        if set(initial) != set(ids) or not all(
+            np.isfinite(value) for value in initial.values()
+        ):
+            raise ValueError("causal source initial SoC does not match storage IDs")
+        first_soc = np.asarray(self.first_soc_mwh, dtype=float).copy()
+        first_b = np.asarray(self.first_b_mw, dtype=float).copy()
+        if first_soc.shape != (len(self.storage_device_ids),) or first_b.shape != (
+            len(self.storage_device_ids),
+        ):
+            raise ValueError("causal source first-step storage arrays have wrong shape")
+        if not np.all(np.isfinite(first_soc)) or not np.all(np.isfinite(first_b)):
+            raise ValueError("causal source first-step storage arrays must be finite")
+        values = {
+            name: np.asarray(value, dtype=float).copy()
+            for name, value in self.solution_values.items()
+        }
+        if not values or any(
+            not np.all(np.isfinite(value)) for value in values.values()
+        ):
+            raise ValueError(
+                "causal source solution values must be complete and finite"
+            )
+        first_soc.setflags(write=False)
+        first_b.setflags(write=False)
+        for value in values.values():
+            value.setflags(write=False)
+        object.__setattr__(self, "storage_device_ids", ids)
+        object.__setattr__(self, "initial_soc_mwh", MappingProxyType(initial))
+        object.__setattr__(self, "first_soc_mwh", first_soc)
+        object.__setattr__(self, "first_b_mw", first_b)
+        object.__setattr__(self, "solution_values", MappingProxyType(values))
+
+
+@dataclass(frozen=True)
 class _X0Run:
     assigned_start: Mapping[str, np.ndarray]
     evidence: IPOPTStartEvidence | None
@@ -173,7 +232,9 @@ def _copy_case(case: Mapping[str, object]) -> dict[str, object]:
     copied: dict[str, object] = {}
     for name, value in case.items():
         copied[name] = (
-            np.asarray(value).copy() if isinstance(value, np.ndarray) else deepcopy(value)
+            np.asarray(value).copy()
+            if isinstance(value, np.ndarray)
+            else deepcopy(value)
         )
     return copied
 
@@ -256,14 +317,10 @@ def snapshot_inputs(inputs: HierarchicalInputs) -> HierarchicalInputs:
         ),
         df_nd=None if inputs.df_nd is None else inputs.df_nd.copy(deep=True),
         df_hvdc_min=(
-            None
-            if inputs.df_hvdc_min is None
-            else inputs.df_hvdc_min.copy(deep=True)
+            None if inputs.df_hvdc_min is None else inputs.df_hvdc_min.copy(deep=True)
         ),
         df_hvdc_max=(
-            None
-            if inputs.df_hvdc_max is None
-            else inputs.df_hvdc_max.copy(deep=True)
+            None if inputs.df_hvdc_max is None else inputs.df_hvdc_max.copy(deep=True)
         ),
         options=deepcopy(inputs.options),
     )
@@ -383,13 +440,15 @@ def _layout_signature(layout: tuple[Mapping[str, object], ...]) -> str:
         original = bool(item["is_original_variable"])
         label = str(item["name"]) if original else f"auxiliary_{auxiliary_index}"
         auxiliary_index += int(not original)
-        normalized.append({
-            "label": label,
-            "shape": item["shape"],
-            "start": item["start"],
-            "stop": item["stop"],
-            "is_original_variable": original,
-        })
+        normalized.append(
+            {
+                "label": label,
+                "shape": item["shape"],
+                "start": item["start"],
+                "stop": item["stop"],
+                "is_original_variable": original,
+            }
+        )
     encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return sha256(encoded.encode()).hexdigest()
 
@@ -417,10 +476,12 @@ def solve_ac_with_verified_x0(
         captured_x0 = np.asarray(data["x0"], dtype=float).copy()
         reduced_problem = cast(Any, data["problem"])
         reduced_variables = reduced_problem.variables()
-        expected = np.concatenate([
-            np.asarray(variable.value, dtype=float).flatten(order="F")
-            for variable in reduced_variables
-        ])
+        expected = np.concatenate(
+            [
+                np.asarray(variable.value, dtype=float).flatten(order="F")
+                for variable in reduced_variables
+            ]
+        )
         layout: list[dict[str, object]] = []
         seen: set[int] = set()
         offset = 0
@@ -433,16 +494,16 @@ def solve_ac_with_verified_x0(
                 model_value = np.asarray(
                     original_variables[variable.id].value, dtype=float
                 ).flatten(order="F")
-                originals_match &= np.array_equal(
-                    captured_x0[offset:stop], model_value
-                )
-            layout.append({
-                "name": variable.name(),
-                "shape": tuple(variable.shape),
-                "start": offset,
-                "stop": stop,
-                "is_original_variable": is_original,
-            })
+                originals_match &= np.array_equal(captured_x0[offset:stop], model_value)
+            layout.append(
+                {
+                    "name": variable.name(),
+                    "shape": tuple(variable.shape),
+                    "start": offset,
+                    "stop": stop,
+                    "is_original_variable": is_original,
+                }
+            )
             offset = stop
         captured_layout = tuple(layout)
         if not (
@@ -471,11 +532,13 @@ def solve_ac_with_verified_x0(
             {"solve_via_data": capturing_solve_via_data},
         )
         solver = solver_type()
-        chain = SolvingChain(reductions=[
-            CvxAttr2Constr(reduce_bounds=not solver.BOUNDED_VARIABLES),
-            Dnlp2Smooth(),
-            solver,
-        ])
+        chain = SolvingChain(
+            reductions=[
+                CvxAttr2Constr(reduce_bounds=not solver.BOUNDED_VARIABLES),
+                Dnlp2Smooth(),
+                solver,
+            ]
+        )
         canonical_problem, inverse_data = chain.apply(problem=build.prob)
         solution = solver.solve_via_data(
             canonical_problem,
@@ -518,9 +581,9 @@ def _values_by_step(
         if match is None:
             unsuffixed[name] = np.asarray(value, dtype=float).copy()
         else:
-            stepped.setdefault(match.group("base"), {})[
-                int(match.group("step"))
-            ] = np.asarray(value, dtype=float).copy()
+            stepped.setdefault(match.group("base"), {})[int(match.group("step"))] = (
+                np.asarray(value, dtype=float).copy()
+            )
     return stepped, unsuffixed
 
 
@@ -690,11 +753,15 @@ def _validate_outer_binding(
     if outer.delta_hours != inputs.delta:
         raise ValueError("outer plan timestep does not match the execution snapshot")
     if outer.storage_device_ids != _storage_ids(inputs.storage):
-        raise ValueError("outer plan storage identities do not match the execution snapshot")
+        raise ValueError(
+            "outer plan storage identities do not match the execution snapshot"
+        )
     if outer.policy_sha256 != policy_sha256(policy):
         raise ValueError("outer plan policy hash does not match the execution policy")
     if outer.solve_config_sha256 != solve_config_sha256(solve_config):
-        raise ValueError("outer plan solver hash does not match the execution configuration")
+        raise ValueError(
+            "outer plan solver hash does not match the execution configuration"
+        )
 
 
 def _p0_registry(iteration: int) -> tuple[_Slot, ...]:
@@ -707,16 +774,16 @@ def _p0_registry(iteration: int) -> tuple[_Slot, ...]:
     ]
     for ordinal in range(3, 9):
         scale = PERTURBATION_SCALES[(ordinal - 3) % 3]
-        transformation = (
-            "perturb_target_free" if ordinal < 6 else "perturb_causal"
+        transformation = "perturb_target_free" if ordinal < 6 else "perturb_causal"
+        slots.append(
+            _Slot(
+                ordinal,
+                ATTEMPT_ROLES[ordinal],
+                transformation,
+                scale,
+                perturbation_seed(iteration, ordinal),
+            )
         )
-        slots.append(_Slot(
-            ordinal,
-            ATTEMPT_ROLES[ordinal],
-            transformation,
-            scale,
-            perturbation_seed(iteration, ordinal),
-        ))
     return tuple(slots)
 
 
@@ -839,8 +906,35 @@ def _solution_values(attempt: ACAttemptRecord) -> dict[str, np.ndarray] | None:
     }
 
 
+def causal_source_from_attempt(attempt: ACAttemptRecord) -> CausalControllerSource:
+    """Detach the shifted-recovery source from its live AC build."""
+    values = _solution_values(attempt)
+    if values is None or attempt.result is None:
+        raise ValueError("causal source requires an accepted live controller")
+    ids = attempt.storage_device_ids
+    steps = attempt.local_interval_stop
+    return CausalControllerSource(
+        attempt_id=attempt.attempt_id,
+        ordinal=attempt.ordinal,
+        role=attempt.role,
+        iteration=attempt.iteration,
+        global_interval_start=attempt.global_interval_start,
+        global_interval_stop=attempt.global_interval_stop,
+        outer_plan_id=attempt.outer_plan_id,
+        storage_device_ids=ids,
+        initial_soc_mwh=attempt.initial_soc_mwh,
+        first_soc_mwh=np.asarray(attempt.result["soc"], dtype=float).reshape(
+            steps, len(ids)
+        )[0],
+        first_b_mw=np.asarray(attempt.result["b"], dtype=float).reshape(
+            steps, len(ids)
+        )[0],
+        solution_values=values,
+    )
+
+
 def _validate_preceding_controller(
-    attempt: ACAttemptRecord,
+    attempt: ACAttemptRecord | CausalControllerSource,
     *,
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
@@ -853,7 +947,9 @@ def _validate_preceding_controller(
         expected_iteration + policy.ac_window_steps, inputs.horizon_steps
     )
     if attempt.iteration != expected_iteration:
-        raise ValueError("causal source must come from the immediately preceding iteration")
+        raise ValueError(
+            "causal source must come from the immediately preceding iteration"
+        )
     if attempt.ordinal not in range(len(ATTEMPT_ROLES)):
         raise ValueError("causal source ordinal is outside the frozen registry")
     expected_role = ATTEMPT_ROLES[attempt.ordinal]
@@ -872,16 +968,17 @@ def _validate_preceding_controller(
         raise ValueError("causal source does not belong to the frozen outer plan")
     if attempt.storage_device_ids != _storage_ids(inputs.storage):
         raise ValueError("causal source storage identities do not match the fleet")
-    if (
-        attempt.slot_state != "executed"
-        or attempt.audit is None
-        or not attempt.audit.accepted_primal
-        or not attempt.supplied_executed_action
-        or attempt.role == "target_free"
-        or attempt.result is None
-        or attempt.build is None
-    ):
-        raise ValueError("causal source must be an accepted controlling attempt")
+    if isinstance(attempt, ACAttemptRecord):
+        if (
+            attempt.slot_state != "executed"
+            or attempt.audit is None
+            or not attempt.audit.accepted_primal
+            or not attempt.supplied_executed_action
+            or attempt.role == "target_free"
+            or attempt.result is None
+            or attempt.build is None
+        ):
+            raise ValueError("causal source must be an accepted controlling attempt")
 
 
 def _validate_realized_state(
@@ -890,7 +987,7 @@ def _validate_realized_state(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     iteration: int,
-    preceding: ACAttemptRecord | None,
+    preceding: ACAttemptRecord | CausalControllerSource | None,
 ) -> dict[str, float]:
     """Bind the observed state to the frozen initial or preceding action."""
     ids = _storage_ids(inputs.storage)
@@ -904,14 +1001,20 @@ def _validate_realized_state(
             [unit.initial_soc for unit in inputs.storage], dtype=float
         )
     else:
-        if preceding is None or preceding.result is None:
+        if preceding is None:
             raise RuntimeError("validated preceding controller lacks a result")
-        first_soc = np.asarray(preceding.result["soc"], dtype=float).reshape(
-            preceding.local_interval_stop, len(ids)
-        )[0]
-        first_b = np.asarray(preceding.result["b"], dtype=float).reshape(
-            preceding.local_interval_stop, len(ids)
-        )[0]
+        if isinstance(preceding, CausalControllerSource):
+            first_soc = preceding.first_soc_mwh
+            first_b = preceding.first_b_mw
+        else:
+            if preceding.result is None:
+                raise RuntimeError("validated preceding controller lacks a result")
+            first_soc = np.asarray(preceding.result["soc"], dtype=float).reshape(
+                preceding.local_interval_stop, len(ids)
+            )[0]
+            first_b = np.asarray(preceding.result["b"], dtype=float).reshape(
+                preceding.local_interval_stop, len(ids)
+            )[0]
         preceding_initial = np.asarray(
             [preceding.initial_soc_mwh[device_id] for device_id in ids],
             dtype=float,
@@ -946,23 +1049,43 @@ def _execute_attempt(
     source_kind: Literal["generated_flat", "attempt"],
     source_attempt_id: str | None,
     prebuilt: OPFBuild | None = None,
+    phase_observer: PhaseObserver | None = None,
 ) -> ACAttemptRecord:
     build = prebuilt
     retained_assigned: Mapping[str, np.ndarray] | None = None
     try:
         storage = _inner_storage(inputs, initial, None if target_free else target)
         if build is None:
+            if phase_observer is not None:
+                phase_observer("before_ac_build", iteration, slot.ordinal)
             build = build_window(inputs, "ac", iteration, stop, storage)
+            if phase_observer is not None:
+                phase_observer("after_ac_build", iteration, slot.ordinal)
         if assigned_start is not None:
             assign_start(build, assigned_start)
             retained_assigned = assigned_start
+        if phase_observer is not None:
+            phase_observer("before_ac_solve", iteration, slot.ordinal)
         run = solve_ac_with_verified_x0(build, solve_config)
+        if phase_observer is not None:
+            phase_observer("after_ac_solve", iteration, slot.ordinal)
     except Exception as exc:
         return _empty_attempt(
-            inputs, policy, outer, iteration, stop, initial, target, slot,
-            "construction_error", f"ac_construction_error:{type(exc).__name__}: {exc}",
-            source_kind=source_kind, source_attempt_id=source_attempt_id,
-            build=build, raw_start=raw_start, assigned_start=retained_assigned,
+            inputs,
+            policy,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slot,
+            "construction_error",
+            f"ac_construction_error:{type(exc).__name__}: {exc}",
+            source_kind=source_kind,
+            source_attempt_id=source_attempt_id,
+            build=build,
+            raw_start=raw_start,
+            assigned_start=retained_assigned,
         )
     result = extract_results(build)
     probe = audit_probe(
@@ -982,10 +1105,21 @@ def _execute_attempt(
     raw = run.assigned_start if raw_start is None else raw_start
     if run.evidence is None:
         return _empty_attempt(
-            inputs, policy, outer, iteration, stop, initial, target, slot,
-            "construction_error", "IPOPT x0 was not captured",
-            source_kind=source_kind, source_attempt_id=source_attempt_id,
-            build=build, raw_start=raw, assigned_start=run.assigned_start,
+            inputs,
+            policy,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slot,
+            "construction_error",
+            "IPOPT x0 was not captured",
+            source_kind=source_kind,
+            source_attempt_id=source_attempt_id,
+            build=build,
+            raw_start=raw,
+            assigned_start=run.assigned_start,
         )
     deviation = None
     if not target_free and result.get("soc") is not None:
@@ -1034,7 +1168,8 @@ def execute_streaming_window(
     outer: StreamingOuterPlan,
     iteration: int,
     realized_soc_mwh: Mapping[str, float],
-    preceding_controlling_attempt: ACAttemptRecord | None,
+    preceding_controlling_attempt: ACAttemptRecord | CausalControllerSource | None,
+    phase_observer: PhaseObserver | None = None,
 ) -> StreamingWindowResult:
     """Resolve one frozen nine-slot AC window and advance at most once."""
     validate_streaming_policy(policy)
@@ -1083,10 +1218,16 @@ def execute_streaming_window(
     if iteration > 0:
         if preceding_controlling_attempt is None:
             raise RuntimeError("validated preceding controller disappeared")
-        preceding_values = _solution_values(preceding_controlling_attempt)
+        preceding_values = (
+            preceding_controlling_attempt.solution_values
+            if isinstance(preceding_controlling_attempt, CausalControllerSource)
+            else _solution_values(preceding_controlling_attempt)
+        )
         if preceding_values is None:
             raise RuntimeError("validated preceding controller lacks solution values")
         try:
+            if phase_observer is not None:
+                phase_observer("before_ac_build", iteration, slots[0].ordinal)
             primary_build = build_window(
                 inputs,
                 "ac",
@@ -1094,6 +1235,8 @@ def execute_streaming_window(
                 stop,
                 _inner_storage(inputs, initial, target),
             )
+            if phase_observer is not None:
+                phase_observer("after_ac_build", iteration, slots[0].ordinal)
             causal_raw, causal_start = shifted_start(
                 preceding_values,
                 primary_build,
@@ -1103,19 +1246,37 @@ def execute_streaming_window(
             )
         except Exception as exc:
             reason = f"causal_start_construction_error:{type(exc).__name__}: {exc}"
-            records.append(_empty_attempt(
-                inputs, policy, outer, iteration, stop, initial, target, slots[0],
-                "construction_error", reason,
-                source_kind="attempt",
-                source_attempt_id=preceding_controlling_attempt.attempt_id,
-                build=primary_build,
-                raw_start=causal_raw,
-                assigned_start=causal_start,
-            ))
+            records.append(
+                _empty_attempt(
+                    inputs,
+                    policy,
+                    outer,
+                    iteration,
+                    stop,
+                    initial,
+                    target,
+                    slots[0],
+                    "construction_error",
+                    reason,
+                    source_kind="attempt",
+                    source_attempt_id=preceding_controlling_attempt.attempt_id,
+                    build=primary_build,
+                    raw_start=causal_raw,
+                    assigned_start=causal_start,
+                )
+            )
             records.extend(
                 _empty_attempt(
-                    inputs, policy, outer, iteration, stop, initial, target, slot,
-                    "source_unavailable", reason,
+                    inputs,
+                    policy,
+                    outer,
+                    iteration,
+                    stop,
+                    initial,
+                    target,
+                    slot,
+                    "source_unavailable",
+                    reason,
                 )
                 for slot in slots[1:]
             )
@@ -1124,10 +1285,22 @@ def execute_streaming_window(
         causal_source_id = preceding_controlling_attempt.attempt_id
 
     primary = _execute_attempt(
-        inputs, policy, solve_config, outer, iteration, stop, initial, target,
-        slots[0], target_free=False, raw_start=causal_raw,
-        assigned_start=causal_start, source_kind=causal_source_kind,
-        source_attempt_id=causal_source_id, prebuilt=primary_build,
+        inputs,
+        policy,
+        solve_config,
+        outer,
+        iteration,
+        stop,
+        initial,
+        target,
+        slots[0],
+        target_free=False,
+        raw_start=causal_raw,
+        assigned_start=causal_start,
+        source_kind=causal_source_kind,
+        source_attempt_id=causal_source_id,
+        prebuilt=primary_build,
+        phase_observer=phase_observer,
     )
     records.append(primary)
     if primary.supplied_executed_action:
@@ -1136,56 +1309,122 @@ def execute_streaming_window(
     target_free: ACAttemptRecord | None = None
     if accepted is None:
         target_free = _execute_attempt(
-            inputs, policy, solve_config, outer, iteration, stop, initial, target,
-            slots[1], target_free=True, raw_start=causal_raw,
-            assigned_start=causal_start, source_kind=causal_source_kind,
+            inputs,
+            policy,
+            solve_config,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slots[1],
+            target_free=True,
+            raw_start=causal_raw,
+            assigned_start=causal_start,
+            source_kind=causal_source_kind,
             source_attempt_id=causal_source_id,
+            phase_observer=phase_observer,
         )
         records.append(target_free)
     else:
-        records.append(_empty_attempt(
-            inputs, policy, outer, iteration, stop, initial, target, slots[1],
-            "not_needed_after_acceptance", "primary controlling attempt accepted",
-        ))
+        records.append(
+            _empty_attempt(
+                inputs,
+                policy,
+                outer,
+                iteration,
+                stop,
+                initial,
+                target,
+                slots[1],
+                "not_needed_after_acceptance",
+                "primary controlling attempt accepted",
+            )
+        )
 
-    target_free_values = (
-        None if target_free is None else _solution_values(target_free)
-    )
+    target_free_values = None if target_free is None else _solution_values(target_free)
     if accepted is None and target_free_values is not None and target_free is not None:
         copied = _execute_attempt(
-            inputs, policy, solve_config, outer, iteration, stop, initial, target,
-            slots[2], target_free=False, raw_start=target_free_values,
-            assigned_start=target_free_values, source_kind="attempt",
+            inputs,
+            policy,
+            solve_config,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slots[2],
+            target_free=False,
+            raw_start=target_free_values,
+            assigned_start=target_free_values,
+            source_kind="attempt",
             source_attempt_id=target_free.attempt_id,
+            phase_observer=phase_observer,
         )
         records.append(copied)
         if copied.supplied_executed_action:
             accepted = copied
     elif accepted is not None:
-        records.append(_empty_attempt(
-            inputs, policy, outer, iteration, stop, initial, target, slots[2],
-            "not_needed_after_acceptance", "earlier controlling attempt accepted",
-        ))
+        records.append(
+            _empty_attempt(
+                inputs,
+                policy,
+                outer,
+                iteration,
+                stop,
+                initial,
+                target,
+                slots[2],
+                "not_needed_after_acceptance",
+                "earlier controlling attempt accepted",
+            )
+        )
     else:
-        records.append(_empty_attempt(
-            inputs, policy, outer, iteration, stop, initial, target, slots[2],
-            "source_unavailable", "target-free solve was not accepted",
-        ))
+        records.append(
+            _empty_attempt(
+                inputs,
+                policy,
+                outer,
+                iteration,
+                stop,
+                initial,
+                target,
+                slots[2],
+                "source_unavailable",
+                "target-free solve was not accepted",
+            )
+        )
 
     causal_center = causal_start if causal_start is not None else primary.assigned_start
     for slot in slots[3:]:
         if accepted is not None:
             record = _empty_attempt(
-                inputs, policy, outer, iteration, stop, initial, target, slot,
-                "not_needed_after_acceptance", "earlier controlling attempt accepted",
+                inputs,
+                policy,
+                outer,
+                iteration,
+                stop,
+                initial,
+                target,
+                slot,
+                "not_needed_after_acceptance",
+                "earlier controlling attempt accepted",
             )
         else:
             target_free_role = slot.role == "perturbed_target_free"
             center = target_free_values if target_free_role else causal_center
             if center is None:
                 record = _empty_attempt(
-                    inputs, policy, outer, iteration, stop, initial, target, slot,
-                    "source_unavailable", "perturbation center is unavailable",
+                    inputs,
+                    policy,
+                    outer,
+                    iteration,
+                    stop,
+                    initial,
+                    target,
+                    slot,
+                    "source_unavailable",
+                    "perturbation center is unavailable",
                 )
             else:
                 source_id = (
@@ -1200,6 +1439,8 @@ def execute_streaming_window(
                 try:
                     if slot.scale is None or slot.seed is None:
                         raise RuntimeError("perturbation slot lacks scale or seed")
+                    if phase_observer is not None:
+                        phase_observer("before_ac_build", iteration, slot.ordinal)
                     build = build_window(
                         inputs,
                         "ac",
@@ -1207,12 +1448,21 @@ def execute_streaming_window(
                         stop,
                         _inner_storage(inputs, initial, target),
                     )
+                    if phase_observer is not None:
+                        phase_observer("after_ac_build", iteration, slot.ordinal)
                     raw, projected = perturbed_start(
                         center, build, scale=slot.scale, seed=slot.seed
                     )
                 except Exception as exc:
                     record = _empty_attempt(
-                        inputs, policy, outer, iteration, stop, initial, target, slot,
+                        inputs,
+                        policy,
+                        outer,
+                        iteration,
+                        stop,
+                        initial,
+                        target,
+                        slot,
                         "construction_error",
                         f"perturbation_construction_error:{type(exc).__name__}: {exc}",
                         source_kind=source_kind,
@@ -1221,10 +1471,21 @@ def execute_streaming_window(
                     )
                 else:
                     record = _execute_attempt(
-                        inputs, policy, solve_config, outer, iteration, stop,
-                        initial, target, slot, target_free=False,
-                        raw_start=raw, assigned_start=projected,
-                        source_kind=source_kind, source_attempt_id=source_id,
+                        inputs,
+                        policy,
+                        solve_config,
+                        outer,
+                        iteration,
+                        stop,
+                        initial,
+                        target,
+                        slot,
+                        target_free=False,
+                        raw_start=raw,
+                        assigned_start=projected,
+                        source_kind=source_kind,
+                        source_attempt_id=source_id,
+                        phase_observer=phase_observer,
                     )
                     if record.supplied_executed_action:
                         accepted = record
@@ -1249,9 +1510,7 @@ def execute_streaming_window(
         if residual > policy.tolerances.soc_recurrence_mwh_abs:
             raise RuntimeError("accepted controlling action violates SoC recurrence")
         post = dict(zip(ids, first_soc.tolist(), strict=True))
-    return StreamingWindowResult(
-        iteration, stop, tuple(records), accepted, post
-    )
+    return StreamingWindowResult(iteration, stop, tuple(records), accepted, post)
 
 
 __all__ = [

@@ -176,9 +176,7 @@ def unsuccessful_window(archived_window_source):
         )
         for ordinal in range(2, 6)
     )
-    attempts.extend(
-        executed_from(nominal.attempts[ordinal]) for ordinal in range(6, 9)
-    )
+    attempts.extend(executed_from(nominal.attempts[ordinal]) for ordinal in range(6, 9))
     return StreamingWindowResult(0, 3, tuple(attempts), None, None)
 
 
@@ -187,7 +185,11 @@ def test_unsuccessful_window_is_archived_without_checkpoint_advancement(
 ):
     fixture, inputs, outer, _nominal, _payload = archived_window_source
     outer_entry = write_verified_outer_plan_archive(
-        tmp_path / "outer-plan.json.gz", outer, inputs=inputs
+        tmp_path / "outer-plan.json.gz",
+        outer,
+        inputs=inputs,
+        source_fingerprint="source-fingerprint",
+        scenario_hash="scenario-hash",
     )
     transaction = persist_window_transaction(
         tmp_path,
@@ -210,13 +212,15 @@ def test_unsuccessful_window_is_archived_without_checkpoint_advancement(
     assert not (tmp_path / "checkpoint.json").exists()
 
 
-def test_atomic_window_then_checkpoint_round_trip(
-    tmp_path, archived_window_source
-):
+def test_atomic_window_then_checkpoint_round_trip(tmp_path, archived_window_source):
     fixture, inputs, outer, window, payload = archived_window_source
     artifact_path = tmp_path / "window-000.json.gz"
     outer_entry = write_verified_outer_plan_archive(
-        tmp_path / "outer-plan.json.gz", outer, inputs=inputs
+        tmp_path / "outer-plan.json.gz",
+        outer,
+        inputs=inputs,
+        source_fingerprint="source-fingerprint",
+        scenario_hash="scenario-hash",
     )
     entry = write_verified_window_archive(
         artifact_path,
@@ -253,9 +257,7 @@ def test_atomic_window_then_checkpoint_round_trip(
         expected_scenario_hash="scenario-hash",
         expected_outer_plan_sha256=outer_entry.sha256,
         expected_policy_hash=fixture.policy_sha256,
-        expected_soc_tolerance_mwh=(
-            fixture.policy.tolerances.soc_recurrence_mwh_abs
-        ),
+        expected_soc_tolerance_mwh=(fixture.policy.tolerances.soc_recurrence_mwh_abs),
         expected_residual_tolerances={
             name: getattr(fixture.policy.tolerances, name)
             for name in fixture.policy.tolerances.__dataclass_fields__
@@ -275,7 +277,11 @@ def test_transaction_archives_before_advancing_checkpoint(
 ):
     fixture, inputs, outer, window, _payload = archived_window_source
     outer_entry = write_verified_outer_plan_archive(
-        tmp_path / "outer-plan.json.gz", outer, inputs=inputs
+        tmp_path / "outer-plan.json.gz",
+        outer,
+        inputs=inputs,
+        source_fingerprint="source-fingerprint",
+        scenario_hash="scenario-hash",
     )
     transaction = persist_window_transaction(
         tmp_path,
@@ -304,7 +310,11 @@ def test_transaction_does_not_write_checkpoint_if_archive_write_fails(
 ):
     fixture, inputs, outer, window, _payload = archived_window_source
     outer_entry = write_verified_outer_plan_archive(
-        tmp_path / "outer-plan.json.gz", outer, inputs=inputs
+        tmp_path / "outer-plan.json.gz",
+        outer,
+        inputs=inputs,
+        source_fingerprint="source-fingerprint",
+        scenario_hash="scenario-hash",
     )
 
     def fail_write(*_args, **_kwargs):
@@ -339,7 +349,13 @@ def test_window_and_outer_artifacts_cannot_be_replaced(
     fixture, inputs, outer, _window, payload = archived_window_source
     outer_path = tmp_path / "outer-plan.json.gz"
     window_path = tmp_path / "window-000000.json.gz"
-    write_verified_outer_plan_archive(outer_path, outer, inputs=inputs)
+    write_verified_outer_plan_archive(
+        outer_path,
+        outer,
+        inputs=inputs,
+        source_fingerprint="source-fingerprint",
+        scenario_hash="scenario-hash",
+    )
     write_verified_window_archive(
         window_path,
         payload,
@@ -351,7 +367,13 @@ def test_window_and_outer_artifacts_cannot_be_replaced(
     window_bytes = window_path.read_bytes()
 
     with pytest.raises(FileExistsError):
-        write_verified_outer_plan_archive(outer_path, outer, inputs=inputs)
+        write_verified_outer_plan_archive(
+            outer_path,
+            outer,
+            inputs=inputs,
+            source_fingerprint="source-fingerprint",
+            scenario_hash="scenario-hash",
+        )
     with pytest.raises(FileExistsError):
         write_verified_window_archive(
             window_path,
