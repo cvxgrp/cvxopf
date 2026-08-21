@@ -294,6 +294,13 @@ outer signposts, slot registry, assigned model starts and complete IPOPT `x0`,
 statuses, residuals, controlling attempts, executed actions, SoC, and
 exact-once summaries. Any non-equivalence blocks scaling work.
 
+The frozen 6- and 24-hour orchestration fixtures are compact case9 scenarios,
+not 24 case118 AC windows. S0/S1 already established that the latter would
+violate the resource gate without adding network-dependent orchestration
+evidence. Case118 receives a separate S1 outer/endpoint structural and archive
+equivalence gate. `P0_PROTOCOL.md` freezes both requirements; neither alone is
+sufficient for S2.
+
 Nominal equivalence is necessary but not sufficient. P0 must also exercise the
 complete recovery and termination state machine through a predeclared matrix:
 

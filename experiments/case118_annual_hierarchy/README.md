@@ -27,6 +27,9 @@ release capabilities that the all-at-once public API intentionally does not
 provide. P0 covers both nominal execution and deterministic recovery cases,
 including target-free/copy recovery, both perturbation families, solver
 failure and infeasibility classifications, and complete recovery exhaustion.
+`P0_PROTOCOL.md` freezes the compact 6-/24-hour orchestration fixtures, exact
+fault matrix, case118 S1 archive gate, and transaction/resume contract before
+runner implementation.
 
 The frozen six-hour S0 pilot is executed from a clean checkpoint with:
 
