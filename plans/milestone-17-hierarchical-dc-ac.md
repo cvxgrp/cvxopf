@@ -1042,8 +1042,7 @@ suite.
 
 ### S7 frozen-reference equivalence
 
-**Implementation and authoritative execution complete; review and checkpoint
-pending.** S7 re-executes the frozen scenario through the public
+**Complete; checkpoint commit `b5703cc`.** S7 re-executes the frozen scenario through the public
 hierarchical API and compares its retained audit tree and realized trajectory
 against the reviewed manual-reference records. It does not regenerate or
 reinterpret those reference records.
@@ -1101,7 +1100,8 @@ variables or constraints.
 - [x] Record software/source provenance and tracked integrity metadata for the
   S7 execution.
 - [x] Pass focused, lint, typing, and complete-suite verification.
-- [ ] Complete external review and checkpoint S7 before beginning S8.
+- [x] Complete external review and checkpoint S7 before beginning S8
+  (`b5703cc`).
 
 The authoritative S7 execution ran from clean commit `5fb84cf` and rebuilt all
 five trajectories without resume. All checks passed. Maximum finite absolute
@@ -1113,3 +1113,33 @@ and 864 S3b slots. See `experiments/hierarchical_battery_resilience/S7_REPORT.md
 and `S7_RESULTS_METADATA.json` for interpretation and tracked provenance.
 The stopping-point verification is 97 focused hierarchical/S7 tests, Ruff,
 cold strict mypy, JSON and diff validation, and the complete 1,817-test suite.
+
+### S8 documentation and milestone handoff
+
+**Implementation and verification complete; external review and checkpoint
+pending.** S8 documents the public hierarchy at the same three levels as the
+implementation: a concise user-facing workflow in the top-level README, a
+runnable case9 example, and the complete as-built orchestration boundary in
+`PROJECT_FLOWCHART.md`. Documentation preserves the scientific limits of the
+reviewed evidence: AC represents modeled nonlinear steady-state physics; hard
+shifted recovery completed the frozen S3b scenario but is not a universal
+feasibility guarantee; and soft shifted recovery remains supported without a
+dedicated full-trajectory validation.
+
+#### S8 checklist
+
+- [x] Add a runnable public hierarchical example and regenerate the examples
+  index from its final output.
+- [x] Document inputs, policy choices, SoC-only handoff, accepted-action rule,
+  recovery semantics, audit retention, and current scope limits in README.
+- [x] Replace the pre-M17 flowchart boundary with the as-built controller and
+  its relationship to the ordinary OPF build/solve/result path.
+- [x] Update project-facing milestone status and cross-references.
+- [x] Verify the example, generated documentation, focused hierarchical tests,
+  Ruff, strict mypy, full suite, and diff cleanliness.
+- [ ] Complete final external review and checkpoint S8.
+
+The stopping-point verification is the directly executed three-interval
+example, a regenerated `examples/README.md`, 97 focused hierarchical tests,
+Ruff, configured strict mypy, diff validation, and the complete 1,817-test
+suite.
