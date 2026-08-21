@@ -126,7 +126,10 @@ def atomic_gzip_json(path: Path, value: object) -> WindowIndexEntry:
         with os.fdopen(descriptor, "wb") as raw:
             with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as stream:
                 stream.write(_json_bytes(value))
-        os.replace(temporary_name, path)
+        # Window/outer artifacts are immutable. A hard link publishes the
+        # completed temporary file atomically and fails if the target exists.
+        os.link(temporary_name, path)
+        Path(temporary_name).unlink()
     except BaseException:
         Path(temporary_name).unlink(missing_ok=True)
         raise
@@ -580,6 +583,13 @@ def validate_window_archive(
         raise ValueError("generator, bus, and storage dimensions must be positive")
     if dimensions["storage"] != len(storage_ids):
         raise ValueError("storage result dimension must match storage identities")
+    if archive.get("formulation") != "ac":
+        raise ValueError("streaming window formulation must be AC")
+    archived_dimensions = _mapping(
+        archive.get("result_dimensions"), "archived result dimensions"
+    )
+    if archived_dimensions != dimensions:
+        raise ValueError("archived result dimensions differ from frozen fleet")
     steps = stop - iteration
     result_shapes = {
         "b": (steps, dimensions["storage"]),
@@ -636,6 +646,12 @@ def validate_window_archive(
             raise ValueError("attempt ordinals must be exactly 0..8")
         if attempt.get("role") != ATTEMPT_ROLES[ordinal]:
             raise ValueError("attempt role does not match frozen registry")
+        if attempt.get("formulation") != "ac":
+            raise ValueError("attempt formulation must be AC")
+        if _mapping(
+            attempt.get("result_dimensions"), "attempt result dimensions"
+        ) != dimensions:
+            raise ValueError("attempt result dimensions differ from frozen fleet")
         if attempt.get("slot_state") not in SLOT_STATES:
             raise ValueError("unknown attempt slot state")
         if "build" in attempt:

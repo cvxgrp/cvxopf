@@ -216,6 +216,8 @@ def _attempt(
         "ordinal": ordinal,
         "role": role,
         "inner_terminal_policy": terminal_policy,
+        "formulation": "ac",
+        "result_dimensions": RESULT_DIMENSIONS,
         "slot_state": state,
         "solver_executed": state == "executed",
         "supplied_executed_action": controlling,
@@ -281,6 +283,8 @@ def _archive(
         "iteration": iteration,
         "interval_start": iteration,
         "interval_stop": stop,
+        "formulation": "ac",
+        "result_dimensions": RESULT_DIMENSIONS,
         "storage_device_ids": ["battery"],
         "initial_soc_mwh": [initial],
         "target_soc_mwh": [5.0],
@@ -728,7 +732,9 @@ def test_resume_rejects_state_or_identity_discontinuity(tmp_path):
         post=3.5,
         preceding_id=preceding,
     )
-    second_entry = atomic_gzip_json(tmp_path / "window_000001.json.gz", second)
+    second_entry = atomic_gzip_json(
+        tmp_path / "window_000001_identity.json.gz", second
+    )
     checkpoint = _checkpoint((first_entry, second_entry), realized=3.5)
     checkpoint_path = tmp_path / "checkpoint.json"
     atomic_json(checkpoint_path, checkpoint)
