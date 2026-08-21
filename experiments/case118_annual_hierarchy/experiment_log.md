@@ -68,3 +68,44 @@ The draft plan therefore uses 1-hour and 6-hour probes followed by day, week,
 month, annual-outer, and annual-execution stages. The full-year run is
 conditional on earlier resource and audit gates rather than predeclared as
 inevitable.
+
+## 2026-08-21 — S0 source pin and first operating-point probes
+
+The official PGLib source was pinned at revision
+`dc6be4b2f85ca0e776952ec22cbd4c22396ea5a3` and redistributed with its CC BY
+4.0 license. A strict loader now verifies source-file, license, normalized
+source-array, and converted-array hashes.
+
+The first compatibility probe found that PGLib supplies the ten required
+MATPOWER generator columns while cvxopf validates the extended 21-column
+layout. The deterministic conversion preserves source columns 0–9 and pads
+the unused optional columns with zero. Both formulations then build without
+row reordering.
+
+The rated one-hour AC operating point solved to `optimal` in about 6.1 seconds
+and reached a branch terminal rating. Its matched `rateA`-only control solved
+to `optimal_inaccurate` in about 7.2 seconds with a lower local objective. The
+latter remains diagnostic until independent residual checks accept it.
+
+The constant-input six-hour AC probe solved to `optimal` but required about
+294.6 seconds, compared with 0.042 seconds for lossy DC. This is an early
+throughput warning, not a reason to change the scaling ladder. Full values and
+the remaining S0 gates are recorded in `S0_REPORT.md`.
+
+The deterministic UTC annual profiles, electrical-distance medoids, and
+eight-point pilot grid were then frozen before inspecting storage-coupled
+dispatch. Storage buses are 41, 65, 89, and 105; wind and solar are placed at
+105 and 65. The lowest pilot point passed both rated one-hour independent
+audits. Its six-hour rated/control audits remain the next scientific gate.
+
+Review found that the first profile hashes covered raw transcendental output
+and that the preliminary AC audit omitted M17's negative-curtailment and
+negative-branch-loss gates. Profile values are now rounded to nine decimal
+places before use and hashing. The AC audit now requires the complete branch
+and curtailment evidence and applies both nonnegativity residuals. Synthetic
+drift tests prove that material violations are rejected.
+
+The quantized one-hour AC probe passed the complete gate but reached a
+different local objective from the earlier unquantized exploratory solve. The
+unquantized value is explicitly superseded; no authoritative comparison will
+mix the two input specifications.

@@ -13,10 +13,11 @@ only `rateA` set to zero. AC then omits those limits, while lossy DC uses one
 frozen, ex-post-verified finite branch-limit sentinel; this is an effectively
 unlimited rather than mathematically unconstrained control.
 
-No scientific runner or scenario is frozen yet. The next step is S0 protocol
-review: pinned PGLib acquisition and conversion, annual input construction,
-storage placement and sizing, renewable placement, congestion-sensitivity
-scope, and machine resource budgets.
+The PGLib acquisition and deterministic case conversion are now frozen and
+hash-verified. S0 is continuing with annual input construction, deterministic
+storage and renewable placement, the predeclared pilot grid, independent
+residual audits, and machine resource budgets. No authoritative annual
+scenario or scientific streaming runner is frozen yet.
 
 Before week-scale execution, an experiment-owned streaming runner must pass
 short-horizon, window-by-window equivalence against the public M17 controller.
