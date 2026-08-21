@@ -69,3 +69,14 @@ def test_s7_skipped_s3b_slot_does_not_require_an_audit():
     assert s7_equivalence._expected_supplied_action(
         {"audit": {"accepted_primal": True}}
     )
+
+
+def test_s7_normalizes_reviewed_cross_schema_equivalences():
+    assert s7_equivalence._outcome_class("accepted_soft") == "accepted"
+    assert s7_equivalence._outcome_class("unusable_primal") == (
+        "unusable_primal"
+    )
+    assert s7_equivalence._is_unavailable_scalar(None)
+    assert s7_equivalence._is_unavailable_scalar(float("nan"))
+    assert not s7_equivalence._is_unavailable_scalar(0.0)
+    assert s7_equivalence._array_comparison("absent", None, None).passed

@@ -1063,6 +1063,16 @@ and reports the additional S3 record as a manual-only diagnostic. It neither
 manufactures a public slot nor changes `flat_only`. The S3b shifted-recovery
 comparison requires the full nine-slot registry window by window.
 
+Two additional cross-schema normalizations preserve meaning without weakening
+the comparison. The manual runner labels a successful soft-policy solve
+`accepted_soft`, while the public closed outcome vocabulary uses `accepted`
+and retains the soft policy and signed deviation separately; S7 compares these
+as the same accepted outcome class. For unsuccessful solves, manual JSON
+serializes unavailable scalar values as `null`, while public result extraction
+uses `NaN`; S7 compares both as unavailable and never equates either with a
+finite value. Absent outer signpost arrays are compared by presence before any
+numeric operation.
+
 The first preliminary frozen-hard execution exposed tolerance-level negative
 renewable curtailment in otherwise accepted IPOPT primals (the S3 artifacts
 contain values as low as approximately `-4.8e-12` MW). Realized accounting now

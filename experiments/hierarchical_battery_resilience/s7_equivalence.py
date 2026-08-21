@@ -195,6 +195,8 @@ def run_public_case(case_name: CaseName) -> HierarchicalResult:
 
 
 def _array_comparison(name: str, actual: object, expected: object) -> Comparison:
+    if actual is None or expected is None:
+        return _exact(f"{name}.presence", actual is None, expected is None)
     left = np.asarray(actual, dtype=float)
     right = np.asarray(expected, dtype=float)
     if left.shape != right.shape:
@@ -223,6 +225,22 @@ def _structural_value(value: object) -> object:
     if isinstance(value, (list, tuple)):
         return [_structural_value(item) for item in value]
     return value
+
+
+def _is_unavailable_scalar(value: object) -> bool:
+    if value is None:
+        return True
+    array = np.asarray(value)
+    if array.ndim != 0:
+        return False
+    try:
+        return bool(np.isnan(float(array)))
+    except (TypeError, ValueError):
+        return False
+
+
+def _outcome_class(value: object) -> object:
+    return "accepted" if value == "accepted_soft" else value
 
 
 def _reference(case_name: CaseName) -> dict[str, Any]:
@@ -274,8 +292,14 @@ def _common_result_checks(
     ]
     for name in sorted(set(actual) & set(expected)):
         left, right = actual[name], expected[name]
-        if left is None or right is None:
-            checks.append(_exact(f"{prefix}.result.{name}", left, right))
+        if _is_unavailable_scalar(left) or _is_unavailable_scalar(right):
+            checks.append(
+                _exact(
+                    f"{prefix}.result.{name}.unavailable",
+                    _is_unavailable_scalar(left),
+                    _is_unavailable_scalar(right),
+                )
+            )
             continue
         try:
             left_array = np.asarray(left, dtype=float)
@@ -395,7 +419,17 @@ def compare_public_to_reference(
                 expected_supplied_action,
             ),
             _exact(f"{prefix}.status", None if attempt.audit is None else attempt.audit.status, None if expected.get("audit") is None else expected["audit"]["status"]),
-            _exact(f"{prefix}.outcome", None if attempt.audit is None else attempt.audit.outcome, None if expected.get("audit") is None else expected["audit"]["outcome"]),
+            _exact(
+                f"{prefix}.outcome_class",
+                _outcome_class(
+                    None if attempt.audit is None else attempt.audit.outcome
+                ),
+                _outcome_class(
+                    None
+                    if expected.get("audit") is None
+                    else expected["audit"]["outcome"]
+                ),
+            ),
             _array_comparison(f"{prefix}.initial_soc", list(attempt.initial_soc_mwh.values()), list(expected["initial_soc_mwh"].values())),
             _array_comparison(f"{prefix}.target_soc", list(attempt.target_soc_mwh.values()), list(expected["target_soc_mwh"].values())),
         ))
