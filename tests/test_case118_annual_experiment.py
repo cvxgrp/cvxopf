@@ -32,6 +32,7 @@ from experiments.case118_annual_hierarchy.scenario import (
     deterministic_siting,
     electrical_distance_matrix,
     materialize_pilot,
+    select_pilot_window,
 )
 from experiments.case118_annual_hierarchy import run_s0
 
@@ -319,6 +320,20 @@ def test_pilot_rejects_outcome_driven_parameter_invention(converted_case):
         materialize_pilot(converted_case, PilotParameters(0.2, 0.08, 6.0))
 
 
+def test_common_pilot_window_selection_is_frozen_and_nonwrapping(converted_case):
+    selection = select_pilot_window(converted_case)
+    assert selection.start == 3757
+    assert selection.stop == 3763
+    assert selection.split == 5
+    assert selection.score_mw == pytest.approx(1182.9499038)
+    assert selection.start_timestamp == "2025-06-06T13:00:00+00:00"
+    assert selection.stop_timestamp == "2025-06-06T18:00:00+00:00"
+    assert selection.reference_net_load_sha256 == (
+        "03a77b95e5ae3437df5b02f710a5bd6cd3f4f1ac50035640050ef10a10f9d46e"
+    )
+    assert selection.stop <= HOURS_PER_YEAR
+
+
 def test_lossy_dc_probe_passes_independent_audit_and_detects_drift(
     converted_case,
 ):
@@ -491,13 +506,16 @@ def test_s0_runner_writes_deterministic_atomic_gzip(tmp_path):
 def test_s0_artifact_registers_all_four_cases_before_execution(monkeypatch):
     observed = []
 
-    def fake_run(network, formulation, case):
+    def fake_run(network, formulation, case, window_start, window_stop):
         observed.append((network, formulation))
-        return {
+        record = {
             "network": network,
             "formulation": formulation,
             "accepted_primal": True,
         }
+        if network == "pglib_rated" and formulation == "ac":
+            record["movement_gate"] = {"passed": True}
+        return record
 
     monkeypatch.setattr(run_s0, "_run_case", fake_run)
     artifact = run_s0.build_artifact()
@@ -510,3 +528,31 @@ def test_s0_artifact_registers_all_four_cases_before_execution(monkeypatch):
     assert artifact["all_accepted"] is True
     assert artifact["horizon_steps"] == 6
     assert artifact["branch_limit_sentinel_mw"] == 1e6
+    assert artifact["rated_ac_movement_gate_passed"] is True
+    assert artifact["window_selection"]["start"] == 3757
+
+
+def test_s0_movement_gate_requires_power_and_throughput(converted_case):
+    pilot = materialize_pilot(converted_case, PILOT_GRID[0])
+    power = np.zeros((6, len(pilot.storage)))
+    result = {"b": power}
+    zero = run_s0._movement_gate(pilot.storage, result, 100.0)
+    assert not zero["passed"]
+    thresholds = np.asarray(zero["power_threshold_by_storage_mw"])
+    throughput_threshold = float(zero["throughput_threshold_mwh"])
+
+    power[0, 0] = 2.0 * thresholds[0]
+    instantaneous_only = run_s0._movement_gate(
+        pilot.storage, result, 100.0
+    )
+    assert instantaneous_only["instantaneous_passed"]
+    assert not instantaneous_only["throughput_passed"]
+    assert not instantaneous_only["passed"]
+
+    power[:, 0] = max(
+        2.0 * thresholds[0], 2.0 * throughput_threshold / len(power)
+    )
+    complete = run_s0._movement_gate(pilot.storage, result, 100.0)
+    assert complete["instantaneous_passed"]
+    assert complete["throughput_passed"]
+    assert complete["passed"]

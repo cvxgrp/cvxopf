@@ -22,7 +22,8 @@ import warnings
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import OPFBuild, OPFOptions, build_opf_multistep
+from cvxopf import OPFBuild, OPFOptions, StorageUnitIdeal, build_opf_multistep
+from cvxopf.hierarchical import HierarchicalAcceptanceTolerances
 from cvxopf.generator import gen_from_matpower
 from cvxopf.results import extract_results
 from experiments.case118_annual_hierarchy.audit import audit_probe
@@ -34,16 +35,20 @@ from experiments.case118_annual_hierarchy.pglib_case import (
 from experiments.case118_annual_hierarchy.scenario import (
     PILOT_GRID,
     materialize_pilot,
+    select_pilot_window,
 )
 
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = Path(
-    "experiments/case118_annual_hierarchy/results/s0_six_hour.json.gz"
+    "experiments/case118_annual_hierarchy/results/s0_selected_window.json.gz"
 )
 SCHEMA_VERSION = 1
 HORIZON_STEPS = 6
 BRANCH_LIMIT_SENTINEL_MW = 1e6
+POWER_TOLERANCE_MULTIPLIER = 100.0
+DEVICE_RATING_MOVEMENT_FRACTION = 0.001
+CAPACITY_THROUGHPUT_FRACTION = 0.001
 
 
 def _jsonable(value: object) -> object:
@@ -206,10 +211,52 @@ def _result_summary(
     }
 
 
+def _movement_gate(
+    storage: tuple[StorageUnitIdeal, ...],
+    result: Mapping[str, object],
+    base_mva: float,
+) -> dict[str, object]:
+    power = np.abs(np.asarray(result["b"], dtype=float))
+    maxima = np.max(power, axis=0)
+    declared_power_tolerance_mw = (
+        base_mva
+        * HierarchicalAcceptanceTolerances().ac_active_balance_pu_abs
+    )
+    thresholds = np.array(
+        [
+            max(
+                POWER_TOLERANCE_MULTIPLIER * declared_power_tolerance_mw,
+                DEVICE_RATING_MOVEMENT_FRACTION
+                * unit.apparent_power_rating,
+            )
+            for unit in storage
+        ]
+    )
+    throughput = float(np.sum(power))
+    throughput_threshold = float(
+        CAPACITY_THROUGHPUT_FRACTION
+        * sum(unit.capacity for unit in storage)
+    )
+    instantaneous_passed = bool(np.any(maxima > thresholds))
+    throughput_passed = throughput > throughput_threshold
+    return {
+        "passed": instantaneous_passed and throughput_passed,
+        "instantaneous_passed": instantaneous_passed,
+        "throughput_passed": throughput_passed,
+        "maximum_absolute_power_by_storage_mw": maxima,
+        "power_threshold_by_storage_mw": thresholds,
+        "throughput_mwh": throughput,
+        "throughput_threshold_mwh": throughput_threshold,
+        "comparison": "strictly_greater_than",
+    }
+
+
 def _run_case(
     network: str,
     formulation: str,
     case: dict[str, object],
+    window_start: int,
+    window_stop: int,
 ) -> dict[str, object]:
     pilot = materialize_pilot(case, PILOT_GRID[0])
     generators = gen_from_matpower(case["gen"], case["gencost"])
@@ -233,10 +280,10 @@ def _run_case(
             options=options,
             generators=generators,
             loads=list(pilot.loads),
-            df_load_p=pilot.df_load_p.iloc[:HORIZON_STEPS],
-            df_load_q=pilot.df_load_q.iloc[:HORIZON_STEPS],
+            df_load_p=pilot.df_load_p.iloc[window_start:window_stop],
+            df_load_q=pilot.df_load_q.iloc[window_start:window_stop],
             nondispatchable=list(pilot.nondispatchable),
-            df_nd=pilot.df_nd.iloc[:HORIZON_STEPS],
+            df_nd=pilot.df_nd.iloc[window_start:window_stop],
             storage=list(pilot.storage),
         )
     construction_seconds = time.perf_counter() - construction_start
@@ -290,12 +337,17 @@ def _run_case(
     }
     if accepted:
         payload["summary"] = _result_summary(case, formulation, result)
+        if network == "pglib_rated" and formulation == "ac":
+            payload["movement_gate"] = _movement_gate(
+                pilot.storage, result, float(np.asarray(case["baseMVA"]).item())
+            )
     return payload
 
 
 def build_artifact() -> dict[str, object]:
     """Run all four frozen S0 cases and return one complete artifact."""
     rated = load_pglib_case118()
+    window = select_pilot_window(rated)
     cases = (
         ("pglib_rated", rated),
         ("pglib_effectively_unlimited", make_effectively_unlimited_case(rated)),
@@ -306,9 +358,20 @@ def build_artifact() -> dict[str, object]:
         for formulation in ("lossy_dc", "ac")
     ]
     runs = [
-        _run_case(network, formulation, case)
+        _run_case(network, formulation, case, window.start, window.stop)
         for network, formulation, case in registry
     ]
+    rated_ac = next(
+        run
+        for run in runs
+        if run["network"] == "pglib_rated" and run["formulation"] == "ac"
+    )
+    movement_gate = rated_ac.get("movement_gate")
+    movement_passed = (
+        bool(movement_gate["passed"])
+        if isinstance(movement_gate, Mapping)
+        else False
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -323,9 +386,11 @@ def build_artifact() -> dict[str, object]:
         "profile_hashes": materialize_pilot(rated, PILOT_GRID[0]).profiles.hashes(),
         "pilot_parameters": PILOT_GRID[0].__dict__,
         "horizon_steps": HORIZON_STEPS,
+        "window_selection": window.__dict__,
         "branch_limit_sentinel_mw": BRANCH_LIMIT_SENTINEL_MW,
         "runs": runs,
         "all_accepted": all(bool(run["accepted_primal"]) for run in runs),
+        "rated_ac_movement_gate_passed": movement_passed,
     }
 
 

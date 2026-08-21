@@ -20,6 +20,9 @@ HOURS_PER_YEAR = 8760
 PROFILE_YEAR = 2025
 DISTANCE_FLOOR_PU = 1e-6
 PROFILE_QUANTIZATION_DECIMALS = 9
+REFERENCE_NET_LOAD_DECIMALS = 6
+WINDOW_SCORE_DECIMALS = 9
+PILOT_WINDOW_STEPS = 6
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,19 @@ class MaterializedPilot:
     nondispatchable: tuple[NondispatchableUnit, ...]
     df_nd: pd.DataFrame
     storage: tuple[StorageUnitIdeal, ...]
+
+
+@dataclass(frozen=True)
+class PilotWindowSelection:
+    """One common exogenously selected pilot window and scoring evidence."""
+
+    start: int
+    stop: int
+    split: int
+    score_mw: float
+    start_timestamp: str
+    stop_timestamp: str
+    reference_net_load_sha256: str
 
 
 PILOT_GRID = tuple(
@@ -349,4 +365,47 @@ def materialize_pilot(
         nondispatchable=nondispatchable,
         df_nd=df_nd,
         storage=storage,
+    )
+
+
+def select_pilot_window(case: Mapping[str, object]) -> PilotWindowSelection:
+    """Select the common six-hour pilot window from frozen exogenous data.
+
+    The reference trajectory always uses the grid's lowest renewable share;
+    storage sizing does not enter net load. Every non-wrapping six-hour window
+    and split 1--5 is scored. Strict greater-than updates retain the earliest
+    start and then earliest split when quantized scores tie.
+    """
+    reference = materialize_pilot(case, PILOT_GRID[0])
+    net_load = np.round(
+        reference.df_load_p.sum(axis=1).to_numpy(dtype=float)
+        - reference.df_nd.sum(axis=1).to_numpy(dtype=float),
+        decimals=REFERENCE_NET_LOAD_DECIMALS,
+    )
+    best_start = 0
+    best_split = 1
+    best_score = -np.inf
+    last_start = len(net_load) - PILOT_WINDOW_STEPS
+    for start in range(last_start + 1):
+        window = net_load[start : start + PILOT_WINDOW_STEPS]
+        for split in range(1, PILOT_WINDOW_STEPS):
+            score = float(
+                np.round(
+                    np.mean(window[split:]) - np.mean(window[:split]),
+                    decimals=WINDOW_SCORE_DECIMALS,
+                )
+            )
+            if score > best_score:
+                best_start = start
+                best_split = split
+                best_score = score
+    stop = best_start + PILOT_WINDOW_STEPS
+    return PilotWindowSelection(
+        start=best_start,
+        stop=stop,
+        split=best_split,
+        score_mw=best_score,
+        start_timestamp=reference.profiles.index[best_start].isoformat(),
+        stop_timestamp=reference.profiles.index[stop - 1].isoformat(),
+        reference_net_load_sha256=_array_sha256(net_load),
     )

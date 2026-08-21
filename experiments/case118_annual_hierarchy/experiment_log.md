@@ -109,3 +109,31 @@ The quantized one-hour AC probe passed the complete gate but reached a
 different local objective from the earlier unquantized exploratory solve. The
 unquantized value is explicitly superseded; no authoritative comparison will
 mix the two input specifications.
+
+## 2026-08-21 — first frozen six-hour pilot
+
+The lowest grid point ran from clean commit `634dc1f`. All rated and matched
+control AC/DC results passed the complete independent audit. Rated AC required
+585 seconds and drove the process peak to approximately 14.5 GiB. The matched
+unlimited AC solve required 117 seconds and was accepted as
+`optimal_inaccurate` only after its residuals passed.
+
+The rated network was thermally binding but its storage movement was only
+floating-point noise. The unlimited AC case moved 6.001 MWh and curtailed
+35.585 MWh. Because the predeclared word “nonzero” lacks a threshold and does
+not explicitly identify the rated network, the lowest point was not selected
+by literal comparison. S0 pauses for that protocol clarification before
+running another expensive pilot point.
+
+## 2026-08-21 — reviewed S0 protocol amendment
+
+Review agreed that meaningful movement must occur in rated AC and must pass
+both a tolerance/rating-scaled instantaneous gate and a capacity-scaled
+throughput gate. Review also replaced the arbitrary midnight interval with one
+common exogenously selected window across the grid.
+
+The 15% renewable reference net load selected boundaries 3757–3763 with split
+5, or `2025-06-06 13:00` through `18:00` UTC. The scoring formula, rounding,
+tie breaking, result hash, and strict movement comparisons were committed
+before replacement execution. The midnight artifact remains separate and is
+not combined with the amended run.

@@ -47,18 +47,74 @@ and uses a cycling weight of 1 objective unit/MWh. Loads are fixed and
 nonsheddable. A no-renewable, no-storage source operating point remains the
 network/conversion control but is not part of the eight-point sizing grid.
 
-The S0 pilot uses the first annual interval for the one-hour gate and annual
-intervals 0–5 (`2025-01-01 00:00` through `05:00` UTC) for the six-hour gate.
-This window choice is fixed before pilot dispatch and is not selected for a
-favorable renewable or congestion outcome.
+The original S0 pilot used annual intervals 0–5. The resulting reviewed run is
+retained as a superseded midnight characterization and is never combined with
+the amended-window results below.
+
+## Reviewed window amendment — 2026-08-21
+
+Inspection of the midnight result showed only tolerance-level storage movement
+in the primary rated AC case. Before running another OPF, the protocol was
+amended to select one common window from frozen exogenous data.
+
+The reference trajectory uses the 15% renewable-energy construction for every
+pilot point:
+
+$$
+N_t=P^{load,total}_t-P^{wind,available}_t-P^{solar,available}_t.
+$$
+
+It is rounded to six decimal places in MW before scoring. For every
+non-wrapping six-hour start $$t\in\{0,\ldots,8754\}$$ and every split
+$$k\in\{1,\ldots,5\}$$, compute
+
+$$
+S(t,k)=
+\operatorname{mean}(N_{t+k:t+6})
+-
+\operatorname{mean}(N_{t:t+k}).
+$$
+
+Scores are rounded to nine decimal places. Selection maximizes $$S(t,k)$$,
+breaking ties by earliest start and then earliest split. The frozen result is:
+
+- start boundary 3757 and stop boundary 3763;
+- split $$k=5$$;
+- `2025-06-06 13:00` through `18:00` UTC;
+- score 1,182.9499038 MW; and
+- reference net-load hash
+  `03a77b95e5ae3437df5b02f710a5bd6cd3f4f1ac50035640050ef10a10f9d46e`.
+
+This one interval is used across the complete pilot grid. It cannot vary with
+renewable penetration, storage size, or an OPF outcome.
 
 ## Pilot selection rule
 
 The authoritative point should be the lowest-renewable, lowest-storage point
 that passes all rated-network one- and six-hour scientific audits while
-showing nonzero renewable output and nonzero storage movement in at least one
-six-hour probe. If no point qualifies, S0 reports that result and returns for
-protocol review; it does not expand the grid silently.
+showing nonzero renewable output and meaningful storage movement in the
+primary rated AC result.
+
+For storage device $$i$$, define its instantaneous threshold as
+
+$$
+P_i^{threshold}
+=
+\max\left(
+100P^{declared\ tolerance},
+0.001S_i^{rating}
+\right).
+$$
+
+At least one device must strictly exceed its threshold, and total six-hour
+throughput must strictly exceed
+
+$$
+0.001\sum_i E_i^{capacity}.
+$$
+
+Both conditions are required. If no point qualifies, S0 reports that result
+and returns for protocol review; it does not expand the grid silently.
 
 Passing the short pilot does not establish annual feasibility. Its only role
 is to choose one predeclared, nontrivial scenario for the scaling ladder.

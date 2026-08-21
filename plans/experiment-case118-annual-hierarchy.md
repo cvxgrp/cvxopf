@@ -351,6 +351,22 @@ Direct AC is a characterization comparator at small horizons only. Failure to
 build or solve larger direct AC cases is itself a recorded scaling result; it
 is not a reason to weaken the hierarchical acceptance gate.
 
+### Reviewed S0 pilot-window amendment
+
+The original midnight six-hour probe was reviewed and retained but produced
+only tolerance-level rated-AC storage movement. Before any replacement OPF,
+the S0 protocol was amended to use one common, exogenously selected six-hour
+window across the whole pilot grid. The 15% renewable-energy construction
+defines the fixed reference net load; all non-wrapping windows use the
+low-earlier/high-later mean-difference score and deterministic tie breaking
+locked in `S0_PILOT_PROTOCOL.md`.
+
+Meaningful movement must occur in the primary rated AC result. It requires at
+least one device to exceed the greater of 100 times the declared power
+tolerance and 0.1% of its rating, plus total throughput greater than 0.1% of
+aggregate storage capacity. Both comparisons are strict. Midnight and amended
+results are separate scientific records and are never combined.
+
 ### Annual outer-only equivalence
 
 S4 uses the streaming reference runner's outer-plan construction seam, not
