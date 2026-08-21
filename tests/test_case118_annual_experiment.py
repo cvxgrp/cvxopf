@@ -3,7 +3,9 @@
 from copy import deepcopy
 from contextlib import nullcontext
 import gzip
+import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,6 +16,7 @@ from cvxopf import OPFBuild, OPFOptions, build_opf_multistep
 from cvxopf.data import validate_case
 from cvxopf.generator import gen_from_matpower
 from cvxopf.results import extract_results
+from cvxopf.testcases import case118
 from experiments.case118_annual_hierarchy.audit import audit_probe
 from experiments.case118_annual_hierarchy.pglib_case import (
     SOURCE_CASE_PATH,
@@ -35,6 +38,9 @@ from experiments.case118_annual_hierarchy.scenario import (
     select_pilot_window,
 )
 from experiments.case118_annual_hierarchy import run_s0
+
+
+EXPERIMENT_DIRECTORY = Path("experiments/case118_annual_hierarchy")
 
 
 @pytest.fixture(scope="module")
@@ -556,3 +562,24 @@ def test_s0_movement_gate_requires_power_and_throughput(converted_case):
     assert complete["instantaneous_passed"]
     assert complete["throughput_passed"]
     assert complete["passed"]
+
+
+def test_s0_completion_metadata_freezes_repository_comparator_and_s1_limits():
+    metadata = json.loads(
+        (EXPERIMENT_DIRECTORY / "S0_COMPLETION_METADATA.json").read_text()
+    )
+    comparator = metadata["repository_case118_comparator"]
+    repository_case = case118()
+    for table, expected in comparator["array_sha256"].items():
+        values = np.ascontiguousarray(np.asarray(repository_case[table]))
+        assert hashlib.sha256(values.tobytes()).hexdigest() == expected
+
+    policy = metadata["s1_resource_policy"]
+    assert policy["process_rss_limit_gib"] == 16.0
+    assert policy["per_ac_solve_wall_time_minutes"] == 45.0
+    assert policy["complete_s1_wall_time_hours"] == 2.0
+    assert policy["direct_ac_maximum_authorized_horizon_hours"] == 6
+    assert (
+        policy["direct_ac_24_hour_classification"]
+        == "not_authorized_by_s0_resource_gate"
+    )

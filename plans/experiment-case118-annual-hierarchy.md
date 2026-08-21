@@ -337,7 +337,7 @@ No stage may silently advance after a failed gate.
 
 | Stage | Horizon | Purpose | Advancement gate |
 |---|---:|---|---|
-| S0 | 1 and 6 h | Import and hash PGLib case118; freeze the pilot/authoritative scenario boundary; verify AC/DC signs, identities, branch-rating enforcement, residuals, and storage recurrence | Both formulations produce accepted, independently audited results on PGLib-rated and PGLib-derived unlimited cases; repository case118 is characterized separately |
+| S0 (complete) | 1 and 6 h | Import and hash PGLib case118; freeze the pilot/authoritative scenario boundary; verify AC/DC signs, identities, branch-rating enforcement, residuals, and storage recurrence | Passed; lowest pilot point selected, repository case118 characterized separately, and S1 resource limits frozen |
 | S1 | 24 h | Compare direct AC construction/solve with hierarchical components where practical; quantify matched rated/unlimited behavior and separately characterize repository case118 | Record dimensions, memory, construction, canonicalization, solve, and iteration counts |
 | P0 | 6 and 24 h | Implement and review the streaming reference runner | Exact public-controller equivalence on both frozen short cases |
 | S2 | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | Complete trajectory, exact state accounting, no concealed shedding |
@@ -438,6 +438,15 @@ The public M17 API remains the short-horizon equivalence reference and retains
 its complete live-build audit tree. The streaming experiment record is a
 distinct archival schema; it must never be returned or documented as a
 `HierarchicalResult`.
+
+For S1 on the S0 workstation, the frozen limits are 16 GiB process RSS,
+45 minutes per AC solve, and two hours overall. A supervising parent samples
+child RSS at intervals no longer than one second and terminates the child at a
+limit while retaining an explicit resource-boundary record. Direct AC is
+authorized only through six hours. The 24-hour direct-AC comparator is not
+executed and is classified as `not_authorized_by_s0_resource_gate`, never as
+solver failure or infeasibility. Twenty-four-hour lossy DC and bounded
+AC/hierarchical construction measurements remain authorized.
 
 ## Reproducibility contract
 

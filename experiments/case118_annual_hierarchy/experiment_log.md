@@ -137,3 +137,28 @@ The 15% renewable reference net load selected boundaries 3757–3763 with split
 tie breaking, result hash, and strict movement comparisons were committed
 before replacement execution. The midnight artifact remains separate and is
 not combined with the amended run.
+
+## 2026-08-21 — amended-window pilot selected
+
+The replacement run executed from clean commit `578b270`. All four solves
+passed the complete audits. Rated AC moved storage by 205.946 MW at maximum
+and 465.760 MWh of throughput, decisively exceeding the committed 0.206 MW and
+1.084 MWh gates. The lowest grid point is selected without running higher
+penetrations or capacities.
+
+The computational result is equally important: rated and unlimited AC solve
+calls took 2,068.6 and 1,326.7 seconds, and process peak RSS reached 14.66 GiB.
+The two convex solves each took roughly 0.06 seconds. S1 must therefore use a
+hard direct-AC stopping budget and cannot extrapolate the midnight runtime.
+
+## 2026-08-21 — S0 closure and S1 authorization
+
+The repository `case118()` was characterized separately. Although its basic
+dimensions and aggregate demand match PGLib, its generator capacity, costs,
+bus data, and branch data differ materially; all branch ratings are 9,900 MVA.
+It remains a scale comparator and is never used as the rating counterfactual.
+
+S1 is limited to 16 GiB process RSS, 45 minutes per AC solve, and two hours
+overall, with child-process RSS sampling at least once per second. Direct
+24-hour AC is not authorized by the S0 resource gate. Twenty-four-hour lossy
+DC and bounded AC/hierarchical measurements remain authorized. S0 is complete.

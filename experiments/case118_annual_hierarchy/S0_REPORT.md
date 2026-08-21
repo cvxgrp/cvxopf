@@ -1,6 +1,6 @@
 # S0 report — source and static operating-point characterization
 
-**Status:** In progress
+**Status:** Complete
 
 ## Reproducible source boundary
 
@@ -117,14 +117,6 @@ local objective. It is superseded rather than mixed with the frozen pilot
 record. This is another concrete reason that authoritative nonlinear runs must
 use committed prepared inputs and retain exact solver provenance.
 
-## Remaining S0 work
-
-- Verify storage recurrence, branch limits, device signs, and independent
-  residuals on rated and matched-control six-hour pilot cases.
-- Characterize repository case118 separately as a scale comparator.
-- Review the pilot evidence, then freeze authoritative sizing and machine
-  resource budgets before S1.
-
 ## Frozen six-hour pilot result
 
 The four-case run executed from clean commit `634dc1f` and all public results
@@ -176,3 +168,69 @@ hours, corresponding to `2025-06-06 13:00` through `18:00` UTC. The midnight
 artifact remains an integrity-bound characterization but is superseded for
 pilot selection. The lowest pilot point will be rerun from scratch after this
 amendment is committed.
+
+## Amended-window execution and selection
+
+The lowest pilot point was rerun from scratch at clean commit `578b270`. All
+four cases passed the complete audit, and the rated AC result passed both
+precommitted movement conditions:
+
+- maximum device power was 205.946 MW, compared with a largest applicable
+  per-device threshold of 0.206 MW; and
+- total throughput was 465.760 MWh, compared with a 1.084 MWh threshold.
+
+The lowest grid point is therefore selected: 15% annual available renewable
+energy, aggregate storage power equal to 5% of peak load, and four-hour
+storage duration.
+
+| Network | Formulation | Status | Solve | Objective | Maximum utilization | Storage throughput |
+|---|---|---:|---:|---:|---:|---:|
+| rated | lossy DC | `optimal` | 0.061 s | 402,195.889 | 1.000000 | $$1.24\times10^{-6}$$ MWh |
+| rated | AC | `optimal` | 2,068.60 s | 441,231.518 | 1.000000 | 465.760 MWh |
+| effectively unlimited | lossy DC | `optimal` | 0.061 s | 402,102.445 | 0.000773 | $$6.17\times10^{-7}$$ MWh |
+| effectively unlimited | AC | `optimal` | 1,326.68 s | 425,541.122 | — | 478.287 MWh |
+
+The rated/nonrated contrast is not merely an outer-plan effect: both lossy-DC
+solutions leave storage essentially idle, while both nonlinear AC solutions
+cycle materially under the same equality endpoint. The rated AC solution also
+uses an enforced branch limit. This makes the selected case a nontrivial test
+of the DC-to-AC hierarchy rather than a large but inactive storage example.
+
+Peak process RSS reached 14,662 MiB. Combined with 34.5- and 22.1-minute AC
+solve calls, this rules out treating a direct 24-hour AC solve as an ordinary
+S1 expectation. S1 requires an explicit wall-time limit and memory policy.
+
+## Repository case118 comparator
+
+The repository `case118()` is retained only as an implementation and scale
+comparator. It has the same 118 buses, 54 generators, 186 active branches,
+100 MVA base, and aggregate 4,242 MW / 1,438 MVAr demand as the converted
+PGLib case. It is not a matched congestion counterfactual:
+
+- aggregate active-generator maximum is 9,966.2 MW rather than 6,515 MW;
+- all 186 `rateA` values are 9,900 MVA rather than the PGLib 72–7,218 MVA
+  range; and
+- 235 bus, 177 generator, 932 branch, and 108 cost-table entries differ.
+
+Its exact array hashes are retained in `S0_COMPLETION_METADATA.json`. No
+scientific rating-sensitivity conclusion compares this case with PGLib.
+
+## S1 resource authorization
+
+S0 freezes the following limits for this workstation:
+
+- 16 GiB process RSS;
+- 45 minutes for any individual AC solve;
+- two hours for the complete S1 run; and
+- RSS observation at least once per second in a supervised child process.
+
+Direct AC is authorized only through six hours. The 24-hour direct-AC
+comparator is recorded as `not_authorized_by_s0_resource_gate`; it is not run
+and is not classified as solver failure or infeasibility. S1 may proceed with
+24-hour lossy DC and bounded AC/hierarchical construction measurements. A
+resource limit terminates the child process and produces an explicit retained
+resource-boundary record.
+
+This is already a substantive scaling result: decomposition is needed not
+only to address feasibility. On this frozen case, a monolithic nonlinear model
+reaches a practical memory and runtime boundary at a six-hour horizon.
