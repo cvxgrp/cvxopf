@@ -747,6 +747,11 @@ package environment.
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
 - [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
 - [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
+- [ ] Configurable and extensible formulation hierarchies: preserve the
+  validated M17 `lossy_dc`→`ac` workflow, add typed selectable planning
+  formulations, and validate a future three-layer
+  `singlenode_dc`→`socp`→`ac` workflow (see
+  `plans/milestone-21-configurable-hierarchy.md`)
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
 - [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently

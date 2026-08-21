@@ -58,6 +58,13 @@ This milestone is why the formulation ladder, storage SoC coupling, M16
 composability, and cheap multi-formulation runs exist — it is where that
 infrastructure is cashed in.
 
+The public controller remains intentionally fixed to the scientifically
+validated two-layer `lossy_dc`→`ac` workflow. Selectable outer formulations
+and three-or-more-layer composition are deferred to
+[Milestone 21](milestone-21-configurable-hierarchy.md), after M17 establishes
+the compatibility baseline and the SOCP milestone defines its relaxation and
+audit semantics.
+
 ## Companion experiment
 
 M17 has one companion experiment:
@@ -588,9 +595,9 @@ support `shifted_with_recovery` as the typed operational policy for the frozen
 reference workflow, while `flat_only` remains available for baseline
 reproduction. This is not a universal default across networks or solver stacks.
 
-### S4 typed public contract — draft for review
+### S4 typed public contract
 
-**Typed module implemented; verification and review in progress.** S4 defines
+**Complete; checkpoint commit `c168050`.** S4 defines
 the public types and validation contract before S5 implements orchestration.
 It does not import experiment modules or silently turn the S2/S3b runner into
 production code. The public implementation will reconstruct the reviewed
@@ -858,8 +865,8 @@ intentionally retained live `OPFBuild` objects are explicit exceptions:
   `AttemptSourceKind`, `OuterTerminalMode`, and `AttemptOutcome`.
 
 The module is included in the strict mypy surface and re-exported from the
-package root. `solve_hierarchical_opf` is the locked S5 entry-point name but is
-not published as a nonfunctional stub in S4. Constructor-only tests exercise
+package root. S4 locked `solve_hierarchical_opf` as the S5 entry-point name
+without publishing a nonfunctional stub. Constructor-only tests exercise
 copying, structural immutability, policy combinations, solver-option
 allow-lists, stable identity, trajectory alignment, complete IPOPT layout accounting, attempt
 state/payload rules, and cross-record execution linkage without running a
@@ -913,4 +920,74 @@ drift.
   primal residual gate.
 - [x] Add the typed module and constructor-only tests without implementing the
   solve loop.
-- [ ] Review and checkpoint S4 before S5 orchestration begins.
+- [x] Review and checkpoint S4 before S5 orchestration begins (`c168050`).
+
+### S5 hierarchical orchestration
+
+**Implementation complete; review and checkpoint pending.** The public
+`solve_hierarchical_opf()` entry point is a thin typed boundary over the
+private orchestration in `src/cvxopf/_hierarchical_solver.py`. The private
+module composes `build_opf_multistep()` and `extract_results()`; it does not
+import the experiment package or reproduce device and network equations.
+
+The as-built execution path:
+
+1. takes one deep private snapshot of the structurally read-only public input
+   bundle before constructing any OPF;
+2. solves either one frozen outer lossy-DC plan or one remaining-horizon plan
+   per controller iteration;
+3. selects each AC signpost by storage ID and by the plan's local/global
+   boundary mapping;
+4. registers either the single `flat_only` slot or all nine
+   `shifted_with_recovery` slots before resolving the window;
+5. constructs generated-flat, shifted-preceding, copied target-free, and
+   deterministic perturbed starts according to the reviewed S3b rules;
+6. solves through a build-local IPOPT solver instance, captures the actual
+   complete `x0`, verifies every model-owned coordinate, and records
+   reduction-added coordinates; and
+7. advances SoC and realized accounting only from the first action of the
+   first accepted controlling attempt.
+
+IPOPT start capture uses a private CVXPY solving chain with a dedicated solver
+instance. It never replaces the registered process-global IPOPT class or
+singleton. A synchronized concurrency regression proves that an unrelated
+ordinary AC solve and a hierarchical solve use distinct solver instances and
+both complete without sharing capture state. Each executed slot owns one AC
+build; the shifted-start construction reuses the same destination build for
+its solve.
+
+Diagnostics independently reconstruct storage recurrence, component/network
+injection agreement, lossy-DC nodal balance, AC real/reactive balance, voltage
+violations, and both thermal-limit residuals. Required result fields are
+conditional on participating device families. Outer hard equality and reserve
+floor residuals and all supported soft terminal costs are reconstructed from
+the reported terminal SoC rather than trusted from the modeled expression.
+
+Focused S5 tests demonstrate:
+
+- a complete single-interval `flat_only` execution with verified IPOPT start;
+- two replanned shifted-start windows with the required nine-slot registries;
+- a failed primary attempt recovered through an accepted target-free solve and
+  copied target-constrained start, with the target-free action never executed;
+- complete recovery exhaustion with no state advance; and
+- outer failure retained before any AC attempt is registered.
+
+The S5 stopping-point verification is 75 focused S4/S5 tests, 465 broader
+hierarchical/storage/results tests, cold strict mypy over both typed modules, Ruff,
+`git diff --check`, and the complete 1,795-test suite.
+
+#### S5 checklist
+
+- [x] Add the public `solve_hierarchical_opf()` entry point.
+- [x] Take and exclusively use one private execution snapshot.
+- [x] Implement frozen and per-step-replanned outer policies.
+- [x] Implement `flat_only` and the complete causal shifted-recovery sequence.
+- [x] Capture and verify the actual complete IPOPT initial point.
+- [x] Independently reconstruct the frozen DC and AC acceptance diagnostics.
+- [x] Execute only accepted controlling first actions and account for each
+  realized interval exactly once.
+- [x] Retain failed outer plans and complete failed AC windows without silently
+  relaxing a target or advancing state.
+- [x] Add focused success, recovery, and termination tests.
+- [x] Pass strict typing, lint, focused, broader, and full-suite verification.
+- [ ] Complete external review and checkpoint S5 before beginning S6.

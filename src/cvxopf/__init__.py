@@ -84,6 +84,7 @@ from cvxopf.hierarchical import (
     OuterPolicy,
     OuterTerminalMode,
     ShiftedRecoveryConfig,
+    solve_hierarchical_opf,
 )
 from cvxopf.testcases import make_singlenode_case
 
@@ -124,5 +125,6 @@ __all__ = [
     "OuterPolicy",
     "OuterTerminalMode",
     "ShiftedRecoveryConfig",
+    "solve_hierarchical_opf",
     "make_singlenode_case",
 ]

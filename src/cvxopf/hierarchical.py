@@ -1,8 +1,9 @@
-"""Typed public contract for hierarchical lossy-DC to AC control.
+"""Public contract for hierarchical lossy-DC to AC control.
 
-Milestone 17 separates immutable controller configuration and auditable result
-records from the orchestration implemented in the next stage.  This module
-contains no solve loop and imports no experiment code.
+Milestone 17 separates controller configuration and auditable result records
+from the private orchestration implementation. This module owns the public
+types and thin solve entry point; it contains no solve loop and imports no
+experiment code.
 """
 
 from __future__ import annotations
@@ -1765,6 +1766,17 @@ class HierarchicalResult:
         object.__setattr__(self, "delta", delta)
 
 
+def solve_hierarchical_opf(
+    inputs: HierarchicalInputs,
+    policy: HierarchicalPolicy,
+    solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
+) -> HierarchicalResult:
+    """Run the M17 lossy-DC-to-AC hierarchical controller."""
+    from cvxopf._hierarchical_solver import solve_hierarchical_opf as _solve
+
+    return _solve(inputs, policy, solve_config)
+
+
 __all__ = [
     "ACCEPTED_SOLVER_STATUSES",
     "ACAttemptRecord",
@@ -1788,4 +1800,5 @@ __all__ = [
     "OuterPolicy",
     "OuterTerminalMode",
     "ShiftedRecoveryConfig",
+    "solve_hierarchical_opf",
 ]
