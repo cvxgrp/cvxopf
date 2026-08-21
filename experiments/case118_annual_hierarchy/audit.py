@@ -33,9 +33,9 @@ def _as_2d(values: object) -> np.ndarray:
     return array.reshape(1, -1) if array.ndim == 1 else array
 
 
-def _required_fields(formulation: str) -> tuple[str, ...]:
+def _required_fields(formulation: str, *, has_nondispatchable: bool) -> tuple[str, ...]:
     if formulation == "ac":
-        return (
+        fields: tuple[str, ...] = (
             "objective",
             "b",
             "b_q",
@@ -56,11 +56,13 @@ def _required_fields(formulation: str) -> tuple[str, ...]:
             "q_load",
             "p_load_served",
             "q_load_served",
-            "p_nd",
-            "q_nd",
-            "curtailment",
         )
-    return (
+        return fields + (
+            ("p_nd", "q_nd", "curtailment")
+            if has_nondispatchable
+            else ()
+        )
+    fields = (
         "objective",
         "b",
         "soc",
@@ -70,8 +72,9 @@ def _required_fields(formulation: str) -> tuple[str, ...]:
         "p_load",
         "q_load",
         "p_load_served",
-        "p_nd",
-        "curtailment",
+    )
+    return fields + (
+        ("p_nd", "curtailment") if has_nondispatchable else ()
     )
 
 
@@ -114,6 +117,8 @@ def _soc_and_terminal_residuals(
     storage: Sequence[StorageUnitIdeal],
     result: Mapping[str, object],
     delta: float,
+    *,
+    include_terminal: bool,
 ) -> dict[str, float]:
     soc = _as_2d(result["soc"])
     power = _as_2d(result["b"])
@@ -124,10 +129,11 @@ def _soc_and_terminal_residuals(
             np.max(np.abs(soc - previous + delta * power))
         )
     }
-    targets = np.array([unit.terminal_soc for unit in storage], dtype=float)
-    residuals["terminal_soc_mwh_abs"] = float(
-        np.max(np.abs(soc[-1] - targets))
-    )
+    if include_terminal:
+        targets = np.array([unit.terminal_soc for unit in storage], dtype=float)
+        residuals["terminal_soc_mwh_abs"] = float(
+            np.max(np.abs(soc[-1] - targets))
+        )
     return residuals
 
 
@@ -196,8 +202,9 @@ def _ac_residuals(
         "branch_mva_abs": thermal,
         "branch_normalized_squared_residual": normalized,
         "curtailment_nonnegativity_pu_abs": float(
-            np.max(np.maximum(-_as_2d(result["curtailment"]), 0.0))
-            / base_mva
+            np.max(np.maximum(-_as_2d(result["curtailment"]), 0.0)) / base_mva
+            if nondispatchable
+            else 0.0
         ),
         "branch_loss_nonnegativity_pu_abs": float(
             np.max(np.maximum(-branch_loss_by_step, 0.0)) / base_mva
@@ -272,9 +279,12 @@ def audit_probe(
     delta: float = 1.0,
     branch_limit_sentinel: float = 1e6,
     tolerances: HierarchicalAcceptanceTolerances | None = None,
+    include_terminal: bool = True,
 ) -> ProbeAudit:
     """Independently reconstruct one complete fixed-device probe audit."""
-    required = _required_fields(build.formulation)
+    required = _required_fields(
+        build.formulation, has_nondispatchable=bool(nondispatchable)
+    )
     missing = tuple(
         field
         for field in required
@@ -291,7 +301,11 @@ def audit_probe(
     identity_error = None if actual_ids == expected_ids else "storage identity mismatch"
     residuals: dict[str, float] = {}
     if not missing and identity_error is None:
-        residuals.update(_soc_and_terminal_residuals(storage, result, delta))
+        residuals.update(
+            _soc_and_terminal_residuals(
+                storage, result, delta, include_terminal=include_terminal
+            )
+        )
         if build.formulation == "ac":
             residuals.update(
                 _ac_residuals(

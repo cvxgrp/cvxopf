@@ -29,6 +29,15 @@ The compact fixture uses:
 - the exact M17 solver configurations, perturbation scales, seeds, status
   classifier, and residual tolerances.
 
+The complete policy is bound to SHA-256
+`2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520`.
+The two-layer solve configuration is bound separately to SHA-256
+`bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977`:
+CLARABEL for the outer solve and IPOPT for AC, both with the empty explicit
+option mapping used by the M17 reference run. Any policy tolerance, recovery
+scale or seed, solver, or solver-option change is a different protocol and is
+rejected before model construction.
+
 The 6-hour and 24-hour nominal cases compare the complete public result with
 the streaming archive window by window. The comparison includes outer
 signposts, slot registry, starts, complete reduced IPOPT `x0`, statuses,
