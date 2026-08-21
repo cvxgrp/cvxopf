@@ -145,8 +145,8 @@ flowchart LR
 ```
 
 See the [full software architecture and component lifecycle](PROJECT_FLOWCHART.md)
-for the as-built assembly sequence, architectural invariants, and the boundary
-reserved for the Milestone 17 hierarchical controller.
+for the as-built assembly sequence, architectural invariants, and the
+Milestone 17 hierarchical controller above that boundary.
 
 ### Formulations
 
@@ -799,8 +799,7 @@ package environment.
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
 - [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
-- [ ] Hierarchical DC→AC receding-horizon dispatch (final documentation and
-  milestone handoff in progress): long-horizon convex
+- [x] Hierarchical DC→AC receding-horizon dispatch: long-horizon convex
   planning passes identity-aligned SoC signposts into short AC windows, with
   causal initialization recovery and a complete audit tree (see
   `plans/milestone-17-hierarchical-dc-ac.md`)

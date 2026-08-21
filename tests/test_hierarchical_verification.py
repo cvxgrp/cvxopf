@@ -395,3 +395,82 @@ def test_material_negative_curtailment_is_not_hidden(monkeypatch):
     assert attempt.audit.residuals[
         "curtailment_nonnegativity_pu_abs"
     ] == pytest.approx(0.01)
+
+
+def test_tolerance_level_negative_branch_loss_is_normalized(monkeypatch):
+    inputs = _inputs(horizon_steps=1)
+    original = _hierarchical_solver.extract_results
+    calls = 0
+
+    def inject_tolerance_level_residual(build):
+        nonlocal calls
+        calls += 1
+        result = original(build)
+        if calls == 2:
+            result["branch_p_to"] = np.asarray(
+                result["branch_p_to"]
+            ).copy()
+            result["branch_p_to"][0, 0] -= (
+                np.sum(result["branch_p_from"])
+                + np.sum(result["branch_p_to"])
+                + 1e-10
+            )
+        return result
+
+    monkeypatch.setattr(
+        _hierarchical_solver,
+        "extract_results",
+        inject_tolerance_level_residual,
+    )
+    result = solve_hierarchical_opf(
+        inputs,
+        HierarchicalPolicy(ac_window_steps=1, initialization_policy="flat_only"),
+    )
+
+    assert result.completed
+    assert result.ac_attempts[0].audit is not None
+    assert result.ac_attempts[0].audit.residuals[
+        "branch_loss_nonnegativity_pu_abs"
+    ] == pytest.approx(1e-12)
+    assert result.executed_intervals[0].active_loss_mwh == 0.0
+    assert result.trajectory_summary["active_loss_mwh"] == 0.0
+
+
+def test_material_negative_branch_loss_is_not_hidden(monkeypatch):
+    inputs = _inputs(horizon_steps=1)
+    original = _hierarchical_solver.extract_results
+    calls = 0
+
+    def inject_material_residual(build):
+        nonlocal calls
+        calls += 1
+        result = original(build)
+        if calls == 2:
+            result["branch_p_to"] = np.asarray(
+                result["branch_p_to"]
+            ).copy()
+            result["branch_p_to"][0, 0] -= (
+                np.sum(result["branch_p_from"])
+                + np.sum(result["branch_p_to"])
+                + 1.0
+            )
+        return result
+
+    monkeypatch.setattr(
+        _hierarchical_solver, "extract_results", inject_material_residual
+    )
+    result = solve_hierarchical_opf(
+        inputs,
+        HierarchicalPolicy(ac_window_steps=1, initialization_policy="flat_only"),
+    )
+
+    assert not result.completed
+    assert result.completed_intervals == 0
+    assert result.executed_intervals == ()
+    attempt = result.ac_attempts[0]
+    assert attempt.audit is not None
+    assert attempt.audit.outcome == "unusable_primal"
+    assert not attempt.audit.accepted_primal
+    assert attempt.audit.residuals[
+        "branch_loss_nonnegativity_pu_abs"
+    ] == pytest.approx(0.01)

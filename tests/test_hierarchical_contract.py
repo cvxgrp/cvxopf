@@ -78,6 +78,7 @@ def _audit(*, accepted=True, status="optimal", residuals=None, **overrides):
         "branch_mva_abs": 0.0,
         "branch_normalized_squared_residual": 0.0,
         "curtailment_nonnegativity_pu_abs": 0.0,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
     }
     if residuals is not None:
         residual_values = residuals
@@ -425,6 +426,10 @@ class TestInputs:
         with pytest.raises(ValueError, match="init_flat=True"):
             _inputs(options=OPFOptions(init_flat=False))
 
+    def test_disabled_ac_branch_limits_are_rejected(self):
+        with pytest.raises(ValueError, match="enforce_branch_limits=True"):
+            _inputs(options=OPFOptions(enforce_branch_limits=False))
+
     def test_storage_identity_is_required_and_unique(self):
         missing = StorageUnitIdeal(7, 10.0, 20.0, 10.0)
         with pytest.raises(ValueError, match=r"storage\[0\].device_id"):
@@ -462,6 +467,30 @@ class TestAttemptRecords:
         assert record.assigned_start["x"] == pytest.approx([1.0])
         assert not record.assigned_start["x"].flags.writeable
         assert record.solver_evidence.complete_x0.shape == (2,)
+
+    def test_retained_result_arrays_are_copied_and_read_only(self):
+        source = np.array([[1.0]])
+        nested = np.array([2.0])
+        record = _attempt(result={"b": source, "nested": {"x": nested}})
+
+        source[0, 0] = 9.0
+        nested[0] = 9.0
+
+        assert np.array_equal(record.result["b"], [[1.0]])
+        assert np.array_equal(record.result["nested"]["x"], [2.0])
+        with pytest.raises(ValueError, match="read-only"):
+            record.result["b"][0, 0] = 3.0
+        with pytest.raises(ValueError, match="read-only"):
+            record.result["nested"]["x"][0] = 3.0
+
+    def test_outer_plan_result_arrays_are_copied_and_read_only(self):
+        source = np.array([[500.0]])
+        record = _outer_record(result={"soc": source})
+        source[0, 0] = 0.0
+
+        assert np.array_equal(record.result["soc"], [[500.0]])
+        with pytest.raises(ValueError, match="read-only"):
+            record.result["soc"][0, 0] = 0.0
 
     @pytest.mark.parametrize(
         "missing_field",
@@ -740,6 +769,7 @@ class TestAuditTree:
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
                     "curtailment_nonnegativity_pu_abs": 0.0,
+                    "branch_loss_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )
@@ -770,6 +800,7 @@ class TestAuditTree:
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
                     "curtailment_nonnegativity_pu_abs": 0.0,
+                    "branch_loss_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )
@@ -1291,6 +1322,7 @@ class TestAuditTree:
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
                     "curtailment_nonnegativity_pu_abs": 0.0,
+                    "branch_loss_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )

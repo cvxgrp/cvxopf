@@ -275,4 +275,3 @@ M21 is complete only when:
 5. the scientific comparison reports both benefits and failure modes; and
 6. documentation explains how to add a formulation adapter without modifying
    every existing layer or component.
-

@@ -145,6 +145,8 @@ def test_flat_only_executes_one_interval_with_verified_ipopt_start():
         result.realized_soc_mwh[1],
         result.realized_soc_mwh[0] - result.executed_b_mw[0],
     )
+    assert result.provenance.software_versions["clarabel"] != "unknown"
+    assert result.provenance.software_versions["ipopt"] != "unknown"
 
 
 @pytest.mark.filterwarnings(

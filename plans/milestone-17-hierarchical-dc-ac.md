@@ -958,10 +958,11 @@ its solve.
 
 Diagnostics independently reconstruct storage recurrence, component/network
 injection agreement, lossy-DC nodal balance, AC real/reactive balance, voltage
-violations, and both thermal-limit residuals. Required result fields are
-conditional on participating device families. Outer hard equality and reserve
-floor residuals and all supported soft terminal costs are reconstructed from
-the reported terminal SoC rather than trusted from the modeled expression.
+violations, both thermal-limit residuals, and nonnegativity of renewable
+curtailment and aggregate branch-terminal active loss. Required result fields
+are conditional on participating device families. Outer hard equality and
+reserve floor residuals and all supported soft terminal costs are reconstructed
+from the reported terminal SoC rather than trusted from the modeled expression.
 
 Focused S5 tests demonstrate:
 
@@ -1116,8 +1117,7 @@ cold strict mypy, JSON and diff validation, and the complete 1,817-test suite.
 
 ### S8 documentation and milestone handoff
 
-**Implementation and verification complete; external review and checkpoint
-pending.** S8 documents the public hierarchy at the same three levels as the
+**Complete; checkpoint commit `188450c`.** S8 documents the public hierarchy at the same three levels as the
 implementation: a concise user-facing workflow in the top-level README, a
 runnable case9 example, and the complete as-built orchestration boundary in
 `PROJECT_FLOWCHART.md`. Documentation preserves the scientific limits of the
@@ -1137,9 +1137,16 @@ dedicated full-trajectory validation.
 - [x] Update project-facing milestone status and cross-references.
 - [x] Verify the example, generated documentation, focused hierarchical tests,
   Ruff, strict mypy, full suite, and diff cleanliness.
-- [ ] Complete final external review and checkpoint S8.
+- [x] Complete final external review and checkpoint S8 (`188450c`).
 
 The stopping-point verification is the directly executed three-interval
 example, a regenerated `examples/README.md`, 97 focused hierarchical tests,
 Ruff, configured strict mypy, diff validation, and the complete 1,817-test
-suite.
+suite. A post-checkpoint boundary review additionally locked enforced AC
+branch limits at `HierarchicalInputs`, added branch-loss nonnegativity to the
+accepted-primal audit with tolerance-level reporting normalization, and fixed
+branch-wide whitespace validation. The final auditability pass recursively
+freezes array-valued retained results while leaving the documented live
+`OPFBuild` exception intact, and records both Clarabel and the linked IPOPT
+library version in public solve provenance. The resulting verification is 102
+focused hierarchical tests and the complete 1,822-test suite.

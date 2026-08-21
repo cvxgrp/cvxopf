@@ -158,6 +158,35 @@ def _readonly_array_mapping(
     return MappingProxyType(copied)
 
 
+def _readonly_result_value(value: object) -> object:
+    """Recursively snapshot one retained extraction result value."""
+    if isinstance(value, np.ndarray):
+        copied = value.copy()
+        copied.setflags(write=False)
+        return copied
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {
+                deepcopy(key): _readonly_result_value(item)
+                for key, item in value.items()
+            }
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_readonly_result_value(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_readonly_result_value(item) for item in value)
+    return deepcopy(value)
+
+
+def _readonly_result_mapping(
+    result: Mapping[str, object],
+) -> Mapping[str, object]:
+    """Return a structurally read-only snapshot of extracted results."""
+    return MappingProxyType(
+        {key: _readonly_result_value(value) for key, value in result.items()}
+    )
+
+
 def _copy_frame(frame: pd.DataFrame | None, *, name: str) -> pd.DataFrame | None:
     if frame is None:
         return None
@@ -517,6 +546,11 @@ class HierarchicalInputs:
         if not self.options.init_flat:
             raise ValueError(
                 "hierarchical initialization requires OPFOptions.init_flat=True"
+            )
+        if not self.options.enforce_branch_limits:
+            raise ValueError(
+                "hierarchical AC execution requires "
+                "OPFOptions.enforce_branch_limits=True"
             )
         generators = tuple(deepcopy(tuple(self.generators)))
         loads = tuple(deepcopy(tuple(self.loads)))
@@ -882,9 +916,7 @@ class OuterPlanRecord:
             raise ValueError("accepted outer plan requires boundary_soc_mwh")
         if not isinstance(self.result, Mapping):
             raise TypeError("result must be a mapping")
-        object.__setattr__(
-            self, "result", MappingProxyType(deepcopy(dict(self.result)))
-        )
+        object.__setattr__(self, "result", _readonly_result_mapping(self.result))
 
 
 @dataclass(frozen=True)
@@ -1018,7 +1050,7 @@ class ACAttemptRecord:
             )
         if self.result is not None:
             object.__setattr__(
-                self, "result", MappingProxyType(deepcopy(dict(self.result)))
+                self, "result", _readonly_result_mapping(self.result)
             )
         if self.build is not None and not isinstance(self.build, OPFBuild):
             raise TypeError("build must be OPFBuild or None")
@@ -1221,11 +1253,13 @@ _AC_RESIDUAL_NAMES = frozenset(
         "branch_mva_abs",
         "branch_normalized_squared_residual",
         "curtailment_nonnegativity_pu_abs",
+        "branch_loss_nonnegativity_pu_abs",
     }
 )
 
 _RESIDUAL_TOLERANCE_FIELDS = {
     "curtailment_nonnegativity_pu_abs": "ac_active_balance_pu_abs",
+    "branch_loss_nonnegativity_pu_abs": "ac_active_balance_pu_abs",
 }
 
 

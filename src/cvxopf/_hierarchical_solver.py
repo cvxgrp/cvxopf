@@ -650,6 +650,11 @@ def _ac_residuals(
         raise RuntimeError("AC diagnostics require reactive injections")
     base_mva = float(cast(Any, snapshot.case["baseMVA"]))
     voltage, thermal, normalized = _network_limit_residuals(snapshot, result)
+    branch_loss_by_step = np.sum(
+        _as_2d(result["branch_p_from"])
+        + _as_2d(result["branch_p_to"]),
+        axis=1,
+    )
     residuals = {
         "soc_recurrence_mwh_abs": _soc_residual(snapshot, build, result),
         "ac_active_balance_pu_abs": float(np.max(np.abs(
@@ -666,6 +671,9 @@ def _ac_residuals(
             / base_mva
             if snapshot.nondispatchable
             else 0.0
+        ),
+        "branch_loss_nonnegativity_pu_abs": float(
+            np.max(np.maximum(-branch_loss_by_step, 0.0)) / base_mva
         ),
     }
     deviations, terminal = _terminal_deviation(snapshot, result, target)
@@ -737,6 +745,9 @@ def _tolerance_mapping(policy: HierarchicalPolicy) -> dict[str, float]:
         for name in policy.tolerances.__dataclass_fields__
     }
     values["curtailment_nonnegativity_pu_abs"] = (
+        policy.tolerances.ac_active_balance_pu_abs
+    )
+    values["branch_loss_nonnegativity_pu_abs"] = (
         policy.tolerances.ac_active_balance_pu_abs
     )
     return values
@@ -1363,10 +1374,20 @@ def _executed_record(
                 f"nonnegativity by {-minimum:.6g} MW"
             )
         curtailment = float(np.sum(np.maximum(curtailment_values, 0.0)))
-    branch_loss = float(
+    raw_branch_loss = float(
         np.sum(_as_2d(result["branch_p_from"])[0])
         + np.sum(_as_2d(result["branch_p_to"])[0])
     )
+    tolerance_mw = (
+        float(cast(Any, snapshot.case["baseMVA"]))
+        * policy.tolerances.ac_active_balance_pu_abs
+    )
+    if raw_branch_loss < -tolerance_mw:
+        raise RuntimeError(
+            "accepted AC action violates branch-loss nonnegativity by "
+            f"{-raw_branch_loss:.6g} MW"
+        )
+    branch_loss = max(raw_branch_loss, 0.0)
     injection_loss = float(np.sum(_as_2d(result["p_net"])[0]))
     initial = _aligned(
         attempt.initial_soc_mwh, snapshot.storage_device_ids, "attempt initial SoC"
@@ -1385,7 +1406,7 @@ def _executed_record(
         storage_cycling_cost=snapshot.delta * storage_rate,
         renewable_curtailment_mwh=snapshot.delta * curtailment,
         active_loss_mwh=snapshot.delta * branch_loss,
-        active_loss_crosscheck_mw_abs=abs(branch_loss - injection_loss),
+        active_loss_crosscheck_mw_abs=abs(raw_branch_loss - injection_loss),
         state_transition_residual_mwh_abs=state_residual,
         voltage_violation_pu=voltage,
         thermal_residual_mva=thermal,
@@ -1436,11 +1457,19 @@ def _summary(
 
 def _software_versions() -> dict[str, str]:
     versions = {"python": __import__("platform").python_version()}
-    for package in ("cvxopf", "cvxpy", "numpy", "pandas", "cyipopt"):
+    for package in (
+        "cvxopf", "cvxpy", "numpy", "pandas", "clarabel", "cyipopt"
+    ):
         try:
             versions[package] = version(package)
         except PackageNotFoundError:
             versions[package] = "unknown"
+    try:
+        from cyipopt import IPOPT_VERSION
+
+        versions["ipopt"] = ".".join(str(value) for value in IPOPT_VERSION)
+    except (ImportError, TypeError):
+        versions["ipopt"] = "unknown"
     return versions
 
 
