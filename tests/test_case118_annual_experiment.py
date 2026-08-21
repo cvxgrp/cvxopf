@@ -775,3 +775,21 @@ def test_s1_ac_clock_marker_requires_pending_endpoint(
         },
     )
     assert run_s1._checkpoint_endpoint_pending(checkpoint) is expected
+
+
+def test_s1_tracked_record_binds_runner_and_nonexecution_contract():
+    metadata = json.loads(
+        (EXPERIMENT_DIRECTORY / "S1_RESULTS_METADATA.json").read_text()
+    )
+    runner = EXPERIMENT_DIRECTORY / "run_s1.py"
+    assert hashlib.sha256(runner.read_bytes()).hexdigest() == (
+        metadata["execution_source"]["runner_sha256"]
+    )
+    assert metadata["status"] == "complete"
+    assert all(
+        worker["eligible_for_advancement"]
+        and worker["parent_context_matches"]
+        and worker["direct_ac_24h"]
+        == "not_authorized_by_s0_resource_gate"
+        for worker in metadata["workers"]
+    )

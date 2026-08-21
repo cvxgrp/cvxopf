@@ -162,3 +162,19 @@ S1 is limited to 16 GiB process RSS, 45 minutes per AC solve, and two hours
 overall, with child-process RSS sampling at least once per second. Direct
 24-hour AC is not authorized by the S0 resource gate. Twenty-four-hour lossy
 DC and bounded AC/hierarchical measurements remain authorized. S0 is complete.
+
+## 2026-08-21 — S1 completed
+
+Both 24-hour lossy-DC outer plans solved and passed independent audits in less
+than 0.35 seconds. Their selected six-hour AC endpoint realizations also
+passed, taking 21.0 minutes rated and 19.3 minutes effectively unlimited. Peak
+sampled worker RSS was 10.1 and 10.7 GiB. Direct 24-hour AC remained
+unconstructed and classified `not_authorized_by_s0_resource_gate`.
+
+Over the matched six-hour interval, the unlimited lossy-DC optimum selected
+only $$1.02\times10^{-6}$$ MWh of storage throughput while its AC endpoint
+optimum selected 478.285 MWh. The rated values were 2.353 and 468.220 MWh.
+These are economically selected optima; S1 does not establish that AC
+feasibility required the cycling. The rated outer's 151.748 MWh full-day
+throughput remains a separate daily summary. This is endpoint-realization
+evidence, not a sequential operating total. S1 passes and P0 is next.
