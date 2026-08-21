@@ -250,6 +250,13 @@ def _controlling_s3_attempts(reference: Mapping[str, Any]) -> list[dict[str, Any
     ]
 
 
+def _expected_supplied_action(expected: Mapping[str, Any]) -> bool:
+    if "supplied_executed_action" in expected:
+        return bool(expected["supplied_executed_action"])
+    audit = expected.get("audit")
+    return bool(audit is not None and audit.get("accepted_primal", False))
+
+
 def _common_result_checks(
     prefix: str,
     actual: Mapping[str, object] | None,
@@ -372,6 +379,7 @@ def compare_public_to_reference(
             if attempt.source_attempt_id is None
             else actual_attempt_locations.get(attempt.source_attempt_id)
         )
+        expected_supplied_action = _expected_supplied_action(expected)
         checks.extend((
             _exact(f"{prefix}.iteration", attempt.iteration, expected["iteration"]),
             _exact(f"{prefix}.ordinal", attempt.ordinal, expected_slot.get("ordinal", 0)),
@@ -381,7 +389,11 @@ def compare_public_to_reference(
             _exact(f"{prefix}.seed", attempt.seed, expected_slot.get("seed")),
             _exact(f"{prefix}.source_location", actual_source_location, expected_source_location),
             _exact(f"{prefix}.slot_state", attempt.slot_state, expected.get("slot_state", "executed")),
-            _exact(f"{prefix}.supplied_action", attempt.supplied_executed_action, expected.get("supplied_executed_action", expected.get("audit", {}).get("accepted_primal", False))),
+            _exact(
+                f"{prefix}.supplied_action",
+                attempt.supplied_executed_action,
+                expected_supplied_action,
+            ),
             _exact(f"{prefix}.status", None if attempt.audit is None else attempt.audit.status, None if expected.get("audit") is None else expected["audit"]["status"]),
             _exact(f"{prefix}.outcome", None if attempt.audit is None else attempt.audit.outcome, None if expected.get("audit") is None else expected["audit"]["outcome"]),
             _array_comparison(f"{prefix}.initial_soc", list(attempt.initial_soc_mwh.values()), list(expected["initial_soc_mwh"].values())),

@@ -60,3 +60,12 @@ def test_s7_array_comparison_rejects_shape_and_tolerance_drift():
     )
     assert not comparison.passed
     assert comparison.maximum_absolute_difference is not None
+
+
+def test_s7_skipped_s3b_slot_does_not_require_an_audit():
+    assert not s7_equivalence._expected_supplied_action(
+        {"supplied_executed_action": False, "audit": None}
+    )
+    assert s7_equivalence._expected_supplied_action(
+        {"audit": {"accepted_primal": True}}
+    )
