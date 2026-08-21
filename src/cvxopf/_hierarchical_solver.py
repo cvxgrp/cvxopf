@@ -661,6 +661,12 @@ def _ac_residuals(
         "voltage_bound_pu_abs": voltage,
         "branch_mva_abs": thermal,
         "branch_normalized_squared_residual": normalized,
+        "curtailment_nonnegativity_pu_abs": (
+            float(np.max(np.maximum(-_as_2d(result["curtailment"]), 0.0)))
+            / base_mva
+            if snapshot.nondispatchable
+            else 0.0
+        ),
     }
     deviations, terminal = _terminal_deviation(snapshot, result, target)
     if target is not None and policy.inner_terminal_policy == "hard_equality":
@@ -726,10 +732,14 @@ def _audit(
 
 
 def _tolerance_mapping(policy: HierarchicalPolicy) -> dict[str, float]:
-    return {
+    values = {
         name: float(getattr(policy.tolerances, name))
         for name in policy.tolerances.__dataclass_fields__
     }
+    values["curtailment_nonnegativity_pu_abs"] = (
+        policy.tolerances.ac_active_balance_pu_abs
+    )
+    return values
 
 
 def _solve_outer(
@@ -1322,7 +1332,9 @@ def _outer_target(
 
 
 def _executed_record(
-    snapshot: _ExecutionInputs, attempt: ACAttemptRecord
+    snapshot: _ExecutionInputs,
+    attempt: ACAttemptRecord,
+    policy: HierarchicalPolicy,
 ) -> ExecutedIntervalRecord:
     if attempt.result is None:
         raise RuntimeError("executed attempt has no result")
@@ -1337,11 +1349,20 @@ def _executed_record(
         list(snapshot.storage), cp.Constant(b)
     )
     storage_rate = float(cast(Any, storage_expression.value))
-    curtailment = (
-        float(np.sum(_as_2d(result["curtailment"])[0]))
-        if snapshot.nondispatchable
-        else 0.0
-    )
+    curtailment = 0.0
+    if snapshot.nondispatchable:
+        curtailment_values = _as_2d(result["curtailment"])[0]
+        tolerance_mw = (
+            float(cast(Any, snapshot.case["baseMVA"]))
+            * policy.tolerances.ac_active_balance_pu_abs
+        )
+        minimum = float(np.min(curtailment_values))
+        if minimum < -tolerance_mw:
+            raise RuntimeError(
+                "accepted AC action violates nondispatchable curtailment "
+                f"nonnegativity by {-minimum:.6g} MW"
+            )
+        curtailment = float(np.sum(np.maximum(curtailment_values, 0.0)))
     branch_loss = float(
         np.sum(_as_2d(result["branch_p_from"])[0])
         + np.sum(_as_2d(result["branch_p_to"])[0])
@@ -1506,7 +1527,7 @@ def solve_hierarchical_opf(
                 "accepted AC first action disagrees with first post-step SoC"
             )
         executed_b.append(first_b.copy())
-        executed_records.append(_executed_record(snapshot, accepted))
+        executed_records.append(_executed_record(snapshot, accepted, policy))
         realized_history.append(reconstructed.copy())
         realized = dict(zip(ids, reconstructed, strict=True))
         preceding_attempt = accepted

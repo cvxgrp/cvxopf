@@ -1220,8 +1220,13 @@ _AC_RESIDUAL_NAMES = frozenset(
         "voltage_bound_pu_abs",
         "branch_mva_abs",
         "branch_normalized_squared_residual",
+        "curtailment_nonnegativity_pu_abs",
     }
 )
+
+_RESIDUAL_TOLERANCE_FIELDS = {
+    "curtailment_nonnegativity_pu_abs": "ac_active_balance_pu_abs",
+}
 
 
 def _validate_accepted_residuals(
@@ -1236,10 +1241,14 @@ def _validate_accepted_residuals(
         return
     missing = sorted(required - set(audit.residuals))
     failures = {
-        name: (audit.residuals[name], getattr(tolerances, name))
+        name: (
+            audit.residuals[name],
+            getattr(tolerances, _RESIDUAL_TOLERANCE_FIELDS.get(name, name)),
+        )
         for name in required
         if name in audit.residuals
-        and audit.residuals[name] > getattr(tolerances, name)
+        and audit.residuals[name]
+        > getattr(tolerances, _RESIDUAL_TOLERANCE_FIELDS.get(name, name))
     }
     other_gate_failure = bool(
         audit.missing_or_nonfinite_fields

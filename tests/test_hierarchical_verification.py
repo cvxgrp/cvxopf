@@ -306,3 +306,92 @@ def test_trajectory_summary_reconstructs_executed_records_exactly_once():
         if attempt.audit is not None
     )
     assert summary["runtime_seconds"] == pytest.approx(expected_runtime)
+
+
+def test_tolerance_level_negative_curtailment_is_zeroed_for_accounting(
+    monkeypatch,
+):
+    inputs = _inputs(horizon_steps=1)
+    nd = NondispatchableUnit(
+        bus=5,
+        p_available=20.0,
+        apparent_power_rating=25.0,
+        device_id="solar-5",
+    )
+    inputs = replace(
+        inputs,
+        nondispatchable=(nd,),
+        df_nd=pd.DataFrame([[20.0]], columns=["solar-5"]),
+    )
+    original = _hierarchical_solver.extract_results
+    calls = 0
+
+    def inject_tolerance_level_residual(build):
+        nonlocal calls
+        calls += 1
+        result = original(build)
+        if calls == 2:
+            result["curtailment"] = np.array([[-1e-10]])
+        return result
+
+    monkeypatch.setattr(
+        _hierarchical_solver,
+        "extract_results",
+        inject_tolerance_level_residual,
+    )
+    result = solve_hierarchical_opf(
+        inputs,
+        HierarchicalPolicy(ac_window_steps=1, initialization_policy="flat_only"),
+    )
+
+    assert result.completed
+    assert result.ac_attempts[0].audit is not None
+    assert result.ac_attempts[0].audit.residuals[
+        "curtailment_nonnegativity_pu_abs"
+    ] == pytest.approx(1e-12)
+    assert result.executed_intervals[0].renewable_curtailment_mwh == 0.0
+    assert result.trajectory_summary["renewable_curtailment_mwh"] == 0.0
+
+
+def test_material_negative_curtailment_is_not_hidden(monkeypatch):
+    inputs = _inputs(horizon_steps=1)
+    nd = NondispatchableUnit(
+        bus=5,
+        p_available=20.0,
+        apparent_power_rating=25.0,
+        device_id="solar-5",
+    )
+    inputs = replace(
+        inputs,
+        nondispatchable=(nd,),
+        df_nd=pd.DataFrame([[20.0]], columns=["solar-5"]),
+    )
+    original = _hierarchical_solver.extract_results
+    calls = 0
+
+    def inject_material_residual(build):
+        nonlocal calls
+        calls += 1
+        result = original(build)
+        if calls == 2:
+            result["curtailment"] = np.array([[-1.0]])
+        return result
+
+    monkeypatch.setattr(
+        _hierarchical_solver, "extract_results", inject_material_residual
+    )
+    result = solve_hierarchical_opf(
+        inputs,
+        HierarchicalPolicy(ac_window_steps=1, initialization_policy="flat_only"),
+    )
+
+    assert not result.completed
+    assert result.completed_intervals == 0
+    assert result.executed_intervals == ()
+    attempt = result.ac_attempts[0]
+    assert attempt.audit is not None
+    assert attempt.audit.outcome == "unusable_primal"
+    assert not attempt.audit.accepted_primal
+    assert attempt.audit.residuals[
+        "curtailment_nonnegativity_pu_abs"
+    ] == pytest.approx(0.01)

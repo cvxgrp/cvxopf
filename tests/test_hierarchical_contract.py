@@ -77,6 +77,7 @@ def _audit(*, accepted=True, status="optimal", residuals=None, **overrides):
         "voltage_bound_pu_abs": 0.0,
         "branch_mva_abs": 0.0,
         "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
     }
     if residuals is not None:
         residual_values = residuals
@@ -738,6 +739,7 @@ class TestAuditTree:
                     "voltage_bound_pu_abs": 0.0,
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
+                    "curtailment_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )
@@ -767,6 +769,7 @@ class TestAuditTree:
                     "voltage_bound_pu_abs": 0.0,
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
+                    "curtailment_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )
@@ -1287,6 +1290,7 @@ class TestAuditTree:
                     "voltage_bound_pu_abs": 0.0,
                     "branch_mva_abs": 0.0,
                     "branch_normalized_squared_residual": 0.0,
+                    "curtailment_nonnegativity_pu_abs": 0.0,
                 }
             ),
         )

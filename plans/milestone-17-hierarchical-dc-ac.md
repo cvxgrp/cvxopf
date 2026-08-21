@@ -995,7 +995,7 @@ hierarchical/storage/results tests, cold strict mypy over both typed modules, Ru
 
 ### S6 hierarchy verification
 
-**Implementation complete; review and checkpoint pending.** S6 adds a
+**Complete; checkpoint commit `48c8704`.** S6 adds a
 separate end-to-end verification slice rather than changing the reviewed S5
 orchestration. The tests exercise the public controller and independently
 inspect its retained plans, attempts, executed actions, and summaries.
@@ -1037,4 +1037,57 @@ suite.
 - [x] Verify missing conditional outputs prevent action execution.
 - [x] Verify executed-interval accounting and trajectory aggregation.
 - [x] Pass lint, typing, focused, and complete-suite verification.
-- [ ] Complete external review and checkpoint S6 before beginning S7.
+- [x] Complete external review and checkpoint S6 before beginning S7
+  (`48c8704`).
+
+### S7 frozen-reference equivalence
+
+**In progress.** S7 re-executes the frozen scenario through the public
+hierarchical API and compares its retained audit tree and realized trajectory
+against the reviewed manual-reference records. It does not regenerate or
+reinterpret those reference records.
+
+S7 uses an absolute `1e-6` implementation-equivalence tolerance for common
+numeric result fields, outer signposts, executed actions, interval accounting,
+and non-runtime trajectory summaries. Shapes, identities, policy/slot
+structure, status/outcome classifications, and termination iteration are
+exact checks. This comparison tolerance is intentionally stricter than the
+physical accepted-primal gates and is frozen before the authoritative S7 run;
+it is not a new solver-feasibility tolerance.
+
+The S3 failed hard-replanning window contains one additional target-free
+diagnostic attempt. Public `flat_only` intentionally registers and solves only
+its controlling slot. S7 therefore compares every S3 controlling attempt
+one-to-one, requires the same controlling failure iteration and classification,
+and reports the additional S3 record as a manual-only diagnostic. It neither
+manufactures a public slot nor changes `flat_only`. The S3b shifted-recovery
+comparison requires the full nine-slot registry window by window.
+
+The first preliminary frozen-hard execution exposed tolerance-level negative
+renewable curtailment in otherwise accepted IPOPT primals (the S3 artifacts
+contain values as low as approximately `-4.8e-12` MW). Realized accounting now
+maps only negative values within the frozen, `baseMVA`-scaled AC active-balance
+tolerance to zero; a larger negative value fails acceptance and is never
+hidden. Material violations are classified as an unusable AC primal before
+action selection, so normal recovery or explicit termination retains the full
+audit tree. The zero normalization affects reporting only, not the OPF
+variables or constraints.
+
+#### S7 checklist
+
+- [ ] Verify reference artifact integrity and execution-source provenance.
+- [ ] Reproduce frozen hard `flat_only` against its S3 baseline.
+- [ ] Reproduce frozen quadratic-soft `flat_only` against its S3 baseline.
+- [ ] Reproduce replanned hard `flat_only` against its S3 baseline, including
+  the same terminal failure classification.
+- [ ] Reproduce replanned quadratic-soft `flat_only` against its S3 baseline.
+- [ ] Reproduce replanned hard `shifted_with_recovery` against S3b.
+- [ ] Compare every outer plan, registered AC slot, accepted first action,
+  realized SoC boundary, termination record, and trajectory summary under the
+  frozen absolute tolerances.
+- [ ] Retain any non-equivalence as a finding; do not weaken tolerances or
+  modify the frozen reference artifacts to obtain agreement.
+- [ ] Record software/source provenance and tracked integrity metadata for the
+  S7 execution.
+- [ ] Pass focused, lint, typing, and complete-suite verification.
+- [ ] Complete external review and checkpoint S7 before beginning S8.
