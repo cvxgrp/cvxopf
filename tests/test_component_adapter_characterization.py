@@ -83,7 +83,8 @@ for _formulation_data in CORE_DATA.values():
 
 STORAGE_DATA = {
     "ns", "Cs", "storage_bus", "storage_apparent_power_rating",
-    "storage_capacity", "storage_initial_soc", "storage_delta",
+    "storage_capacity", "storage_initial_soc", "storage_device_ids",
+    "storage_device_id_is_explicit", "storage_delta",
     "storage_aging_weight", "storage_terminal_soc",
     "storage_terminal_constraint", "storage_terminal_cost",
     "storage_terminal_weight",

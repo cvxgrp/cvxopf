@@ -42,6 +42,9 @@ EXAMPLE_GROUPS = {
     "Multistep Problems": [
         "case9_multistep_flat_load.py",
     ],
+    "Hierarchical Control": [
+        "case9_hierarchical_dc_ac.py",
+    ],
     "Storage": [
         "case9_storage_ac.py",
         "case9_storage_dc.py",

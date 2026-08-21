@@ -405,6 +405,8 @@ class TestEdgeCases:
             "b",
             "soc",
             "storage_cost",
+            "storage_device_ids",
+            "storage_device_id_is_explicit",
             "storage_terminal_deviation",
             "p_load",
             "q_load",
@@ -469,6 +471,8 @@ class TestEdgeCases:
             data={
                 "baseMVA": 100.0,
                 "ns": 1,
+                "storage_device_ids": np.array(["storage_0"], dtype=object),
+                "storage_device_id_is_explicit": np.array([False]),
                 "storage_terminal_soc": np.array([50.0]),
                 "nnd": 1,
                 "nd_p_available": np.array([20.0]),
@@ -592,11 +596,17 @@ class TestEdgeCases:
                 variables["b_q"] = value
             data.update({
                 "ns": 1,
+                "storage_device_ids": np.array(
+                    ["storage_0"], dtype=object
+                ),
+                "storage_device_id_is_explicit": np.array([False]),
                 "storage_terminal_soc": np.array([50.0]),
             })
             expressions["storage_cost"] = x
             expected |= {
                 "b", "soc", "storage_cost",
+                "storage_device_ids",
+                "storage_device_id_is_explicit",
                 "storage_terminal_deviation",
             }
             scalar_nan_fields.add("storage_cost")
@@ -642,8 +652,19 @@ class TestEdgeCases:
         assert all(np.isnan(results[field]) for field in scalar_nan_fields)
         assert all(
             results[field] is None
-            for field in expected - scalar_nan_fields - {"status"}
+            for field in expected - scalar_nan_fields - {
+                "status",
+                "storage_device_ids",
+                "storage_device_id_is_explicit",
+            }
         )
+        if with_storage:
+            np.testing.assert_array_equal(
+                results["storage_device_ids"], ["storage_0"]
+            )
+            np.testing.assert_array_equal(
+                results["storage_device_id_is_explicit"], [False]
+            )
 
 
 class TestSheddableLoadResults:

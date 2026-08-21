@@ -1,9 +1,9 @@
 # cvxopf software architecture
 
-This diagram records the software structure implemented by API hardening,
-Milestone 16+, and Milestone 19. It describes the current problem-construction
-and result paths before the Milestone 17 hierarchical DC/AC controller is
-added.
+This diagram records the software structure implemented by API hardening and
+Milestones 16+, 17, and 19. The first diagram follows one OPF build; the M17
+controller shown below composes those same public build, solve, and result
+boundaries without moving device or network equations into orchestration.
 
 ```mermaid
 flowchart TD
@@ -184,10 +184,50 @@ sequenceDiagram
   still requires ordinary input and parser plumbing; this is a closed-world
   internal architecture, not a dynamic plugin interface.
 
-## Scope boundary
+## Hierarchical controller
 
-Milestone 17 will sit above this architecture as a controller that coordinates
-long-horizon convex planning and short-horizon AC feasibility/correction
-solves. It will consume the same public build, solve, and result interfaces;
-it should not bypass the typed component assembly or move network physics into
-the orchestration layer.
+```mermaid
+flowchart LR
+    inputs["<b>HierarchicalInputs</b><br/>case · identity-aligned devices<br/>full-horizon time series"]
+    policy["<b>HierarchicalPolicy</b><br/>outer replanning · AC terminal policy<br/>initialization and recovery"]
+    outer["<b>Long-horizon lossy DC</b><br/>convex energy plan<br/>battery SoC signposts"]
+    outer_gate{"<b>Accepted outer primal?</b><br/>status · finite fields<br/>DC residuals"}
+    inner["<b>Short-horizon AC</b><br/>nonlinear network realization<br/>target-conditioned by SoC only"]
+    gate{"<b>Accepted-primal gate</b><br/>status · identity · finite fields<br/>physics residuals"}
+    recovery{"<b>Recovery slot remains?</b>"}
+    execute["<b>Execute first action</b><br/>advance realized SoC once"]
+    terminate["<b>Terminate trajectory</b><br/>retain failure audit<br/>do not advance state"]
+    audit["<b>HierarchicalResult</b><br/>plans · every AC attempt · starts<br/>executed intervals · accounting"]
+
+    inputs --> outer
+    policy --> outer
+    outer --> outer_gate
+    outer_gate -->|accepted: device-ID-aligned SoC boundary| inner
+    outer_gate -->|unsuccessful: no AC window| terminate
+    policy --> inner
+    inner --> gate
+    gate -->|accepted controlling solve| execute
+    gate -->|unsuccessful attempt| recovery
+    recovery -->|yes: next declared slot| inner
+    recovery -->|no: sequence exhausted| terminate
+    execute -->|next controller iteration| outer
+    outer --> audit
+    inner --> audit
+    execute --> audit
+    terminate --> audit
+```
+
+The outer layer communicates battery energy states, not dispatch setpoints.
+Each AC window therefore re-optimizes generation, reactive power, storage
+power, and other device behavior under the modeled nonlinear AC physics. Only
+the first action from an accepted target-conditioned AC solve is executed.
+An unsuccessful outer plan terminates before an AC window is registered. An
+unsuccessful AC attempt advances only to the next policy-declared recovery
+slot; exhausting those slots terminates without advancing state. Failed
+attempts remain distinct audit records and are never silently relaxed or used
+as control actions.
+
+M17 intentionally fixes this reviewed `lossy_dc` to `ac` workflow. Future
+selectable formulations and additional hierarchy layers belong to M21. Both
+layers continue to use the ordinary public OPF builders and the typed component
+assembly shown above.

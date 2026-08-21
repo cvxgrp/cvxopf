@@ -69,6 +69,8 @@ with appropriate solvers. It is designed to:
   curtailable output and reactive power support
 - Model loads as first-class, identity-aligned devices with optional
   single-solve shedding and energy-not-served reporting
+- Coordinate long-horizon convex battery planning with audited short-horizon
+  AC execution through the public hierarchical controller
 
 ### Methodology
 
@@ -80,11 +82,12 @@ packages. The central contribution here is their organization within a
 wherever the model permits, while the nonconvexity of the full AC formulation
 is confined to the network-flow physics.
 
-This separation supports an explicit hierarchical solve structure. A globally
-solvable, long-horizon convex layer determines intertemporal energy decisions
-and passes device states, especially battery state of charge, to a
-short-horizon AC layer. The AC layer verifies and corrects for full network
-physics without needing to reproduce the approximate dispatch trajectory.
+This separation supports the implemented hierarchical solve structure. A
+globally solvable, long-horizon convex layer determines intertemporal energy
+decisions and passes device states, especially battery state of charge, to a
+short-horizon AC layer. The AC layer verifies and corrects for modeled
+nonlinear network physics without needing to reproduce the approximate
+dispatch trajectory.
 
 Nondispatchable resources are likewise first-class devices rather than generic
 generator boxes: time-varying real-power availability is coupled to a convex
@@ -98,6 +101,16 @@ time-series alignment and optional interruption policies. Shedding is an
 affine extension of the load feasible set with a high linear value-of-lost-load
 cost in the original optimization problem; it is not a lexicographic pass, an
 anonymous balance slack, or a second feasibility-restoration solve.
+
+AC voltage magnitudes and reactive dispatch are currently governed by their
+physical bounds and network equations but are generally not assigned an
+operating preference in the objective. Reactive variables can therefore reach
+a limit because support is physically required, because the economic optimum
+is nonunique in reactive coordinates, or because the nonlinear solver selects
+a particular local solution. A planned characterization and optional
+regularization milestone will distinguish these cases before introducing any
+voltage-reference or reactive-power ridge; see
+[`plans/milestone-20-ac-voltage-reactive-regularization.md`](plans/milestone-20-ac-voltage-reactive-regularization.md).
 
 The implementation follows the same separation of responsibilities. Public
 build APIs select formulation-owned network physics, while a shared typed
@@ -132,8 +145,8 @@ flowchart LR
 ```
 
 See the [full software architecture and component lifecycle](PROJECT_FLOWCHART.md)
-for the as-built assembly sequence, architectural invariants, and the boundary
-reserved for the Milestone 17 hierarchical controller.
+for the as-built assembly sequence, architectural invariants, and the
+Milestone 17 hierarchical controller above that boundary.
 
 ### Formulations
 
@@ -173,12 +186,62 @@ bus: no branch flows, no transmission limits, no losses, no reactive power —
 just total generation equals total load. It is the classic economic dispatch
 problem, useful as a fast baseline and for large-horizon energy planning.
 
-The intended workflow for large-scale resiliency studies is hierarchical:
-solve the convex `lossy_dc` formulation over the full planning horizon to
-obtain a globally optimal battery SoC trajectory and dispatch plan, then use
-the AC formulation over a short receding horizon to verify and correct for
-true network physics, with SoC targets inherited from the convex layer as
-boundary constraints.
+### Hierarchical DC to AC control
+
+`solve_hierarchical_opf()` implements the project's reviewed two-layer
+workflow. The outer `lossy_dc` problem plans the full remaining horizon. Each
+short AC window receives only identity-aligned battery SoC signposts from that
+plan; it does not inherit generator, renewable, HVDC, or battery-power
+setpoints. The controller executes only the first action from an accepted,
+residual-checked, target-conditioned AC solve, advances the realized SoC, and
+repeats.
+
+The default `shifted_with_recovery` initialization first shifts the preceding
+accepted AC prediction. If needed, it follows a deterministic and fully
+retained recovery sequence. `flat_only` remains available for baseline
+reproduction. Hard-equality shifted recovery completed the frozen M17-S3b
+scenario, but that experiment is not a recursive-feasibility guarantee or a
+claim of universal robustness for the nonlinear solver. Quadratic-soft shifted
+recovery is supported by the same API and initialization mechanism, but has
+not yet received a dedicated full-trajectory experiment.
+
+The returned `HierarchicalResult` keeps every outer plan and AC attempt,
+complete IPOPT starting-point evidence for executed AC attempts, executed
+actions, termination state, and exact-once trajectory accounting. This
+auditability is deliberate: a failed solve, target-free initialization solve,
+or unused recovery slot is never presented as executed control.
+
+```python
+result = solve_hierarchical_opf(
+    HierarchicalInputs(
+        case=case,
+        horizon_steps=T,
+        delta=1.0,
+        generators=generators,
+        loads=loads,
+        storage=storage,  # every unit has a unique device_id
+        df_load_p=df_load_p,
+        df_load_q=df_load_q,
+        nondispatchable=renewables,
+        df_nd=df_renewables,
+    ),
+    HierarchicalPolicy(
+        ac_window_steps=5,
+        outer_policy="replan_every_step",
+        inner_terminal_policy="hard_equality",
+        initialization_policy="shifted_with_recovery",
+    ),
+)
+```
+
+The current public controller deliberately fixes `lossy_dc` as the outer layer
+and `ac` as the inner layer. Loads must be nonsheddable, storage IDs are
+mandatory, AC `rateA` limits are enforced through the supplied `OPFOptions`,
+and the supported solvers are CLARABEL outside and IPOPT inside. See
+[`examples/case9_hierarchical_dc_ac.py`](examples/case9_hierarchical_dc_ac.py)
+for a runnable example and the
+[`M17 plan`](plans/milestone-17-hierarchical-dc-ac.md) for the exact acceptance,
+failure, and provenance contracts.
 
 References:
 
@@ -513,6 +576,7 @@ unit = StorageUnitIdeal(
     capacity=100.0,              # MWh
     initial_soc=50.0,            # MWh
     aging_weight=1e-2,           # objective units/MWh
+    device_id="battery-5",       # stable cross-build identity
 )
 
 build = build_opf_multistep(
@@ -525,6 +589,12 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Storage real power (MW): {results['b']}")
 print(f"State of charge (MWh):   {results['soc']}")
 ```
+
+An explicit, unique `device_id` provides stable storage identity across
+independently built problems, which is important for receding-horizon state
+handoffs. If it is omitted, the build publishes a convenience label such as
+`storage_0`; that label is tied to the current fleet ordering and must not be
+used as cross-build identity.
 
 Each storage unit may optionally configure one terminal policy. Hard policies
 use `terminal_constraint="equality"` to fix the final post-step SoC or
@@ -729,9 +799,22 @@ package environment.
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
 - [x] Post-M12/M16 correctness and API hardening: finite temporal inputs, stable unsuccessful-result schemas, and objective time units (see `plans/correctness-api-hardening.md`)
-- [ ] Hierarchical DC→AC receding-horizon dispatch (long-horizon convex plan passes SoC signposts into a short AC window; the implementation of the core vision)
+- [x] Hierarchical DC→AC receding-horizon dispatch: long-horizon convex
+  planning passes identity-aligned SoC signposts into short AC windows, with
+  causal initialization recovery and a complete audit tree (see
+  `plans/milestone-17-hierarchical-dc-ac.md`)
+- [ ] Configurable and extensible formulation hierarchies: preserve the
+  validated M17 `lossy_dc`→`ac` workflow, add typed selectable planning
+  formulations, and validate a future three-layer
+  `singlenode_dc`→`socp`→`ac` workflow (see
+  `plans/milestone-21-configurable-hierarchy.md`)
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
 - [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently
   large linear value-of-lost-load cost, and energy-not-served reporting (see
   `plans/milestone-19-load-shedding.md`)
+- [ ] AC voltage and reactive-dispatch characterization and optional
+  regularization: distinguish required voltage support from unpriced
+  nonuniqueness and local-solver selection, then add only scientifically
+  justified AC operating preferences (see
+  `plans/milestone-20-ac-voltage-reactive-regularization.md`)

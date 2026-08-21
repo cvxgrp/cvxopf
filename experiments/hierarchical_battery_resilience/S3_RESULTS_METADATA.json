@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "result_status": "authoritative_clean_run",
+  "created_utc": "2026-08-20T18:06:00.620323+00:00",
+  "execution_source": {
+    "git_commit": "0cd65b1a1c809b81813389f58fde6559a161d147",
+    "git_dirty": false,
+    "git_status_porcelain": [],
+    "source_fingerprints": {
+      "cvxopf_python_tree_sha256": "c071d31e8c1d29af4d08eb1b128a920b75d765d53b8ea29c3b81e79b977ff237",
+      "experiment_execution_sha256": "6904caf639f62420f6dedf5e71fed3202528d273a2b84b524857be150bf86998",
+      "artifact_code_sha256": "84140ef8b63cbbef2a32f5cb753b4044221e14dc3e5963d3c60101dfd3f2e4e4",
+      "files": {
+        "experiments/hierarchical_battery_resilience/scenario.py": "042c2febb49b384477222c9dceb66ddd1d4be928b6c3d35c3e68dbadf8590342",
+        "experiments/hierarchical_battery_resilience/manual_runner.py": "23af2bb3a0ed6969ad8317dfc76164e82240590c90a51319af23da0c2993bec7",
+        "experiments/hierarchical_battery_resilience/reproduce.py": "fa28bf946f7a6af23d9238e73abcb0dd8ce5610f06981ae998c85f59ab37dd98",
+        "experiments/hierarchical_battery_resilience/analysis.py": "1f0b18477ef10f1b55d75be4cbeb4e30cc1e3a10266c407ff8709252a8d826b7"
+      }
+    }
+  },
+  "scenario": {
+    "name": "tracy_high_96h_v1",
+    "manifest_sha256": "46ae15be4f56681416423f17d9374c95a8f5274010319c552ce5308bf7cbc80b"
+  },
+  "environment": {
+    "python": "3.13.2",
+    "packages": {
+      "cvxopf": "0.1.0",
+      "cvxpy": "1.9.2",
+      "numpy": "2.5.1",
+      "pandas": "3.0.3"
+    }
+  },
+  "solver_stack": {
+    "inner": {
+      "solver": "IPOPT",
+      "ipopt_version": "3.14.19",
+      "interface": "cyipopt",
+      "cyipopt_version": "1.7.0"
+    },
+    "outer": {
+      "solver": "CLARABEL",
+      "clarabel_version": "0.11.1",
+      "record_basis": "Identified immediately after the authoritative run by rebuilding the unchanged frozen outer problem under the recorded environment; the authoritative artifact retained 15 iterations but not the solver name."
+    }
+  },
+  "artifact_integrity_note": "Artifact sizes and SHA-256 hashes identify and verify this run's local files. They do not imply that an independent rerun will produce byte-identical gzip files.",
+  "artifacts": {
+    "endpoint_realization.json.gz": {
+      "sha256": "987e5635ca770905a2b2324da5ad6d8f14cd645016523cd46b86bf8e2a594f9c",
+      "bytes": 75522
+    },
+    "frozen__hard_equality.json.gz": {
+      "sha256": "7f06f334818decc53f95a8ee2a37df3c85eafaf9d2a7ec7277b74ec60381a924",
+      "bytes": 535316
+    },
+    "frozen__quadratic_soft.json.gz": {
+      "sha256": "517f0a549635b2620f46ea4597b86058ffc296bb26792db67541f0e6fe69d347",
+      "bytes": 546575
+    },
+    "replan_every_step__hard_equality.json.gz": {
+      "sha256": "8670f7dfb6863a93804b9c3d0d0aaad55f5ffdf7ed9b25377d21d98a0a0c4afc",
+      "bytes": 1151692
+    },
+    "replan_every_step__quadratic_soft.json.gz": {
+      "sha256": "9fdbc66ba79a35b27d517d322fd8a6f93a47f7f0d375cb6a4b35013be0db10d7",
+      "bytes": 2029583
+    },
+    "trajectory_summary.csv": {
+      "sha256": "4ddaa9d43a476314992a9c42dac858f5ab01182254065e377efd1a81e14f9fc6",
+      "bytes": 1280
+    }
+  },
+  "endpoint_summary": [
+    {
+      "case": "crosses_saturation_boundary_32_50",
+      "start": 32,
+      "stop": 50,
+      "status": "optimal",
+      "outcome": "accepted",
+      "diagnosis": "hard_target_met",
+      "terminal_soc_error_mwh": 0.0
+    },
+    {
+      "case": "within_regime_60_78",
+      "start": 60,
+      "stop": 78,
+      "status": "optimal",
+      "outcome": "accepted",
+      "diagnosis": "hard_target_met",
+      "terminal_soc_error_mwh": 0.0
+    }
+  ],
+  "trajectory_summary": [
+    {
+      "outer_policy": "frozen",
+      "inner_policy": "hard_equality",
+      "completed": true,
+      "termination_iteration": null,
+      "termination_reason": null,
+      "completed_intervals": 96,
+      "completion_fraction": 1.0,
+      "generation_cost": 360263.39803927095,
+      "storage_cycling_cost": 71.50067315195618,
+      "renewable_curtailment_mwh": 239.2044255055866,
+      "active_loss_mwh": 391.9119140328856,
+      "maximum_voltage_violation_pu": 0.0,
+      "maximum_thermal_residual_mva": 0.0,
+      "maximum_normalized_squared_thermal_residual": 0.0,
+      "cumulative_absolute_signpost_deviation_mwh": 4.276480061223391e-08,
+      "runtime_seconds": 89.41019316308666
+    },
+    {
+      "outer_policy": "frozen",
+      "inner_policy": "quadratic_soft",
+      "completed": true,
+      "termination_iteration": null,
+      "termination_reason": null,
+      "completed_intervals": 96,
+      "completion_fraction": 1.0,
+      "generation_cost": 358924.2937466702,
+      "storage_cycling_cost": 61.992314909447536,
+      "renewable_curtailment_mwh": 239.2045392497431,
+      "active_loss_mwh": 383.2754457366865,
+      "maximum_voltage_violation_pu": 0.0,
+      "maximum_thermal_residual_mva": 7.768136640606826e-07,
+      "maximum_normalized_squared_thermal_residual": 6.214509368874133e-09,
+      "cumulative_absolute_signpost_deviation_mwh": 15508.735247360566,
+      "runtime_seconds": 82.70999224907428
+    },
+    {
+      "outer_policy": "replan_every_step",
+      "inner_policy": "hard_equality",
+      "completed": false,
+      "termination_iteration": 35,
+      "termination_reason": "solver_certified_infeasible",
+      "completed_intervals": 35,
+      "completion_fraction": 0.3645833333333333,
+      "generation_cost": 137546.0179321258,
+      "storage_cycling_cost": 28.465878679448746,
+      "renewable_curtailment_mwh": 230.11878955458863,
+      "active_loss_mwh": 147.6602009167258,
+      "maximum_voltage_violation_pu": 0.0,
+      "maximum_thermal_residual_mva": 0.0,
+      "maximum_normalized_squared_thermal_residual": 0.0,
+      "cumulative_absolute_signpost_deviation_mwh": 1.3853464756225719e-08,
+      "runtime_seconds": 54.79523746002815
+    },
+    {
+      "outer_policy": "replan_every_step",
+      "inner_policy": "quadratic_soft",
+      "completed": false,
+      "termination_iteration": 95,
+      "termination_reason": "outer_solver_certified_infeasible",
+      "completed_intervals": 95,
+      "completion_fraction": 0.9895833333333334,
+      "generation_cost": 357833.023955385,
+      "storage_cycling_cost": 55.326090999026256,
+      "renewable_curtailment_mwh": 239.20444478171564,
+      "active_loss_mwh": 373.6774866238172,
+      "maximum_voltage_violation_pu": 0.0,
+      "maximum_thermal_residual_mva": 2.6923032692138804e-09,
+      "maximum_normalized_squared_thermal_residual": 2.153846435248852e-11,
+      "cumulative_absolute_signpost_deviation_mwh": 14179.94450307756,
+      "runtime_seconds": 112.88992812698416
+    }
+  ]
+}
