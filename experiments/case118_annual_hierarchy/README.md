@@ -26,3 +26,14 @@ release capabilities that the all-at-once public API intentionally does not
 provide. P0 covers both nominal execution and deterministic recovery cases,
 including target-free/copy recovery, both perturbation families, solver
 failure and infeasibility classifications, and complete recovery exhaustion.
+
+The frozen six-hour S0 pilot is executed from a clean checkpoint with:
+
+```bash
+uv run python -m experiments.case118_annual_hierarchy.run_s0
+```
+
+The ignored gzip artifact retains all four public results, independent audits,
+dimensions, timings, solver statistics, peak-memory observations, and source
+provenance. A compact tracked scientific record is produced only after the
+artifact passes review.

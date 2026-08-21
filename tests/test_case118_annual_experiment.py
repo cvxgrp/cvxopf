@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 from contextlib import nullcontext
+import gzip
+import json
 
 import numpy as np
 import pandas as pd
@@ -31,6 +33,7 @@ from experiments.case118_annual_hierarchy.scenario import (
     electrical_distance_matrix,
     materialize_pilot,
 )
+from experiments.case118_annual_hierarchy import run_s0
 
 
 @pytest.fixture(scope="module")
@@ -453,3 +456,57 @@ def test_ac_probe_rejects_material_negative_branch_loss(converted_case):
     assert audit.residuals[
         "branch_loss_nonnegativity_pu_abs"
     ] == pytest.approx(0.01)
+
+
+def test_s0_runner_problem_dimensions_count_scalar_structure():
+    x = cp.Variable(3)
+    build = OPFBuild(
+        prob=cp.Problem(cp.Minimize(cp.sum(x)), [x == 1.0, x >= 0.0]),
+        variables={"x": x},
+        data={},
+        formulation="lossy_dc",
+        is_convex=True,
+    )
+    assert run_s0._problem_dimensions(build) == {
+        "scalar_variables": 3,
+        "scalar_equalities": 3,
+        "explicit_scalar_inequalities": 3,
+        "other_scalar_constraints": 0,
+        "constraint_objects": 2,
+    }
+
+
+def test_s0_runner_writes_deterministic_atomic_gzip(tmp_path):
+    path = tmp_path / "artifact.json.gz"
+    payload = {"array": np.array([1.0, 2.0]), "status": "complete"}
+    run_s0._atomic_gzip_json(path, payload)
+    first = path.read_bytes()
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        assert json.load(stream) == {"array": [1.0, 2.0], "status": "complete"}
+    run_s0._atomic_gzip_json(path, payload)
+    assert path.read_bytes() == first
+    assert first[4:8] == b"\x00\x00\x00\x00"
+
+
+def test_s0_artifact_registers_all_four_cases_before_execution(monkeypatch):
+    observed = []
+
+    def fake_run(network, formulation, case):
+        observed.append((network, formulation))
+        return {
+            "network": network,
+            "formulation": formulation,
+            "accepted_primal": True,
+        }
+
+    monkeypatch.setattr(run_s0, "_run_case", fake_run)
+    artifact = run_s0.build_artifact()
+    assert observed == [
+        ("pglib_rated", "lossy_dc"),
+        ("pglib_rated", "ac"),
+        ("pglib_effectively_unlimited", "lossy_dc"),
+        ("pglib_effectively_unlimited", "ac"),
+    ]
+    assert artifact["all_accepted"] is True
+    assert artifact["horizon_steps"] == 6
+    assert artifact["branch_limit_sentinel_mw"] == 1e6
