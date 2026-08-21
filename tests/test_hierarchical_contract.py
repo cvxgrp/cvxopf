@@ -313,6 +313,15 @@ def _recovery_registry(replacements=None, *, iteration=0):
 
 
 class TestPolicy:
+    @pytest.mark.parametrize("value", [True, 1.5])
+    def test_window_steps_must_be_an_integer(self, value):
+        with pytest.raises(TypeError, match="must be an integer"):
+            HierarchicalPolicy(ac_window_steps=value)
+
+    def test_window_steps_must_be_positive(self):
+        with pytest.raises(ValueError, match="must be positive"):
+            HierarchicalPolicy(ac_window_steps=0)
+
     def test_reference_defaults_are_explicit(self):
         policy = HierarchicalPolicy(ac_window_steps=5)
 
@@ -344,12 +353,53 @@ class TestPolicy:
             )
 
     def test_recovery_scales_are_ordered_unique_and_immutable(self):
+        with pytest.raises(ValueError, match="exactly three"):
+            ShiftedRecoveryConfig((1e-4, 1e-3))
+        with pytest.raises(ValueError, match="must be unique"):
+            ShiftedRecoveryConfig((1e-4, 1e-4, 1e-2))
         with pytest.raises(ValueError, match="strictly increasing"):
             ShiftedRecoveryConfig((1e-3, 1e-4, 1e-2))
         config = ShiftedRecoveryConfig([1e-4, 1e-3, 1e-2])
         assert config.perturbation_scales == (1e-4, 1e-3, 1e-2)
         with pytest.raises(FrozenInstanceError):
             config.seed_base = 1
+
+    @pytest.mark.parametrize("seed", [True, 1.5])
+    def test_recovery_seed_must_be_an_integer(self, seed):
+        with pytest.raises(TypeError, match="seed_base must be an integer"):
+            ShiftedRecoveryConfig(seed_base=seed)
+
+    def test_recovery_seed_must_be_nonnegative(self):
+        with pytest.raises(ValueError, match="seed_base must be nonnegative"):
+            ShiftedRecoveryConfig(seed_base=-1)
+
+    @pytest.mark.parametrize(
+        ("field", "value", "message"),
+        [
+            ("outer_policy", "other", "unsupported outer_policy"),
+            ("inner_terminal_policy", "other", "inner_terminal_policy"),
+            ("initialization_policy", "other", "initialization_policy"),
+        ],
+    )
+    def test_policy_enums_are_closed(self, field, value, message):
+        with pytest.raises(ValueError, match=message):
+            HierarchicalPolicy(ac_window_steps=1, **{field: value})
+
+    def test_hard_policy_rejects_soft_weight(self):
+        with pytest.raises(ValueError, match="valid only for quadratic_soft"):
+            HierarchicalPolicy(ac_window_steps=1, quadratic_soft_weight=1.0)
+
+    def test_policy_requires_typed_recovery_and_tolerances(self):
+        with pytest.raises(TypeError, match="recovery must be"):
+            HierarchicalPolicy(ac_window_steps=1, recovery={})
+        with pytest.raises(TypeError, match="tolerances must be"):
+            HierarchicalPolicy(ac_window_steps=1, tolerances={})
+
+    @pytest.mark.parametrize("value", [True, "1", np.inf])
+    def test_tolerance_values_must_be_finite_real_scalars(self, value):
+        error = TypeError if value is True or isinstance(value, str) else ValueError
+        with pytest.raises(error):
+            HierarchicalAcceptanceTolerances(soc_recurrence_mwh_abs=value)
 
     def test_tolerances_are_finite_nonnegative(self):
         with pytest.raises(ValueError, match="must be nonnegative"):
@@ -391,6 +441,48 @@ class TestSolveConfiguration:
             LayerSolveConfig("IPOPT", {"max_iter": True})
         with pytest.raises(ValueError, match="must be positive"):
             LayerSolveConfig("CLARABEL", {"tol_feas": 0.0})
+
+    @pytest.mark.parametrize(
+        ("solver", "options", "error", "message"),
+        [
+            ("IPOPT", {"verbose": 1}, TypeError, "must be Boolean"),
+            ("IPOPT", {"print_level": -1}, ValueError, "nonnegative"),
+            ("IPOPT", {"print_level": 13}, ValueError, "must not exceed"),
+            ("IPOPT", {"sb": "maybe"}, ValueError, "must be one of"),
+            ("IPOPT", {"mu_strategy": ""}, ValueError, "nonempty string"),
+            ("IPOPT", {"max_cpu_time": np.inf}, ValueError, "finite"),
+        ],
+    )
+    def test_each_solve_option_kind_is_validated(
+        self, solver, options, error, message
+    ):
+        with pytest.raises(error, match=message):
+            LayerSolveConfig(solver, options)
+
+    def test_string_solve_options_are_normalized(self):
+        config = LayerSolveConfig(
+            "IPOPT",
+            {
+                "sb": "yes",
+                "mu_strategy": "adaptive",
+                "linear_solver": "mumps",
+                "warm_start_init_point": "no",
+            },
+        )
+        assert dict(config.options) == {
+            "sb": "yes",
+            "mu_strategy": "adaptive",
+            "linear_solver": "mumps",
+            "warm_start_init_point": "no",
+        }
+
+    def test_layer_configuration_rejects_bad_container_values(self):
+        with pytest.raises(ValueError, match="unsupported hierarchical solver"):
+            LayerSolveConfig("SCS")
+        with pytest.raises(TypeError, match="must be a mapping"):
+            LayerSolveConfig("IPOPT", [])
+        with pytest.raises(TypeError, match="must be LayerSolveConfig"):
+            HierarchicalSolveConfig(outer="CLARABEL")
 
     def test_layer_roles_are_closed(self):
         with pytest.raises(ValueError, match="outer.*CLARABEL"):
@@ -457,6 +549,46 @@ class TestInputs:
         with pytest.raises(ValueError, match="explicit generator"):
             _inputs(generators=())
 
+    def test_input_container_types_and_fleet_members_are_validated(self):
+        with pytest.raises(TypeError, match="case must be a mapping"):
+            _inputs(case=[])
+        with pytest.raises(TypeError, match="options must be OPFOptions"):
+            _inputs(options={})
+        with pytest.raises(TypeError, match="generators must contain"):
+            _inputs(generators=(object(),))
+        with pytest.raises(ValueError, match="at least one storage"):
+            _inputs(storage=())
+
+    @pytest.mark.parametrize("value", ["bad", pd.DataFrame([["bad"]])])
+    def test_load_frame_must_be_a_finite_numeric_dataframe(self, value):
+        with pytest.raises(TypeError):
+            _inputs(df_load_p=value)
+
+    def test_load_frame_rejects_nonfinite_values(self):
+        with pytest.raises(ValueError, match="finite"):
+            _inputs(
+                df_load_p=pd.DataFrame(
+                    [[90.0], [np.nan]], columns=["load-5"]
+                )
+            )
+
+    def test_trajectory_indices_are_unique_and_aligned(self):
+        p = pd.DataFrame(
+            [[90.0], [95.0]], columns=["load-5"], index=[0, 0]
+        )
+        with pytest.raises(ValueError, match="index must be unique"):
+            _inputs(df_load_p=p, df_load_q=None)
+        q = pd.DataFrame(
+            [[30.0], [31.0]], columns=["load-5"], index=[1, 2]
+        )
+        with pytest.raises(ValueError, match="indices must match"):
+            _inputs(df_load_q=q)
+
+    def test_hvdc_trajectory_bounds_must_be_paired(self):
+        frame = pd.DataFrame([[0.0], [0.0]], columns=["link"])
+        with pytest.raises(ValueError, match="must be supplied together"):
+            _inputs(df_hvdc_min=frame)
+
 
 class TestAttemptRecords:
     def test_executed_payload_is_copied_and_read_only(self):
@@ -482,6 +614,12 @@ class TestAttemptRecords:
             record.result["b"][0, 0] = 3.0
         with pytest.raises(ValueError, match="read-only"):
             record.result["nested"]["x"][0] = 3.0
+
+    def test_retained_result_sequences_and_sets_are_immutable(self):
+        record = _attempt(result={"items": [np.array([1.0])], "tags": {"a"}})
+        assert isinstance(record.result["items"], tuple)
+        assert isinstance(record.result["tags"], frozenset)
+        assert not record.result["items"][0].flags.writeable
 
     def test_outer_plan_result_arrays_are_copied_and_read_only(self):
         source = np.array([[500.0]])
@@ -643,6 +781,136 @@ class TestAttemptRecords:
                 object_ids_after={"variables": (2,)},
             )
 
+    @pytest.mark.parametrize(
+        ("overrides", "error", "message"),
+        [
+            ({"complete_x0": np.array([[1.0]])}, ValueError, "one-dimensional"),
+            ({"auxiliary_coordinate_count": True}, TypeError, "must be an integer"),
+            ({"auxiliary_coordinate_count": -1}, ValueError, "nonnegative"),
+            ({"auxiliary_coordinate_count": 2}, ValueError, "counts"),
+            ({"layout": ({"name": "x"},)}, ValueError, "must contain"),
+            (
+                {
+                    "layout": (
+                        {
+                            "name": "x",
+                            "start": 0.0,
+                            "stop": 1,
+                            "is_original_variable": True,
+                        },
+                    )
+                },
+                TypeError,
+                "offsets must be integers",
+            ),
+            (
+                {
+                    "layout": (
+                        {
+                            "name": "x",
+                            "start": 0,
+                            "stop": 1,
+                            "is_original_variable": 1,
+                        },
+                    )
+                },
+                TypeError,
+                "must be Boolean",
+            ),
+        ],
+    )
+    def test_ipopt_start_evidence_rejects_malformed_layouts(
+        self, overrides, error, message
+    ):
+        values = {
+            "complete_x0": np.array([1.0, 0.0]),
+            "layout": (
+                {
+                    "name": "x",
+                    "start": 0,
+                    "stop": 1,
+                    "is_original_variable": True,
+                },
+                {
+                    "name": "aux",
+                    "start": 1,
+                    "stop": 2,
+                    "is_original_variable": False,
+                },
+            ),
+            "layout_signature": "signature",
+            "model_coordinate_count": 1,
+            "auxiliary_coordinate_count": 1,
+            "object_ids_before": {"variables": (1,)},
+            "object_ids_after": {"variables": (1,)},
+        }
+        values.update(overrides)
+        with pytest.raises(error, match=message):
+            IPOPTStartEvidence(**values)
+
+    @pytest.mark.parametrize(
+        ("overrides", "message"),
+        [
+            ({"slot_state": "bad"}, "unsupported attempt slot state"),
+            ({"role": "bad"}, "unsupported attempt role"),
+            ({"source_kind": "bad"}, "unsupported attempt source kind"),
+            (
+                {"source_attempt_id": "other"},
+                "generated-flat sources cannot name",
+            ),
+            (
+                {"source_kind": "attempt", "source_attempt_id": None},
+                "require source_attempt_id",
+            ),
+            (
+                {"source_kind": None, "source_attempt_id": "other"},
+                "requires source_kind",
+            ),
+            ({"inner_terminal_policy": "bad"}, "unsupported inner_terminal"),
+            ({"local_interval_start": 1}, "must be zero"),
+            ({"local_interval_stop": 0}, "must be nonempty"),
+            ({"global_interval_start": 1}, "must equal iteration"),
+            ({"global_interval_stop": 3}, "window lengths must match"),
+            ({"ordinal": -1}, "ordinal must be nonnegative"),
+            ({"storage_device_ids": ()}, "nonempty and unique"),
+            ({"initial_soc_mwh": {}}, "mappings must match"),
+            ({"terminal_deviation_mwh": {}}, "deviation must match"),
+            ({"source_kind": None}, "require an initialization source"),
+            (
+                {"role": "target_free", "supplied_executed_action": False},
+                "target-free attempts cannot report terminal deviation",
+            ),
+            (
+                {"role": "primary_controlling", "scale": 1e-3},
+                "valid only for perturbation",
+            ),
+        ],
+    )
+    def test_attempt_record_rejects_malformed_contracts(self, overrides, message):
+        with pytest.raises(ValueError, match=message):
+            _attempt(**overrides)
+
+    def test_attempt_start_names_shapes_and_size_must_match(self):
+        with pytest.raises(ValueError, match="namespaces must match"):
+            _attempt(assigned_start={"y": np.array([1.0])})
+        with pytest.raises(ValueError, match="shapes must match"):
+            _attempt(assigned_start={"x": np.array([[1.0]])})
+        with pytest.raises(ValueError, match="model coordinates"):
+            _attempt(
+                raw_start={"x": np.array([1.0, 2.0])},
+                assigned_start={"x": np.array([1.0, 2.0])},
+            )
+
+    @pytest.mark.parametrize("seed", [True, -1])
+    def test_perturbation_seed_is_nonnegative_integer(self, seed):
+        error = TypeError if seed is True else ValueError
+        with pytest.raises(error):
+            _attempt(
+                role="perturbed_causal",
+                scale=1e-3,
+                seed=seed,
+            )
+
 
 class TestAuditTree:
     def test_outer_boundaries_are_aligned_and_read_only(self):
@@ -652,6 +920,45 @@ class TestAuditTree:
         assert not record.boundary_soc_mwh.flags.writeable
         with pytest.raises(ValueError, match="consecutive from zero"):
             _outer_record(local_boundary_indices=np.array([0, 2, 3]))
+
+    @pytest.mark.parametrize(
+        ("overrides", "error", "message"),
+        [
+            ({"created_iteration": -1}, ValueError, "nonnegative"),
+            ({"global_interval_stop": 0}, ValueError, "nonempty"),
+            ({"created_iteration": 1}, ValueError, "must equal"),
+            ({"build": object()}, TypeError, "build must be"),
+            ({"audit": object()}, TypeError, "audit must be"),
+            (
+                {"storage_device_ids": ("battery-7", "battery-7")},
+                ValueError,
+                "must be unique",
+            ),
+            ({"terminal_modes": {}}, ValueError, "must match"),
+            (
+                {"terminal_modes": {"battery-7": "bad"}},
+                ValueError,
+                "unsupported outer terminal modes",
+            ),
+            (
+                {"global_boundary_indices": np.array([0, 2, 3])},
+                ValueError,
+                "do not match",
+            ),
+            (
+                {"boundary_soc_mwh": np.array([[500.0]])},
+                ValueError,
+                "must have shape",
+            ),
+            ({"boundary_soc_mwh": None}, ValueError, "requires boundary"),
+            ({"result": []}, TypeError, "result must be a mapping"),
+        ],
+    )
+    def test_outer_record_rejects_malformed_contracts(
+        self, overrides, error, message
+    ):
+        with pytest.raises(error, match=message):
+            _outer_record(**overrides)
 
     @pytest.mark.parametrize(
         ("mode", "residuals"),
@@ -1436,6 +1743,140 @@ class TestAuditTree:
                 policy=HierarchicalPolicy(ac_window_steps=1),
                 ac_attempts=tuple(malformed),
             )
+
+    @pytest.mark.parametrize(
+        ("ordinal", "changes", "message"),
+        [
+            (1, {"role": "primary_controlling"}, "roles do not match"),
+            (1, {"transformation": "copy_target_free"}, "transformations"),
+            (3, {"scale": 5e-4}, "scales do not match"),
+            (3, {"seed": 99}, "seeds do not match"),
+        ],
+    )
+    def test_recovery_registry_matches_declared_policy(
+        self, ordinal, changes, message
+    ):
+        malformed = list(_recovery_registry())
+        malformed[ordinal] = replace(malformed[ordinal], **changes)
+        with pytest.raises(ValueError, match=message):
+            _result(
+                policy=HierarchicalPolicy(ac_window_steps=1),
+                ac_attempts=tuple(malformed),
+            )
+
+    def test_attempt_registries_must_be_ordered(self):
+        attempts = list(_recovery_registry())
+        attempts[0], attempts[1] = attempts[1], attempts[0]
+        with pytest.raises(ValueError, match="ordered by iteration and ordinal"):
+            _result(
+                policy=HierarchicalPolicy(ac_window_steps=1),
+                ac_attempts=tuple(attempts),
+            )
+
+    @pytest.mark.parametrize(
+        ("overrides", "error", "message"),
+        [
+            ({"policy": object()}, TypeError, "policy must be"),
+            ({"provenance": object()}, TypeError, "provenance must be"),
+            ({"storage_device_ids": ()}, ValueError, "nonempty and unique"),
+            ({"outer_plans": {"outer-000": object()}}, TypeError, "OuterPlanRecord"),
+            (
+                {"outer_plans": {"wrong": _result().outer_plans["outer-000"]}},
+                ValueError,
+                "keys must match",
+            ),
+            ({"ac_attempts": (object(),)}, TypeError, "ACAttemptRecord"),
+            (
+                {"ac_attempts": (_result().ac_attempts[0],) * 2},
+                ValueError,
+                "IDs must be unique",
+            ),
+            (
+                {"executed_intervals": (object(),)},
+                TypeError,
+                "ExecutedIntervalRecord",
+            ),
+        ],
+    )
+    def test_result_rejects_malformed_top_level_records(
+        self, overrides, error, message
+    ):
+        with pytest.raises(error, match=message):
+            _result(**overrides)
+
+    @pytest.mark.parametrize(
+        ("overrides", "error", "message"),
+        [
+            ({"completed_intervals": True}, TypeError, "must be an integer"),
+            ({"completed_intervals": 2}, ValueError, "within the horizon"),
+            ({"completed_intervals": 0}, ValueError, "executed record count"),
+            ({"completion_fraction": 2.0}, ValueError, "must not exceed"),
+            ({"completion_fraction": 0.5}, ValueError, "must equal"),
+            ({"completed": False}, ValueError, "agree with horizon"),
+            (
+                {"termination_iteration": 0, "termination_reason": "bad"},
+                ValueError,
+                "cannot carry termination",
+            ),
+        ],
+    )
+    def test_result_coverage_and_completion_fields_are_consistent(
+        self, overrides, error, message
+    ):
+        with pytest.raises(error, match=message):
+            _result(**overrides)
+
+    @pytest.mark.parametrize(
+        ("overrides", "error", "message"),
+        [
+            ({"termination_reason": None}, ValueError, "require termination_reason"),
+            ({"termination_iteration": None}, TypeError, "integer termination"),
+            ({"termination_iteration": 1}, ValueError, "must equal"),
+            (
+                {"realized_soc_mwh": np.empty((0, 1))},
+                ValueError,
+                "realized_soc_mwh must have shape",
+            ),
+            (
+                {"executed_b_mw": np.array([[0.0]])},
+                ValueError,
+                "executed_b_mw must have shape",
+            ),
+        ],
+    )
+    def test_incomplete_result_requires_consistent_termination_and_shapes(
+        self, overrides, error, message
+    ):
+        values = {
+            "ac_attempts": (
+                _attempt(
+                    slot_state="construction_error",
+                    local_interval_stop=1,
+                    global_interval_stop=1,
+                    source_kind=None,
+                    build=None,
+                    raw_start=None,
+                    assigned_start=None,
+                    solver_evidence=None,
+                    result=None,
+                    audit=None,
+                    terminal_deviation_mwh=None,
+                    reason="failed",
+                    supplied_executed_action=False,
+                ),
+            ),
+            "executed_intervals": (),
+            "realized_soc_mwh": np.array([[500.0]]),
+            "executed_b_mw": np.empty((0, 1)),
+            "completed_intervals": 0,
+            "completion_fraction": 0.0,
+            "completed": False,
+            "termination_iteration": 0,
+            "termination_reason": "failed",
+        }
+        values.update(overrides)
+        with pytest.raises(error, match=message):
+            _result(**values)
 
     def test_generated_flat_source_is_restricted_to_first_window(self):
         later = _attempt(

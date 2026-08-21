@@ -4,6 +4,7 @@ from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 
+import cvxpy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,6 +15,7 @@ from cvxopf import (
     HierarchicalSolveAudit,
     HierarchicalSolveConfig,
     Load,
+    OPFBuild,
     StorageUnitIdeal,
     build_opf,
     gen_from_matpower,
@@ -67,6 +69,11 @@ def _inputs(*, horizon_steps: int = 2) -> HierarchicalInputs:
     )
 
 
+def _named_build(*variables: cp.Variable) -> OPFBuild:
+    objective = cp.sum([cp.sum_squares(variable) for variable in variables])
+    return OPFBuild(cp.Problem(cp.Minimize(objective)), {}, {}, "ac", True)
+
+
 def test_execution_snapshot_isolates_all_mutable_physical_inputs():
     inputs = _inputs()
     snapshot = _execution_snapshot(inputs)
@@ -80,6 +87,117 @@ def test_execution_snapshot_isolates_all_mutable_physical_inputs():
     assert snapshot.loads[0].p_load_mw != 999.0
     assert snapshot.storage[0].initial_soc == 500.0
     assert snapshot.options.loss_weight != 42.0
+
+
+def test_private_alignment_and_window_bounds_fail_clearly():
+    snapshot = _execution_snapshot(_inputs(horizon_steps=1))
+    with pytest.raises(ValueError, match="storage identity"):
+        _hierarchical_solver._aligned({}, snapshot.storage_device_ids, "state")
+    with pytest.raises(ValueError, match="invalid half-open interval"):
+        _hierarchical_solver._build_window(
+            snapshot, "ac", 0, 2, snapshot.storage
+        )
+
+
+def test_finite_field_and_storage_identity_diagnostics_are_total():
+    missing = _hierarchical_solver._finite_fields(
+        {"bad": object(), "nan": np.nan}, ("bad", "nan", "absent")
+    )
+    assert missing == ("bad", "nan", "absent")
+
+    snapshot = _execution_snapshot(_inputs(horizon_steps=1))
+    build = _hierarchical_solver._build_window(
+        snapshot, "ac", 0, 1, snapshot.storage
+    )
+    common = {
+        "storage_device_ids": np.array(["battery-7"]),
+        "storage_device_id_is_explicit": np.array([True]),
+    }
+    assert _hierarchical_solver._identity_error(snapshot, build, common) is None
+    implicit = {**common, "storage_device_id_is_explicit": np.array([False])}
+    assert "build-local" in _hierarchical_solver._identity_error(
+        snapshot, build, implicit
+    )
+    reordered = {**common, "storage_device_ids": np.array(["other"])}
+    assert "ordering differs" in _hierarchical_solver._identity_error(
+        snapshot, build, reordered
+    )
+
+
+def test_named_start_assignment_rejects_ambiguous_or_misaligned_values():
+    duplicate = _named_build(cp.Variable(name="x"), cp.Variable(name="x"))
+    with pytest.raises(ValueError, match="unique variable names"):
+        _hierarchical_solver._variables_by_name(duplicate)
+
+    build = _named_build(cp.Variable(2, name="x"))
+    with pytest.raises(ValueError, match="namespace"):
+        _hierarchical_solver._assign_start(build, {"y": np.zeros(2)})
+    with pytest.raises(ValueError, match="shape mismatch"):
+        _hierarchical_solver._assign_start(build, {"x": np.zeros((1, 2))})
+
+
+def test_shift_and_perturbation_initialization_validate_source_structure():
+    snapshot = _execution_snapshot(_inputs(horizon_steps=1))
+    policy = HierarchicalPolicy(
+        ac_window_steps=1, initialization_policy="flat_only"
+    )
+    state = {"battery-7": 500.0}
+
+    with pytest.raises(ValueError, match="lacks variable x"):
+        _hierarchical_solver._shifted_start(
+            {}, _named_build(cp.Variable(name="x")), snapshot, policy, state
+        )
+    with pytest.raises(ValueError, match="lacks family Pg"):
+        _hierarchical_solver._shifted_start(
+            {"Qg_1": np.zeros(1)},
+            _named_build(cp.Variable(1, name="Pg_0")),
+            snapshot,
+            policy,
+            state,
+        )
+    with pytest.raises(ValueError, match="shape mismatch"):
+        _hierarchical_solver._shifted_start(
+            {"Pg_1": np.zeros(2)},
+            _named_build(cp.Variable(1, name="Pg_0")),
+            snapshot,
+            policy,
+            state,
+        )
+    with pytest.raises(ValueError, match="SoC steps are not consecutive"):
+        _hierarchical_solver._shifted_start(
+            {},
+            _named_build(cp.Variable(1, name="soc_1")),
+            snapshot,
+            policy,
+            state,
+        )
+    with pytest.raises(ValueError, match="lacks b_0"):
+        _hierarchical_solver._shifted_start(
+            {},
+            _named_build(cp.Variable(1, name="soc_0")),
+            snapshot,
+            policy,
+            state,
+        )
+    with pytest.raises(ValueError, match="center does not match"):
+        _hierarchical_solver._perturbed_start(
+            {}, _named_build(cp.Variable(name="x")), scale=1e-3, seed=1
+        )
+
+
+def test_network_limit_diagnostics_handle_an_unrated_network():
+    snapshot = _execution_snapshot(_inputs(horizon_steps=1))
+    snapshot.case["branch"][:, 5] = 0.0
+    result = {
+        "Vm": np.ones((1, 9)),
+        "branch_s_from": np.zeros((1, 9)),
+        "branch_s_to": np.zeros((1, 9)),
+    }
+    assert _hierarchical_solver._network_limit_residuals(snapshot, result) == (
+        0.0,
+        0.0,
+        0.0,
+    )
 
 
 def test_outer_audit_accepts_mixed_terminal_policy_fleet():
