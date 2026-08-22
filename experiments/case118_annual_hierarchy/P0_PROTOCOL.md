@@ -269,6 +269,10 @@ injected publication failure, and checkpoint-free recovery from a verified
 outer-only boundary. Its report is necessary but not sufficient for P0: the
 final consolidated gate must also combine nominal equivalence, the injected
 recovery matrix, S3b retrospective evidence, and the case118 S1 boundary.
+Its own executable decision requires the initial observer stop to return
+`observer_terminated` at exactly two completed intervals with reason
+`p0 safe boundary`; the consolidated gate never relies on a separate pytest
+assertion for that contract.
 
 `p0_import_gate.run_import_gate()` is the executable dependency-boundary
 sub-gate. Its frozen production registry contains `streaming_schema.py`,
@@ -280,6 +284,18 @@ those sources and rejects static, aliased, and literal dynamic imports of
 injection harnesses are intentionally outside this registry: they may observe
 or instrument the public controller solely to prove equivalence, but no such
 dependency may enter the production streaming execution path.
+
+`p0_consolidated_gate.run_consolidated_p0()` is the sole formal P0 decision.
+It executes the complete frozen nominal and injected registries plus the
+persistence, S3b, case118 S1, and dependency-boundary gates. Its atomic strict-
+JSON record embeds every sub-report, the exact source-file hashes, current Git
+commit and porcelain status, total wall time, prefixed failures, and one closed
+decision: `advance_to_s2` or `p0_blocked`. The injected schedule and expected-
+outcome registry has its own frozen digest. Formal execution requires an empty
+Git porcelain status; an explicitly allowed dirty-tree development execution
+can report only `preliminary_pass`, never advancement. A passing individual
+test or sub-gate is never interpreted as P0 closure outside this consolidated
+record.
 
 P0 passes only when:
 

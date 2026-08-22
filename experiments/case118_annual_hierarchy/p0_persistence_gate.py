@@ -34,6 +34,8 @@ class PersistenceGateReport:
     """Results of the predeclared P0 persistence gate."""
 
     stopped_intervals: int
+    stopped_status: str
+    stopped_reason: str | None
     resumed_intervals: int
     reconstructed_attempt_id: str
     reconstructed_variable_count: int
@@ -127,6 +129,12 @@ def run_persistence_gate(root: Path) -> PersistenceGateReport:
     finally:
         setattr(streaming_driver, "solve_frozen_outer", original_outer)
         setattr(streaming_driver, "execute_streaming_window", original_window)
+    if (
+        partial.status != "observer_terminated"
+        or partial.completed_intervals != 2
+        or partial.termination_reason != "p0 safe boundary"
+    ):
+        failures.append("observer_stop")
     outer_released = bool(outer_refs) and all(item() is None for item in outer_refs)
     ac_released = bool(ac_refs) and all(item() is None for item in ac_refs)
     if not outer_released:
@@ -241,6 +249,8 @@ def run_persistence_gate(root: Path) -> PersistenceGateReport:
 
     return PersistenceGateReport(
         stopped_intervals=partial.completed_intervals,
+        stopped_status=partial.status,
+        stopped_reason=partial.termination_reason,
         resumed_intervals=resumed.completed_intervals,
         reconstructed_attempt_id=source.attempt_id,
         reconstructed_variable_count=len(source.solution_values),
