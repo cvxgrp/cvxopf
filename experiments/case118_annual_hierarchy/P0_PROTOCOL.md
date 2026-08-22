@@ -239,6 +239,26 @@ SHA-256 binds the complete normalized JSON, including identities, targets,
 audits, schemas, residuals, and all retained evidence digests, so an ordinary
 tracked-file edit cannot be silently accepted when the source gzip is absent.
 
+## Case118 S1 outer/endpoint boundary gate
+
+P0 binds the expensive S1 network evidence without rerunning either accepted
+case118 solve. `S1_OUTER_ENDPOINT_NORMALIZED.json` is a compact tracked
+derivative of the ignored S1 summary artifact. For both the rated PGLib case
+and its matched effectively-unlimited derivative, it retains the complete
+worker and record digests, provenance-context digests, classifications,
+dimensions, outer-to-inner SoC handoff, result schemas and digests, residual
+audits, and scientific summaries. It also records that direct 24-hour AC was
+not built or solved because S0's resource gate did not authorize it.
+
+The derivative is bound to the source artifact size and SHA-256 from
+`S1_RESULTS_METADATA.json`, and a canonical SHA-256 covers the entire tracked
+JSON for CI. When the ignored source artifact is locally available, the gate
+also requires exact re-derivation, reconstructs both outer and endpoint audits
+from the frozen case and device fleets, rechecks the selected boundary states,
+and recomputes all four result summaries. When it is absent, CI reports those
+source-backed checks as unperformed rather than verified; the tracked digest,
+scientific registry, and provenance binding remain mandatory.
+
 ## Advancement gate
 
 `p0_persistence_gate.run_persistence_gate()` is the executable persistence
