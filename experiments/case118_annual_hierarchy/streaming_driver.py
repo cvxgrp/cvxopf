@@ -713,6 +713,15 @@ def run_streaming_trajectory(
         )
         if window.controlling_attempt is None or window.post_step_soc_mwh is None:
             failed_entry = persisted.artifact
+            terminal_executed = [
+                record for record in window.attempts if record.slot_state == "executed"
+            ]
+            if terminal_executed:
+                last_audit = terminal_executed[-1].audit
+                outcome = None if last_audit is None else last_audit.outcome
+                reason = f"ac_recovery_exhausted:{outcome}"
+            else:
+                reason = "ac_recovery_exhausted:no_solver_attempt"
             del window
             gc.collect()
             _sample(
@@ -745,7 +754,6 @@ def run_streaming_trajectory(
                     realized_soc_mwh=[realized[device_id] for device_id in ids],
                     entries=completed_entries,
                 )
-            reason = "all controlling initialization attempts were exhausted"
             _termination(
                 directory,
                 status="recovery_exhausted",
