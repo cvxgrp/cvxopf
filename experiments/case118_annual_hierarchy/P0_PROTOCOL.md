@@ -227,6 +227,15 @@ other paths.
 
 ## Advancement gate
 
+`p0_persistence_gate.run_persistence_gate()` is the executable persistence
+sub-gate. It covers safe-boundary stop/resume, immutable causal-source
+reconstruction after live-build release, window/checkpoint/resource corruption
+rejection, preservation and retry of the preceding checkpoint after an
+injected publication failure, and checkpoint-free recovery from a verified
+outer-only boundary. Its report is necessary but not sufficient for P0: the
+final consolidated gate must also combine nominal equivalence, the injected
+recovery matrix, S3b retrospective evidence, and the case118 S1 boundary.
+
 P0 passes only when:
 
 - nominal 6- and 24-hour compact runs are exactly equivalent;
