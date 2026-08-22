@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
+from pathlib import Path
 
 from experiments.case118_annual_hierarchy import p0_consolidated_gate
 from experiments.case118_annual_hierarchy.p0_consolidated_gate import (
@@ -11,6 +13,31 @@ from experiments.case118_annual_hierarchy.p0_consolidated_gate import (
 from experiments.case118_annual_hierarchy.p0_injected_equivalence import (
     INJECTED_CASES,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
+TRACKED_RESULT = (
+    ROOT / "experiments/case118_annual_hierarchy/P0_RESULTS.json"
+)
+TRACKED_RESULT_SHA256 = (
+    "6bd6b65b7475bd0ac00ad1e3070b00ac687fbdeaa9f3c929797a9f8df5818198"
+)
+
+
+def test_tracked_formal_p0_result_is_integrity_bound_and_clean():
+    payload = json.loads(TRACKED_RESULT.read_text())
+
+    assert hashlib.sha256(TRACKED_RESULT.read_bytes()).hexdigest() == (
+        TRACKED_RESULT_SHA256
+    )
+    assert payload["passed"] is True
+    assert payload["decision"] == "advance_to_s2"
+    assert payload["failures"] == []
+    assert payload["clean_source_required"] is True
+    assert payload["execution_context"]["git_status_porcelain"] == ""
+    assert payload["execution_context"]["git_commit"] == (
+        "81b31894e70ef3c13720b5f44aeddcff6f70bd71"
+    )
 
 
 def test_consolidated_p0_gate_executes_complete_frozen_registry(

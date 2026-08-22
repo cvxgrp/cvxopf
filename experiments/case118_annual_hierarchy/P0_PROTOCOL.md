@@ -307,3 +307,8 @@ P0 passes only when:
   post-release reconstruction tests pass; and
 - no production streaming module imports `cvxopf._hierarchical_solver` or any
   M17 experiment runner.
+
+P0 completed from clean execution-source commit `81b3189`. The normative
+machine-readable decision is `P0_RESULTS.json`; `P0_REPORT.md` records its
+integrity hash and scientific handoff. The consolidated decision was
+`advance_to_s2` with an empty failure list.

@@ -15,10 +15,9 @@ unlimited rather than mathematically unconstrained control.
 
 The PGLib acquisition, deterministic case conversion, authoritative pilot,
 independent residual gates, and workstation resource limits are frozen and
-hash-verified. S0 is complete. S1 characterizes a 24-hour outer plan and one
-bounded six-hour AC endpoint realization under `S1_PROTOCOL.md`; direct
-24-hour AC is explicitly unauthorized by the S0 resource gate. No scientific
-streaming runner is frozen yet.
+hash-verified. S0 and S1 are complete. S1 characterized a 24-hour outer plan
+and one bounded six-hour AC endpoint realization under `S1_PROTOCOL.md`;
+direct 24-hour AC remains explicitly unauthorized by the S0 resource gate.
 
 Before week-scale execution, an experiment-owned streaming runner must pass
 short-horizon, window-by-window equivalence against the public M17 controller.
@@ -28,8 +27,9 @@ provide. P0 covers both nominal execution and deterministic recovery cases,
 including target-free/copy recovery, both perturbation families, solver
 failure and infeasibility classifications, and complete recovery exhaustion.
 `P0_PROTOCOL.md` freezes the compact 6-/24-hour orchestration fixtures, exact
-fault matrix, case118 S1 archive gate, and transaction/resume contract before
-runner implementation.
+fault matrix, case118 S1 archive gate, and transaction/resume contract. P0 is
+complete: the clean consolidated record in `P0_RESULTS.json` passed every
+sub-gate and authorized S2. `P0_REPORT.md` gives the human-readable handoff.
 
 The frozen six-hour S0 pilot is executed from a clean checkpoint with:
 

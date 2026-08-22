@@ -346,7 +346,7 @@ No stage may silently advance after a failed gate.
 |---|---:|---|---|
 | S0 (complete) | 1 and 6 h | Import and hash PGLib case118; freeze the pilot/authoritative scenario boundary; verify AC/DC signs, identities, branch-rating enforcement, residuals, and storage recurrence | Passed; lowest pilot point selected, repository case118 characterized separately, and S1 resource limits frozen |
 | S1 (complete) | 24 h outer + bounded 6 h AC | Solve and audit matched 24-hour lossy-DC outer plans; characterize one six-hour endpoint realization; retain direct 24-hour AC as unauthorized | Passed; both outer and endpoint records accepted, provenance matched, direct 24-hour AC remained unexecuted, and resource limits were respected |
-| P0 | 6 and 24 h | Implement and review the streaming reference runner | Exact public-controller equivalence on both frozen short cases |
+| P0 (complete) | 6 and 24 h | Implement and review the streaming reference runner | Passed; clean consolidated execution `81b3189` established nominal and injected equivalence, persistence/reconstruction, historical evidence, Case118 boundary, and dependency gates |
 | S2 | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | Complete trajectory, exact state accounting, no concealed shedding |
 | S3 | 720 h | One-month frozen hierarchy and memory-retention study | Complete or terminate with an auditable resource boundary |
 | S4 | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within predeclared runtime and memory budgets, plus the outer equivalence gate below |
