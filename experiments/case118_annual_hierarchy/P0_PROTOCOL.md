@@ -225,6 +225,20 @@ archive schema. This is retrospective evidence for a naturally observed
 recovery path. The deterministic injected matrix remains the proof for all
 other paths.
 
+`S3B_COPIED_RECOVERY_NORMALIZED.json` is the tracked compact derivative of
+that ignored authoritative artifact. It retains the nine-slot public identity
+and source-location interpretation, audit and action-selection fields, result
+schemas, coordinate counts, and cryptographic digests of named starts,
+normalized layouts, complete reduced `x0`, and extracted results. The record
+is bound to the authoritative artifact size and SHA-256 in tracked S3b
+metadata. When the ignored artifact is locally available, the gate verifies
+its integrity and requires a byte-for-byte-equivalent re-derivation of the
+tracked normalized JSON; CI validates the tracked semantics and provenance
+without requiring the 3.3 MB historical gzip. An unconditional canonical
+SHA-256 binds the complete normalized JSON, including identities, targets,
+audits, schemas, residuals, and all retained evidence digests, so an ordinary
+tracked-file edit cannot be silently accepted when the source gzip is absent.
+
 ## Advancement gate
 
 `p0_persistence_gate.run_persistence_gate()` is the executable persistence
