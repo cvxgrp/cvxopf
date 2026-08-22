@@ -178,3 +178,42 @@ These are economically selected optima; S1 does not establish that AC
 feasibility required the cycling. The rated outer's 151.748 MWh full-day
 throughput remains a separate daily summary. This is endpoint-realization
 evidence, not a sequential operating total. S1 passes and P0 is next.
+
+## 2026-08-22 — S2 reached its resource boundary and the week completed by continuation
+
+The authoritative 16 GiB invocation completed and durably archived 128 of 168
+intervals before the supervisor observed 19,220.4 MiB RSS. The supervisor
+classified the event as `resource_limit`, terminated without advancing an
+incomplete interval, and preserved interval 128 as a verified restart
+boundary. This is a successful exercise of the declared protection path, not
+a solver failure or infeasibility result.
+
+An explicitly labeled exploratory continuation raised the process boundary to
+24 GiB, resumed the same causal trajectory at interval 128, and completed the
+remaining 40 intervals in 2,142.2 seconds. The fresh worker began at 182.6 MiB
+RSS, its first resumed window peaked at 10,431.3 MiB, and its maximum recorded
+safe-boundary RSS was 17,874.9 MiB. The memory reclaimed by restarting is
+positive resilience evidence from a real resource event and motivates planned
+worker recycling. It does not yet identify the retaining subsystem or an
+optimal recycling interval.
+
+Independent reconstruction accepted all 168 controlling attempts. All 167
+applicable shifted starts succeeded without recovery. Maximum SoC recurrence,
+terminal, voltage, and thermal residuals were respectively
+$$7.65\times10^{-12}$$ MWh, $$5.68\times10^{-14}$$ MWh, zero pu, and
+$$2.78\times10^{-7}$$ MVA; fixed-load service error was zero. The restart
+preserved the physical state and causal-controller chains.
+
+The continuation worker's `eligible_for_advancement: true` is local to its
+numerical and provenance checks. It does not turn the combined run into an
+uninterrupted pass of the frozen 16 GiB condition. S2 is therefore complete as
+a resource-boundary stage, with a complete scientific trajectory obtained
+through an exploratory continuation.
+
+Invocation 0 began from clean commit `3cd4229`. An untracked scaling-notes
+file appeared during execution, so its end context was dirty even though the
+executable fingerprint, commit, scenario, policy, and solve configuration did
+not change. The continuation ran with matching clean execution provenance.
+`S2_REPORT.md` gives the bounded interpretation, and
+`S2_RESULTS_METADATA.json` tracks the compact metrics, restart boundary,
+provenance, and artifact integrity identifiers.

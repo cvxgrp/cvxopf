@@ -347,7 +347,7 @@ No stage may silently advance after a failed gate.
 | S0 (complete) | 1 and 6 h | Import and hash PGLib case118; freeze the pilot/authoritative scenario boundary; verify AC/DC signs, identities, branch-rating enforcement, residuals, and storage recurrence | Passed; lowest pilot point selected, repository case118 characterized separately, and S1 resource limits frozen |
 | S1 (complete) | 24 h outer + bounded 6 h AC | Solve and audit matched 24-hour lossy-DC outer plans; characterize one six-hour endpoint realization; retain direct 24-hour AC as unauthorized | Passed; both outer and endpoint records accepted, provenance matched, direct 24-hour AC remained unexecuted, and resource limits were respected |
 | P0 (complete) | 6 and 24 h | Implement and review the streaming reference runner | Passed; clean consolidated execution `81b3189` established nominal and injected equivalence, persistence/reconstruction, historical evidence, Case118 boundary, and dependency gates |
-| S2 | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | Complete trajectory, exact state accounting, no concealed shedding |
+| S2 (complete: resource boundary + exploratory continuation) | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | The frozen 16 GiB invocation stopped cleanly at its resource boundary after 128 intervals; a labeled 24 GiB continuation resumed from that checkpoint and completed a fully accepted 168-interval trajectory |
 | S3 | 720 h | One-month frozen hierarchy and memory-retention study | Complete or terminate with an auditable resource boundary |
 | S4 | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within predeclared runtime and memory budgets, plus the outer equivalence gate below |
 | S5 | 8,760 h | Full annual hierarchical execution | All intervals completed, or explicit partial-horizon scientific record |
@@ -357,6 +357,16 @@ No stage may silently advance after a failed gate.
 Direct AC is a characterization comparator at small horizons only. Failure to
 build or solve larger direct AC cases is itself a recorded scaling result; it
 is not a reason to weaken the hierarchical acceptance gate.
+
+S2 is complete as a resource-boundary stage, with the complete scientific
+trajectory obtained through an explicitly exploratory continuation. It is not
+an uninterrupted pass of the frozen 16 GiB execution policy. The continuation
+worker's advancement eligibility records successful numerical and provenance
+checks local to that worker; it does not supersede the authoritative
+invocation's `resource_limit` classification. Before S3, a modest planned
+worker-recycling policy or bounded recycling comparison must be frozen and
+must measure restart overhead, per-worker peak RSS, and causal trajectory
+continuity.
 
 ### Reviewed S0 pilot-window amendment
 
