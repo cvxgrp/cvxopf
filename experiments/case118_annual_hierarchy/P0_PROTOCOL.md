@@ -270,6 +270,17 @@ outer-only boundary. Its report is necessary but not sufficient for P0: the
 final consolidated gate must also combine nominal equivalence, the injected
 recovery matrix, S3b retrospective evidence, and the case118 S1 boundary.
 
+`p0_import_gate.run_import_gate()` is the executable dependency-boundary
+sub-gate. Its frozen production registry contains `streaming_schema.py`,
+`streaming_runner.py`, `streaming_archive.py`, and `streaming_driver.py`, plus
+their direct runtime support modules `audit.py` and `p0_fixture.py`. It parses
+those sources and rejects static, aliased, and literal dynamic imports of
+`cvxopf._hierarchical_solver` or any M17
+`experiments.hierarchical_battery_resilience` module. Equivalence and fault-
+injection harnesses are intentionally outside this registry: they may observe
+or instrument the public controller solely to prove equivalence, but no such
+dependency may enter the production streaming execution path.
+
 P0 passes only when:
 
 - nominal 6- and 24-hour compact runs are exactly equivalent;
