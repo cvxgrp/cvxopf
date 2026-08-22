@@ -42,7 +42,15 @@ The 6-hour and 24-hour nominal cases compare the complete public result with
 the streaming archive window by window. The comparison includes outer
 signposts, slot registry, starts, complete reduced IPOPT `x0`, statuses,
 residuals, controlling attempts, executed actions, realized SoC, termination,
-and every exact-once summary.
+and every exact-once summary. Discrete structure and metadata compare exactly;
+floating-point values compare with zero relative tolerance and an absolute
+tolerance of `1e-9`, which admits only last-bit solver noise and is stricter
+than every frozen acceptance tolerance. CVXPY-generated auxiliary variable
+names are normalized by reduced-coordinate order, while the complete reduced
+`x0` remains numerically compared. Process object IDs are compared by count
+and before/after identity preservation. Each implementation's runtime is
+reconstructed and required to be finite and positive, but runtimes from two
+sequential solves are not compared numerically.
 
 Case118 applicability is checked separately without a 24-window public run:
 
