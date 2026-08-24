@@ -1,6 +1,9 @@
 # Bounded worker-recycling comparison (pre-S3)
 
-Status: **final review (revision 8).** No implementation until approved.
+Status: **Complete.** The approved revision-8 protocol was implemented at
+checkpoint `b50755e`; the authoritative comparison completed on 2026-08-24.
+All three 64-interval arms completed and the promoted observational record is
+`experiments/case118_annual_hierarchy/RECYCLE_COMPARISON_RESULTS.json`.
 
 This revision incorporates the scientific-completeness review, resolves the
 outer-plan/reference design against the actual streaming architecture, and
@@ -66,6 +69,22 @@ across a process memory reset.
 This is an observational study reviewed live by the user. We run it, report
 predefined measurements, and decide together how to proceed. No self-imposed
 pass/fail gating.
+
+## Completed result
+
+The comparison completed 192/192 accepted controlling intervals. The
+`never`, `recycle_32`, and `recycle_16` arms completed in 3,396.5, 3,392.2,
+and 3,391.8 seconds, with maximum externally sampled RSS of 20,025.5,
+19,501.7, and 17,926.3 MiB. All planned restarts resumed the exact verified
+checkpoint. Executed storage power, realized SoC, attempt labels, causal-source
+state, and reconstructed actual starts agreed across treatments at the
+predeclared comparison points; the full action and SoC trajectories matched
+exactly.
+
+The result is observational and retains `automatic_advancement_gate: false` as
+designed. It supports reviewed selection of a bounded recycling cadence for
+S3; it does not itself promote a universal default or diagnose the source of
+process-memory pressure.
 
 ## What S2 showed (grounding evidence)
 

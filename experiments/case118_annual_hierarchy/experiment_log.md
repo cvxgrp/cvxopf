@@ -217,3 +217,31 @@ not change. The continuation ran with matching clean execution provenance.
 `S2_REPORT.md` gives the bounded interpretation, and
 `S2_RESULTS_METADATA.json` tracks the compact metrics, restart boundary,
 provenance, and artifact integrity identifiers.
+
+## 2026-08-24 — bounded worker-recycling comparison completed
+
+The pre-S3 comparison executed from clean commit `b50755e` and completed all
+three 64-interval arms: one uninterrupted worker, one planned restart at
+interval 32, and planned restarts at intervals 16, 32, and 48. All 192
+controlling intervals were accepted. Every planned boundary was classified
+`planned_recycle`, resumed from the exact verified checkpoint, and ended with
+the expected `study_complete` record.
+
+Recycling did not alter the causal numerical trajectory. Executed storage
+power and realized SoC matched exactly between both recycled arms and the
+uninterrupted arm; attempt labels also matched. The reconstructed actual-start
+and causal-source evidence passed at every predeclared comparison boundary.
+
+The uninterrupted, 32-interval, and 16-interval arms took respectively
+3,396.5, 3,392.2, and 3,391.8 seconds. Their maximum externally sampled RSS
+was 20,025.5, 19,501.7, and 17,926.3 MiB. Estimated incremental restart cost,
+after subtracting the matched uninterrupted interval duration, was about
+0.7–2.0 seconds per restart, subject to the recorded one-second polling
+resolution. These are observational results from one fixed serial execution,
+not a universal memory or performance guarantee.
+
+The comparison therefore establishes that planned worker recycling preserved
+the frozen trajectory and reduced observed peak memory in this run without a
+material wall-time penalty. `RECYCLE_COMPARISON_RESULTS.json` retains the
+promoted machine-readable record. The protocol deliberately makes no automatic
+S3 policy decision; cadence selection remains a reviewed milestone decision.

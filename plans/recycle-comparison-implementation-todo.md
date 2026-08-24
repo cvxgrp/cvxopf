@@ -25,9 +25,16 @@
   protocol identities, imports, compilation, and absence of experiment output.
 - [x] Close final pre-run analysis contract: frozen reference digest, matched RSS,
   causal-source/start residuals, restart timing baseline, and compact provenance.
-- [ ] Review and commit the implementation and reference artifacts.
-- [ ] Confirm `git status --porcelain` is empty before authorizing the expensive
+- [x] Review and commit the implementation and reference artifacts (`b50755e`).
+- [x] Confirm `git status --porcelain` was empty before authorizing the expensive
   comparison run.
+- [x] Execute all three 64-interval arms from the frozen clean source commit.
+- [x] Verify all planned recycle boundaries, supervision classifications,
+  checkpoint continuity, and final study-complete records.
+- [x] Independently reconstruct and promote the observational result.
 
-Implementation is complete for review. The expensive comparison has not been
-started, no compact result has been promoted, and commits remain user-controlled.
+Implementation and execution are complete. The comparison accepted all 192
+controlling intervals, and `RECYCLE_COMPARISON_RESULTS.json` is the promoted
+machine-readable scientific record. Its approximately 4.87 MB size reflects
+retained per-layout-entry IPOPT residual metadata; future result schemas may
+summarize zero-valued coordinate detail, but this completed record is unchanged.
