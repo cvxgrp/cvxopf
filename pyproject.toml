@@ -62,6 +62,9 @@ packages = ["src/cvxopf"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+[tool.uv.sources]
+cvxpy = { git = "https://github.com/cvxpy/cvxpy.git" }
+
 [tool.ruff]
 required-version = ">=0.16,<0.17"
 target-version = "py311"

@@ -756,6 +756,23 @@ or `cyipopt` will fail to build with a linker error.
 `pytest`, `pytest-cov` — installed via `pip install -e ".[dev]"` or
 `uv run --extra dev`.
 
+### Parked PR — sparse P/Q vectorization (branch `todo-fix`)
+
+The sparse `P_vec`/`Q_vec` flow constraints in `ac_problem.py` were built
+with a scalar Python loop as a workaround for cvxpy issue #3442 (numpy-array
+indexing of a CVXPY variable crashed the DNLP Hessian analyser in
+`init_hessian_coo_lower_tri`). That is fixed in `sparsediffpy >= 0.6.0`
+(cvxpy `>= 1.10`), and the loop is now replaced with the vectorized gather
+form.
+
+This PR is **blocked until cvxpy publishes a release** with the widened
+`sparsediffpy` pin. Until then `pyproject.toml` temporarily points `cvxpy`
+at git `main` (`1.10.0.dev`, `sparsediffpy 0.6.1`). CI runs `pip install`,
+which ignores `uv.lock` and re-resolves `@branch=main` to the live tip — so
+CI is **expected red** (a `main`-tip `init_jacobian_coo` SIGABRT unrelated to
+this change), while the pinned local env passes. Before merge: revert the git
+ref to a released `cvxpy >= 1.10` constraint and confirm CI is green.
+
 ---
 
 ## Fixture generation
