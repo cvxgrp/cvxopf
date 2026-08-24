@@ -4,7 +4,7 @@ Status: **final review (revision 8).** No implementation until approved.
 
 This revision incorporates the scientific-completeness review, resolves the
 outer-plan/reference design against the actual streaming architecture, and
-folds in the previously-open decisions (power tolerance, wall ceilings,
+folds in the previously-open decisions (observational numerical reporting, wall ceilings,
 negative-control test). Revision 4 corrected three implementation-critical
 points (all arms `resume=True` with checkpoint-free first invocation; two
 separate provenance fingerprints; reproducible tracked S2 reference). Revision
@@ -31,7 +31,7 @@ definition*, and the derived value is computed at execution start and recorded
 outside the protocol, removing circularity; (4) the reference extractor
 *validates* the S2 source via existing checkpoint/schema validators before
 extracting; (5) two stale statements (the extract "carries its own SHA-256" and
-the power-tolerance basis) are corrected to match the sidecar and Section 7; and
+the numerical-comparison basis) are corrected to match the sidecar and Section 7; and
 (6) the full historical fingerprint is used where it is an operational constant.
 Revision 7 implements the fourth re-review: (1) the first-64 reference becomes a
 **tiered** extract - compact trajectory/metadata for all 64 intervals, full
@@ -377,7 +377,7 @@ interval 32 for `recycle_32`), from the archived controlling attempt:
      `causal_source_from_archive` / existing schema validators (results
      retained, not re-implemented);
    - `causal_source` `first_soc_mwh` / `first_b_mw` / `solution_values` match
-     `k-1` within the declared tolerance (Section 7).
+     `k-1`, with raw absolute and normalized residuals reported under Section 7.
 2. **Start-construction correctness** - the actual start is the expected
    shifted/reconciled start:
    - the archived `assigned_start` equals the shifted start implied by the
@@ -388,9 +388,9 @@ interval 32 for `recycle_32`), from the archived controlling attempt:
      consistent;
    - storage identity and `initial_soc_mwh` align with the realized checkpoint
      state carried across the process boundary.
-3. **Cross-run agreement** - the actual starts match the uninterrupted
-   references (`never` arm and S2) within declared numerical tolerances where
-   numerical equality is expected: `assigned_start`, `solver_x0`, and
+3. **Cross-run agreement** - the actual starts are compared with the
+   uninterrupted references (`never` arm and S2), reporting raw numerical
+   differences for `assigned_start` and `solver_x0` and exact agreement for
    `structural_signature`.
 
 Reported per restart boundary, not only as an aggregate.
@@ -410,7 +410,7 @@ Reported per restart boundary, not only as an aggregate.
 - We do **not** classify a worker as "6 GiB" or "17.5 GiB"; we report the
   summaries and inspect them together.
 
-**Restart overhead** (per resumed worker):
+**Restart-to-first-checkpoint time** (per resumed worker):
 - start: immediately after child creation (supervisor monotonic timestamp);
 - baseline RSS: first successful external RSS sample;
 - endpoint: the supervisor monotonic timestamp at its first polling observation
@@ -423,13 +423,15 @@ Reported per restart boundary, not only as an aggregate.
   verification succeeds. Plain file-existence polling is insufficient - it would
   match the preexisting checkpoint immediately. The supervisor records its
   polling interval so the observation granularity is explicit;
-- wall overhead = endpoint - launch;
+- operational time to progress = endpoint - launch; this includes startup,
+  validation, the complete first AC solve, publication, and polling latency;
 - optional decomposition from phase samples: launch+import; checkpoint/outer/
   archive verification; first resumed window build+solve; archive publication;
 - baseline comparison: equivalent wall for the corresponding uninterrupted
-  interval in the `never` arm.
+  interval in the `never` arm. Their difference is reported as an estimate of
+  incremental restart cost, not as a perfectly isolated causal measurement.
 
-## 7. Numerical comparison quantities and tolerances
+## 7. Numerical comparison quantities and reporting
 
 All comparisons are device-aligned by explicit storage ID, with fixed interval
 indexing, and reject nonfinite values.
@@ -438,24 +440,13 @@ Compared quantities (each arm vs the `never` arm, and `never` vs S2 first-64):
 - executed storage power by interval and storage ID;
 - realized SoC at all 65 boundaries, including initial boundary 0;
 - controlling attempt ordinal and ID per interval;
-- warm-start source/signature evidence (Section 5);
-- secondary diagnostics: executed generator dispatch, objective/audit values
-  (clearly labeled secondary to controller-state equivalence).
+- warm-start source/signature evidence (Section 5).
 
-Tolerances: reuse the frozen M17/P0 residual and SoC-recurrence tolerances
-(`policy.tolerances`, `residual_tolerances(policy)`) where the quantity matches.
-For cross-run SoC agreement, use absolute tolerance equal to the frozen
-`soc_recurrence_mwh_abs` (1e-4 MWh).
-
-The cross-run **power tolerance for `b`** is justified primarily by the existing
-P0/M17 numerical tolerances and expected IPOPT/CLARABEL reproducibility on an
-identical build and start - not by action magnitude. S2 action magnitudes are
-used only to confirm the chosen tolerance is scientifically negligible relative
-to realized storage power (S2 per-device throughput ranged from ~8e-5 MWh at
-bus 89 to ~2,517 MWh at bus 65). The concrete value is frozen in the protocol
-before any run and is never loosened after the fact. Solver-variability note:
-cross-run equality is expected only up to documented determinism; deviations are
-reported, not silently tolerated by loosening.
+The comparison is deliberately observational. It reports raw numerical
+differences without an automatic cross-run acceptance threshold or S3 decision.
+Existing M17/P0 tolerances may be displayed as unit-compatible descriptive
+context, but they are not repurposed into a new equality gate and are never
+loosened after inspecting the comparison.
 
 **Actual-start comparison semantics (Section 5 Tier B).** The `assigned_start`
 and `solver_x0` payloads are heterogeneous - voltage, angle, generator,
@@ -466,14 +457,13 @@ before any run:
   `layout_signature`, keys, array shapes, coordinate order, and
   `solver_evidence` coordinate counts;
 - **nonfinite values rejected** anywhere in the start arrays;
-- **numerical start arrays** compared **per named variable group**, using the
-  existing physical tolerances where a group has one (e.g. SoC uses
-  `soc_recurrence_mwh_abs`), not one global number across unlike units;
+- **numerical start arrays** compared **per named variable group**, rather than
+  relying on one global number across unlike units;
 - both **maximum absolute** and **normalized** (scaled) coordinate differences
-  reported per group, against one predeclared tolerance each;
+  reported per group, with the normalization rule frozen before execution;
 - residuals reported per boundary (0, 16, 32, 48), not only as a pass/fail.
-Structure divergence is always a hard mismatch; numerical divergence beyond the
-per-group tolerance is reported, never silently absorbed.
+Structure divergence is always a hard mismatch; numerical divergence is
+reported for review rather than silently converted into a pass/fail label.
 
 ## 8. Partial-run and unexpected-termination handling
 
@@ -527,8 +517,10 @@ existing schema validators and retain their results.
 
 **Compact tracked `RECYCLE_COMPARISON_RESULTS.json`:** arm directory names; SHA-
 256 of each arm's final checkpoint, the shared outer plan, supervision records,
-and analysis output; per-arm RSS summaries; restart overheads; warm-start
-evidence per restart boundary; numerical-agreement residuals; machine and
+and analysis output; per-arm external first/peak/final RSS and the complete
+global-interval-indexed safe-boundary RSS series; restart-to-first-checkpoint
+times with matched `never` baselines; warm-start evidence per restart boundary;
+numerical-agreement residuals; machine and
 software provenance; both provenance fingerprints (Section 1). Large raw window
 artifacts stay ignored (the verified checkpoint already binds the immutable
 prefix; they are not re-hashed individually in the compact record).
@@ -614,7 +606,7 @@ study.
 - `run_recycle_comparison.py` - comparison-owned supervisor + worker + observer;
   all invocations `resume=True` (checkpoint-free first, checkpointed later).
 - `RECYCLE_COMPARISON_PROTOCOL.md` - freezes Sections 1-11 with concrete hashes
-  and tolerances at freeze time; states observational scope, no-S2-change, and
+  and numerical reporting definitions; states observational scope, no-S2-change, and
   the two provenance identities.
 - `recycle_analysis.py` - independent reconstruction: RSS summaries, restart
   overhead, archive-continuity via existing validators, warm-start evidence,
@@ -645,12 +637,10 @@ a production recycling interval (decided after we see the numbers together).
 
 ## Resolved decisions (previously open)
 
-1. **Cross-run power tolerance for executed `b`:** justified primarily by the
-   existing P0/M17 numerical tolerances and expected IPOPT/CLARABEL
-   reproducibility on an identical build and start (Section 7); S2 action
-   magnitudes only confirm the chosen value is scientifically negligible. The
-   concrete value is recorded in the protocol before any run; it is not guessed
-   now and not loosened after the fact.
+1. **Cross-run numerical interpretation:** the comparison reports raw absolute
+   and normalized residuals without introducing an automatic equality gate.
+   Existing P0/M17 tolerances may appear only as unit-compatible descriptive
+   context and are not adjusted after observing the results.
 2. **Wall ceilings:** 4 h per arm, 12 h total (Section 11), approved.
 3. **Negative-control test:** included (Section 10, last bullet). The comparator
    must detect a deliberately altered action, SoC, or source record in a copied
