@@ -244,4 +244,22 @@ The comparison therefore establishes that planned worker recycling preserved
 the frozen trajectory and reduced observed peak memory in this run without a
 material wall-time penalty. `RECYCLE_COMPARISON_RESULTS.json` retains the
 promoted machine-readable record. The protocol deliberately makes no automatic
-S3 policy decision; cadence selection remains a reviewed milestone decision.
+S3 policy decision; at comparison closure, cadence selection was reserved for
+a separate reviewed milestone decision.
+
+## 2026-08-24 — S3 recycling cadence selected
+
+After reviewing the observational comparison, the user selected
+`recycle_every_16` for the frozen S3 month. S3 will restart its worker after
+global completed-interval boundaries 16, 32, ..., 704 and resume only from the
+exact verified checkpoint. This is exactly 44 planned restarts and 45 worker
+invocations. Boundary 720 is `study_complete`; invocation-local counters do not
+reset the global schedule. An abnormal resource, solver, or provenance outcome
+stops automatic execution, retains the partial record, and requires explicit
+review. Reviewed continuation remains possible, but no abnormal outcome
+automatically changes the cadence or launches an unscheduled restart.
+
+The decision is supported by exact trajectory preservation, the lowest
+observed peak RSS of the three treatments, and effectively unchanged total
+runtime in this execution. It applies to this Case118 S3 workflow and is not a
+universal recycling recommendation.

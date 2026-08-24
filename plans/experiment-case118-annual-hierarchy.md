@@ -349,7 +349,7 @@ No stage may silently advance after a failed gate.
 | P0 (complete) | 6 and 24 h | Implement and review the streaming reference runner | Passed; clean consolidated execution `81b3189` established nominal and injected equivalence, persistence/reconstruction, historical evidence, Case118 boundary, and dependency gates |
 | S2 (complete: resource boundary + exploratory continuation) | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | The frozen 16 GiB invocation stopped cleanly at its resource boundary after 128 intervals; a labeled 24 GiB continuation resumed from that checkpoint and completed a fully accepted 168-interval trajectory |
 | Pre-S3 recycling comparison (complete) | 3 × 64 h | Compare uninterrupted, 32-interval, and 16-interval worker lifetimes | Completed 192/192 accepted intervals; exact causal trajectories; observed peak RSS 20,025.5, 19,501.7, and 17,926.3 MiB respectively |
-| S3 (next; policy selection pending review) | 720 h | One-month frozen hierarchy and memory-retention study | Complete or terminate with an auditable resource boundary |
+| S3 (next; `recycle_every_16` selected) | 720 h | One-month frozen hierarchy and memory-retention study | Run with planned worker recycling after every 16 completed intervals; complete or terminate with an auditable resource boundary |
 | S4 | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within predeclared runtime and memory budgets, plus the outer equivalence gate below |
 | S5 | 8,760 h | Full annual hierarchical execution | All intervals completed, or explicit partial-horizon scientific record |
 | S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
@@ -371,8 +371,17 @@ continuity. That bounded comparison completed on 2026-08-24: all three
 64-interval arms were accepted, recycled trajectories matched the uninterrupted
 trajectory exactly, and the 16-interval cadence had the lowest observed peak
 RSS without a material wall-time penalty. The comparison was intentionally
-observational, so the exact S3 recycling policy remains a reviewed selection
-rather than an automatic advancement decision.
+observational and made no automatic advancement decision. After reviewing that
+evidence, the user selected `recycle_every_16` for S3. This means a planned
+worker restart at global completed-interval boundaries 16, 32, ..., 704,
+resuming only from the exact verified checkpoint. The 720-interval horizon
+therefore has exactly 44 planned restarts and 45 worker invocations; boundary
+720 is `study_complete`, not an extra restart. Counters never reset the global
+schedule after a recycle. An abnormal resource, solver, or provenance outcome
+stops automatic execution, retains the partial record, and requires explicit
+review; it never triggers an automatic cadence adjustment. The selection is
+specific to the frozen Case118 S3 workflow and is not a universal controller
+or solver default.
 
 ### Reviewed S0 pilot-window amendment
 

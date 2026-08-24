@@ -86,6 +86,28 @@ designed. It supports reviewed selection of a bounded recycling cadence for
 S3; it does not itself promote a universal default or diagnose the source of
 process-memory pressure.
 
+## Reviewed S3 policy decision
+
+After reviewing the completed observational record, the user selected
+`recycle_every_16` for S3. The frozen 720-interval global restart schedule is
+16, 32, ..., 704: exactly 44 planned restarts and 45 worker invocations. Each
+worker stops normally at the next global boundary, preserves and verifies the
+checkpoint, then resumes in a fresh process; a local invocation counter never
+resets the global schedule. Boundary 720 is `study_complete` rather than an
+additional restart.
+
+No adaptive cadence change is inferred from RSS. An abnormal resource, solver,
+or provenance outcome stops automatic execution, retains the partial record,
+and requires explicit review. Reviewed continuation remains possible, but an
+abnormal outcome never triggers an automatic cadence adjustment or an
+unscheduled restart.
+
+This selection is justified for the frozen Case118 S3 workflow by the lowest
+observed peak RSS among the compared arms, exact causal-trajectory agreement,
+and no material wall-time penalty in this run. It is a reviewed operational
+choice, not an automatic consequence of the result and not a general default
+for other networks, horizons, machines, or solver stacks.
+
 ## What S2 showed (grounding evidence)
 
 Reconstructed from the committed S2 `resource-samples-*.json` chunks and their
