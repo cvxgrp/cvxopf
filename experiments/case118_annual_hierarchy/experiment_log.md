@@ -263,3 +263,26 @@ The decision is supported by exact trajectory preservation, the lowest
 observed peak RSS of the three treatments, and effectively unchanged total
 runtime in this execution. It applies to this Case118 S3 workflow and is not a
 universal recycling recommendation.
+
+## 2026-08-25 — S3 month completed
+
+S3 completed all 720 intervals from clean commit `c5d0bbc` using the frozen
+16-interval cadence: 44 planned restarts, 45 worker invocations, no abnormal
+stop, and a terminal `study_complete` record. Independent reconstruction
+accepted every controlling interval and verified the complete state,
+signpost, load-service, voltage, thermal, artifact, resource, and provenance
+chains. Shifted primaries succeeded in 716 of 719 opportunities. Three
+`user_limit` primaries recovered causally through accepted target-free and
+copied hard-target solves; perturbations were never needed.
+
+Total retained wall time was 41,744.1 seconds and maximum externally sampled
+RSS was 15,985.7 MiB, below the 24 GiB limit. The compact promoted
+`S3_RESULTS.json` is 144,315 bytes with SHA-256
+`74f2c37f4dfe039a991cfddba5d035954108bb2bceccbc53fe6950f61ac903aa`.
+S3 is complete and accepted for opening outer-only S4 planning.
+
+A post-hoc replay of all three accepted primaries that exceeded five minutes
+supported adopting a typed 300-second primary budget followed by unchanged
+causal recovery for later Case118 AC execution. This bounded tail-latency rule
+does not apply to S4 and requires its focused implementation gate before
+S4b/S5.
