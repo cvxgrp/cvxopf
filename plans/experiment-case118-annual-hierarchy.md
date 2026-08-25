@@ -351,7 +351,8 @@ No stage may silently advance after a failed gate.
 | Pre-S3 recycling comparison (complete) | 3 × 64 h | Compare uninterrupted, 32-interval, and 16-interval worker lifetimes | Completed 192/192 accepted intervals; exact causal trajectories; observed peak RSS 20,025.5, 19,501.7, and 17,926.3 MiB respectively |
 | S3 (pre-execution implementation complete; review pending) | 720 h | One-month frozen hierarchy and memory-retention study using selected `recycle_every_16` policy | Run with planned worker recycling after every 16 completed intervals; complete or terminate with an auditable resource boundary |
 | S4 | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within predeclared runtime and memory budgets, plus the outer equivalence gate below |
-| S5 | 8,760 h | Full annual hierarchical execution | All intervals completed, or explicit partial-horizon scientific record |
+| S4b | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Sequential shard equivalence, fresh-process execution, deterministic merge/audit, and a resource-bounded parallel demonstration all pass before S5 |
+| S5 | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | All shards completed and merged into one boundary-continuous annual record, or an explicit partial-horizon scientific record |
 | S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
 | S7 | — | Analysis, reproducibility record, and conclusions | Independent reconstruction of all reported totals and hashes |
 
@@ -420,6 +421,83 @@ public-controller outer plans for both rated and matched-unlimited networks:
 
 The annual record retains the same fields and hashes. A merely similar
 standalone lossy-DC build does not satisfy S4.
+
+### Pre-S5 sharding and parallel-execution qualification
+
+S4b establishes that the annual AC realization can be executed as independent,
+restartable jobs without changing the scientific problem. It does not add a
+cluster scheduler or make scheduler-specific behavior part of `cvxopf`. The
+experiment provides a scheduler-neutral, installable execution command that
+accepts one frozen annual manifest, one shard identifier, and one output
+location. The same command must be usable from a workstation process, a fresh
+environment containing the installed package, or an HPC array job. SLURM, PBS,
+Kubernetes, resource requests, retries, and artifact transport remain external
+execution concerns.
+
+Every shard specification retains:
+
+- the global half-open interval range and immutable scenario/input hashes;
+- the source commit and complete model, policy, solver, and recovery settings;
+- ordered storage identities and the identity-aligned initial state;
+- the S4 outer-plan signposts, including the shard terminal target;
+- deterministic initialization transformations, perturbation seeds, and
+  stopping rules; and
+- an independent output location, atomic checkpoints, and machine-readable
+  completion and resource summaries.
+
+Shard boundaries are derived only from the accepted S4 outer plan, never from
+observed AC outcomes. Before executing S4b, freeze a deterministic selection
+rule that prefers sufficiently separated charging periods whose device-level
+SoCs are near 50% of capacity. The rule must define the charging statistic,
+normalized distance from mid-SoC, tie breaking, minimum and maximum shard
+lengths, and treatment of inactive or stationary devices. Aggregate SoC alone
+is insufficient if it conceals a participating device near an energy bound.
+The selected boundaries and their exact identity-aligned states are then
+materialized in the annual manifest and cannot be adapted in response to shard
+outcomes.
+
+The predecessor shard's hard terminal signpost and the successor shard's
+initial state are the same outer-plan state. Shards may not optimize, infer, or
+silently repair their own boundary conditions. Consequently, successful shards
+form one storage-continuous annual trajectory even when their wall-clock
+execution order differs.
+
+S4b must pass four gates:
+
+1. **Partition equivalence.** On a bounded frozen reference horizon, an
+   uninterrupted execution and a sequential execution of the same intervals as
+   shards agree within the existing scientific tolerances on boundary states,
+   accepted intervals, residuals, attempts, and reconstructed trajectory
+   quantities.
+2. **Independent execution.** Every test shard succeeds in a fresh process
+   using only its manifest entry and declared immutable inputs; no predecessor
+   in-memory state or undeclared local artifact is required.
+3. **Merge validation.** The merger rejects missing, duplicated, overlapping,
+   misconfigured, or boundary-discontinuous shard records and deterministically
+   reconstructs global interval order and all additive and extremal summaries.
+4. **Resource-bounded parallel demonstration.** At least two shards run
+   concurrently under a predeclared aggregate memory budget, with per-worker
+   and aggregate peak memory, CPU time, elapsed wall time, and restart/recovery
+   behavior retained. If the qualification host cannot safely support two AC
+   workers, sequential qualification may establish architectural shardability,
+   but S5 parallel execution remains unauthorized until the parallel gate is
+   demonstrated on a suitably provisioned host.
+
+Passing S4b establishes portability and semantic equivalence, not universal
+parallel efficiency. S5 records requested versus achieved concurrency and
+keeps scheduler waiting time distinct from model construction, solver, merge,
+and total elapsed time. The frozen manifest remains runnable serially when
+available memory does not permit concurrent AC workers.
+
+Before any S4b or S5 AC execution, implement and verify the experiment-owned
+five-minute primary-attempt safeguard frozen in
+`experiments/case118_annual_hierarchy/FIVE_MINUTE_TIMEOUT_POLICY.md`. The
+300-second budget is a typed manifest/provenance field. Exhausting it retains
+the primary attempt and enters the unchanged causal target-free/copied recovery
+sequence; it never accepts a timed-out primal, changes the terminal policy, or
+silently advances state. Timing reports separate the consumed primary budget,
+both recovery solves, construction/canonicalization where available,
+worker/restart overhead, and total window latency.
 
 ## Measurements
 

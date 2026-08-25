@@ -32,6 +32,7 @@ from experiments.case118_annual_hierarchy.streaming_archive import (
     result_dimensions,
 )
 from experiments.case118_annual_hierarchy.streaming_driver import (
+    ResourceSample,
     _load_resource_samples,
 )
 from experiments.case118_annual_hierarchy.streaming_schema import (
@@ -192,6 +193,71 @@ def _execution_disposition(
     return complete, "complete" if complete else "partial", terminal_outcome
 
 
+def _resource_evidence(
+    samples: Sequence[ResourceSample],
+    records: Sequence[Mapping[str, object]],
+    completed_intervals: int,
+) -> tuple[tuple[Mapping[str, object], ...], Mapping[int, float | None]]:
+    """Validate sample coordinates and summarize RSS by global interval."""
+    records_by_invocation = {
+        _integer(record["invocation"]): record for record in records
+    }
+    if len(records_by_invocation) != len(records):
+        raise ValueError("S3 resource lifecycle contains duplicate invocations")
+    interval_samples: dict[int, list[ResourceSample]] = {}
+    first_checkpoint: dict[int, float | None] = {
+        invocation: None for invocation in records_by_invocation
+    }
+    for sample in samples:
+        record = records_by_invocation.get(sample.invocation)
+        if record is None:
+            raise ValueError("S3 resource sample references an unknown invocation")
+        if sample.iteration is None:
+            if sample.phase not in {"before_outer", "after_outer_release"}:
+                raise ValueError("S3 resource sample lacks an interval coordinate")
+            if sample.phase == "before_outer" and sample.invocation != 0:
+                raise ValueError("S3 outer-construction sample is not in invocation zero")
+            continue
+        before = _integer(record["completed_before"])
+        after = _integer(record["completed_after"])
+        if not before <= sample.iteration < after:
+            raise ValueError("S3 resource sample lies outside its invocation interval")
+        interval_samples.setdefault(sample.iteration, []).append(sample)
+        if sample.phase == "after_release" and first_checkpoint[sample.invocation] is None:
+            if sample.iteration != before:
+                raise ValueError("S3 first verified checkpoint is not the first interval")
+            first_checkpoint[sample.invocation] = sample.elapsed_seconds
+    if sorted(interval_samples) != list(range(completed_intervals)):
+        raise ValueError("S3 resource samples do not cover the executed interval prefix")
+    summaries: list[Mapping[str, object]] = []
+    for iteration in range(completed_intervals):
+        grouped = interval_samples[iteration]
+        invocations = {sample.invocation for sample in grouped}
+        if len(invocations) != 1:
+            raise ValueError("S3 interval resource samples cross invocations")
+        released = [sample for sample in grouped if sample.phase == "after_release"]
+        if len(released) != 1:
+            raise ValueError("S3 interval lacks one verified after-release sample")
+        summaries.append(
+            {
+                "iteration": iteration,
+                "invocation": invocations.pop(),
+                "maximum_rss_mib": max(sample.rss_bytes for sample in grouped)
+                / (1024.0**2),
+                "after_release_rss_mib": released[0].rss_bytes / (1024.0**2),
+                "after_release_elapsed_seconds": released[0].elapsed_seconds,
+                "sample_count": len(grouped),
+            }
+        )
+    for invocation, record in records_by_invocation.items():
+        advanced = _integer(record["completed_after"]) > _integer(
+            record["completed_before"]
+        )
+        if advanced != (first_checkpoint[invocation] is not None):
+            raise ValueError("S3 invocation checkpoint timing disagrees with lifecycle")
+    return tuple(summaries), first_checkpoint
+
+
 def analyze_s3(
     directory: Path,
     *,
@@ -263,6 +329,9 @@ def analyze_s3(
     )
     if _integer(supervisions[-1]["completed_after"]) != completed:
         raise ValueError("S3 supervision and checkpoint completion mismatch")
+    interval_resource_evidence, first_checkpoint_elapsed = _resource_evidence(
+        samples, supervisions, completed
+    )
     storage_ids = tuple(str(unit.device_id) for unit in inputs.storage)
     throughput = (
         np.sum(
@@ -315,7 +384,17 @@ def analyze_s3(
             "classification": record["classification"],
             "completed_before": record["completed_before"],
             "completed_after": record["completed_after"],
+            "first_sampled_rss_mib": record.get("first_sampled_rss_mib"),
             "peak_sampled_rss_mib": record.get("peak_sampled_rss_mib"),
+            "final_sampled_rss_mib": record.get("final_sampled_rss_mib"),
+            "first_verified_checkpoint_elapsed_seconds": first_checkpoint_elapsed[
+                _integer(record["invocation"])
+            ],
+            "restart_to_first_checkpoint_seconds": (
+                None
+                if _integer(record["invocation"]) == 0
+                else first_checkpoint_elapsed[_integer(record["invocation"])]
+            ),
             "wall_time_seconds": record["wall_time_seconds"],
             "sha256": record["record_sha256"],
             "reviewed_continuation": record.get("reviewed_continuation"),
@@ -386,6 +465,18 @@ def analyze_s3(
         "maximum_current_rss_mib": max(
             (sample.rss_bytes / (1024.0**2) for sample in samples), default=0.0
         ),
+        "maximum_external_supervisor_rss_mib": max(
+            (
+                _number(record["peak_sampled_rss_mib"])
+                for record in supervisions
+                if record.get("peak_sampled_rss_mib") is not None
+            ),
+            default=0.0,
+        ),
+        "total_wall_time_seconds": sum(
+            _number(record["wall_time_seconds"]) for record in supervisions
+        ),
+        "global_interval_resource_evidence": interval_resource_evidence,
         "source_fingerprint": source_fingerprint,
         "scenario_hash": scenario_hash,
         "outer_plan_sha256": outer_sha,

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from experiments.case118_annual_hierarchy import s3_analysis
+from experiments.case118_annual_hierarchy.streaming_driver import ResourceSample
 
 
 def _record(
@@ -367,3 +368,71 @@ def test_completed_result_is_promoted_immutably(tmp_path: Path) -> None:
             destination,
             {"execution_complete": True, "completed_intervals": 719},
         )
+
+
+def _sample(
+    invocation: int,
+    iteration: int | None,
+    phase: str,
+    elapsed: float,
+    rss: int,
+) -> ResourceSample:
+    return ResourceSample(
+        phase=phase,
+        invocation=invocation,
+        iteration=iteration,
+        attempt_ordinal=None,
+        elapsed_seconds=elapsed,
+        rss_bytes=rss,
+    )
+
+
+def test_resource_evidence_binds_invocations_and_global_intervals() -> None:
+    records = (_record(0, 0, 2), _record(1, 2, 3, classification="rss_limit"))
+    samples = (
+        _sample(0, None, "before_outer", 0.0, 10),
+        _sample(0, None, "after_outer_release", 2.0, 20),
+        _sample(0, 0, "after_ac_solve", 4.0, 30),
+        _sample(0, 0, "after_release", 5.0, 25),
+        _sample(0, 1, "after_ac_solve", 8.0, 40),
+        _sample(0, 1, "after_release", 9.0, 35),
+        _sample(1, None, "after_outer_release", 1.0, 15),
+        _sample(1, 2, "after_ac_solve", 6.0, 50),
+        _sample(1, 2, "after_release", 7.0, 45),
+    )
+
+    intervals, first = s3_analysis._resource_evidence(samples, records, 3)
+
+    assert first == {0: 5.0, 1: 7.0}
+    assert [item["invocation"] for item in intervals] == [0, 0, 1]
+    assert intervals[0]["maximum_rss_mib"] == 30 / (1024.0**2)
+    assert intervals[0]["after_release_rss_mib"] == 25 / (1024.0**2)
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        (_sample(2, 0, "after_release", 1.0, 1), "unknown invocation"),
+        (_sample(0, 2, "after_release", 1.0, 1), "outside its invocation"),
+        (_sample(0, None, "after_release", 1.0, 1), "lacks an interval"),
+    ],
+)
+def test_resource_evidence_rejects_coordinate_drift(
+    replacement: ResourceSample, message: str
+) -> None:
+    records = (_record(0, 0, 1),)
+    samples = (
+        _sample(0, 0, "after_ac_solve", 1.0, 2),
+        replacement,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        s3_analysis._resource_evidence(samples, records, 1)
+
+
+def test_resource_evidence_requires_one_verified_checkpoint_per_interval() -> None:
+    records = (_record(0, 0, 1),)
+    samples = (_sample(0, 0, "after_ac_solve", 1.0, 2),)
+
+    with pytest.raises(ValueError, match="one verified after-release"):
+        s3_analysis._resource_evidence(samples, records, 1)
