@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 from importlib.metadata import PackageNotFoundError, version
@@ -53,6 +54,18 @@ INVOCATION_WALL_LIMIT_SECONDS = 4.0 * 60.0 * 60.0
 TOTAL_WALL_LIMIT_SECONDS = 72.0 * 60.0 * 60.0
 POLL_SECONDS = 1.0
 SCHEMA_VERSION = 1
+REVIEWABLE_CLASSIFICATIONS = frozenset(
+    {
+        "rss_limit",
+        "invocation_wall_limit",
+        "total_wall_limit",
+        "checkpoint_stall_limit",
+        "worker_failure",
+        "artifact_failure",
+        "provenance_mismatch",
+        "reviewed_interruption",
+    }
+)
 
 S3_SOURCE_PATHS = (
     "experiments/case118_annual_hierarchy/S3_PROTOCOL.md",
@@ -74,6 +87,33 @@ S3_SOURCE_PATHS = (
     "tests/test_case118_s3_analysis.py",
     "tests/test_case118_s3_runner.py",
 )
+
+
+@dataclass(frozen=True)
+class ReviewedPriorOutcome:
+    """The retained lifecycle outcome that authorizes one reviewed continuation."""
+
+    prior_record_kind: str
+    prior_invocation: int
+    prior_classification: str
+    completed_intervals: int
+    checkpoint_sha256: str
+    execution_context: Mapping[str, object]
+    prior_record_path: str
+    prior_record_sha256: str
+
+    def authorization_identity(self, *, next_invocation: int) -> Mapping[str, object]:
+        return {
+            "next_invocation": next_invocation,
+            "prior_record_kind": self.prior_record_kind,
+            "prior_invocation": self.prior_invocation,
+            "prior_classification": self.prior_classification,
+            "completed_intervals": self.completed_intervals,
+            "checkpoint_sha256": self.checkpoint_sha256,
+            "execution_context": dict(self.execution_context),
+            "prior_record_path": self.prior_record_path,
+            "prior_record_sha256": self.prior_record_sha256,
+        }
 
 
 def _mapping(value: object, name: str) -> Mapping[str, object]:
@@ -385,6 +425,7 @@ def _archive_stale_active_invocation(directory: Path) -> Mapping[str, object] | 
         supervisor_pid = int(cast(int, active["supervisor_pid"]))
         worker_pid = int(cast(int, active["worker_pid"]))
         started_epoch = float(cast(float, active["started_epoch_seconds"]))
+        completed_before = int(cast(int, active["completed_before"]))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("active S3 invocation record is malformed") from exc
     if _pid_is_alive(supervisor_pid) or _pid_is_alive(worker_pid):
@@ -393,6 +434,16 @@ def _archive_stale_active_invocation(directory: Path) -> Mapping[str, object] | 
         active_path.unlink()
         return None
     reviewed_epoch = time.time()
+    checkpoint = _checkpoint_candidate(directory / "trajectory/checkpoint.json")
+    if checkpoint is None or checkpoint[0] < completed_before:
+        raise ValueError("interrupted S3 invocation lacks a valid retained checkpoint")
+    context_path = directory / f"run-context-{invocation:03d}.json"
+    if not context_path.is_file():
+        raise ValueError("interrupted S3 invocation lacks its run context")
+    start_context = _mapping(
+        json.loads(context_path.read_text()), "interrupted S3 run context"
+    )
+    end_context = _safe_execution_context()
     record: Mapping[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "classification": "reviewed_interruption",
@@ -402,6 +453,18 @@ def _archive_stale_active_invocation(directory: Path) -> Mapping[str, object] | 
         "started_epoch_seconds": started_epoch,
         "reviewed_epoch_seconds": reviewed_epoch,
         "wall_time_seconds": max(0.0, reviewed_epoch - started_epoch),
+        "completed_before": completed_before,
+        "completed_after": checkpoint[0],
+        "checkpoint_sha256_before": active.get("checkpoint_sha256_before"),
+        "checkpoint_sha256_after": checkpoint[1],
+        "outer_plan_sha256": (
+            sha256_path(directory / "trajectory/outer-plan.json.gz")
+            if (directory / "trajectory/outer-plan.json.gz").is_file()
+            else None
+        ),
+        "start_context": start_context,
+        "end_context": end_context,
+        "context_matches": start_context == end_context,
     }
     atomic_immutable_json(
         directory / f"interrupted-invocation-{invocation:03d}.json", record
@@ -471,6 +534,8 @@ def supervise_invocation(directory: Path) -> Mapping[str, object]:
                 "supervisor_pid": os.getpid(),
                 "worker_pid": process.pid,
                 "started_epoch_seconds": time.time(),
+                "completed_before": passed_boundary,
+                "checkpoint_sha256_before": None if before is None else before[1],
             },
         )
         last_completed = passed_boundary
@@ -595,7 +660,8 @@ def supervise_invocation(directory: Path) -> Mapping[str, object]:
     return record
 
 
-def _validate_reviewed_continuation(directory: Path) -> None:
+def _validate_reviewed_continuation(directory: Path) -> ReviewedPriorOutcome:
+    """Validate and identify the exact retained outcome under review."""
     interrupted = _archive_stale_active_invocation(directory)
     checkpoint_path = directory / "trajectory/checkpoint.json"
     if not checkpoint_path.is_file():
@@ -620,6 +686,53 @@ def _validate_reviewed_continuation(directory: Path) -> None:
     prior_context = _mapping(json.loads(prior_context_path.read_text()), "S3 run context")
     if current.get("git_clean") is not True or current != prior_context:
         raise ValueError("reviewed S3 continuation provenance mismatch")
+    retained = interrupted if interrupted is not None else latest
+    if retained is None:
+        raise ValueError("reviewed S3 continuation lacks a retained outcome")
+    record_kind = "interrupted_invocation" if interrupted is not None else "supervision"
+    try:
+        prior_invocation = int(cast(int, retained["invocation"]))
+        classification = str(retained["classification"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("reviewed S3 prior outcome is incomplete") from exc
+    retained_path = (
+        directory / f"interrupted-invocation-{prior_invocation:03d}.json"
+        if interrupted is not None
+        else _supervision_path(directory, prior_invocation)
+    )
+    if not retained_path.is_file():
+        raise ValueError("reviewed S3 prior outcome artifact is missing")
+    immutable_retained = _mapping(
+        json.loads(retained_path.read_text()), "reviewed S3 prior outcome artifact"
+    )
+    if immutable_retained != retained or classification not in REVIEWABLE_CLASSIFICATIONS:
+        raise ValueError("reviewed S3 prior outcome identity mismatch")
+    try:
+        completed_intervals = int(cast(int, retained["completed_after"]))
+        checkpoint_sha256 = str(retained["checkpoint_sha256_after"])
+        retained_context = _mapping(
+            retained["start_context"], "reviewed S3 prior execution context"
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("reviewed S3 prior outcome is incomplete") from exc
+    checkpoint = _checkpoint_candidate(checkpoint_path)
+    if (
+        checkpoint is None
+        or checkpoint != (completed_intervals, checkpoint_sha256)
+        or prior_invocation != invocation - 1
+        or retained_context != prior_context
+    ):
+        raise ValueError("reviewed S3 prior outcome identity mismatch")
+    return ReviewedPriorOutcome(
+        prior_record_kind=record_kind,
+        prior_invocation=prior_invocation,
+        prior_classification=classification,
+        completed_intervals=completed_intervals,
+        checkpoint_sha256=checkpoint_sha256,
+        execution_context=retained_context,
+        prior_record_path=retained_path.name,
+        prior_record_sha256=sha256_path(retained_path),
+    )
 
 
 def run_s3(directory: Path = DEFAULT_OUTPUT_DIRECTORY, *, reviewed: bool = False) -> Mapping[str, object]:
@@ -627,7 +740,37 @@ def run_s3(directory: Path = DEFAULT_OUTPUT_DIRECTORY, *, reviewed: bool = False
     if reviewed:
         if not directory.is_dir():
             raise ValueError("reviewed S3 continuation requires an existing directory")
-        _validate_reviewed_continuation(directory)
+        prior_outcome = _validate_reviewed_continuation(directory)
+        checkpoint_path = directory / "trajectory/checkpoint.json"
+        checkpoint = _checkpoint_candidate(checkpoint_path)
+        if checkpoint is None:
+            raise ValueError("reviewed S3 continuation lacks readable checkpoint")
+        invocation = _next_invocation(directory)
+        authorization_path = directory / f"reviewed-continuation-{invocation:03d}.json"
+        authorization_identity = prior_outcome.authorization_identity(
+            next_invocation=invocation
+        )
+        if (
+            authorization_identity["completed_intervals"] != checkpoint[0]
+            or authorization_identity["checkpoint_sha256"] != checkpoint[1]
+        ):
+            raise ValueError("reviewed S3 continuation checkpoint changed")
+        if authorization_path.is_file():
+            existing = _mapping(
+                json.loads(authorization_path.read_text()),
+                "reviewed S3 continuation authorization",
+            )
+            if any(existing.get(key) != value for key, value in authorization_identity.items()):
+                raise ValueError("reviewed S3 continuation authorization mismatch")
+        else:
+            atomic_immutable_json(
+                authorization_path,
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "created_utc": datetime.now(timezone.utc).isoformat(),
+                    **authorization_identity,
+                },
+            )
     else:
         if directory.exists():
             raise FileExistsError("fresh S3 execution requires an absent output directory")

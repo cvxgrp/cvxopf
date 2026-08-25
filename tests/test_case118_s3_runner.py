@@ -140,12 +140,25 @@ def test_reviewed_continuation_requires_abnormal_retained_outcome(
     context = {"git_clean": True, "source_fingerprint": "frozen"}
     monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
     monkeypatch.setattr(run_s3, "execution_context", lambda: context)
-
-    (directory / "latest-supervision.json").write_text(
-        json.dumps({"classification": "rss_limit", "start_context": context})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (35, "checkpoint-35")
     )
+
+    retained = {
+        "invocation": 0,
+        "classification": "rss_limit",
+        "completed_after": 35,
+        "checkpoint_sha256_after": "checkpoint-35",
+        "start_context": context,
+        "wall_time_seconds": 1.0,
+    }
+    (directory / "latest-supervision.json").write_text(json.dumps(retained))
+    (directory / "supervision-000.json").write_text(json.dumps(retained))
     (directory / "run-context-000.json").write_text(json.dumps(context))
-    run_s3._validate_reviewed_continuation(directory)
+    prior = run_s3._validate_reviewed_continuation(directory)
+    assert prior.prior_record_kind == "supervision"
+    assert prior.prior_classification == "rss_limit"
+    assert prior.completed_intervals == 35
 
     (directory / "latest-supervision.json").write_text(
         json.dumps({"classification": "planned_recycle", "start_context": context})
@@ -154,11 +167,63 @@ def test_reviewed_continuation_requires_abnormal_retained_outcome(
         run_s3._validate_reviewed_continuation(directory)
 
 
+def test_reviewed_continuation_persists_authorization_before_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "study"
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    checkpoint = trajectory / "checkpoint.json"
+    checkpoint.write_text("{}")
+    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    retained = {
+        "invocation": 2,
+        "classification": "rss_limit",
+        "completed_after": 35,
+        "checkpoint_sha256_after": "checkpoint-35",
+        "start_context": context,
+        "wall_time_seconds": 1.0,
+    }
+    (directory / "latest-supervision.json").write_text(json.dumps(retained))
+    (directory / "supervision-002.json").write_text(json.dumps(retained))
+    (directory / "run-context-002.json").write_text(json.dumps(context))
+    monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (35, "checkpoint-35")
+    )
+    monkeypatch.setattr(run_s3, "_next_invocation", lambda _path: 3)
+    monkeypatch.setattr(run_s3, "execution_context", lambda: context)
+    def supervise(_path: Path) -> Mapping[str, object]:
+        assert (directory / "reviewed-continuation-003.json").is_file()
+        return {
+            "classification": "study_complete",
+            "wall_time_seconds": 1.0,
+        }
+
+    monkeypatch.setattr(run_s3, "supervise_invocation", supervise)
+
+    run_s3.run_s3(directory, reviewed=True)
+
+    authorization = json.loads(
+        (directory / "reviewed-continuation-003.json").read_text()
+    )
+    assert authorization["prior_record_kind"] == "supervision"
+    assert authorization["prior_invocation"] == 2
+    assert authorization["prior_record_path"] == "supervision-002.json"
+    assert authorization["prior_classification"] == "rss_limit"
+    assert authorization["completed_intervals"] == 35
+    assert authorization["checkpoint_sha256"] == "checkpoint-35"
+    assert authorization["execution_context"] == context
+
+
 def test_stale_interruption_is_retained_and_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     directory = tmp_path / "study"
-    directory.mkdir()
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    (directory / "run-context-003.json").write_text(json.dumps(context))
     (directory / "active-invocation.json").write_text(
         json.dumps(
             {
@@ -166,19 +231,118 @@ def test_stale_interruption_is_retained_and_counted(
                 "supervisor_pid": 1001,
                 "worker_pid": 1002,
                 "started_epoch_seconds": 10.0,
+                "completed_before": 32,
+                "checkpoint_sha256_before": "checkpoint-32",
             }
         )
     )
     monkeypatch.setattr(run_s3, "_pid_is_alive", lambda _pid: False)
     monkeypatch.setattr(run_s3.time, "time", lambda: 25.0)
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (35, "checkpoint-35")
+    )
+    monkeypatch.setattr(run_s3, "_safe_execution_context", lambda: context)
 
     record = run_s3._archive_stale_active_invocation(directory)
 
     assert record is not None
     assert record["classification"] == "reviewed_interruption"
+    assert record["completed_before"] == 32
+    assert record["completed_after"] == 35
     assert record["wall_time_seconds"] == 15.0
     assert run_s3._prior_wall_seconds(directory) == 15.0
     assert run_s3._next_invocation(directory) == 4
+
+
+def test_reviewed_continuation_uses_stale_interruption_without_latest_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "study"
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    checkpoint_path = trajectory / "checkpoint.json"
+    checkpoint_path.write_text("{}")
+    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    (directory / "run-context-000.json").write_text(json.dumps(context))
+    (directory / "active-invocation.json").write_text(
+        json.dumps(
+            {
+                "invocation": 0,
+                "supervisor_pid": 1001,
+                "worker_pid": 1002,
+                "started_epoch_seconds": 10.0,
+                "completed_before": 0,
+                "checkpoint_sha256_before": None,
+            }
+        )
+    )
+    monkeypatch.setattr(run_s3, "_pid_is_alive", lambda _pid: False)
+    monkeypatch.setattr(run_s3.time, "time", lambda: 25.0)
+    monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (5, "checkpoint-5")
+    )
+    monkeypatch.setattr(run_s3, "_safe_execution_context", lambda: context)
+    monkeypatch.setattr(run_s3, "execution_context", lambda: context)
+    monkeypatch.setattr(
+        run_s3,
+        "supervise_invocation",
+        lambda _path: {
+            "classification": "study_complete",
+            "wall_time_seconds": 1.0,
+        },
+    )
+
+    run_s3.run_s3(directory, reviewed=True)
+
+    authorization = json.loads(
+        (directory / "reviewed-continuation-001.json").read_text()
+    )
+    assert authorization["prior_record_kind"] == "interrupted_invocation"
+    assert authorization["prior_invocation"] == 0
+    assert authorization["prior_record_path"] == "interrupted-invocation-000.json"
+    assert authorization["prior_classification"] == "reviewed_interruption"
+    assert authorization["completed_intervals"] == 5
+
+
+def test_reviewed_continuation_rejects_mismatched_existing_authorization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "study"
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    (trajectory / "checkpoint.json").write_text("{}")
+    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    retained = {
+        "invocation": 0,
+        "classification": "rss_limit",
+        "completed_after": 5,
+        "checkpoint_sha256_after": "checkpoint-5",
+        "start_context": context,
+    }
+    (directory / "latest-supervision.json").write_text(json.dumps(retained))
+    (directory / "supervision-000.json").write_text(json.dumps(retained))
+    (directory / "run-context-000.json").write_text(json.dumps(context))
+    (directory / "reviewed-continuation-001.json").write_text(
+        json.dumps({"next_invocation": 1, "checkpoint_sha256": "wrong"})
+    )
+    monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (5, "checkpoint-5")
+    )
+    monkeypatch.setattr(run_s3, "execution_context", lambda: context)
+    called = False
+
+    def supervise(_path: Path) -> Mapping[str, object]:
+        nonlocal called
+        called = True
+        return {"classification": "study_complete", "wall_time_seconds": 1.0}
+
+    monkeypatch.setattr(run_s3, "supervise_invocation", supervise)
+
+    with pytest.raises(ValueError, match="authorization mismatch"):
+        run_s3.run_s3(directory, reviewed=True)
+    assert called is False
 
 
 def test_resumed_worker_rejects_changed_outer_before_solving(
