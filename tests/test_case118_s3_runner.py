@@ -137,7 +137,11 @@ def test_reviewed_continuation_requires_abnormal_retained_outcome(
     trajectory = directory / "trajectory"
     trajectory.mkdir(parents=True)
     (trajectory / "checkpoint.json").write_text("{}")
-    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    context = {
+        "git_commit": "commit",
+        "git_clean": True,
+        "source_fingerprint": "frozen",
+    }
     monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
     monkeypatch.setattr(run_s3, "execution_context", lambda: context)
     monkeypatch.setattr(
@@ -361,6 +365,61 @@ def test_reviewed_continuation_retries_archived_interruption_and_authorization(
 
     assert result["complete"] is True
     assert calls == 2
+
+
+def test_reviewed_continuation_reuses_context_when_popen_never_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "study"
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    (trajectory / "checkpoint.json").write_text("{}")
+    context = {
+        "git_commit": "commit",
+        "git_clean": True,
+        "source_fingerprint": "frozen",
+    }
+    retained = {
+        "invocation": 0,
+        "classification": "rss_limit",
+        "completed_after": 16,
+        "checkpoint_sha256_after": "checkpoint-16",
+        "start_context": context,
+        "wall_time_seconds": 1.0,
+    }
+    (directory / "latest-supervision.json").write_text(json.dumps(retained))
+    (directory / "supervision-000.json").write_text(json.dumps(retained))
+    (directory / "run-context-000.json").write_text(json.dumps(context))
+    monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (16, "checkpoint-16")
+    )
+    monkeypatch.setattr(run_s3, "execution_context", lambda: context)
+    commands: list[list[str]] = []
+
+    def fail_popen(command: list[str], **_kwargs: object) -> None:
+        commands.append(command)
+        raise OSError("synthetic Popen failure")
+
+    monkeypatch.setattr(run_s3.subprocess, "Popen", fail_popen)
+
+    with pytest.raises(OSError, match="synthetic Popen failure"):
+        run_s3.run_s3(directory, reviewed=True)
+    context_path = directory / "run-context-001.json"
+    authorization_path = directory / "reviewed-continuation-001.json"
+    assert context_path.is_file()
+    assert authorization_path.is_file()
+    authorization_sha = run_s3.sha256_path(authorization_path)
+    assert run_s3._next_invocation(directory) == 1
+    assert not (directory / "active-invocation.json").exists()
+
+    with pytest.raises(OSError, match="synthetic Popen failure"):
+        run_s3.run_s3(directory, reviewed=True)
+
+    assert len(commands) == 2
+    assert all(command[command.index("--invocation") + 1] == "1" for command in commands)
+    assert run_s3.sha256_path(authorization_path) == authorization_sha
+    assert json.loads(context_path.read_text()) == context
 
 
 def test_reviewed_continuation_rejects_mismatched_existing_authorization(

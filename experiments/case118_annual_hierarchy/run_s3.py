@@ -389,10 +389,9 @@ def _prior_wall_seconds(directory: Path) -> float:
 
 
 def _next_invocation(directory: Path) -> int:
+    """Return the next lifecycle identity, ignoring merely prepared artifacts."""
     indices: list[int] = []
     for pattern in (
-        "run-context-*.json",
-        "worker-result-*.json",
         "supervision-*.json",
         "interrupted-invocation-*.json",
     ):
@@ -491,7 +490,20 @@ def supervise_invocation(directory: Path) -> Mapping[str, object]:
     context = execution_context()
     if context["git_clean"] is not True:
         raise ValueError("S3 execution requires a clean committed worktree")
-    atomic_immutable_json(directory / f"run-context-{invocation:03d}.json", context)
+    context_path = directory / f"run-context-{invocation:03d}.json"
+    if context_path.is_file():
+        prepared_context = _mapping(
+            json.loads(context_path.read_text()), "prepared S3 run context"
+        )
+        if prepared_context != context:
+            raise ValueError("prepared S3 invocation context mismatch")
+        if (
+            _worker_result_path(directory, invocation).exists()
+            or (directory / "active-invocation.json").exists()
+        ):
+            raise ValueError("prepared S3 invocation has ambiguous execution evidence")
+    else:
+        atomic_immutable_json(context_path, context)
     command = [
         sys.executable,
         "-m",
