@@ -350,7 +350,7 @@ No stage may silently advance after a failed gate.
 | S2 (complete: resource boundary + exploratory continuation) | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | The frozen 16 GiB invocation stopped cleanly at its resource boundary after 128 intervals; a labeled 24 GiB continuation resumed from that checkpoint and completed a fully accepted 168-interval trajectory |
 | Pre-S3 recycling comparison (complete) | 3 × 64 h | Compare uninterrupted, 32-interval, and 16-interval worker lifetimes | Completed 192/192 accepted intervals; exact causal trajectories; observed peak RSS 20,025.5, 19,501.7, and 17,926.3 MiB respectively |
 | S3 (complete) | 720 h | One-month frozen hierarchy and memory-retention study using selected `recycle_every_16` policy | Completed 720/720 accepted intervals with 44 planned restarts, three successful copied-target-free recoveries, no abnormal stop, and independently reconstructed numerical/resource evidence |
-| S4 | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within predeclared runtime and memory budgets, plus the outer equivalence gate below |
+| S4 (pre-execution implementation in progress) | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within the limits frozen in `S4_PROTOCOL.md`, plus the outer equivalence gate below |
 | S4b | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Sequential shard equivalence, fresh-process execution, deterministic merge/audit, and a resource-bounded parallel demonstration all pass before S5 |
 | S5 | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | All shards completed and merged into one boundary-continuous annual record, or an explicit partial-horizon scientific record |
 | S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
@@ -409,8 +409,8 @@ snapshot, converted case, horizon slice, explicit fleets, storage initial and
 global terminal settings, `OPFOptions`, and `LayerSolveConfig` as the public
 hierarchy.
 
-Before the annual outer solve is accepted, this seam must reproduce short
-public-controller outer plans for both rated and matched-unlimited networks:
+Before the annual outer solve is accepted, this seam must reproduce a
+characterized 24-hour public-controller outer plan for the rated network:
 
 - formulation and scalar variable/equality/inequality counts;
 - ordered storage and device identities;
@@ -421,6 +421,12 @@ public-controller outer plans for both rated and matched-unlimited networks:
 
 The annual record retains the same fields and hashes. A merely similar
 standalone lossy-DC build does not satisfy S4.
+
+`experiments/case118_annual_hierarchy/S4_PROTOCOL.md` is authoritative for the
+S4 resource limits, supervision behavior, artifact layout, and advancement
+decision. The matched effectively-unlimited network remains an S0/S1
+congestion counterfactual and conversion characterization; it is not a second
+authoritative annual S4 solve.
 
 ### Pre-S5 sharding and parallel-execution qualification
 
