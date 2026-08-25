@@ -130,10 +130,11 @@ def _supervision_records(directory: Path) -> tuple[Mapping[str, object], ...]:
             if record.get("context_matches") is not True:
                 raise ValueError("S3 supervision provenance mismatch")
         elif classification in ABNORMAL_CLASSIFICATIONS:
-            if index < len(records) - 1:
-                authorization_path = directory / f"reviewed-continuation-{index + 1:03d}.json"
-                if not authorization_path.is_file():
-                    raise ValueError("S3 abnormal outcome lacks reviewed continuation")
+            authorization_path = directory / f"reviewed-continuation-{index + 1:03d}.json"
+            continuation_exists = index < len(records) - 1
+            if continuation_exists and not authorization_path.is_file():
+                raise ValueError("S3 abnormal outcome lacks reviewed continuation")
+            if authorization_path.is_file():
                 authorization = cast(
                     Mapping[str, object], json.loads(authorization_path.read_text())
                 )
@@ -148,8 +149,11 @@ def _supervision_records(directory: Path) -> tuple[Mapping[str, object], ...]:
                     or authorization.get("checkpoint_sha256") != checkpoint_after
                     or authorization.get("execution_context")
                     != record.get("start_context")
-                    or records[index + 1].get("start_context")
-                    != authorization.get("execution_context")
+                    or (
+                        continuation_exists
+                        and records[index + 1].get("start_context")
+                        != authorization.get("execution_context")
+                    )
                     or not prior_path.is_file()
                     or prior_path.name
                     != (
@@ -164,6 +168,7 @@ def _supervision_records(directory: Path) -> tuple[Mapping[str, object], ...]:
                 record["reviewed_continuation"] = {
                     **authorization,
                     "sha256": sha256_path(authorization_path),
+                    "state": "continued" if continuation_exists else "pending",
                 }
                 consumed_authorizations.add(authorization_path)
         else:
@@ -345,6 +350,12 @@ def analyze_s3(
         "reviewed_continuation_count": sum(
             record.get("reviewed_continuation") is not None
             for record in supervisions
+        ),
+        "pending_reviewed_continuation_count": sum(
+            cast(Mapping[str, object], record["reviewed_continuation"]).get("state")
+            == "pending"
+            for record in supervisions
+            if record.get("reviewed_continuation") is not None
         ),
         "storage_device_ids": list(storage_ids),
         "final_soc_mwh": final_soc.tolist(),

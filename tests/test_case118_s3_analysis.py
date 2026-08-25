@@ -180,6 +180,32 @@ def test_supervision_registry_accepts_retained_partial_trajectory(
     )
 
 
+def test_terminal_review_authorization_is_retained_as_pending(
+    tmp_path: Path,
+) -> None:
+    records = [
+        _record(0, 0, 16),
+        _record(1, 16, 19, classification="worker_failure"),
+    ]
+    for invocation, record in enumerate(records):
+        (tmp_path / f"supervision-{invocation:03d}.json").write_text(
+            json.dumps(record)
+        )
+    _write_review(
+        tmp_path,
+        next_invocation=2,
+        prior_classification="worker_failure",
+        completed=19,
+    )
+
+    retained = s3_analysis._supervision_records(tmp_path)
+
+    authorization = retained[-1]["reviewed_continuation"]
+    assert isinstance(authorization, dict)
+    assert authorization["state"] == "pending"
+    assert s3_analysis._execution_disposition(retained, 19)[1] == "partial"
+
+
 def test_continuation_after_abnormal_stop_requires_matching_review(
     tmp_path: Path,
 ) -> None:

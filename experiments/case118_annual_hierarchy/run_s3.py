@@ -662,22 +662,53 @@ def supervise_invocation(directory: Path) -> Mapping[str, object]:
 
 def _validate_reviewed_continuation(directory: Path) -> ReviewedPriorOutcome:
     """Validate and identify the exact retained outcome under review."""
-    interrupted = _archive_stale_active_invocation(directory)
+    newly_interrupted = _archive_stale_active_invocation(directory)
     checkpoint_path = directory / "trajectory/checkpoint.json"
     if not checkpoint_path.is_file():
         raise ValueError("reviewed S3 continuation requires a verified checkpoint")
     verify_checkpoint(checkpoint_path)
     latest_path = directory / "latest-supervision.json"
-    if not latest_path.is_file() and interrupted is None:
-        raise ValueError("reviewed S3 continuation requires a supervision outcome")
     latest = (
         _mapping(json.loads(latest_path.read_text()), "latest S3 supervision")
         if latest_path.is_file()
         else None
     )
-    if interrupted is None and latest is not None:
-        if latest.get("classification") in {"planned_recycle", "study_complete"}:
-            raise ValueError("normal S3 outcomes do not require reviewed continuation")
+    interruption_paths = sorted(directory.glob("interrupted-invocation-*.json"))
+    archived_interruption = (
+        _mapping(
+            json.loads(interruption_paths[-1].read_text()),
+            "archived interrupted S3 invocation",
+        )
+        if interruption_paths
+        else None
+    )
+    interrupted = newly_interrupted or archived_interruption
+    candidates: tuple[tuple[str, Mapping[str, object] | None], ...] = (
+        ("supervision", latest),
+        ("interrupted_invocation", interrupted),
+    )
+    available: list[tuple[str, Mapping[str, object]]] = [
+        (kind, record)
+        for kind, record in candidates
+        if record is not None
+    ]
+    if not available:
+        raise ValueError("reviewed S3 continuation requires a retained outcome")
+    try:
+        def invocation_key(item: tuple[str, Mapping[str, object]]) -> int:
+            value = item[1].get("invocation")
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError
+            return value
+
+        record_kind, retained = max(
+            available,
+            key=invocation_key,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("reviewed S3 prior outcome is incomplete") from exc
+    if retained.get("classification") in {"planned_recycle", "study_complete"}:
+        raise ValueError("normal S3 outcomes do not require reviewed continuation")
     current = execution_context()
     invocation = _next_invocation(directory)
     prior_context_path = directory / f"run-context-{invocation - 1:03d}.json"
@@ -686,10 +717,6 @@ def _validate_reviewed_continuation(directory: Path) -> ReviewedPriorOutcome:
     prior_context = _mapping(json.loads(prior_context_path.read_text()), "S3 run context")
     if current.get("git_clean") is not True or current != prior_context:
         raise ValueError("reviewed S3 continuation provenance mismatch")
-    retained = interrupted if interrupted is not None else latest
-    if retained is None:
-        raise ValueError("reviewed S3 continuation lacks a retained outcome")
-    record_kind = "interrupted_invocation" if interrupted is not None else "supervision"
     try:
         prior_invocation = int(cast(int, retained["invocation"]))
         classification = str(retained["classification"])
@@ -697,7 +724,7 @@ def _validate_reviewed_continuation(directory: Path) -> ReviewedPriorOutcome:
         raise ValueError("reviewed S3 prior outcome is incomplete") from exc
     retained_path = (
         directory / f"interrupted-invocation-{prior_invocation:03d}.json"
-        if interrupted is not None
+        if record_kind == "interrupted_invocation"
         else _supervision_path(directory, prior_invocation)
     )
     if not retained_path.is_file():

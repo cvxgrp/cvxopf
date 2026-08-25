@@ -161,7 +161,13 @@ def test_reviewed_continuation_requires_abnormal_retained_outcome(
     assert prior.completed_intervals == 35
 
     (directory / "latest-supervision.json").write_text(
-        json.dumps({"classification": "planned_recycle", "start_context": context})
+        json.dumps(
+            {
+                "invocation": 0,
+                "classification": "planned_recycle",
+                "start_context": context,
+            }
+        )
     )
     with pytest.raises(ValueError, match="normal S3 outcomes"):
         run_s3._validate_reviewed_continuation(directory)
@@ -303,6 +309,58 @@ def test_reviewed_continuation_uses_stale_interruption_without_latest_record(
     assert authorization["prior_record_path"] == "interrupted-invocation-000.json"
     assert authorization["prior_classification"] == "reviewed_interruption"
     assert authorization["completed_intervals"] == 5
+
+
+def test_reviewed_continuation_retries_archived_interruption_and_authorization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "study"
+    trajectory = directory / "trajectory"
+    trajectory.mkdir(parents=True)
+    (trajectory / "checkpoint.json").write_text("{}")
+    context = {"git_clean": True, "source_fingerprint": "frozen"}
+    (directory / "run-context-000.json").write_text(json.dumps(context))
+    (directory / "active-invocation.json").write_text(
+        json.dumps(
+            {
+                "invocation": 0,
+                "supervisor_pid": 1001,
+                "worker_pid": 1002,
+                "started_epoch_seconds": 10.0,
+                "completed_before": 0,
+                "checkpoint_sha256_before": None,
+            }
+        )
+    )
+    monkeypatch.setattr(run_s3, "_pid_is_alive", lambda _pid: False)
+    monkeypatch.setattr(run_s3.time, "time", lambda: 25.0)
+    monkeypatch.setattr(run_s3, "verify_checkpoint", lambda _path: {})
+    monkeypatch.setattr(
+        run_s3, "_checkpoint_candidate", lambda _path: (5, "checkpoint-5")
+    )
+    monkeypatch.setattr(run_s3, "_safe_execution_context", lambda: context)
+    monkeypatch.setattr(run_s3, "execution_context", lambda: context)
+    calls = 0
+
+    def supervise(_path: Path) -> Mapping[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("synthetic exit after authorization")
+        return {"classification": "study_complete", "wall_time_seconds": 1.0}
+
+    monkeypatch.setattr(run_s3, "supervise_invocation", supervise)
+
+    with pytest.raises(RuntimeError, match="synthetic exit"):
+        run_s3.run_s3(directory, reviewed=True)
+    assert not (directory / "active-invocation.json").exists()
+    assert not (directory / "latest-supervision.json").exists()
+    assert (directory / "reviewed-continuation-001.json").is_file()
+
+    result = run_s3.run_s3(directory, reviewed=True)
+
+    assert result["complete"] is True
+    assert calls == 2
 
 
 def test_reviewed_continuation_rejects_mismatched_existing_authorization(
