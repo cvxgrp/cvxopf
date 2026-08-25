@@ -40,6 +40,14 @@ public hierarchical controller's retained outer plan on:
 - residual audit and terminal obligation; and
 - model, policy, solver, and input fingerprints.
 
+The retained equivalence record contains canonical result, boundary, and
+structure digests for both sides; complete result schemas; objectives;
+storage/boundary identities; both residual mappings; and the common input,
+policy, and solve-configuration fingerprints. The public M17 outer audit omits
+the streaming probe's inactive `branch_mw_abs` diagnostic. Equivalence may
+project a zero public value only after asserting the public key is absent and
+independently requiring the streaming value to be zero.
+
 The public comparison may stop before AC construction. A standalone similar
 lossy-DC model is not equivalent evidence.
 
@@ -65,9 +73,16 @@ wall time are reported separately where the existing interfaces expose them.
 
 Crossing a resource limit terminates the worker and produces an explicit
 `rss_limit`, `worker_wall_limit`, or `total_wall_limit` supervision outcome.
-Solver exceptions, certified infeasibility, unusable primals, residual
-rejection, artifact failure, and provenance mismatch remain distinct. No
-failure is reclassified as mathematical infeasibility.
+Worker-launch or construction failures, solver exceptions, certified
+infeasibility, unusable primals, residual rejection, artifact failure, and
+provenance mismatch remain distinct. No failure is reclassified as
+mathematical infeasibility.
+
+If multiple limits are observed in one poll, all are retained and the primary
+classification uses the frozen priority RSS, worker wall, then total wall. An
+accepted resource gate requires at least one successful external RSS sample
+and a finite positive peak; missing RSS evidence is
+`resource_measurement_failure`, not a zero-memory observation.
 
 There is no scientifically valid mid-solve checkpoint. An abnormal outcome
 stops automatic execution and retains all reached evidence for review. Any
@@ -96,7 +111,9 @@ replacement. The active marker is removed only after durable supervision.
 After execution, independent analysis reloads and semantically validates the
 outer archive, reconstructs the complete residual audit and terminal boundary,
 checks every artifact/provenance hash, and promotes compact `S4_RESULTS.json`
-immutably. Raw outputs remain ignored.
+immutably. Promotion retains a separate clean Git commit and source fingerprint
+for the analysis implementation, distinct from execution provenance. Raw
+outputs remain ignored.
 
 ## Advancement gate
 

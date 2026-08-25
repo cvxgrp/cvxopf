@@ -41,9 +41,7 @@ def test_execution_snapshot_isolates_mutable_inputs():
 
 def test_public_window_builder_preserves_global_slice_and_delta():
     fixture = load_p0_fixture(6)
-    build = build_window(
-        fixture.inputs, "ac", 3, 6, fixture.inputs.storage
-    )
+    build = build_window(fixture.inputs, "ac", 3, 6, fixture.inputs.storage)
 
     assert build.data["T"] == 3
     assert build.formulation == "ac"
@@ -54,10 +52,18 @@ def test_public_window_builder_preserves_global_slice_and_delta():
 
 @pytest.mark.parametrize(
     ("changes", "match"),
-    [({"ac_window_steps": 2}, "three-hour"),
-     ({"outer_policy": "replan_every_step"}, "frozen outer"),
-     ({"inner_terminal_policy": "quadratic_soft", "quadratic_soft_weight": 1.0}, "hard_equality"),
-     ({"initialization_policy": "flat_only", "recovery": None}, "shifted_with_recovery")],
+    [
+        ({"ac_window_steps": 2}, "three-hour"),
+        ({"outer_policy": "replan_every_step"}, "frozen outer"),
+        (
+            {"inner_terminal_policy": "quadratic_soft", "quadratic_soft_weight": 1.0},
+            "hard_equality",
+        ),
+        (
+            {"initialization_policy": "flat_only", "recovery": None},
+            "shifted_with_recovery",
+        ),
+    ],
 )
 def test_streaming_policy_rejects_unfrozen_choices(changes, match):
     policy = replace(load_p0_fixture(6).policy, **changes)
@@ -121,12 +127,30 @@ def test_frozen_outer_plan_is_accepted_and_indexed_by_global_boundary():
     assert outer.target_at(6)["p0_storage_bus_7"] == pytest.approx(500.0)
 
 
+def test_frozen_outer_phase_observer_wraps_real_build_and_solve():
+    fixture = load_p0_fixture(6)
+    phases: list[str] = []
+
+    outer = solve_frozen_outer(
+        fixture.inputs,
+        fixture.policy,
+        fixture.solve_config,
+        phase_observer=phases.append,
+    )
+
+    assert outer.accepted_primal
+    assert phases == [
+        "before_construction",
+        "after_construction",
+        "before_solve",
+        "after_solve",
+    ]
+
+
 def test_causal_start_transformations_are_complete_and_deterministic():
     fixture = load_p0_fixture(6)
     first = build_window(fixture.inputs, "ac", 0, 3, fixture.inputs.storage)
-    destination = build_window(
-        fixture.inputs, "ac", 1, 4, fixture.inputs.storage
-    )
+    destination = build_window(fixture.inputs, "ac", 1, 4, fixture.inputs.storage)
     flat = complete_flat_start(first)
     raw, shifted = shifted_start(
         flat,
@@ -185,7 +209,12 @@ def test_nominal_window_captures_complete_x0_and_advances_exactly_once(
         "ac-000-08-perturbed_causal",
     ]
     assert [attempt.scale for attempt in window.attempts[3:]] == [
-        1e-4, 1e-3, 1e-2, 1e-4, 1e-3, 1e-2
+        1e-4,
+        1e-3,
+        1e-2,
+        1e-4,
+        1e-3,
+        1e-2,
     ]
     assert [attempt.seed for attempt in window.attempts[3:]] == [
         17_000_011,
@@ -228,9 +257,7 @@ def test_nominal_window_captures_complete_x0_and_advances_exactly_once(
     result = window.attempts[0].result
     assert result is not None
     expected = float(np.asarray(result["soc"], dtype=float).reshape(3, 1)[0, 0])
-    assert window.post_step_soc_mwh == {
-        "p0_storage_bus_7": pytest.approx(expected)
-    }
+    assert window.post_step_soc_mwh == {"p0_storage_bus_7": pytest.approx(expected)}
 
 
 def test_copied_target_free_recovery_selects_first_controller(
@@ -376,9 +403,7 @@ def test_later_window_rejects_discontinuous_realized_state(nominal_window):
     fixture, snapshot, outer, first = nominal_window
     assert first.controlling_attempt is not None
     assert first.post_step_soc_mwh is not None
-    discontinuous = {
-        key: value + 1.0 for key, value in first.post_step_soc_mwh.items()
-    }
+    discontinuous = {key: value + 1.0 for key, value in first.post_step_soc_mwh.items()}
 
     with pytest.raises(ValueError, match="physical state handoff"):
         execute_streaming_window(
@@ -467,9 +492,7 @@ def test_window_rejects_outer_plan_from_another_horizon(nominal_window):
 
 
 @pytest.mark.parametrize("mutation", ["profile", "network"])
-def test_window_rejects_outer_plan_after_snapshot_drift(
-    nominal_window, mutation
-):
+def test_window_rejects_outer_plan_after_snapshot_drift(nominal_window, mutation):
     fixture, _snapshot, outer, _first = nominal_window
     changed = snapshot_inputs(fixture.inputs)
     if mutation == "profile":
@@ -495,9 +518,7 @@ def test_window_rejects_outer_plan_after_snapshot_drift(
 
 
 @pytest.mark.parametrize("field", ["policy_sha256", "solve_config_sha256"])
-def test_window_rejects_corrupted_outer_configuration_hash(
-    nominal_window, field
-):
+def test_window_rejects_corrupted_outer_configuration_hash(nominal_window, field):
     fixture, snapshot, outer, _first = nominal_window
     changed_outer = replace(outer, **{field: "0" * 64})
 

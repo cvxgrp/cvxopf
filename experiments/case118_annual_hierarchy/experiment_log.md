@@ -286,3 +286,22 @@ supported adopting a typed 300-second primary budget followed by unchanged
 causal recovery for later Case118 AC execution. This bounded tail-latency rule
 does not apply to S4 and requires its focused implementation gate before
 S4b/S5.
+
+## 2026-08-25 — S4 outer-only pre-execution implementation completed
+
+S4 now has a frozen annual fixture, exact resource and artifact protocol, and
+a single fresh-worker supervisor that cannot construct AC work. The worker
+records the real outer construction, solve, archive, and released-build phases;
+resource, provenance, solver, construction, and artifact outcomes remain
+distinct. The independent analyzer recomputes the outer audit from archived
+primal arrays, reconstructs scalar structural counts from the retained model
+signature, verifies terminal signposts and the no-AC boundary, and permits only
+immutable promotion of a complete accepted result.
+
+The required 24-hour rated-network equivalence gate executes before annual
+work. It intercepts the public controller after outer acceptance and before AC
+construction, then compares the complete streaming result and audit. The
+characterized gate matches exactly, including 6,000 scalar variables, 2,932
+scalar equalities, and 7,584 explicit scalar inequalities. The annual solve has
+not been launched; implementation review and a clean committed execution SHA
+remain required.

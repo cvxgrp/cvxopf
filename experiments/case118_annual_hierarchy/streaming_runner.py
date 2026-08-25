@@ -51,6 +51,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 
 _STEP_NAME = re.compile(r"^(?P<base>.+)_(?P<step>\d+)$")
 PhaseObserver = Callable[[str, int, int], None]
+OuterPhaseObserver = Callable[[str], None]
 
 
 def _signpost_sha256(
@@ -679,14 +680,22 @@ def solve_frozen_outer(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     solve_config: HierarchicalSolveConfig,
+    *,
+    phase_observer: OuterPhaseObserver | None = None,
 ) -> StreamingOuterPlan:
     """Build and solve the one retained full-horizon lossy-DC plan."""
     validate_streaming_policy(policy)
     validate_solve_config(solve_config)
     storage = tuple(replace(unit) for unit in inputs.storage)
+    if phase_observer is not None:
+        phase_observer("before_construction")
     build = build_window(inputs, "lossy_dc", 0, inputs.horizon_steps, storage)
+    if phase_observer is not None:
+        phase_observer("after_construction")
     exception = None
     started = perf_counter()
+    if phase_observer is not None:
+        phase_observer("before_solve")
     try:
         build.solve(
             solver=solve_config.outer.solver,
@@ -696,6 +705,8 @@ def solve_frozen_outer(
     except Exception as exc:
         exception = f"{type(exc).__name__}: {exc}"
     elapsed = perf_counter() - started
+    if phase_observer is not None:
+        phase_observer("after_solve")
     result = extract_results(build)
     audit = audit_probe(
         inputs.case,
