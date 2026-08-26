@@ -40,19 +40,87 @@ def finish(fig: plt.Figure, name: str) -> None:
     plt.close(fig)
 
 
+def representative_scenarios() -> None:
+    inputs = pd.read_csv(BATTERY / "scenario_inputs.csv")
+    trajectories = pd.read_csv(BATTERY / "policy_trajectories.csv")
+    regimes = ("low", "moderate", "high")
+    regime_labels = {
+        "low": "Low net energy",
+        "moderate": "Medium net energy",
+        "high": "High net energy",
+    }
+    fig, axes = plt.subplots(3, 2, figsize=(10.8, 6.2), sharex=True)
+    for row, scenario in enumerate(regimes):
+        scenario_inputs = inputs[inputs["scenario"] == scenario].sort_values("step")
+        hard = trajectories[
+            (trajectories["scenario"] == scenario)
+            & (trajectories["policy"] == "equality")
+        ].sort_values("step")
+        if len(scenario_inputs) != 96 or len(hard) != 96:
+            raise ValueError(f"Expected 96 inputs and hard-target states for {scenario}")
+
+        power_ax, soc_ax = axes[row]
+        power_ax.step(
+            scenario_inputs["step"],
+            scenario_inputs["load_mw"],
+            where="post",
+            color=BLUE,
+            linewidth=1.2,
+            label="Load",
+        )
+        power_ax.step(
+            scenario_inputs["step"],
+            scenario_inputs["renewable_available_mw"],
+            where="post",
+            color=ORANGE,
+            linewidth=1.2,
+            label="Renewable availability",
+        )
+        soc_steps = np.arange(97)
+        soc = np.r_[hard["initial_soc_mwh"].iloc[0], hard["soc_mwh"].to_numpy()]
+        soc_ax.plot(soc_steps, soc, color=BLUE, linewidth=1.5, label="Optimized SoC")
+        soc_ax.axhline(
+            500, color=ORANGE, linestyle="--", linewidth=1.0, label="500 MWh target"
+        )
+        power_ax.set_ylabel(f"{regime_labels[scenario]}\nPower (MW)")
+        soc_ax.set_ylabel("SoC (MWh)")
+        power_ax.grid(alpha=0.2)
+        soc_ax.grid(alpha=0.2)
+        soc_ax.set_ylim(-30, 1030)
+
+    axes[0, 0].set_title("Exogenous power trajectories", fontweight="bold")
+    axes[0, 1].set_title("Hard-target battery realization", fontweight="bold")
+    axes[-1, 0].set_xlabel("Hour")
+    axes[-1, 1].set_xlabel("Hour")
+    axes[0, 0].legend(frameon=False, ncols=2, fontsize=8, loc="upper right")
+    axes[0, 1].legend(frameon=False, ncols=2, fontsize=8, loc="upper right")
+    finish(fig, "representative_scenarios.pdf")
+
+
 def terminal_value() -> None:
     data = pd.read_csv(BATTERY / "terminal_value_sweep.csv")
     fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.0))
+    regime_labels = {
+        "low": "Low: renewable surplus",
+        "moderate": "Moderate: energy-balanced, peak deficit",
+        "high": "High: sustained energy deficit",
+    }
     for scenario, group in data.groupby("scenario", sort=False):
         group = group[group["status"].isin(("optimal", "optimal_inaccurate"))]
         operating = group["objective"] - group["objective"].min()
-        axes[0].plot(group["target_mwh"], operating, marker="o", ms=3, label=scenario)
+        axes[0].plot(
+            group["target_mwh"],
+            operating,
+            marker="o",
+            ms=3,
+            label=regime_labels[scenario],
+        )
     axes[0].set(
         xlabel="Required terminal SoC (MWh)", ylabel="Incremental operating cost"
     )
     axes[0].set_title("Terminal energy has a convex operating value", fontweight="bold")
     axes[0].grid(alpha=0.25)
-    axes[0].legend(frameon=False)
+    axes[0].legend(frameon=False, fontsize=8)
 
     soft = pd.read_csv(BATTERY / "soft_weight_sweep.csv")
     high = soft[soft["scenario"] == "high"]
@@ -304,6 +372,7 @@ def main() -> None:
     plt.rcParams.update(
         {"font.size": 10, "axes.spines.top": False, "axes.spines.right": False}
     )
+    representative_scenarios()
     terminal_value()
     locality_and_handoff()
     formulation_results()
