@@ -9,11 +9,13 @@ import pytest
 
 from experiments.m14_time_vectorization import run_m14a
 from experiments.m14_time_vectorization.m14a_analysis import (
+    _analysis_source_fingerprint,
     _promote,
     _validate_classification_record,
     analyze_run,
     analyze_runs,
 )
+from experiments.m14_time_vectorization.run_m14a import _source_fingerprint
 
 
 def _small_frozen_ladder(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,10 +152,10 @@ def test_complete_promotion_is_immutable(tmp_path: Path):
         "execution_complete": True,
         "accepted_for_m14b": True,
         "execution_commit": "commit",
-        "execution_source_fingerprint": "source",
+        "execution_source_fingerprint": "s" * 64,
         "analysis_context": {
             "git_commit": "commit",
-            "source_fingerprint": "source",
+            "source_fingerprint": "a" * 64,
             "worktree_clean": True,
         },
         "value": 1,
@@ -184,11 +186,20 @@ def test_consolidation_requires_both_frozen_ladders(
         analyze_runs([output])
 
 
-def _synthetic_run(ladder: str, *, platform: str = "platform") -> dict:
+def _synthetic_run(
+    ladder: str,
+    *,
+    platform: str = "platform",
+    accepted: bool = True,
+    execution_complete: bool = True,
+    dirty_worker_points: list[dict] | None = None,
+) -> dict:
     return {
         "frozen_ladder": ladder,
-        "execution_complete": True,
-        "accepted_as_ladder_record": True,
+        "execution_complete": execution_complete,
+        "execution_provenance_clean": accepted,
+        "accepted_as_ladder_record": execution_complete and accepted,
+        "dirty_worker_points": dirty_worker_points or [],
         "execution_context": {
             "git_commit": "commit",
             "source_fingerprint": "source",
@@ -216,7 +227,7 @@ def test_complete_consolidation_requires_matched_environment(
         "_git",
         lambda *args: "" if args == ("status", "--porcelain") else "commit",
     )
-    monkeypatch.setattr(analysis, "_analysis_source_fingerprint", lambda: "source")
+    monkeypatch.setattr(analysis, "_analysis_source_fingerprint", lambda: "a" * 64)
 
     result = analyze_runs([tmp_path / "case9", tmp_path / "case118"])
     assert result["execution_complete"] is True
@@ -247,6 +258,106 @@ def test_dirty_analysis_cannot_advance_or_promote(
     assert result["accepted_for_m14b"] is False
     with pytest.raises(ValueError, match="clean provenance"):
         _promote(tmp_path / "result.json", result)
+
+
+def test_reviewed_nonexecution_changes_qualify_dirty_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import experiments.m14_time_vectorization.m14a_analysis as analysis
+
+    dirty_point = {
+        "case": "case118",
+        "formulation": "singlenode_dc",
+        "horizon": 8760,
+        "git_commit": "commit",
+        "source_fingerprint": "source",
+    }
+    runs = {
+        "case9": _synthetic_run("case9"),
+        "case118": _synthetic_run(
+            "case118", accepted=False, dirty_worker_points=[dirty_point]
+        ),
+    }
+    monkeypatch.setattr(analysis, "analyze_run", lambda path: runs[path.name])
+    monkeypatch.setattr(
+        analysis,
+        "_git",
+        lambda *args: "" if args == ("status", "--porcelain") else "analysis",
+    )
+    monkeypatch.setattr(analysis, "_analysis_source_fingerprint", lambda: "a" * 64)
+    exception = {
+        "schema_version": 1,
+        "scope": "non_execution_worktree_changes",
+        "reason": "presentation preparation",
+        "paths": ["presentations/update.tex"],
+        "execution_commit": "commit",
+        "execution_source_fingerprint": "source",
+    }
+
+    result = analyze_runs(
+        [tmp_path / "case9", tmp_path / "case118"],
+        reviewed_worktree_exception=exception,
+    )
+
+    assert result["accepted_for_m14b"] is True
+    assert result["reviewed_worktree_exception"]["dirty_worker_points"] == [dirty_point]
+
+    exception["paths"] = ["experiments/m14_time_vectorization/run_m14a.py"]
+    with pytest.raises(ValueError, match="execution-source path"):
+        analyze_runs(
+            [tmp_path / "case9", tmp_path / "case118"],
+            reviewed_worktree_exception=exception,
+        )
+
+
+def test_reviewed_dirty_worker_exception_does_not_qualify_incomplete_ladder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import experiments.m14_time_vectorization.m14a_analysis as analysis
+
+    dirty_point = {
+        "case": "case118",
+        "formulation": "singlenode_dc",
+        "horizon": 8760,
+        "git_commit": "commit",
+        "source_fingerprint": "source",
+    }
+    runs = {
+        "case9": _synthetic_run("case9"),
+        "case118": _synthetic_run(
+            "case118",
+            accepted=False,
+            execution_complete=False,
+            dirty_worker_points=[dirty_point],
+        ),
+    }
+    monkeypatch.setattr(analysis, "analyze_run", lambda path: runs[path.name])
+    monkeypatch.setattr(
+        analysis,
+        "_git",
+        lambda *args: "" if args == ("status", "--porcelain") else "analysis",
+    )
+    monkeypatch.setattr(analysis, "_analysis_source_fingerprint", lambda: "a" * 64)
+
+    result = analyze_runs(
+        [tmp_path / "case9", tmp_path / "case118"],
+        reviewed_worktree_exception={
+            "schema_version": 1,
+            "scope": "non_execution_worktree_changes",
+            "reason": "presentation preparation",
+            "paths": ["presentations/update.tex"],
+            "execution_commit": "commit",
+            "execution_source_fingerprint": "source",
+        },
+    )
+
+    assert result["execution_complete"] is False
+    assert result["accepted_for_m14b"] is False
+    assert result["reviewed_worktree_exception"] is not None
+
+
+def test_analysis_fingerprint_uses_execution_source_order():
+    assert _analysis_source_fingerprint() == _source_fingerprint()
 
 
 @pytest.mark.parametrize(

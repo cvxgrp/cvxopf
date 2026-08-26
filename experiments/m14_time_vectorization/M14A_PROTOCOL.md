@@ -63,11 +63,16 @@ form one comparable baseline. The compact result retains readable source and
 canonical structures, objectives and component-cost scalars, artifact sizes,
 and their corresponding digests; ignored raw artifacts are not required to
 interpret the baseline.
-Authoritative advancement and promotion additionally require clean parent and
-worker provenance plus a clean analyzer from that exact execution commit and
-source fingerprint. A numerically complete dirty-worktree run remains evidence
-but is not the frozen M14a record. Worker return codes, classifications, and
-artifact availability must also match the frozen supervisor outcome matrix.
+Authoritative advancement and promotion normally require clean parent and
+worker provenance. A reviewed exception may qualify a dirty worker only when
+the parent launched clean, the execution commit and M14 source fingerprint
+remain unchanged, and an explicit retained record names the non-execution
+paths and scientific reason. The dirty worker remains visible in the compact
+result. Post-execution analysis may use a later clean committed analyzer when
+its own commit and source fingerprint are retained separately; correcting an
+analyzer never rewrites execution provenance. Worker return codes,
+classifications, and artifact availability must also match the frozen
+supervisor outcome matrix.
 An unsuccessful point and the intentionally omitted later points remain valid
 partial characterization evidence but cannot be labeled a complete M14a
 baseline or authorize M14b advancement.
@@ -85,6 +90,8 @@ uv run python -m experiments.m14_time_vectorization.run_m14a \
 uv run python -m experiments.m14_time_vectorization.m14a_analysis \
   experiments/m14_time_vectorization/results/m14a-case9 \
   experiments/m14_time_vectorization/results/m14a-case118 \
+  --reviewed-worktree-exception \
+  experiments/m14_time_vectorization/M14A_EXECUTION_REVIEW.json \
   --promote experiments/m14_time_vectorization/M14A_RESULTS.json
 ```
 

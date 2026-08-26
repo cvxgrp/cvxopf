@@ -55,7 +55,9 @@ def _digest(value: object) -> str:
 
 def _analysis_source_fingerprint() -> str:
     digest = hashlib.sha256()
-    for path in sorted(ANALYSIS_SOURCES):
+    # Match run_m14a._source_fingerprint(): package sources first, followed by
+    # experiment sources.  Re-sorting the combined tuple changes the digest.
+    for path in ANALYSIS_SOURCES:
         digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(b"\0")
         digest.update(path.read_bytes())
@@ -235,6 +237,7 @@ def analyze_run(directory: Path) -> dict[str, Any]:
     summaries: list[dict[str, Any]] = []
     complete = True
     provenance_clean = context.get("worktree_clean") is True
+    dirty_worker_points: list[dict[str, Any]] = []
     for raw_record in records:
         if not isinstance(raw_record, dict):
             raise ValueError("manifest record must be a mapping")
@@ -303,6 +306,16 @@ def analyze_run(directory: Path) -> dict[str, Any]:
         provenance_clean = (
             provenance_clean and payload_context.get("worktree_clean") is True
         )
+        if payload_context.get("worktree_clean") is not True:
+            dirty_worker_points.append(
+                {
+                    "case": case_name,
+                    "formulation": formulation,
+                    "horizon": horizon,
+                    "git_commit": payload_context.get("git_commit"),
+                    "source_fingerprint": payload_context.get("source_fingerprint"),
+                }
+            )
         if (
             payload.get("case"),
             payload.get("formulation"),
@@ -396,7 +409,9 @@ def analyze_run(directory: Path) -> dict[str, Any]:
         "stage": "M14a_legacy_baseline",
         "frozen_ladder": ladder,
         "execution_complete": complete,
+        "execution_provenance_clean": provenance_clean,
         "accepted_as_ladder_record": accepted_as_ladder_record,
+        "dirty_worker_points": dirty_worker_points,
         "audit_tolerance": AUDIT_TOLERANCE,
         "execution_context": context,
         "analysis_context": {
@@ -412,7 +427,68 @@ def analyze_run(directory: Path) -> dict[str, Any]:
     }
 
 
-def analyze_runs(directories: list[Path]) -> dict[str, Any]:
+def _validate_reviewed_worktree_exception(
+    exception: object,
+    *,
+    contexts: list[dict[str, Any]],
+    dirty_worker_points: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(exception, dict):
+        raise ValueError("reviewed worktree exception must be a mapping")
+    if exception.get("schema_version") != 1:
+        raise ValueError("unsupported reviewed worktree exception schema")
+    if exception.get("scope") != "non_execution_worktree_changes":
+        raise ValueError("reviewed worktree exception scope is invalid")
+    reason = exception.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("reviewed worktree exception reason is missing")
+    paths = exception.get("paths")
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or not all(isinstance(path, str) and path for path in paths)
+        or len(set(paths)) != len(paths)
+    ):
+        raise ValueError("reviewed worktree exception paths are invalid")
+    normalized_paths: list[str] = []
+    for raw_path in paths:
+        candidate = Path(raw_path)
+        if (
+            candidate.is_absolute()
+            or not candidate.parts
+            or candidate == Path(".")
+            or ".." in candidate.parts
+            or candidate != Path(*candidate.parts)
+        ):
+            raise ValueError("reviewed worktree exception path is not normalized")
+        normalized = candidate.as_posix()
+        if normalized.startswith("src/cvxopf/") or normalized.startswith(
+            "experiments/m14_time_vectorization/"
+        ):
+            raise ValueError("reviewed exception includes an execution-source path")
+        normalized_paths.append(normalized)
+    if not dirty_worker_points:
+        raise ValueError("reviewed exception has no dirty worker to explain")
+    if any(context.get("worktree_clean") is not True for context in contexts):
+        raise ValueError("reviewed exception requires clean parent launch contexts")
+    for name in ("execution_commit", "execution_source_fingerprint"):
+        context_name = (
+            "git_commit" if name == "execution_commit" else "source_fingerprint"
+        )
+        if exception.get(name) != contexts[0].get(context_name):
+            raise ValueError(f"reviewed worktree exception {name} mismatch")
+    return {
+        **exception,
+        "paths": sorted(normalized_paths),
+        "dirty_worker_points": dirty_worker_points,
+    }
+
+
+def analyze_runs(
+    directories: list[Path],
+    *,
+    reviewed_worktree_exception: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Combine the two frozen ladders into the M14a advancement record."""
     runs: dict[str, dict[str, Any]] = {}
     for directory in directories:
@@ -427,28 +503,43 @@ def analyze_runs(directories: list[Path]) -> dict[str, Any]:
     for name in ("git_commit", "source_fingerprint", *ENVIRONMENT_FIELDS):
         if any(context.get(name) != contexts[0].get(name) for context in contexts[1:]):
             raise ValueError(f"M14a ladder {name} values do not match")
+    dirty_worker_points = [
+        point for run in runs.values() for point in run["dirty_worker_points"]
+    ]
+    execution_complete = all(run["execution_complete"] for run in runs.values())
+    execution_provenance_accepted = all(
+        run["execution_provenance_clean"] for run in runs.values()
+    )
+    reviewed_exception = None
+    if reviewed_worktree_exception is not None:
+        reviewed_exception = _validate_reviewed_worktree_exception(
+            reviewed_worktree_exception,
+            contexts=contexts,
+            dirty_worker_points=dirty_worker_points,
+        )
+        execution_provenance_accepted = True
     analysis_context = {
         "git_commit": _git("rev-parse", "HEAD"),
         "worktree_clean": _git("status", "--porcelain") == "",
         "source_fingerprint": _analysis_source_fingerprint(),
     }
-    analysis_matches_execution = (
+    analysis_provenance_accepted = (
         analysis_context["worktree_clean"] is True
-        and analysis_context["git_commit"] == contexts[0].get("git_commit")
-        and analysis_context["source_fingerprint"]
-        == contexts[0].get("source_fingerprint")
+        and isinstance(analysis_context["git_commit"], str)
+        and bool(analysis_context["git_commit"])
+        and len(str(analysis_context["source_fingerprint"])) == 64
     )
     return {
         "schema_version": 1,
         "stage": "M14a_legacy_baseline",
-        "execution_complete": all(run["execution_complete"] for run in runs.values()),
-        "accepted_for_m14b": all(
-            run["accepted_as_ladder_record"] for run in runs.values()
-        )
-        and analysis_matches_execution,
+        "execution_complete": execution_complete,
+        "accepted_for_m14b": execution_complete
+        and execution_provenance_accepted
+        and analysis_provenance_accepted,
         "execution_commit": contexts[0].get("git_commit"),
         "execution_source_fingerprint": contexts[0].get("source_fingerprint"),
         "analysis_context": analysis_context,
+        "reviewed_worktree_exception": reviewed_exception,
         "ladders": runs,
     }
 
@@ -461,9 +552,10 @@ def _promote(path: Path, payload: dict[str, Any]) -> None:
     analysis_context = payload.get("analysis_context")
     if not isinstance(analysis_context, dict) or (
         analysis_context.get("worktree_clean") is not True
-        or analysis_context.get("git_commit") != payload.get("execution_commit")
-        or analysis_context.get("source_fingerprint")
-        != payload.get("execution_source_fingerprint")
+        or not isinstance(analysis_context.get("git_commit"), str)
+        or not analysis_context.get("git_commit")
+        or not isinstance(analysis_context.get("source_fingerprint"), str)
+        or len(analysis_context["source_fingerprint"]) != 64
     ):
         raise ValueError("analysis provenance does not match the execution source")
     data = (
@@ -481,8 +573,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_directories", type=Path, nargs="+")
     parser.add_argument("--promote", type=Path)
+    parser.add_argument("--reviewed-worktree-exception", type=Path)
     arguments = parser.parse_args()
-    result = analyze_runs(arguments.run_directories)
+    reviewed_exception = None
+    if arguments.reviewed_worktree_exception is not None:
+        reviewed_exception = cast(
+            dict[str, Any],
+            json.loads(arguments.reviewed_worktree_exception.read_text()),
+        )
+    result = analyze_runs(
+        arguments.run_directories,
+        reviewed_worktree_exception=reviewed_exception,
+    )
     if arguments.promote is not None:
         _promote(arguments.promote, result)
     print(json.dumps(result, sort_keys=True, indent=2, allow_nan=False))
