@@ -75,25 +75,32 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{A common modeling system now spans the research questions}
-  \small
-  \begin{center}
-  \begin{tikzpicture}[scale=0.82,transform shape,node distance=6mm and 8mm,
+\begin{frame}{Device physics are defined once and reused across fidelity levels}
+  \centering
+  \large A shared component model makes DC planning and AC realization parts of
+  \textbf{one mathematical system}.
+  \normalsize
+  \vspace{0.5em}
+
+  \begin{tikzpicture}[scale=0.84,transform shape,node distance=5mm and 8mm,
     box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum height=9mm,align=center},
+    form/.style={draw=mutedgreen,rounded corners,fill=mutedgreen!7,minimum width=28mm,minimum height=9mm,align=center},
     arr/.style={-{Latex[length=2mm]},thick,customblue}]
-    \node[box] (data) {network + profiles\\\scriptsize stable device identity};
-    \node[box,right=of data] (components) {component models\\\scriptsize generators, renewables, storage, loads, HVDC};
-    \node[box,right=of components] (assembly) {typed assembly\\\scriptsize variables, injections, constraints, costs};
-    \node[box,below=of assembly] (forms) {formulations\\\scriptsize AC, lossy DC, single-node DC};
-    \node[box,left=of forms] (solve) {solve + audit\\\scriptsize stable results and residual gates};
-    \node[box,left=of solve] (hier) {hierarchical control\\\scriptsize signposts, feedback, recovery};
+    \node[box] (data) {network + profiles\\\scriptsize identity-aligned inputs};
+    \node[box,right=of data] (components) {component-owned mathematics\\\scriptsize variables, injections, constraints, costs};
+    \node[box,right=of components] (assembly) {generic typed assembly\\\scriptsize common horizon and result contracts};
+    \node[form,below left=7mm and 23mm of assembly] (ac) {nonlinear AC};
+    \node[form,right=6mm of ac] (dc) {lossy DC};
+    \node[form,right=6mm of dc] (single) {single-node DC};
+    \node[box,below=8mm of dc] (hier) {hierarchical studies\\\scriptsize state constraints passed between fidelity levels};
     \draw[arr] (data)--(components); \draw[arr] (components)--(assembly);
-    \draw[arr] (assembly)--(forms); \draw[arr] (forms)--(solve); \draw[arr] (solve)--(hier);
+    \draw[arr] (assembly)--(ac); \draw[arr] (assembly)--(dc); \draw[arr] (assembly)--(single);
+    \draw[arr] (ac)--(hier); \draw[arr] (dc)--(hier); \draw[arr] (single)--(hier);
   \end{tikzpicture}
-  \end{center}
-  \begin{itemize}
-    \item Components contribute their own mathematics through a typed contract.
-    \item Formulation builders aggregate those contributions generically, so storage, load, and network semantics survive across layers.
+  \vspace{0.45em}
+  \begin{itemize}\tightitems
+    \item Formulation builders supply network equations; components retain the same identities, operating semantics, and costs in every formulation.
+    \item Demonstrated: lossy-DC SoC signposts coordinate AC realization. Proposed: a single-node layer could pass an aggregate storage-energy equality into a networked lossy-DC layer.
   \end{itemize}
 \end{frame}
 
@@ -164,31 +171,55 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The hierarchical controller closes the loop}
-  \centering
-  \begin{tikzpicture}[node distance=8mm and 12mm,
-    box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum width=31mm,minimum height=13mm,align=center},
-    arr/.style={-{Latex[length=2.5mm]},very thick,customblue}]
-    \node[box] (outer) {long-horizon DC\\\scriptsize feasible SoC signposts};
-    \node[box,right=of outer] (window) {short AC window\\\scriptsize hard/soft endpoint};
-    \node[box,right=of window] (action) {accept first action\\\scriptsize audited AC dispatch};
-    \node[box,below=of window] (state) {realized state feedback\\\scriptsize SoC + causal warm start};
-    \draw[arr] (outer)--(window); \draw[arr] (window)--(action);
-    \draw[arr] (action)|-(state); \draw[arr] (state)-|(outer);
-  \end{tikzpicture}
-  \vspace{1em}
+\begin{frame}{Two hierarchical paradigms share the same AC realization}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \centering
+    \textbf{Frozen outer plan}
+    \vspace{0.35em}
+
+    \begin{tikzpicture}[node distance=4.5mm,
+      box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum width=39mm,minimum height=9mm,align=center},
+      arr/.style={-{Latex[length=2.2mm]},thick,customblue}]
+      \node[box] (outerf) {solve long-horizon DC once};
+      \node[box,below=of outerf] (signf) {fixed SoC signpost sequence};
+      \node[box,below=of signf] (acf) {solve next AC window};
+      \node[box,below=of acf] (statef) {execute first action\\\scriptsize carry realized SoC forward};
+      \draw[arr] (outerf)--(signf); \draw[arr] (signf)--(acf);
+      \draw[arr] (acf)--(statef);
+      \draw[arr] (statef.east) -- ++(7mm,0) |- (acf.east);
+    \end{tikzpicture}
+
+    \column{0.48\textwidth}
+    \centering
+    \textbf{Closed-loop outer replanning}
+    \vspace{0.35em}
+
+    \begin{tikzpicture}[node distance=4.5mm,
+      box/.style={draw=mutedgreen,rounded corners,fill=mutedgreen!7,minimum width=39mm,minimum height=9mm,align=center},
+      arr/.style={-{Latex[length=2.2mm]},thick,mutedgreen}]
+      \node[box] (outerr) {solve remaining-horizon DC};
+      \node[box,below=of outerr] (signr) {select next SoC signpost};
+      \node[box,below=of signr] (acr) {solve next AC window};
+      \node[box,below=of acr] (stater) {execute first action\\\scriptsize observe realized SoC};
+      \draw[arr] (outerr)--(signr); \draw[arr] (signr)--(acr);
+      \draw[arr] (acr)--(stater);
+      \draw[arr] (stater.east) -- ++(7mm,0) |- (outerr.east);
+    \end{tikzpicture}
+  \end{columns}
+  \vspace{0.6em}
   \begin{itemize}\tightitems
-    \item The outer model maintains the energy plan; the inner model realizes the next action with AC voltage, reactive-power, loss, and thermal physics.
-    \item Realized state—not an imagined DC action—feeds the next decision.
+    \item Both use audited AC actions and realized-state handoff; replanning additionally updates the outer trajectory from realized state and new information.
+    \item The 96-hour study shows that continuous outer replanning is available, but not always necessary: a coherent frozen plan can remain AC-realizable.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The first 96-hour study exposed two different failure mechanisms}
+\begin{frame}{The 96-hour study validated hierarchical control}
   \centering
-  \includegraphics[width=0.92\textwidth,height=0.55\textheight,keepaspectratio]{m17_policy_outcomes.pdf}
+  \includegraphics[width=0.96\textwidth,height=0.58\textheight,keepaspectratio]{m17_soc_trajectories.pdf}
   \begin{itemize}\tightitems
-    \item \textbf{Numerical/local-solver sensitivity:} flat-start IPOPT reported infeasible at one hard-target window; six alternate starts solved the identical problem.
-    \item \textbf{Genuine loss of terminal viability:} soft deviations left 128.1 MW required charging in the last hour, but only 123.6 MW aggregate headroom.
+    \item \textbf{Hard targets:} both the frozen and repeatedly replanned controllers track the initial DC energy trajectory closely while realizing it through AC-feasible actions.
+    \item \textbf{Soft targets:} both controllers diverge as expected when the configured penalty favors operating flexibility over exact signpost agreement; a consistent soft policy would also soften and solve the final endpoint.
   \end{itemize}
 \end{frame}
 
