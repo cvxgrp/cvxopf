@@ -131,3 +131,19 @@ S4 can advance to S4b only when:
 
 An incomplete or resource-boundary result remains useful scaling evidence but
 does not authorize S4b.
+
+## Post-execution disposition — 2026-08-25
+
+S4 is paused before advancement. Three annual workers reached the same late
+construction/canonicalization phase and were killed without producing an outer
+primal or outer-plan artifact. The final attempt ran as a detached launchd job
+with unlimited per-job jetsam limits, ruling out the Codex command resource
+group. Its supervisor recorded no frozen resource trigger and sampled a peak
+RSS of 11,973 MiB; macOS separately recorded
+`memorystatus: killing largest compressed process ... 198602 MB`.
+
+This is retained as a construction/canonicalization resource boundary, not a
+solver failure or infeasibility result. The Case118 experiment is on hold until
+M14 delivers the vectorized lossy-DC horizon path and its annual resumption
+gate passes. The next authorized S4 execution must use a new clean commit and
+fresh output directory.

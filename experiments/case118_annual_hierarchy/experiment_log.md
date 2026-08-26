@@ -305,3 +305,35 @@ characterized gate matches exactly, including 6,000 scalar variables, 2,932
 scalar equalities, and 7,584 explicit scalar inequalities. The annual solve has
 not been launched; implementation review and a clean committed execution SHA
 remain required.
+
+## 2026-08-25 — S4 annual outer reached the time-axis memory boundary
+
+The supervised annual lossy-DC outer was attempted three times after the S4
+implementation checkpoint. Each real annual worker reached the same late
+construction/canonicalization phase and received `SIGKILL` after roughly 8.5
+minutes, before producing a worker result, accepted outer primal, or outer-plan
+artifact. Presentation edits affected one attempt's end-worktree label but did
+not change its commit or executable source fingerprint and did not cause the
+kill.
+
+The final worker ran from the clean isolated execution commit under a detached
+launchd job. Launchd reported unlimited active and inactive per-job memory
+limits, so this attempt ruled out the Codex command resource group. The S4
+supervisor sampled 11,973.3 MiB peak RSS and observed no configured RSS or
+wall-time trigger. The macOS unified log supplied the decisive classification:
+
+```text
+memorystatus: killing largest compressed process python3.11 [36544] 198602 MB
+```
+
+The workstation has 36 GiB of physical memory. S4 is therefore classified as a
+construction/canonicalization resource boundary caused by the current
+per-time-step CVXPY graph, not as solver-certified infeasibility and not as an
+accepted annual outer result. The failed attempts remain retained evidence but
+cannot be resumed.
+
+The `big-experiment` execution program is paused. M14 time-vectorized
+multistep formulations is now the blocking software milestone, with vectorized
+lossy DC as the first delivery. S4 will restart only after the M14 annual
+resumption gate passes, from a new clean execution commit and fresh output
+directory.

@@ -350,7 +350,7 @@ No stage may silently advance after a failed gate.
 | S2 (complete: resource boundary + exploratory continuation) | 168 h | One-week frozen hierarchy; establish AC throughput and recovery frequency | The frozen 16 GiB invocation stopped cleanly at its resource boundary after 128 intervals; a labeled 24 GiB continuation resumed from that checkpoint and completed a fully accepted 168-interval trajectory |
 | Pre-S3 recycling comparison (complete) | 3 × 64 h | Compare uninterrupted, 32-interval, and 16-interval worker lifetimes | Completed 192/192 accepted intervals; exact causal trajectories; observed peak RSS 20,025.5, 19,501.7, and 17,926.3 MiB respectively |
 | S3 (complete) | 720 h | One-month frozen hierarchy and memory-retention study using selected `recycle_every_16` policy | Completed 720/720 accepted intervals with 44 planned restarts, three successful copied-target-free recoveries, no abnormal stop, and independently reconstructed numerical/resource evidence |
-| S4 (pre-execution review complete; numerical execution ready) | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted outer primal within the limits frozen in `S4_PROTOCOL.md`, plus the outer equivalence gate below |
+| S4 (paused at confirmed construction/canonicalization memory boundary) | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Resume only after M14c time vectorization passes the annual resumption gate; then require an accepted outer primal within newly reviewed limits plus the outer equivalence gate below |
 | S4b | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Sequential shard equivalence, fresh-process execution, deterministic merge/audit, and a resource-bounded parallel demonstration all pass before S5 |
 | S5 | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | All shards completed and merged into one boundary-continuous annual record, or an explicit partial-horizon scientific record |
 | S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
@@ -359,6 +359,22 @@ No stage may silently advance after a failed gate.
 Direct AC is a characterization comparator at small horizons only. Failure to
 build or solve larger direct AC cases is itself a recorded scaling result; it
 is not a reason to weaken the hierarchical acceptance gate.
+
+### S4 time-vectorization hold
+
+S4 is paused after repeated annual workers reached the same
+construction/canonicalization phase and received `SIGKILL`. The detached fourth
+attempt ruled out the Codex command resource group: macOS reported that it was
+killing the largest compressed process at `198602 MB`, while the experiment
+supervisor had sampled 11,973 MiB peak RSS and had triggered none of its frozen
+resource limits. No worker produced an outer primal or outer-plan artifact.
+
+This is a time-axis construction boundary, not solver-certified infeasibility
+and not evidence against the hierarchical formulation. The `big-experiment`
+execution program is on hold until
+[`M14`](milestone-14-time-vectorization.md) delivers and verifies the vectorized
+lossy-DC horizon path. S4 then restarts from a new clean execution commit and a
+fresh output directory; none of the failed workers is resumable.
 
 S2 is complete as a resource-boundary stage, with the complete scientific
 trajectory obtained through an explicitly exploratory continuation. It is not

@@ -794,7 +794,11 @@ package environment.
 - [ ] SOCP network model
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Implement cvxpy parameters for problem data
-- [ ] Vectorize time constraints (currently built with iterative loop)
+- [ ] M14 time-vectorized multistep formulations: replace per-step CVXPY
+  construction with time-indexed matrix expressions and sparse temporal
+  operators while preserving formulation and result equivalence. This is the
+  current scaling priority and blocks resumption of the Case118 annual S4 outer
+  solve (see `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
