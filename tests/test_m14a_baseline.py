@@ -64,10 +64,10 @@ FULL_SCHEMA_DIGESTS = {
 }
 
 FULL_SOURCE_DIGESTS = {
-    "ac": "edeb22b142edc2342543e0c88aa2d7bf1040cc4549089bebb743fec3cd2ad42d",
-    "lossy_dc": ("de40a7a65ab125bbdd699f0daeccc6b2afcc88b9f08fdc9cda04b35d154cb661"),
+    "ac": "57854005fb90eebd02c5bb740c3d66d1e1f718bd8a98a755121696cbb54529c7",
+    "lossy_dc": ("f1eaeb6880471a7cee874d3eba50524d00c1895c5a309686237701847560d87e"),
     "singlenode_dc": (
-        "1da6f9ecc3880440b8d4f81b950d22b74807e5c6de9ff4275cd9eda67b2fdf1f"
+        "bcdc9b99da36a6e165875ddf11ba91bd3ab0a304ffb3e4edaaabcf0db842e846"
     ),
 }
 
@@ -138,6 +138,23 @@ def test_full_component_fixture_retains_schema_and_physical_audit(formulation):
         json.dumps(asdict(source), sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     assert source_digest == FULL_SOURCE_DIGESTS[formulation]
+    parameter_schema = {
+        record.name: record.shapes for record in source.parameter_schema
+    }
+    assert parameter_schema["load_inv_base_mva"] == ((), ())
+    assert parameter_schema["load_p_mw"] == ((2, 3),)
+    assert parameter_schema["load_p_eligible_mw"] == ((2, 3),)
+    assert parameter_schema["load_eligibility_mask"] == ((2, 3),)
+    assert parameter_schema["storage_inv_baseMVA"] == ((), ())
+    assert parameter_schema["nd_inv_baseMVA"] == ((), ())
+    if formulation == "ac":
+        assert parameter_schema["load_q_mvar"] == ((2, 3),)
+    else:
+        assert "load_q_mvar" not in parameter_schema
+    if formulation != "singlenode_dc":
+        assert parameter_schema["hvdc_inv_baseMVA"] == ((), ())
+    else:
+        assert "hvdc_inv_baseMVA" not in parameter_schema
     if formulation != "ac":
         canonical = characterize_convex_canonicalization(fixture.build)
         assert (

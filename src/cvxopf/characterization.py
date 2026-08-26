@@ -36,6 +36,7 @@ class SourceGraphStructure:
     variable_schema: tuple[NamedShape, ...]
     expression_schema: tuple[NamedShape, ...]
     data_keys: tuple[str, ...]
+    parameter_schema: tuple[NamedShape, ...]
     parameter_shapes: tuple[tuple[int, ...], ...]
     variable_object_count: int
     parameter_object_count: int
@@ -85,6 +86,15 @@ def _mapping_schema(mapping: Mapping[str, object]) -> tuple[NamedShape, ...]:
     return tuple(records)
 
 
+def _parameter_schema(parameters: list[cp.Parameter]) -> tuple[NamedShape, ...]:
+    grouped: dict[str, list[tuple[int, ...]]] = {}
+    for parameter in parameters:
+        grouped.setdefault(str(parameter.name()), []).append(_shape(parameter))
+    return tuple(
+        NamedShape(name, tuple(sorted(grouped[name]))) for name in sorted(grouped)
+    )
+
+
 def characterize_source_graph(build: OPFBuild) -> SourceGraphStructure:
     """Capture stable schemas and representation-specific source counts."""
     constraints = build.prob.constraints
@@ -95,6 +105,7 @@ def characterize_source_graph(build: OPFBuild) -> SourceGraphStructure:
         isinstance(constraint, cp.constraints.Inequality) for constraint in constraints
     )
     metrics = build.prob.size_metrics
+    parameters = build.prob.parameters()
     horizon_value = build.data.get("T")
     horizon = None if horizon_value is None else int(horizon_value)
     return SourceGraphStructure(
@@ -104,11 +115,10 @@ def characterize_source_graph(build: OPFBuild) -> SourceGraphStructure:
         variable_schema=_mapping_schema(build.variables),
         expression_schema=_mapping_schema(build.expressions),
         data_keys=tuple(sorted(str(key) for key in build.data)),
-        parameter_shapes=tuple(
-            sorted(_shape(parameter) for parameter in build.prob.parameters())
-        ),
+        parameter_schema=_parameter_schema(parameters),
+        parameter_shapes=tuple(sorted(_shape(parameter) for parameter in parameters)),
         variable_object_count=len(build.prob.variables()),
-        parameter_object_count=len(build.prob.parameters()),
+        parameter_object_count=len(parameters),
         constraint_object_count=len(constraints),
         equality_object_count=equality_count,
         inequality_object_count=inequality_count,

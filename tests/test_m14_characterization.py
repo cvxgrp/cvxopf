@@ -12,6 +12,7 @@ import pytest
 
 from cvxopf import build_opf, build_opf_multistep
 from cvxopf.characterization import (
+    NamedShape,
     characterize_convex_canonicalization,
     characterize_source_graph,
 )
@@ -19,10 +20,10 @@ from cvxopf.testcases import case9
 
 
 SOURCE_GRAPH_DIGESTS = {
-    "ac": "7f69a7694e27983d48fc071ee1cfd84b58fba371aa22bda27b6ebe9347767633",
-    "lossy_dc": "90f376331ca7912f068e96875a6296ddb868b7debab64e8d566d542627eaecd4",
+    "ac": "60df7473cf05f07b852406b6c98dea51af5491efd5d9970d2265b569f9862e07",
+    "lossy_dc": "0f35650806830f468c1719afec5f3051331bb7a44820cc70b2a9e8b8044ee497",
     "singlenode_dc": (
-        "e19b20b4ea86588fdf45210b3df3217691faf27cfd055d7ccc1673fcab09ad5f"
+        "7db1ad0a263a5b049221db2ffcccf1201d49e3677fcc2f86fee0d951e1894f27"
     ),
 }
 
@@ -75,6 +76,7 @@ def test_stepwise_source_graph_baseline(formulation, expected):
     assert "temporal_assembly" not in build.data
     assert record.temporal_assembly == "stepwise"
     assert record.horizon == 2
+    assert record.parameter_schema == (NamedShape("load_inv_base_mva", ((), ())),)
     assert (
         record.scalar_variables,
         record.scalar_equalities,
