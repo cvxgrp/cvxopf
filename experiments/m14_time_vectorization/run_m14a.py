@@ -26,6 +26,7 @@ from cvxopf.characterization import (
 from cvxopf.results import extract_results
 from experiments.m14_time_vectorization.baseline import (
     BaselineCase,
+    audit_inputs,
     audit_result,
     build_baseline_fixture,
     json_result,
@@ -35,6 +36,22 @@ from experiments.m14_time_vectorization.baseline import (
 
 FORMULATIONS = ("ac", "lossy_dc", "singlenode_dc")
 ROOT = Path(__file__).resolve().parents[2]
+
+# M14a characterizes the legacy graph only as far as it remains useful and
+# operationally bounded.  These schedules are scientific protocol, not
+# adaptive defaults: a failed point stops only that formulation's later points.
+FROZEN_LADDERS: dict[str, tuple[tuple[str, int, str], ...]] = {
+    "case9": (
+        *(("ac", horizon, "case9") for horizon in (1, 2, 4, 8, 24)),
+        *(("lossy_dc", horizon, "case9") for horizon in (1, 2, 4, 8, 24, 168)),
+        *(("singlenode_dc", horizon, "case9") for horizon in (1, 2, 4, 8, 24, 168)),
+    ),
+    "case118": (
+        *(("ac", horizon, "case118") for horizon in (1, 3)),
+        *(("lossy_dc", horizon, "case118") for horizon in (24, 168, 720)),
+        *(("singlenode_dc", horizon, "case118") for horizon in (24, 168, 720, 8760)),
+    ),
+}
 
 
 def _sha256(path: Path) -> str:
@@ -76,6 +93,14 @@ def _package_version(name: str) -> str | None:
         return None
 
 
+def _ipopt_version() -> str | None:
+    try:
+        from cyipopt import IPOPT_VERSION
+    except ImportError:
+        return None
+    return ".".join(str(value) for value in IPOPT_VERSION)
+
+
 def _execution_context() -> dict[str, Any]:
     status = _git("status", "--porcelain")
     return {
@@ -88,7 +113,8 @@ def _execution_context() -> dict[str, Any]:
         "packages": {
             name: _package_version(name)
             for name in ("cvxpy", "clarabel", "cyipopt", "numpy", "scipy")
-        },
+        }
+        | {"ipopt": _ipopt_version()},
     }
 
 
@@ -220,6 +246,7 @@ def measure_point(
         "source_structure": asdict(source),
         "canonical_structure": None if canonical is None else asdict(canonical),
         "result_schema": result_schema(result),
+        "audit_inputs": audit_inputs(fixture),
         "residuals": residuals,
         "result": result_payload,
         "serialized_result_bytes": len(result_bytes),
@@ -293,110 +320,132 @@ def _run_parent(args: argparse.Namespace) -> None:
     parent_context = _execution_context()
     if not parent_context["git_commit"] or not parent_context["source_fingerprint"]:
         raise RuntimeError("parent execution provenance is unavailable")
-    if not args.horizons or any(horizon <= 0 for horizon in args.horizons):
+    frozen_ladder = getattr(args, "frozen_ladder", None)
+    if frozen_ladder is None and (
+        not args.horizons or any(horizon <= 0 for horizon in args.horizons)
+    ):
         raise ValueError("horizons must contain positive integers")
     if args.timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
+    if frozen_ladder is None:
+        points = tuple(
+            (formulation, horizon, args.case)
+            for formulation in args.formulations
+            for horizon in args.horizons
+        )
+    else:
+        points = FROZEN_LADDERS[frozen_ladder]
+        required_formulations = {point[0] for point in points}
+        if set(args.formulations) != required_formulations:
+            raise ValueError(
+                "a frozen ladder requires its complete formulation registry"
+            )
     output.mkdir(parents=True, exist_ok=False)
     records: list[dict[str, Any]] = []
-    for formulation in args.formulations:
-        for horizon in args.horizons:
-            destination = output / f"{formulation}-{horizon:05d}.json"
-            command = [
-                sys.executable,
-                "-m",
-                "experiments.m14_time_vectorization.run_m14a",
-                "--worker",
-                "--formulation",
-                formulation,
-                "--horizon",
-                str(horizon),
-                "--case",
-                args.case,
-                "--output",
-                str(destination),
-                "--expected-commit",
-                str(parent_context["git_commit"]),
-                "--expected-source-fingerprint",
-                str(parent_context["source_fingerprint"]),
-            ]
-            classification = "completed"
-            try:
-                completed = subprocess.run(
-                    command,
-                    cwd=ROOT,
-                    check=False,
-                    capture_output=True,
-                    timeout=args.timeout_seconds,
-                )
-                returncode = completed.returncode
-                stdout = completed.stdout
-                stderr = completed.stderr
-                if returncode != 0:
-                    classification = "worker_failure"
-            except subprocess.TimeoutExpired as error:
-                returncode = None
-                classification = "wall_time_limit"
-                stdout = error.stdout or b""
-                stderr = error.stderr or b""
-            log_path = destination.with_suffix(".log")
-            _write_immutable_bytes(
-                log_path,
-                b"--- stdout ---\n" + stdout + b"\n--- stderr ---\n" + stderr,
+    stopped_formulations: set[str] = set()
+    for formulation, horizon, case_name in points:
+        if formulation in stopped_formulations:
+            continue
+        if frozen_ladder is None and formulation not in args.formulations:
+            continue
+        destination = output / f"{formulation}-{horizon:05d}.json"
+        command = [
+            sys.executable,
+            "-m",
+            "experiments.m14_time_vectorization.run_m14a",
+            "--worker",
+            "--formulation",
+            formulation,
+            "--horizon",
+            str(horizon),
+            "--case",
+            case_name,
+            "--output",
+            str(destination),
+            "--expected-commit",
+            str(parent_context["git_commit"]),
+            "--expected-source-fingerprint",
+            str(parent_context["source_fingerprint"]),
+        ]
+        classification = "completed"
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                timeout=args.timeout_seconds,
             )
-            artifact = None
-            if classification == "completed":
-                if not destination.exists():
-                    classification = "artifact_missing"
+            returncode = completed.returncode
+            stdout = completed.stdout
+            stderr = completed.stderr
+            if returncode != 0:
+                classification = "worker_failure"
+        except subprocess.TimeoutExpired as error:
+            returncode = None
+            classification = "wall_time_limit"
+            stdout = error.stdout or b""
+            stderr = error.stderr or b""
+        log_path = destination.with_suffix(".log")
+        _write_immutable_bytes(
+            log_path,
+            b"--- stdout ---\n" + stdout + b"\n--- stderr ---\n" + stderr,
+        )
+        artifact = None
+        if classification == "completed":
+            if not destination.exists():
+                classification = "artifact_missing"
+            else:
+                try:
+                    payload = _validate_worker_artifact(
+                        destination,
+                        formulation=formulation,
+                        horizon=horizon,
+                        case_name=case_name,
+                        parent_context=parent_context,
+                    )
+                    phase_path = destination.with_suffix(".phases.jsonl")
+                    _validate_phase_journal(phase_path, convex=formulation != "ac")
+                except (
+                    FileNotFoundError,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ):
+                    classification = "artifact_invalid"
                 else:
-                    try:
-                        payload = _validate_worker_artifact(
-                            destination,
-                            formulation=formulation,
-                            horizon=horizon,
-                            case_name=args.case,
-                            parent_context=parent_context,
-                        )
-                        phase_path = destination.with_suffix(".phases.jsonl")
-                        _validate_phase_journal(phase_path, convex=formulation != "ac")
-                    except (
-                        FileNotFoundError,
-                        KeyError,
-                        TypeError,
-                        ValueError,
-                        json.JSONDecodeError,
-                    ):
-                        classification = "artifact_invalid"
-                    else:
-                        artifact = _artifact_identity(destination)
-                        if payload["status"] not in {
-                            cp.OPTIMAL,
-                            cp.OPTIMAL_INACCURATE,
-                        }:
-                            classification = "solve_not_accepted"
-            evidence = {"log": _artifact_identity(log_path)}
-            phase_path = destination.with_suffix(".phases.jsonl")
-            if phase_path.exists():
-                evidence["phases"] = _artifact_identity(phase_path)
-            if destination.exists() and artifact is None:
-                evidence["unvalidated_result"] = _artifact_identity(destination)
-            records.append(
-                {
-                    "formulation": formulation,
-                    "horizon": horizon,
-                    "classification": classification,
-                    "returncode": returncode,
-                    "artifact": artifact,
-                    "evidence": evidence,
-                }
-            )
-            if classification != "completed":
-                break
+                    artifact = _artifact_identity(destination)
+                    if payload["status"] not in {
+                        cp.OPTIMAL,
+                        cp.OPTIMAL_INACCURATE,
+                    }:
+                        classification = "solve_not_accepted"
+        evidence = {"log": _artifact_identity(log_path)}
+        phase_path = destination.with_suffix(".phases.jsonl")
+        if phase_path.exists():
+            evidence["phases"] = _artifact_identity(phase_path)
+        if destination.exists() and artifact is None:
+            evidence["unvalidated_result"] = _artifact_identity(destination)
+        records.append(
+            {
+                "formulation": formulation,
+                "horizon": horizon,
+                "case": case_name,
+                "classification": classification,
+                "returncode": returncode,
+                "artifact": artifact,
+                "evidence": evidence,
+            }
+        )
+        if classification != "completed":
+            stopped_formulations.add(formulation)
     _write_immutable(
         output / "manifest.json",
         {
             "schema_version": 1,
             "execution_context": parent_context,
+            "frozen_ladder": frozen_ladder,
             "timeout_seconds_per_point": args.timeout_seconds,
             "records": records,
         },
@@ -409,6 +458,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--formulation", choices=FORMULATIONS)
     parser.add_argument("--horizon", type=int)
     parser.add_argument("--case", choices=("case9", "case118"), default="case9")
+    parser.add_argument("--frozen-ladder", choices=tuple(FROZEN_LADDERS))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--formulations", nargs="+", choices=FORMULATIONS, default=FORMULATIONS

@@ -34,3 +34,59 @@ Scaling stops after the first
 unsuccessful or timed-out worker for each formulation and preserves that
 classification in the immutable manifest. The default per-point wall limit is
 1,800 seconds and authoritative runs must record any reviewed override.
+
+The frozen legacy ladders are formulation-specific:
+
+- Case9 AC: 1, 2, 4, 8, and 24 steps.
+- Case9 lossy DC and single-node DC: 1, 2, 4, 8, 24, and 168 steps.
+- Case118 AC: 1 and 3 steps.
+- Case118 lossy DC: 24, 168, and 720 steps.
+- Case118 single-node DC: 24, 168, 720, and 8,760 steps.
+
+The bounded AC ladder is characterization, not an annual-AC feasibility
+claim. The Case118 lossy-DC ladder stops at 720 because the already retained
+failed annual S4 attempts supply the 8,760-step legacy resource-boundary
+evidence; M14a does not repeat that expensive failure. The single-node path
+retains 8,760 because its smaller per-step network graph is a useful annual
+legacy comparator.
+
+Independent analysis re-verifies every manifest artifact identity, execution
+fingerprint, point ordering, assembly/backend choice, accepted status, result
+schema, and physical residual gate. Workers retain the minimal numerical audit
+inputs, allowing analysis to reconstruct the residuals without rebuilding the
+large legacy CVXPY graph. Each ladder is a separately retained
+record; neither alone authorizes advancement. The consolidated M14a result
+requires both complete ladders from the same commit and source fingerprint.
+The two executions must also share platform, architecture, Python, package,
+and underlying IPOPT-library versions so their timing and memory observations
+form one comparable baseline. The compact result retains readable source and
+canonical structures, objectives and component-cost scalars, artifact sizes,
+and their corresponding digests; ignored raw artifacts are not required to
+interpret the baseline.
+Authoritative advancement and promotion additionally require clean parent and
+worker provenance plus a clean analyzer from that exact execution commit and
+source fingerprint. A numerically complete dirty-worktree run remains evidence
+but is not the frozen M14a record. Worker return codes, classifications, and
+artifact availability must also match the frozen supervisor outcome matrix.
+An unsuccessful point and the intentionally omitted later points remain valid
+partial characterization evidence but cannot be labeled a complete M14a
+baseline or authorize M14b advancement.
+
+From a clean committed tree, the authoritative execution and consolidation
+commands are:
+
+```bash
+uv run python -m experiments.m14_time_vectorization.run_m14a \
+  --frozen-ladder case9 \
+  --output experiments/m14_time_vectorization/results/m14a-case9
+uv run python -m experiments.m14_time_vectorization.run_m14a \
+  --frozen-ladder case118 \
+  --output experiments/m14_time_vectorization/results/m14a-case118
+uv run python -m experiments.m14_time_vectorization.m14a_analysis \
+  experiments/m14_time_vectorization/results/m14a-case9 \
+  experiments/m14_time_vectorization/results/m14a-case118 \
+  --promote experiments/m14_time_vectorization/M14A_RESULTS.json
+```
+
+Raw worker artifacts remain ignored under `results/`; the independently
+reconstructed compact result is the tracked scientific record.

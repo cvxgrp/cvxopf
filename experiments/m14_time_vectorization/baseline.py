@@ -201,10 +201,53 @@ def _maximum_violation(
     )
 
 
-def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, float]:
-    """Independently reconstruct common and formulation-specific residuals."""
-    build = fixture.build
-    data = build.data
+def audit_inputs(fixture: BaselineFixture) -> dict[str, Any]:
+    """Retain only the numerical inputs needed to reconstruct the audit."""
+    data = fixture.build.data
+    names = (
+        "baseMVA",
+        "Cg",
+        "Cs",
+        "Cload",
+        "Cnd",
+        "Ch_from",
+        "Ch_to",
+        "Pgmin",
+        "Pgmax",
+        "Qgmin",
+        "Qgmax",
+        "storage_initial_soc",
+        "storage_delta",
+        "storage_capacity",
+        "storage_terminal_soc",
+        "storage_apparent_power_rating",
+        "sheddable_load_indices",
+        "load_max_shed_fraction",
+        "nd_available",
+        "nd_apparent_power_rating",
+        "branch_rate_a_mva",
+        "f_max",
+        "r",
+    )
+    retained: dict[str, Any] = {}
+    for name in names:
+        if name not in data:
+            continue
+        value = data[name]
+        if np.isscalar(value):
+            retained[name] = float(value)
+        else:
+            retained[name] = np.asarray(value).tolist()
+    ppc = _case(fixture.case_name)
+    retained["voltage_min"] = ppc["bus"][:, 12].tolist()
+    retained["voltage_max"] = ppc["bus"][:, 11].tolist()
+    return retained
+
+
+def audit_result_from_inputs(
+    formulation: str, data: dict[str, Any], result: dict[str, Any]
+) -> dict[str, float]:
+    """Independently reconstruct residuals from retained numerical inputs."""
     base = float(data["baseMVA"])
     generation = np.asarray(result["Pg"], dtype=float)
     storage_power = np.asarray(result["b"], dtype=float)
@@ -300,7 +343,7 @@ def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, 
             np.max(np.abs(hvdc_out + 0.99 * hvdc_in))
         )
 
-    if fixture.formulation == "ac":
+    if formulation == "ac":
         reactive = (
             np.asarray(result["Qg"], dtype=float)
             @ np.asarray(data["Cg"], dtype=float).T
@@ -339,10 +382,11 @@ def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, 
             base * np.asarray(data["Qgmin"]),
             base * np.asarray(data["Qgmax"]),
         )
-        ppc = _case(fixture.case_name)
         voltage = np.asarray(result["Vm"], dtype=float)
         residuals["voltage_bound_pu_abs"] = _maximum_violation(
-            voltage, ppc["bus"][:, 12], ppc["bus"][:, 11]
+            voltage,
+            np.asarray(data["voltage_min"], dtype=float),
+            np.asarray(data["voltage_max"], dtype=float),
         )
         branch_limit = np.asarray(data["branch_rate_a_mva"], dtype=float)
         branch_magnitude = np.maximum(
@@ -358,7 +402,7 @@ def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, 
         residuals["branch_loss_nonnegativity_mw_abs"] = float(
             max(0.0, -np.min(branch_loss))
         )
-    elif fixture.formulation == "lossy_dc":
+    elif formulation == "lossy_dc":
         residuals["thermal_limit_mw_abs"] = _maximum_violation(
             np.asarray(result["p_flows"], dtype=float),
             -base * np.asarray(data["f_max"]),
@@ -370,3 +414,8 @@ def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, 
         )
         residuals["dc_loss_nonnegativity_abs"] = float(max(0.0, -np.min(dc_loss)))
     return residuals
+
+
+def audit_result(fixture: BaselineFixture, result: dict[str, Any]) -> dict[str, float]:
+    """Independently reconstruct common and formulation-specific residuals."""
+    return audit_result_from_inputs(fixture.formulation, audit_inputs(fixture), result)
