@@ -142,14 +142,33 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}[shrink=3]{Equivalent mathematics can have radically different numerical behavior}
+\begin{frame}[shrink=3]{The same branch limit can have very different numerical behavior}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.47\textwidth}
+    \centering
+    \textbf{Direct constraint}
+    \[
+      P_e(V)^2 + Q_e(V)^2 \leq \overline S_e^2
+    \]
+    \scriptsize Put the nonlinear voltage-based terminal-flow expressions
+    directly inside the thermal inequality.
+
+    \column{0.47\textwidth}
+    \centering
+    \textbf{Lifted constraint}
+    \[
+      \widehat P_e=P_e(V),\quad \widehat Q_e=Q_e(V),
+      \qquad
+      \widehat P_e^2 + \widehat Q_e^2 \leq \overline S_e^2
+    \]
+    \scriptsize Name the same terminal powers with auxiliary variables, then
+    constrain those variables. Here $e\in\{\mathrm{from},\mathrm{to}\}$.
+  \end{columns}
+  \vspace{0.2em}
   \centering
-  \includegraphics[width=0.98\textwidth,height=0.68\textheight,keepaspectratio]{formulation_results.pdf}
-  \begin{itemize}\small\tightitems
-    \item Direct and lifted branch-terminal equations agree below $4.5\times10^{-14}$ p.u.; paired objectives agree to solver precision.
-    \item Lifting adds variables and equalities but separates nonlinear voltage expressions from quadratic thermal inequalities.
-    \item On case57, the lifted structure was 27$\times$ faster in sparse form and 110$\times$ faster in dense form.
-  \end{itemize}
+  \includegraphics[width=0.98\textwidth,height=0.55\textheight,keepaspectratio]{formulation_results.pdf}
+  \small The terminal flows agree below $4.5\times10^{-14}$ p.u.; on case57,
+  lifting reduced solve time by 27$\times$ (sparse) and 110$\times$ (dense).
 \end{frame}
 
 \begin{frame}{Terminal energy is an economic decision, not a boundary detail}
