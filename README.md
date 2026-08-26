@@ -123,6 +123,33 @@ affine extension of the load feasible set with a high linear value-of-lost-load
 cost in the original optimization problem; it is not a lexicographic pass, an
 anonymous balance slack, or a second feasibility-restoration solve.
 
+#### Economic decisions from modeled primitives
+
+CVXOPF constructs economic dispatch from explicit physical and economic
+primitives:
+
+- generator cost curves;
+- load and renewable availability;
+- network limits and either physical AC losses or a documented DC loss proxy;
+- storage dynamics, cycling cost, and terminal policy (with ideal efficiency
+  in the current `StorageUnitIdeal` model);
+- load-shedding cost; and
+- the evolving intertemporal system state.
+
+Exogenous electricity-price trajectories are not first-class inputs to the
+current model. Dispatch costs and scarcity consequences are represented
+directly, while marginal values arise endogenously from the optimization. This
+distinction is especially important in black-sky studies: a historical price
+series reflects a different network state, asset fleet, market design, and
+damage condition. Using that scalar signal to stand in for widespread outages,
+physical scarcity, customer consequences, and months of recovery would ask it
+to reconstruct interactions that the model had omitted.
+
+This does not imply that tariffs, contracts, or other explicit economic rules
+can never be modeled. When they are part of the scientific question, they
+should enter transparently as defined costs or constraints rather than serve
+as substitutes for available physical structure.
+
 AC voltage magnitudes and reactive dispatch are currently governed by their
 physical bounds and network equations but are generally not assigned an
 operating preference in the objective. Reactive variables can therefore reach
