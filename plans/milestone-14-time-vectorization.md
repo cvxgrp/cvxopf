@@ -2,9 +2,18 @@
 
 ## Status
 
-**Required next milestone.** The Case118 annual hierarchy experiment is paused
-at S4 until the annual lossy-DC outer problem passes the M14 construction,
-canonicalization, solve, equivalence, and resource gates below.
+**In progress; M14a complete.** The frozen legacy Case9 and Case118 scaling
+ladders completed and the independently reconstructed baseline authorizes M14b.
+The immutable record is bound to:
+
+- execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;
+- analyzer commit `457ec9200050eae2a60dd470a131155a0ddaa53f`; and
+- promoted-record SHA-256
+  `44f6f0b9f3c3b51621f6952dd2efa1eb2d169757895acaba75bba6f04f5edb53`.
+
+The Case118 annual hierarchy experiment remains paused at S4 until the annual
+lossy-DC outer problem passes the remaining M14 construction,
+canonicalization, solve, equivalence, and resource gates below. M14b is next.
 
 ## Motivation
 
