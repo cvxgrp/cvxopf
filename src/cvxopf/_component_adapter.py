@@ -14,7 +14,6 @@ from numbers import Real
 from types import MappingProxyType
 from typing import (
     Generic,
-    Literal,
     Mapping,
     Protocol,
     Sequence,
@@ -23,8 +22,10 @@ from typing import (
 
 import cvxpy as cp
 
+from cvxopf._temporal_assembly import Formulation as Formulation
+from cvxopf._temporal_assembly import HorizonVariableSpec
 
-Formulation = Literal["ac", "lossy_dc", "singlenode_dc"]
+
 UnitT = TypeVar("UnitT")
 UnitT_contra = TypeVar("UnitT_contra", contravariant=True)
 InputT = TypeVar("InputT")
@@ -70,11 +71,7 @@ class PreparationContext:
 
     def __post_init__(self) -> None:
         _validate_positive_real("base_mva", self.base_mva)
-        if (
-            not isinstance(self.nb, int)
-            or isinstance(self.nb, bool)
-            or self.nb <= 0
-        ):
+        if not isinstance(self.nb, int) or isinstance(self.nb, bool) or self.nb <= 0:
             raise ValueError("nb must be a positive integer")
         if (
             not isinstance(self.horizon_steps, int)
@@ -84,14 +81,10 @@ class PreparationContext:
             raise ValueError("horizon_steps must be a positive integer")
         _validate_positive_real("delta", self.delta)
         if self.horizon_steps > 1 and self.is_multistep is False:
-            raise ValueError(
-                "is_multistep must be True when horizon_steps > 1"
-            )
+            raise ValueError("is_multistep must be True when horizon_steps > 1")
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
         if self.is_multistep is None:
-            object.__setattr__(
-                self, "is_multistep", self.horizon_steps > 1
-            )
+            object.__setattr__(self, "is_multistep", self.horizon_steps > 1)
 
 
 @dataclass(frozen=True)
@@ -103,9 +96,7 @@ class ACNetworkState:
     enforce_vset: bool
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "controlled_buses", tuple(self.controlled_buses)
-        )
+        object.__setattr__(self, "controlled_buses", tuple(self.controlled_buses))
 
 
 @dataclass(frozen=True)
@@ -134,9 +125,7 @@ class StepContext:
         _validate_positive_real("base_mva", self.base_mva)
         if self.formulation == "ac":
             if not isinstance(self.network_state, ACNetworkState):
-                raise ValueError(
-                    "formulation='ac' requires ACNetworkState"
-                )
+                raise ValueError("formulation='ac' requires ACNetworkState")
         elif not isinstance(self.network_state, DCNetworkState):
             raise ValueError(
                 f"formulation={self.formulation!r} requires DCNetworkState"
@@ -160,6 +149,36 @@ class HorizonContext:
         ):
             raise ValueError("horizon_steps must be a positive integer")
         _validate_positive_real("delta", self.delta)
+
+
+@dataclass(frozen=True)
+class VectorizedContext:
+    """Typed network and horizon state for one vectorized component build."""
+
+    formulation: Formulation
+    horizon_steps: int
+    delta: float
+    base_mva: float
+    ext_to_int: Mapping[int, int]
+    network_state: NetworkState
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.horizon_steps, int)
+            or isinstance(self.horizon_steps, bool)
+            or self.horizon_steps <= 0
+        ):
+            raise ValueError("horizon_steps must be a positive integer")
+        _validate_positive_real("delta", self.delta)
+        _validate_positive_real("base_mva", self.base_mva)
+        if self.formulation == "ac":
+            if not isinstance(self.network_state, ACNetworkState):
+                raise ValueError("formulation='ac' requires ACNetworkState")
+        elif not isinstance(self.network_state, DCNetworkState):
+            raise ValueError(
+                f"formulation={self.formulation!r} requires DCNetworkState"
+            )
+        object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
 @dataclass(frozen=True)
@@ -246,6 +265,37 @@ class HorizonContribution:
     def __post_init__(self) -> None:
         object.__setattr__(self, "constraints", tuple(self.constraints))
         object.__setattr__(self, "expressions", _readonly(self.expressions))
+
+
+@dataclass(frozen=True)
+class VectorizedModelContribution:
+    """One component's complete time-last model contribution."""
+
+    injection: InjectionContribution
+    operating_constraints: tuple[cp.Constraint, ...] = ()
+    network_constraints: tuple[cp.Constraint, ...] = ()
+    stage_cost_rate: cp.Expression | None = None
+    expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
+    horizon: HorizonContribution = field(default_factory=HorizonContribution)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "operating_constraints", tuple(self.operating_constraints)
+        )
+        object.__setattr__(self, "network_constraints", tuple(self.network_constraints))
+        object.__setattr__(self, "expressions", _readonly(self.expressions))
+
+
+@dataclass(frozen=True)
+class VectorizedComponentContribution:
+    """Builder-owned variables paired with one vectorized model payload."""
+
+    variables: Mapping[str, cp.Variable]
+    model: VectorizedModelContribution
+    cost_expression_name: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "variables", _readonly(self.variables))
 
 
 class PrepareHook(Protocol[UnitT_contra, InputT_contra]):
@@ -340,6 +390,29 @@ class HorizonHook(Protocol[UnitT_contra]):
     ) -> HorizonContribution: ...
 
 
+class VectorizedVariableSpecHook(Protocol[UnitT_contra]):
+    """Describe builder-owned time-last variables once per horizon."""
+
+    def __call__(
+        self,
+        units: Sequence[UnitT_contra],
+        prepared: Mapping[str, object],
+        context: VectorizedContext,
+    ) -> tuple[HorizonVariableSpec, ...]: ...
+
+
+class VectorizedAssemblyHook(Protocol[UnitT_contra]):
+    """Build one component's complete horizon contribution exactly once."""
+
+    def __call__(
+        self,
+        units: Sequence[UnitT_contra],
+        prepared: Mapping[str, object],
+        variables: Mapping[str, cp.Variable],
+        context: VectorizedContext,
+    ) -> VectorizedModelContribution: ...
+
+
 @dataclass(frozen=True)
 class FormulationAdapter(Generic[UnitT]):
     """Explicit component hooks for one formulation capability."""
@@ -352,6 +425,8 @@ class FormulationAdapter(Generic[UnitT]):
     step_cost: StepCostHook[UnitT] | None = None
     step_expressions: StepExpressionHook[UnitT] | None = None
     horizon: HorizonHook[UnitT] | None = None
+    vectorized_variable_specs: VectorizedVariableSpecHook[UnitT] | None = None
+    vectorized_assembly: VectorizedAssemblyHook[UnitT] | None = None
 
     def __post_init__(self) -> None:
         required = (
@@ -366,6 +441,12 @@ class FormulationAdapter(Generic[UnitT]):
                     "active formulation adapters require variable, injection, "
                     "operating-constraint, and horizon hooks"
                 )
+            if (self.vectorized_variable_specs is None) != (
+                self.vectorized_assembly is None
+            ):
+                raise ValueError(
+                    "vectorized variable and assembly hooks must be defined together"
+                )
         elif any(
             hook is not None
             for hook in (
@@ -373,6 +454,8 @@ class FormulationAdapter(Generic[UnitT]):
                 self.network_constraints,
                 self.step_cost,
                 self.step_expressions,
+                self.vectorized_variable_specs,
+                self.vectorized_assembly,
             )
         ):
             raise ValueError(
@@ -393,25 +476,18 @@ class ComponentAdapter(Generic[UnitT, InputT]):
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("component adapter name must be nonempty")
-        if (
-            self.cost_expression_name is not None
-            and (
-                not isinstance(self.cost_expression_name, str)
-                or not self.cost_expression_name
-            )
+        if self.cost_expression_name is not None and (
+            not isinstance(self.cost_expression_name, str)
+            or not self.cost_expression_name
         ):
-            raise ValueError(
-                "component cost expression name must be a nonempty string"
-            )
+            raise ValueError("component cost expression name must be a nonempty string")
         expected = {"ac", "lossy_dc", "singlenode_dc"}
         if set(self.formulations) != expected:
             raise ValueError(
                 "component adapter formulations must contain exactly "
                 f"{sorted(expected)}"
             )
-        object.__setattr__(
-            self, "formulations", _readonly(self.formulations)
-        )
+        object.__setattr__(self, "formulations", _readonly(self.formulations))
 
 
 @dataclass(frozen=True)

@@ -34,6 +34,9 @@ Every prepared field declares one of `static`, `interval`, or `boundary`.
 Static data remain native-size and may be exposed through zero-stride broadcast
 views. Interval data append `T`; boundary data append `T + 1`. Temporal class
 is schema-owned and is never inferred from coincidentally constant values.
+Lower and upper box faces declare temporal class independently; mixed boxes
+retain a zero-stride static face while moving only the dynamic face from
+time-first input to time-last model layout.
 
 The vectorized path uses SCIPY canonicalization. The stepwise path continues to
 use CPP. Backend selection is explicit provenance, not an automatic heuristic.
@@ -47,17 +50,19 @@ following component boxes are not implicitly covered:
 |---|---|---|
 | Storage `b` and `soc` | lossy DC and single-node DC separately | lower/upper power and energy faces; recurrence; initial state; equality, shortfall, and soft terminal policies |
 | Nondispatchable `p_nd` | lossy DC and single-node DC separately | zero, availability-limited, and rating-limited coordinates; time-varying availability; identity alignment |
-| HVDC `p_hvdc_in` | lossy DC and single-node DC separately | positive-only, negative-only, zero-straddling, degenerate, and time-varying boxes; unchanged affine loss branch |
+| HVDC `p_hvdc_in` | lossy DC only | positive-only, negative-only, zero-straddling, degenerate, and time-varying boxes; unchanged affine loss branch |
 | `load_shed_fraction` | lossy DC and single-node DC separately | ineligible zero-width entries; binding upper faces; time-varying eligibility; served-load and cost reconstruction |
 
 Until its gate passes, each family uses explicit vectorized inequalities. A
 failed or neutral leaf-bound result does not block M14b: explicit inequalities
 are a valid vectorized representation.
 
-AC component boxes remain explicit during M14. AC storage and inverter circles,
-branch apparent-power limits, network equations, storage recurrence and
-terminal obligations, and HVDC coupling are coupled or equality constraints,
-not leaf-bound candidates.
+AC component boxes remain explicit during M14. AC storage real power is part of
+the coupled `b`/`b_q` inverter circle and is not itself a box. Single-node HVDC
+is an intentional null capability and has no variable to qualify. Inverter
+circles, branch apparent-power limits, network equations, storage recurrence
+and terminal obligations, and HVDC coupling are coupled or equality
+constraints, not leaf-bound candidates.
 
 Each focused gate must compare explicit and leaf encodings with identical
 prepared arrays, equations, costs, solver configuration, and SCIPY backend. It

@@ -204,8 +204,11 @@ For a variable with logical shape `native_shape + (T,)` or
   the variable dimensions;
 - interval- or boundary-varying bounds use their complete time-last arrays
   directly; and
-- lower and upper bounds are validated for finiteness, identity alignment,
-  exact shape, and elementwise ordering before variable construction.
+- lower and upper faces declare temporal class independently, so a static zero
+  face can remain a zero-stride view while the opposite face varies by
+  interval or boundary; and
+- both faces are validated for finiteness, identity alignment, exact target
+  shape, and elementwise ordering before variable construction.
 
 Candidate applications include independent generator active/reactive limits,
 bus-voltage boxes, DC storage real-power boxes, nondispatchable
@@ -365,17 +368,19 @@ qualification before they may use leaf attributes in a vectorized builder:
 
 | Component box | Required probe | Default until qualified |
 |---|---|---|
-| Storage DC real power and all-formulation SoC | Both power faces, both SoC faces, recurrence, initial state, and equality/shortfall/soft terminal behavior | Explicit inequalities |
+| Storage real power and SoC in lossy DC and single-node DC | Both power faces, both SoC faces, recurrence, initial state, and equality/shortfall/soft terminal behavior | Explicit inequalities |
 | Nondispatchable real power | Zero availability, availability-limited and rating-limited coordinates, and time-varying availability with identity alignment | Explicit inequalities |
-| HVDC from-terminal power | Positive-only, negative-only, zero-straddling, degenerate, and time-varying boxes while preserving the selected affine loss coupling | Explicit inequalities |
+| HVDC from-terminal power in lossy DC | Positive-only, negative-only, zero-straddling, degenerate, and time-varying boxes while preserving the selected affine loss coupling | Explicit inequalities |
 | Load-shed fraction | Zero-width ineligible entries, active upper faces, time-varying eligibility, served-load reconstruction, and shedding cost | Explicit inequalities |
 
-Lossy DC and single-node DC qualify independently even when their component
-equations are shared. AC component boxes remain explicit for M14 regardless of
-convex probe results unless a later production-structure DNLP gate explicitly
-changes that decision. Coupled apparent-power circles, storage recurrence and
-terminal constraints, HVDC loss equalities, and network equations are not
-boxes and are never candidates for leaf-bound replacement.
+Lossy DC and single-node DC qualify independently where the component is active,
+even when their equations are shared. Single-node HVDC is an intentional null
+capability and has no box to qualify. AC component boxes remain explicit for
+M14 regardless of convex probe results unless a later production-structure
+DNLP gate explicitly changes that decision. AC storage real power belongs to
+the coupled `b`/`b_q` apparent-power circle rather than an independent box.
+Coupled circles, storage recurrence and terminal constraints, HVDC loss
+equalities, and network equations are never candidates for leaf bounds.
 
 These focused probes are small deterministic M14b gates, not new scaling
 studies. Each compares explicit and leaf representations through binding
