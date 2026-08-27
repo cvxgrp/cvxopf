@@ -2,14 +2,23 @@
 
 ## Status
 
-**In progress; M14a complete.** The frozen legacy Case9 and Case118 scaling
-ladders completed and the independently reconstructed baseline authorizes M14b.
-The immutable record is bound to:
+**In progress; M14a and M14a.1 complete.** The frozen legacy Case9 and Case118
+scaling ladders completed, and the formulation-specific leaf-bound gate passed.
+Together these records authorize M14b. The M14a baseline is bound to:
 
 - execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;
 - analyzer commit `457ec9200050eae2a60dd470a131155a0ddaa53f`; and
 - promoted-record SHA-256
   `44f6f0b9f3c3b51621f6952dd2efa1eb2d169757895acaba75bba6f04f5edb53`.
+
+The immutable M14a.1 result is bound to execution commit
+`1f45651fa8450cdfc50e55dd024eb1fbcc4b7c06` and SHA-256
+`6efcb1c077fd8201435faf6df11512d4174b0c24edd06c82ffccee3a131a4614`.
+All paired and binding-probe gates passed. Lossy DC selects leaf bounds for
+`Pg` and `p_flows`; single-node DC selects them for `Pg`. AC records isolated
+compatibility for `Pg`, `Qg`, and `v` but retains explicit inequalities because
+the isolated fixture does not retire the production lifted-DNLP and terminal-
+policy risk.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,
