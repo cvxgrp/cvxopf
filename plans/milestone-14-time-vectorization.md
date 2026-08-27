@@ -2,9 +2,10 @@
 
 ## Status
 
-**In progress; M14a and M14a.1 complete.** The frozen legacy Case9 and Case118
-scaling ladders completed, and the formulation-specific leaf-bound gate passed.
-Together these records authorize M14b. The M14a baseline is bound to:
+**In progress; M14b open.** The frozen legacy Case9 and Case118 scaling
+ladders completed, and the formulation-specific leaf-bound gate passed.
+Together these records authorize the horizon-assembly work now in progress.
+The M14a baseline is bound to:
 
 - execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;
 - analyzer commit `457ec9200050eae2a60dd470a131155a0ddaa53f`; and
@@ -22,7 +23,7 @@ policy risk.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,
-canonicalization, solve, equivalence, and resource gates below. M14b is next.
+canonicalization, solve, equivalence, and resource gates below.
 
 ## Motivation
 
@@ -349,6 +350,39 @@ vector, and reporting expressions. The formulation builder then aggregates the
 complete horizon once; it does not call the scalar step builder `T` times.
 The existing stepwise hooks and builder remain executable rather than becoming
 test-only dead code.
+
+M14b uses the immutable M14a.1 decisions as a closed representation registry,
+not as blanket authorization for every component-owned interval. Lossy DC may
+use qualified leaf bounds for formulation-owned `Pg` and `p_flows`, and
+single-node DC may use them for formulation-owned `Pg`. AC retains its current
+production representation: no new AC leaf-bound migration is authorized by
+the isolated M14a.1 fixture. In particular, the existing production voltage
+leaf attribute is preserved as an established compatibility behavior; it does
+not authorize moving `Pg`, `Qg`, or component boxes into leaf attributes.
+
+The following component-owned boxes require focused, formulation-specific
+qualification before they may use leaf attributes in a vectorized builder:
+
+| Component box | Required probe | Default until qualified |
+|---|---|---|
+| Storage DC real power and all-formulation SoC | Both power faces, both SoC faces, recurrence, initial state, and equality/shortfall/soft terminal behavior | Explicit inequalities |
+| Nondispatchable real power | Zero availability, availability-limited and rating-limited coordinates, and time-varying availability with identity alignment | Explicit inequalities |
+| HVDC from-terminal power | Positive-only, negative-only, zero-straddling, degenerate, and time-varying boxes while preserving the selected affine loss coupling | Explicit inequalities |
+| Load-shed fraction | Zero-width ineligible entries, active upper faces, time-varying eligibility, served-load reconstruction, and shedding cost | Explicit inequalities |
+
+Lossy DC and single-node DC qualify independently even when their component
+equations are shared. AC component boxes remain explicit for M14 regardless of
+convex probe results unless a later production-structure DNLP gate explicitly
+changes that decision. Coupled apparent-power circles, storage recurrence and
+terminal constraints, HVDC loss equalities, and network equations are not
+boxes and are never candidates for leaf-bound replacement.
+
+These focused probes are small deterministic M14b gates, not new scaling
+studies. Each compares explicit and leaf representations through binding
+faces, objective/component costs, public results, independent physical
+residuals, canonical structure, and solver classification. A box may remain
+explicit without blocking vectorization; qualification controls only its
+representation.
 
 The compatibility adapter must be designed and tested explicitly. It must not
 materialize thousands of new CVXPY objects merely to recreate the old internal
