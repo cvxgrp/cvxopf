@@ -6,7 +6,9 @@
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
-focused component-box qualification is next.
+the reusable seven-gate component-box harness and fresh-process runner are also
+implemented. A clean authoritative component-box execution and promotion
+remain before the M14c handoff.
 The M14a baseline is bound to:
 
 - execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;

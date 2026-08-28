@@ -5,8 +5,10 @@
 M14b is open. It is authorized by the immutable M14a legacy baseline and the
 M14a.1 leaf-bound qualification record. The typed horizon, one-call assembly,
 aggregation/publication, and compatibility-result projection slices are now
-implemented; the focused component-box gates are next. M14b keeps the public
-stepwise/CPP path available and unchanged by default.
+implemented. The reusable component-box probe harness, seven formulation-local
+gates, fresh-process runner, and immutable result schema are implemented; the
+clean authoritative execution is next. M14b keeps the public stepwise/CPP path
+available and unchanged by default.
 
 The frozen representation decisions are:
 
@@ -97,6 +99,26 @@ must retain binding-face evidence, public results, independent residuals,
 canonical dimensions/nonzeros, solver classification, and a local selection
 decision. No convex result authorizes AC.
 
+The implemented matrix contains seven paired gates and emits nine local box
+decisions because each storage gate qualifies power and SoC separately. Every
+arm records an encoding-independent fixture digest, complete public component
+results, actual component costs, independently reconstructed component/network
+residuals, source and canonical structure, binding probes, timing, RSS, and
+solver classification. Synthetic preferences used only to select informative
+probe points are labeled and retained separately from component costs; in
+particular, nondispatchable generation retains an empty component-cost schema.
+Solver failures remain complete arm records with unavailable solver statistics
+rather than aborting the matrix. Each authoritative arm runs in a fresh process
+under a stable execution commit and source fingerprint. The immutable promoted
+record is `M14B_COMPONENT_BOX_RESULTS.json`.
+
+The selection rule is fixed before execution: a pair selects leaf bounds only
+when both arms and all binding probes are accepted and their objective, costs,
+and public results agree within the frozen tolerances. Any neutral, failed, or
+mismatched leaf arm selects explicit inequalities for that formulation/family
+without blocking other gates or M14b. Preliminary dirty-tree runs are
+diagnostic only and cannot change the production decision registry.
+
 ## Delivery order
 
 1. **Complete:** freeze typed temporal-field and variable-representation
@@ -105,8 +127,9 @@ decision. No convex result authorizes AC.
    without calling scalar hooks `T` times.
 3. **Complete:** implement compatibility publication and typed extraction
    without recreating a length-`T` CVXPY object list.
-4. **Next:** run the focused component-box gates and freeze their local
-   decisions.
+4. **Pre-execution implementation complete:** execute the focused component-box
+   matrix from a clean commit, promote its immutable record, and freeze the
+   resulting local decisions.
 5. **Pending:** hand the completed assembly contract to M14c's vectorized
    lossy-DC builder.
 
