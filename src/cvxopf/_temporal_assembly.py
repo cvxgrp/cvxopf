@@ -25,6 +25,7 @@ ResultTemporalView = Literal[
 ]
 BoxDecisionAuthority = Literal[
     "m14a1_qualified",
+    "m14b_qualified",
     "existing_production",
     "pending_component_gate",
     "ac_explicit_policy",
@@ -464,14 +465,12 @@ def _decision(
     return BoxRepresentationDecision(representation, authority, pending)
 
 
-def _pending_decisions(
+def _m14b_qualified_decisions(
     formulation: Formulation,
     families: tuple[VariableBoxFamily, ...],
 ) -> dict[tuple[Formulation, VariableBoxFamily], BoxRepresentationDecision]:
     return {
-        (formulation, family): _decision(
-            "explicit", "pending_component_gate", pending=True
-        )
+        (formulation, family): _decision("leaf", "m14b_qualified")
         for family in families
     }
 
@@ -496,7 +495,7 @@ _BOX_REPRESENTATIONS: Mapping[
             "explicit", "ac_explicit_policy"
         ),
         ("ac", VariableBoxFamily.AC_VOLTAGE): _decision("leaf", "existing_production"),
-        **_pending_decisions(
+        **_m14b_qualified_decisions(
             "lossy_dc",
             (
                 VariableBoxFamily.STORAGE_REAL_POWER,
@@ -506,7 +505,7 @@ _BOX_REPRESENTATIONS: Mapping[
                 VariableBoxFamily.LOAD_SHED_FRACTION,
             ),
         ),
-        **_pending_decisions(
+        **_m14b_qualified_decisions(
             "singlenode_dc",
             (
                 VariableBoxFamily.STORAGE_REAL_POWER,
@@ -543,12 +542,8 @@ def box_representation_decision(
 
 def pending_component_box_families() -> tuple[VariableBoxFamily, ...]:
     """Return the component-owned box families requiring focused gates."""
-    return (
-        VariableBoxFamily.STORAGE_REAL_POWER,
-        VariableBoxFamily.STORAGE_SOC,
-        VariableBoxFamily.NONDISPATCHABLE_REAL_POWER,
-        VariableBoxFamily.HVDC_INPUT_POWER,
-        VariableBoxFamily.LOAD_SHED_FRACTION,
+    return tuple(
+        dict.fromkeys(family for _, family in pending_component_box_pairs())
     )
 
 

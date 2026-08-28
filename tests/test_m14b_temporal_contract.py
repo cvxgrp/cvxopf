@@ -372,7 +372,7 @@ def test_existing_ac_voltage_leaf_is_not_blanket_ac_authorization():
     assert active.authority == reactive.authority == "ac_explicit_policy"
 
 
-def test_component_boxes_are_explicit_pending_focused_convex_gates():
+def test_m14b_qualified_component_boxes_select_leaf():
     expected = {
         VariableBoxFamily.STORAGE_REAL_POWER,
         VariableBoxFamily.STORAGE_SOC,
@@ -380,8 +380,6 @@ def test_component_boxes_are_explicit_pending_focused_convex_gates():
         VariableBoxFamily.HVDC_INPUT_POWER,
         VariableBoxFamily.LOAD_SHED_FRACTION,
     }
-    assert set(pending_component_box_families()) == expected
-
     expected_pairs = {
         *(("lossy_dc", family) for family in expected),
         *(
@@ -390,12 +388,13 @@ def test_component_boxes_are_explicit_pending_focused_convex_gates():
             if family is not VariableBoxFamily.HVDC_INPUT_POWER
         ),
     }
-    assert set(pending_component_box_pairs()) == expected_pairs
+    assert pending_component_box_families() == ()
+    assert pending_component_box_pairs() == ()
     for formulation, family in expected_pairs:
         decision = box_representation_decision(formulation, family)
-        assert decision.representation == "explicit"
-        assert decision.authority == "pending_component_gate"
-        assert decision.requires_focused_qualification
+        assert decision.representation == "leaf"
+        assert decision.authority == "m14b_qualified"
+        assert not decision.requires_focused_qualification
 
 
 def test_component_box_gates_never_authorize_ac():

@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress; M14b complete, M14c next.** The frozen
+**In progress; M14b complete, M14c open.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -409,7 +409,11 @@ representation.
 The authoritative M14b matrix completed all seven pairs and froze leaf bounds
 for lossy-DC storage power/SoC, nondispatchable power, load-shed fraction, and
 HVDC input power, plus single-node storage power/SoC, nondispatchable power, and
-load-shed fraction. This closes M14b and opens M14c; AC retains the explicit
+load-shed fraction. The registry records those component decisions with
+`m14b_qualified` authority, distinct from the formulation-owned
+`m14a1_qualified` dispatchable-generation and branch-flow decisions. The
+combined registry, rather than M14b alone, authorizes the complete lossy-DC
+leaf-bound set. This closes M14b and opens M14c; AC retains the explicit
 component-box decisions above.
 
 The compatibility adapter must be designed and tested explicitly. It must not
@@ -433,6 +437,11 @@ reconstructs a per-step object list.
 
 ### M14c — Vectorized lossy DC
 
+**Open.** The authoritative implementation and execution contract is frozen in
+`experiments/m14_time_vectorization/M14C_PROTOCOL.md`. M14c consumes the
+completed M14b representation registry and retains explicit caller selection,
+the stepwise default, and formulation-specific SCIPY provenance.
+
 Implement the annual-experiment blocker first:
 
 - branch-flow variables with shape `(n_branch, T)`;
@@ -444,6 +453,17 @@ Implement the annual-experiment blocker first:
 - vectorized storage power, SoC recurrence, cycling cost, and terminal policy;
 - vectorized HVDC boxes, injections, costs, and supported loss semantics; and
 - exact preservation of the lossy-DC audit and result schema.
+
+M14c follows one reproducible execution sequence. Unit, `T=1`, and
+short-horizon stepwise/vectorized gates run on this branch. The reviewed
+implementation is then integrated into `big-experiment`, which owns the S4
+fixture and supervisor. Its bounded ladder uses, in order, the deterministic
+first 24, 168, and 720 hourly rows of the frozen S4 exogenous inputs while
+retaining the exact S4 network, fleet, identities, timestep, policy, solver,
+and construction options; the terminal policy applies at each prefix's final
+boundary. The 8,760-hour run is authorized only after those post-integration
+prefix gates pass. No separate pre-integration Case118 scaling fixture is part
+of the authoritative ladder.
 
 The implementation should use genuine N-dimensional expressions and sparse
 linear operators according to the natural algebra of each component. Replacing
@@ -519,15 +539,21 @@ are true:
    and its separately frozen vectorized structure/dimension registry, storage
    identities, terminal target, and provenance hashes;
 4. execution provenance records the explicit SCIPY canonicalization backend;
-5. construction, canonicalization, and solve remain within a newly reviewed
-   memory and wall-time envelope;
+5. construction, canonicalization, and solve remain within the existing frozen
+   S4 limits: 16,384 MiB child RSS, 7,200 seconds worker wall time, 10,800
+   seconds total supervisor wall time, and one-second polling;
 6. no OS memory-pressure termination occurs;
 7. the independently reconstructed outer audit is accepted; and
 8. execution occurs from a clean committed source with a fresh output
    directory.
 
 The new annual result must identify the vectorized execution commit. It is not
-a continuation of any failed S4 worker.
+a continuation of any failed S4 worker. Because the tracked S4 fixture and
+supervisor live on `big-experiment`, the reviewed M14c implementation must
+first be integrated there at an explicit checkpoint. That checkpoint records
+both source commits, verifies the unchanged S4 fixture/policy/solver/scenario
+hashes, and reruns the cheaper M14c gates before annual authorization; M14 does
+not create a duplicate S4 execution stack on this branch.
 
 ### One annual execution, two gates
 
@@ -537,6 +563,11 @@ scaling gates must pass first. The first authorized 8,760-step execution is then
 launched through the exact frozen S4 supervisor, fixture, provenance, resource,
 archive, and analysis protocol from a clean commit containing the reviewed M14c
 implementation.
+
+The M14c equivalence gate compares the stepwise and vectorized lossy-DC
+mathematics. The S4 equivalence gate separately compares the public
+hierarchical controller's retained outer plan with the streaming experiment
+seam. Both must pass after integration; neither is evidence for the other.
 
 That single execution serves simultaneously as the terminal M14c scaling gate
 and the candidate authoritative S4 outer run. If every predeclared M14c and S4

@@ -146,8 +146,8 @@ and is not a comparative runtime or RSS result.
 4. **Complete:** the focused component-box matrix was executed from a clean
    commit, its immutable record was promoted, and all nine local decisions were
    frozen.
-5. **Next:** hand the completed assembly contract to M14c's vectorized
-   lossy-DC builder.
+5. **Complete:** the frozen assembly contract is handed to the open M14c
+   vectorized lossy-DC stage.
 
 Structural tests cover time-last shapes, `T=1`, static broadcasting, interval
 identity alignment, boundary indexing, DCP validity of every component term,
