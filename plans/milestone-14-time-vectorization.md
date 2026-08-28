@@ -342,7 +342,8 @@ Introduce an internal horizon-level assembly path with:
   where they are the natural representation;
 - vectorized integration of stage costs and reported component costs;
 - stable device axes and explicit time axes;
-- explicit SCIPY canonicalization for the vectorized solve path; and
+- explicit SCIPY canonicalization for convex vectorized solve paths, while AC
+  remains on its separately gated DNLP/IPOPT path; and
 - a deliberate compatibility adapter for the existing public
   `OPFBuild.variables`, expressions, and extraction contracts.
 

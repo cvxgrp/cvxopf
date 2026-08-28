@@ -46,6 +46,7 @@ from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 
 
 TemporalAssembly = Literal["stepwise", "vectorized"]
+CanonicalizationBackend = Literal["CPP", "SCIPY", "DNLP_IPOPT"]
 
 
 # ---------------------------------------------------------------------------
@@ -142,17 +143,21 @@ class OPFBuild:
         AC branch-terminal flow variables are retained in ``expressions``
         rather than this mapping.
 
-        AC multi-step: each value is a list of length T.
+        AC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step: each value is one cp.Variable whose final axis
+        is time. ``temporal_assembly`` distinguishes the two representations.
 
         DC single-step keys:
             p_flows, Pg
 
-        DC multi-step: each value is a list of length T.
+        DC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step uses one time-last cp.Variable.
 
         Singlenode DC single-step keys:
             Pg
 
-        Singlenode DC multi-step: each value is a list of length T.
+        Singlenode DC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step uses one time-last cp.Variable.
 
         When storage is present:
             b (real power, MW), b_q (reactive power, MVAr, AC only),
@@ -204,7 +209,8 @@ class OPFBuild:
     expressions : dict
         Named modeled CVXPY expressions used for solved-value reporting.
         Per-step reporting expressions are stored as one expression for a
-        single-step build and lists of length T for a multistep build.
+        single-step build, lists of length T for stepwise multistep, and one
+        time-last expression for vectorized multistep.
         AC branch-terminal real and reactive powers are retained in per unit
         as ``branch_p_from_pu``, ``branch_q_from_pu``,
         ``branch_p_to_pu``, and ``branch_q_to_pu``. Each value has shape
@@ -239,6 +245,15 @@ class OPFBuild:
     expressions: dict[str, Any] = field(default_factory=dict)
     temporal_assembly: TemporalAssembly = "stepwise"
 
+    @property
+    def canonicalization_backend(self) -> CanonicalizationBackend:
+        """Return the backend required by this formulation/assembly pair."""
+        if not self.is_convex:
+            return "DNLP_IPOPT"
+        if self.temporal_assembly == "vectorized":
+            return "SCIPY"
+        return "CPP"
+
     def solve(self, **kwargs: Any) -> None:
         """
         Solve the OPF problem with appropriate solver defaults.
@@ -265,6 +280,12 @@ class OPFBuild:
         if self.is_convex:
             kwargs.setdefault("solver", cp.CLARABEL)
             kwargs.setdefault("nlp", False)
+            if self.canonicalization_backend == "SCIPY":
+                backend = kwargs.setdefault("canon_backend", cp.SCIPY_CANON_BACKEND)
+                if backend != cp.SCIPY_CANON_BACKEND:
+                    raise ValueError(
+                        "vectorized convex builds require SCIPY canonicalization"
+                    )
         else:
             kwargs.setdefault("solver", cp.IPOPT)
             kwargs.setdefault("nlp", True)

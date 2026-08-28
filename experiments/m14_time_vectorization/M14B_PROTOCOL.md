@@ -38,8 +38,9 @@ Lower and upper box faces declare temporal class independently; mixed boxes
 retain a zero-stride static face while moving only the dynamic face from
 time-first input to time-last model layout.
 
-The vectorized path uses SCIPY canonicalization. The stepwise path continues to
-use CPP. Backend selection is explicit provenance, not an automatic heuristic.
+Convex vectorized paths use SCIPY canonicalization. Convex stepwise paths
+continue to use CPP, while AC remains on its separately gated DNLP/IPOPT path.
+Backend selection is explicit build provenance, not an automatic heuristic.
 
 ## Component-specific box qualification
 

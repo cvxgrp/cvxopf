@@ -604,6 +604,71 @@ def aggregate_step_contributions(
     )
 
 
+def _ordered_expression_sum(
+    values: Sequence[cp.Expression],
+) -> cp.Expression | None:
+    """Return a deterministic expression sum without a scalar-zero seed."""
+    if not values:
+        return None
+    return cast(cp.Expression, sum(values[1:], start=values[0]))
+
+
+def aggregate_vectorized_contributions(
+    contributions: Mapping[str, VectorizedComponentContribution],
+) -> VectorizedComponentContribution:
+    """Compose complete component horizons without iterating over time."""
+    variables: dict[str, cp.Variable] = {}
+    operating_constraints: list[cp.Constraint] = []
+    network_constraints: list[cp.Constraint] = []
+    p_injections: list[cp.Expression] = []
+    q_injections: list[cp.Expression] = []
+    stage_cost_rates: list[cp.Expression] = []
+    expressions: dict[str, cp.Expression] = {}
+    horizon_contributions: dict[str, HorizonContribution] = {}
+
+    for component_name, contribution in contributions.items():
+        duplicate_variables = set(variables).intersection(contribution.variables)
+        if duplicate_variables:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"variables: {sorted(duplicate_variables)}"
+            )
+        variables.update(contribution.variables)
+        model = contribution.model
+        if model.injection.p_pu is not None:
+            p_injections.append(model.injection.p_pu)
+        if model.injection.q_pu is not None:
+            q_injections.append(model.injection.q_pu)
+        operating_constraints.extend(model.operating_constraints)
+        network_constraints.extend(model.network_constraints)
+        if model.stage_cost_rate is not None:
+            stage_cost_rates.append(model.stage_cost_rate)
+        duplicate_expressions = set(expressions).intersection(model.expressions)
+        if duplicate_expressions:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"expressions: {sorted(duplicate_expressions)}"
+            )
+        expressions.update(model.expressions)
+        horizon_contributions[component_name] = model.horizon
+
+    horizon = aggregate_horizon_contributions(horizon_contributions)
+    return VectorizedComponentContribution(
+        variables=variables,
+        model=VectorizedModelContribution(
+            injection=InjectionContribution(
+                _ordered_expression_sum(p_injections),
+                _ordered_expression_sum(q_injections),
+            ),
+            operating_constraints=tuple(operating_constraints),
+            network_constraints=tuple(network_constraints),
+            stage_cost_rate=_ordered_expression_sum(stage_cost_rates),
+            expressions=expressions,
+            horizon=horizon,
+        ),
+    )
+
+
 def _validate_expression_names(
     component_name: str,
     expressions: Mapping[str, cp.Expression],
@@ -718,6 +783,49 @@ def integrate_component_stage_costs(
     return MappingProxyType(costs)
 
 
+def integrate_vectorized_stage_cost_rate(
+    stage_cost_rate: cp.Expression,
+    delta: float,
+) -> cp.Expression:
+    """Integrate one convex time-last rate vector without a Python time loop."""
+    _validate_positive_real("delta", delta)
+    if not isinstance(stage_cost_rate, cp.Expression):
+        raise ValueError("vectorized stage cost rate must be a cp.Expression")
+    if stage_cost_rate.ndim != 1 or stage_cost_rate.shape[0] <= 0:
+        raise ValueError(
+            "vectorized stage cost rate must be a nonempty one-dimensional "
+            f"expression, got {stage_cost_rate.shape}"
+        )
+    if not stage_cost_rate.is_convex():
+        raise ValueError("vectorized stage cost rate must be convex")
+    return cp.multiply(delta, cp.sum(stage_cost_rate))
+
+
+def integrate_vectorized_component_stage_costs(
+    contributions: Mapping[str, VectorizedComponentContribution],
+    delta: float,
+) -> Mapping[str, cp.Expression]:
+    """Integrate and name every component rate once over the horizon."""
+    costs: dict[str, cp.Expression] = {}
+    for component_name, contribution in contributions.items():
+        rate = contribution.model.stage_cost_rate
+        if rate is None:
+            if contribution.cost_expression_name is not None:
+                raise ValueError(
+                    f"component {component_name!r} names a cost without "
+                    "providing a stage cost rate"
+                )
+            continue
+        expression_name = contribution.cost_expression_name or f"{component_name}_cost"
+        if expression_name in costs:
+            raise ValueError(
+                f"component {component_name!r} requested duplicate integrated "
+                f"cost expression {expression_name!r}"
+            )
+        costs[expression_name] = integrate_vectorized_stage_cost_rate(rate, delta)
+    return MappingProxyType(costs)
+
+
 def _validate_publication_step_count(
     step_count: int,
     *,
@@ -797,6 +905,24 @@ def publish_component_variables(
     return published
 
 
+def publish_vectorized_component_variables(
+    contribution: VectorizedComponentContribution,
+    formulation_variables: Mapping[str, cp.Variable] | None = None,
+) -> dict[str, cp.Variable]:
+    """Publish full-horizon variables without recreating per-step objects."""
+    published = {} if formulation_variables is None else dict(formulation_variables)
+    if any(not isinstance(variable, cp.Variable) for variable in published.values()):
+        raise ValueError("vectorized formulation variables must be cp.Variable objects")
+    for variable_name, variable in contribution.variables.items():
+        if variable_name in published:
+            raise ValueError(
+                f"component variable {variable_name!r} collides with an "
+                "already published vectorized variable"
+            )
+        published[variable_name] = variable
+    return published
+
+
 def publish_component_metadata(
     prepared: PreparedComponents,
     formulation_metadata: Mapping[str, object] | None = None,
@@ -865,4 +991,35 @@ def publish_component_expressions(
             f"{sorted(horizon_collisions)}"
         )
     published.update(horizon_contribution.expressions)
+    return published
+
+
+def publish_vectorized_component_expressions(
+    contribution: VectorizedComponentContribution,
+    compatibility_expressions: Mapping[str, cp.Expression],
+) -> dict[str, cp.Expression]:
+    """Publish time-last and horizon expressions without per-step lists."""
+    published = dict(compatibility_expressions)
+    if any(
+        not isinstance(expression, cp.Expression) for expression in published.values()
+    ):
+        raise ValueError(
+            "vectorized compatibility expressions must be cp.Expression objects"
+        )
+    step_collisions = set(published).intersection(contribution.model.expressions)
+    if step_collisions:
+        raise ValueError(
+            "vectorized component expressions collide with formulation "
+            f"compatibility expressions: {sorted(step_collisions)}"
+        )
+    published.update(contribution.model.expressions)
+    horizon_collisions = set(published).intersection(
+        contribution.model.horizon.expressions
+    )
+    if horizon_collisions:
+        raise ValueError(
+            "vectorized horizon expressions collide with published "
+            f"expressions: {sorted(horizon_collisions)}"
+        )
+    published.update(contribution.model.horizon.expressions)
     return published

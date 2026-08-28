@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from typing import Mapping, Sequence
+from unittest.mock import Mock
 
 import cvxpy as cp
 import numpy as np
@@ -21,10 +22,16 @@ from cvxopf._component_adapter import (
 )
 from cvxopf._component_assembly import (
     ComponentRequest,
+    aggregate_vectorized_contributions,
     assemble_component_vectorized,
+    integrate_vectorized_component_stage_costs,
+    integrate_vectorized_stage_cost_rate,
     prepare_components,
+    publish_vectorized_component_expressions,
+    publish_vectorized_component_variables,
 )
 from cvxopf._temporal_assembly import HorizonVariableSpec
+from cvxopf.problem import OPFBuild
 
 
 @dataclass(frozen=True)
@@ -195,6 +202,150 @@ def test_vectorized_component_multistep_t1_keeps_time_axis_and_one_call():
     assert contribution.variables["p"].shape == (2, 1)
     assert contribution.model.injection.p_pu.shape == (2, 1)
     assert contribution.model.stage_cost_rate.shape == (1,)
+
+
+def test_vectorized_aggregation_integration_and_publication_remain_horizon_native():
+    contributions = assemble_component_vectorized(_prepared(), _context())
+    component = contributions["test_vectorized"]
+
+    aggregate = aggregate_vectorized_contributions(contributions)
+    costs = integrate_vectorized_component_stage_costs(contributions, 0.5)
+    network_variable = cp.Variable((1, 4), name="network_flow")
+    network_expression = cp.Constant(np.zeros((1, 4)))
+    variables = publish_vectorized_component_variables(
+        aggregate, {"network_flow": network_variable}
+    )
+    expressions = publish_vectorized_component_expressions(
+        aggregate, {"network_loss": network_expression}
+    )
+
+    assert aggregate.variables["p"] is component.variables["p"]
+    assert aggregate.model.injection.p_pu is component.model.injection.p_pu
+    assert aggregate.model.stage_cost_rate is component.model.stage_cost_rate
+    assert variables == {
+        "network_flow": network_variable,
+        "p": component.variables["p"],
+    }
+    assert all(isinstance(variable, cp.Variable) for variable in variables.values())
+    assert expressions["network_loss"] is network_expression
+    assert expressions["test_power"] is component.model.expressions["test_power"]
+    assert (
+        expressions["test_terminal_power"]
+        is component.model.horizon.expressions["test_terminal_power"]
+    )
+    assert set(costs) == {"test_cost"}
+    component.variables["p"].value = np.ones((2, 4))
+    assert costs["test_cost"].value == pytest.approx(4.0)
+
+
+def test_vectorized_stage_cost_integration_requires_convex_rate_vector():
+    with pytest.raises(ValueError, match="one-dimensional"):
+        integrate_vectorized_stage_cost_rate(cp.Constant(1.0), 1.0)
+    variable = cp.Variable(3)
+    with pytest.raises(ValueError, match="must be convex"):
+        integrate_vectorized_stage_cost_rate(-cp.square(variable), 1.0)
+
+
+def test_vectorized_aggregation_rejects_flat_namespace_collisions():
+    contribution = assemble_component_vectorized(_prepared(), _context())[
+        "test_vectorized"
+    ]
+    other_variable = cp.Variable((2, 4), name="other")
+    other = replace(
+        contribution,
+        variables={"other": other_variable},
+        model=replace(
+            contribution.model,
+            expressions={"test_power": other_variable},
+        ),
+    )
+
+    with pytest.raises(ValueError, match="duplicate vectorized variables"):
+        aggregate_vectorized_contributions(
+            {"first": contribution, "second": contribution}
+        )
+    with pytest.raises(ValueError, match="duplicate vectorized expressions"):
+        aggregate_vectorized_contributions({"first": contribution, "second": other})
+
+
+def test_vectorized_publication_rejects_formulation_collisions():
+    aggregate = aggregate_vectorized_contributions(
+        assemble_component_vectorized(_prepared(), _context())
+    )
+
+    with pytest.raises(ValueError, match="already published"):
+        publish_vectorized_component_variables(aggregate, {"p": cp.Variable((2, 4))})
+    with pytest.raises(ValueError, match="compatibility expressions"):
+        publish_vectorized_component_expressions(
+            aggregate, {"test_power": cp.Constant(np.zeros((2, 4)))}
+        )
+    with pytest.raises(ValueError, match="horizon expressions"):
+        publish_vectorized_component_expressions(
+            aggregate,
+            {"test_terminal_power": cp.Constant(0.0)},
+        )
+
+
+def test_vectorized_component_cost_names_remain_globally_unique():
+    contribution = assemble_component_vectorized(_prepared(), _context())[
+        "test_vectorized"
+    ]
+
+    with pytest.raises(ValueError, match="duplicate integrated"):
+        integrate_vectorized_component_stage_costs(
+            {"first": contribution, "second": contribution},
+            0.5,
+        )
+
+
+def test_vectorized_convex_solve_forces_scipy_canonicalization():
+    problem = Mock()
+    build = OPFBuild(
+        prob=problem,
+        variables={},
+        data={},
+        formulation="lossy_dc",
+        is_convex=True,
+        temporal_assembly="vectorized",
+    )
+
+    build.solve()
+
+    kwargs = problem.solve.call_args.kwargs
+    assert build.canonicalization_backend == "SCIPY"
+    assert kwargs["solver"] == cp.CLARABEL
+    assert kwargs["nlp"] is False
+    assert kwargs["canon_backend"] == cp.SCIPY_CANON_BACKEND
+    with pytest.raises(ValueError, match="require SCIPY"):
+        build.solve(canon_backend=cp.CPP_CANON_BACKEND)
+
+
+def test_build_backend_identity_is_representation_and_formulation_specific():
+    problem = Mock()
+
+    assert OPFBuild(problem, {}, {}, "lossy_dc", True).canonicalization_backend == "CPP"
+    assert (
+        OPFBuild(
+            problem,
+            {},
+            {},
+            "singlenode_dc",
+            True,
+            temporal_assembly="vectorized",
+        ).canonicalization_backend
+        == "SCIPY"
+    )
+    assert (
+        OPFBuild(
+            problem,
+            {},
+            {},
+            "ac",
+            False,
+            temporal_assembly="vectorized",
+        ).canonicalization_backend
+        == "DNLP_IPOPT"
+    )
 
 
 def test_active_stepwise_binding_may_exist_before_vectorized_migration():
