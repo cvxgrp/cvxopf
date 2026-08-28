@@ -53,7 +53,9 @@ from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.problem import OPFBuild, OPFOptions, build_opf_multistep
 from cvxopf.results import extract_results
-from cvxopf.storage import StorageUnitIdeal, storage_cost_expr
+from cvxopf.storage import (
+    StorageUnitIdeal, _validate_connection_window, storage_cost_expr,
+)
 
 
 _STEP_NAME = re.compile(r"^(?P<base>.+)_(?P<step>\d+)$")
@@ -210,6 +212,30 @@ def _inner_storage(
     return tuple(units)
 
 
+def _localize_storage_windows(
+    storage: tuple[StorageUnitIdeal, ...],
+    start: int,
+    stop: int,
+    horizon_steps: int,
+) -> tuple[StorageUnitIdeal, ...]:
+    """Intersect global connection windows with one local solve window."""
+    localized = []
+    for index, unit in enumerate(storage):
+        _validate_connection_window(unit, index, horizon_steps=horizon_steps)
+        if unit.connection_window is None:
+            localized.append(unit)
+            continue
+        arrival, departure = unit.connection_window
+        overlap_start = max(arrival, start)
+        overlap_stop = min(departure, stop)
+        window = (
+            (overlap_start - start, overlap_stop - start)
+            if overlap_start < overlap_stop else (0, 0)
+        )
+        localized.append(replace(unit, connection_window=window))
+    return tuple(localized)
+
+
 def _build_window(
     snapshot: _ExecutionInputs,
     formulation: Literal["ac", "lossy_dc"],
@@ -246,7 +272,9 @@ def _build_window(
                 if snapshot.df_nd is None
                 else snapshot.df_nd.iloc[start:stop].copy()
             ),
-            storage=list(storage),
+            storage=list(_localize_storage_windows(
+                storage, start, stop, snapshot.horizon_steps
+            )),
             hvdc=list(deepcopy(snapshot.hvdc)),
             df_hvdc_min=(
                 None
@@ -589,12 +617,15 @@ def _outer_residuals(
     p_device, _ = _device_injections(snapshot, result, reactive=False)
     p_net = _as_2d(result["p_net"])
     p_flows = _as_2d(result["p_flows"])
+    base_mva = float(
+        np.asarray(snapshot.case["baseMVA"], dtype=float).item()
+    )
     residuals = {
         "soc_recurrence_mwh_abs": _soc_residual(snapshot, build, result),
         "dc_injection_reporting_mw_abs": float(np.max(np.abs(p_device - p_net))),
         "dc_nodal_balance_pu_abs": float(np.max(np.abs(
             (p_flows @ _dc_incidence(snapshot).T + p_net)
-            / float(cast(Any, snapshot.case["baseMVA"]))
+            / base_mva
         ))),
     }
     if target is not None:

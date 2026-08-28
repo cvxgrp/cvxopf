@@ -631,6 +631,7 @@ def _storage_prepare(
         context.nb,
         dict(context.ext_to_int),
         set(context.ext_bus_ids),
+        horizon_steps=context.horizon_steps,
     )
     prepared["storage_delta"] = context.delta
     return prepared
@@ -692,12 +693,14 @@ def _storage_operating_constraints(
             variables["b"],
             variables["b_q"],
             variables["soc"],
+            step=context.step,
         )
     else:
         constraints = storage.dc_operating_constraints(
             list(units),
             variables["b"],
             variables["soc"],
+            step=context.step,
         )
     return tuple(constraints)
 

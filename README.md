@@ -607,6 +607,16 @@ unit. A hard terminal policy makes the problem infeasible when the target
 cannot be reached within the horizon; use a soft terminal cost when a
 controlled violation is preferable.
 
+An aggregate EV fleet can use the same model with
+`connection_window=(arrival_step, departure_step)`. Power is fixed to zero
+outside this half-open interval; an empty interval means fully disconnected.
+Indices are local to a direct build and global to a `HierarchicalInputs`
+horizon, where cvxopf translates them into each receding window. Set
+`bidirectional=False` for charge-only V1G and `bidirectional=True` for V2G;
+the existing terminal SoC policy sets the required departure energy. Since
+power is zero after departure, the horizon-terminal SoC is also the departure
+SoC.
+
 Linear terminal weights have units of objective units/MWh, and quadratic
 weights have units of objective units/MWh². The terminal term is applied once
 at the horizon boundary and is not scaled by `delta`. Stage-cost rates are

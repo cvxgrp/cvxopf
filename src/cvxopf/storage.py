@@ -24,6 +24,7 @@ No circularity.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 
 import numpy as np
 import cvxpy as cp
@@ -96,6 +97,16 @@ class StorageUnitIdeal:
         builder publishes a collision-safe positional label such as
         ``"storage_0"``; that label is local to the build and is not a claim
         of stable cross-build identity.
+    connection_window : tuple[int, int] | None
+        Optional half-open interval ``[arrival_step, departure_step)`` during
+        which the device is connected. Real and reactive power are fixed to
+        zero outside the interval. ``None`` means connected for the full
+        horizon; an empty interval means disconnected for the full horizon.
+    bidirectional : bool
+        Whether positive real-power export is permitted while connected.
+        Set to ``False`` for charge-only V1G fleets and ``True`` for V2G or
+        ordinary storage. Reactive support remains available while connected
+        in AC formulations.
     """
     bus:                   int
     apparent_power_rating: float
@@ -107,15 +118,54 @@ class StorageUnitIdeal:
     terminal_cost:         str | None = None
     terminal_weight:       float | None = None
     device_id:             str | None = None
+    connection_window:     tuple[int, int] | None = None
+    bidirectional:         bool = True
 
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
+def _validate_connection_window(
+    unit: StorageUnitIdeal,
+    index: int,
+    *,
+    horizon_steps: int | None = None,
+) -> None:
+    """Validate one unit's connection window."""
+    if unit.connection_window is None:
+        return
+    window = unit.connection_window
+    if not isinstance(window, tuple) or len(window) != 2:
+        raise TypeError(
+            f"Storage unit {index}: connection_window must be a "
+            "(arrival_step, departure_step) tuple"
+        )
+    arrival, departure = window
+    if any(
+        isinstance(step, bool) or not isinstance(step, Integral)
+        for step in window
+    ):
+        raise TypeError(
+            f"Storage unit {index}: connection_window steps must be integers"
+        )
+    if arrival < 0 or arrival > departure:
+        raise ValueError(
+            f"Storage unit {index}: connection_window must satisfy "
+            "0 <= arrival_step <= departure_step"
+        )
+    if horizon_steps is not None and departure > horizon_steps:
+        raise ValueError(
+            f"Storage unit {index}: connection_window departure_step "
+            f"{departure} exceeds horizon length {horizon_steps}"
+        )
+
+
 def _validate_storage(
     storage_units: list,
     ext_bus_ids: set,
+    *,
+    horizon_steps: int | None = None,
 ) -> None:
     """
     Validate a list of StorageUnitIdeal objects.
@@ -137,13 +187,17 @@ def _validate_storage(
     - 0 <= initial_soc <= capacity
     - aging_weight >= 0
     - terminal policy fields form one valid hard or soft configuration
+    - connection_window is a valid half-open interval within the horizon
     - bus ID present in ext_bus_ids
     """
     if storage_units is None or len(storage_units) == 0:
         return
-    
+
     explicit_ids: set[str] = set()
     for i, unit in enumerate(storage_units):
+        _validate_connection_window(
+            unit, i, horizon_steps=horizon_steps
+        )
         if unit.device_id is not None:
             if (
                 not isinstance(unit.device_id, str)
@@ -399,9 +453,13 @@ def _prepare_data(
     nb: int,
     ext_to_int: dict,
     ext_bus_ids: set,
+    *,
+    horizon_steps: int | None = None,
 ) -> dict:
     """Validate and prepare formulation-independent storage data."""
-    _validate_storage(storage_units, ext_bus_ids)
+    _validate_storage(
+        storage_units, ext_bus_ids, horizon_steps=horizon_steps
+    )
     device_ids, device_id_is_explicit = _storage_device_identity(
         storage_units
     )
@@ -490,15 +548,23 @@ def ac_operating_constraints(
     b: cp.Variable,
     b_q: cp.Variable,
     soc: cp.Variable,
+    *,
+    step: int = 0,
 ) -> list:
     """AC inverter circle and per-step state-of-charge bounds."""
     data = _storage_static_data(storage_units)
+    rating = data["storage_apparent_power_rating"]
+    connected, bidirectional = _connection_masks(storage_units, step)
     constraints = [
         cp.sum_squares(cp.vstack([b[s], b_q[s]]))
-        <= data["storage_apparent_power_rating"][s] ** 2
+        <= rating[s] ** 2
         for s in range(len(storage_units))
     ]
     constraints += [
+        b >= -rating * connected,
+        b <= rating * connected * bidirectional,
+        b_q >= -rating * connected,
+        b_q <= rating * connected,
         soc >= 0.0,
         soc <= data["storage_capacity"],
     ]
@@ -509,16 +575,33 @@ def dc_operating_constraints(
     storage_units: list,
     b: cp.Variable,
     soc: cp.Variable,
+    *,
+    step: int = 0,
 ) -> list:
     """DC real-power box and per-step state-of-charge bounds."""
     data = _storage_static_data(storage_units)
     rating = data["storage_apparent_power_rating"]
+    connected, bidirectional = _connection_masks(storage_units, step)
     return [
-        b >= -rating,
-        b <= rating,
+        b >= -rating * connected,
+        b <= rating * connected * bidirectional,
         soc >= 0.0,
         soc <= data["storage_capacity"],
     ]
+
+
+def _connection_masks(
+    storage_units: list, step: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return connected and bidirectional multipliers for one step."""
+    connected = [
+        unit.connection_window is None
+        or unit.connection_window[0] <= step < unit.connection_window[1]
+        for unit in storage_units
+    ]
+    return np.asarray(connected, dtype=float), np.asarray(
+        [unit.bidirectional for unit in storage_units], dtype=float
+    )
 
 
 def _soc_dynamics_constraints(

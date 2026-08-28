@@ -148,6 +148,20 @@ class TestStorageComponentInterface:
         assert all(constraint.is_dcp() for constraint in dc_constraints)
         assert cost.is_dcp()
 
+    def test_disconnected_ac_storage_has_no_real_or_reactive_power(self):
+        units = [_default_unit(connection_window=(1, 2))]
+        b = cp.Variable(1)
+        b_q = cp.Variable(1)
+        soc = cp.Variable(1)
+        constraints = storage_ac_operating_constraints(
+            units, b, b_q, soc, step=0
+        )
+
+        cp.Problem(cp.Maximize(b[0] + b_q[0]), constraints).solve()
+
+        assert b.value[0] == pytest.approx(0.0, abs=VAL_ATOL)
+        assert b_q.value[0] == pytest.approx(0.0, abs=VAL_ATOL)
+
     def test_coupling_constraints_recover_soc_trajectory(self):
         units = [_default_unit(initial_soc=50.0)]
         b = [cp.Variable(1), cp.Variable(1)]
@@ -377,6 +391,21 @@ class TestStorageValidation:
         ]
         with pytest.raises(ValueError, match="duplicate device_id"):
             build_opf(case9(), formulation="ac", storage=units)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "message"),
+        [
+            ({"connection_window": [0, 1]}, TypeError, "connection_window"),
+            ({"connection_window": (2, 1)}, ValueError, "connection_window"),
+            ({"connection_window": (0, 2)}, ValueError, "horizon length"),
+        ],
+    )
+    def test_invalid_connection_configuration_raises(
+        self, kwargs, error, message
+    ):
+        unit = _default_unit(**kwargs)
+        with pytest.raises(error, match=message):
+            build_opf(case9(), formulation="ac", storage=[unit])
 
     def test_legacy_labels_are_build_local_and_collision_safe(self):
         units = [
@@ -1345,6 +1374,43 @@ class TestStorageDCMultistep:
         _, r_multi  = _solve_dc_multistep(1, df_P, df_Q, storage=[unit])
         assert abs(r_multi["objective"] - r_single["objective"]) \
                / abs(r_single["objective"]) < OBJ_RTOL
+
+    def test_connection_window_models_v1g_and_v2g_fleets(self):
+        units = [
+            _default_unit(
+                bus=1,
+                S_max=20.0,
+                capacity=20.0,
+                initial_soc=0.0,
+                connection_window=(1, 3),
+                bidirectional=False,
+                terminal_soc=20.0,
+                terminal_constraint="equality",
+            ),
+            _default_unit(
+                bus=2,
+                S_max=20.0,
+                capacity=20.0,
+                initial_soc=20.0,
+                connection_window=(1, 3),
+                bidirectional=True,
+                terminal_soc=0.0,
+                terminal_constraint="equality",
+            ),
+        ]
+        df_P, df_Q = _flat_load_dfs(case9, T=4)
+        _, results = _solve_dc_multistep(
+            4, df_P, df_Q, storage=units, delta=1.0
+        )
+
+        np.testing.assert_allclose(results["b"][[0, 3]], 0.0, atol=VAL_ATOL)
+        assert np.all(results["b"][1:3, 0] <= VAL_ATOL)
+        assert np.sum(results["b"][1:3, 0]) == pytest.approx(
+            -20.0, abs=VAL_ATOL
+        )
+        assert np.sum(results["b"][1:3, 1]) == pytest.approx(
+            20.0, abs=VAL_ATOL
+        )
 
 
 class TestStorageMultipleUnits:
