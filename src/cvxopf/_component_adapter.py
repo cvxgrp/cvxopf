@@ -293,9 +293,21 @@ class VectorizedComponentContribution:
     variables: Mapping[str, cp.Variable]
     model: VectorizedModelContribution
     cost_expression_name: str | None = None
+    variable_specs: Mapping[str, HorizonVariableSpec] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables", _readonly(self.variables))
+        specs = dict(self.variable_specs)
+        if set(specs) != set(self.variables):
+            raise ValueError(
+                "vectorized variable specifications must exactly match the "
+                "published variable names"
+            )
+        if any(name != spec.name for name, spec in specs.items()):
+            raise ValueError(
+                "vectorized variable specification keys must match their names"
+            )
+        object.__setattr__(self, "variable_specs", _readonly(specs))
 
 
 class PrepareHook(Protocol[UnitT_contra, InputT_contra]):

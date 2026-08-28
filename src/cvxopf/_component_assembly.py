@@ -33,6 +33,11 @@ from cvxopf._component_adapter import (
     _validate_positive_real,
     bind_injection_scale,
 )
+from cvxopf._temporal_assembly import (
+    HorizonVariableSpec,
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
+)
 
 
 @dataclass(frozen=True)
@@ -443,6 +448,7 @@ def assemble_component_vectorized(
                 model=VectorizedModelContribution(
                     injection=InjectionContribution(None, None)
                 ),
+                variable_specs={},
             )
             continue
         if binding.capability is not FormulationCapability.ACTIVE:
@@ -496,6 +502,7 @@ def assemble_component_vectorized(
                 if model.stage_cost_rate is None
                 else component.adapter.cost_expression_name
             ),
+            variable_specs={spec.name: spec for spec in specs},
         )
     return MappingProxyType(contributions)
 
@@ -624,6 +631,7 @@ def aggregate_vectorized_contributions(
     q_injections: list[cp.Expression] = []
     stage_cost_rates: list[cp.Expression] = []
     expressions: dict[str, cp.Expression] = {}
+    variable_specs: dict[str, HorizonVariableSpec] = {}
     horizon_contributions: dict[str, HorizonContribution] = {}
 
     for component_name, contribution in contributions.items():
@@ -634,6 +642,13 @@ def aggregate_vectorized_contributions(
                 f"variables: {sorted(duplicate_variables)}"
             )
         variables.update(contribution.variables)
+        duplicate_specs = set(variable_specs).intersection(contribution.variable_specs)
+        if duplicate_specs:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"variable specifications: {sorted(duplicate_specs)}"
+            )
+        variable_specs.update(contribution.variable_specs)
         model = contribution.model
         if model.injection.p_pu is not None:
             p_injections.append(model.injection.p_pu)
@@ -666,6 +681,68 @@ def aggregate_vectorized_contributions(
             expressions=expressions,
             horizon=horizon,
         ),
+        variable_specs=variable_specs,
+    )
+
+
+def vectorized_component_result_projections(
+    contribution: VectorizedComponentContribution,
+    integrated_component_costs: Mapping[str, cp.Expression] | None = None,
+) -> ResultProjectionRegistry:
+    """Return typed public projections for one aggregated component horizon.
+
+    Variable temporal class and public shape come from the retained variable
+    specifications.  Expression temporal class comes from the contribution
+    channel itself: model expressions are interval-valued and horizon
+    expressions are published once.  No solved value or name convention is
+    inspected.
+    """
+    if set(contribution.variables) != set(contribution.variable_specs):
+        raise ValueError(
+            "vectorized component variables require retained result schemas"
+        )
+    variables = {
+        name: spec.result_projection()
+        for name, spec in contribution.variable_specs.items()
+    }
+    expressions = {
+        name: ResultProjectionSpec(
+            name,
+            tuple(int(dimension) for dimension in expression.shape[:-1]),
+            tuple(int(dimension) for dimension in expression.shape[:-1]),
+            "interval",
+        )
+        for name, expression in contribution.model.expressions.items()
+    }
+    horizon_expressions = dict(contribution.model.horizon.expressions)
+    for name, expression in (
+        {} if integrated_component_costs is None else integrated_component_costs
+    ).items():
+        if not isinstance(expression, cp.Expression) or not expression.is_scalar():
+            raise ValueError(
+                f"integrated component cost {name!r} must be a scalar cp.Expression"
+            )
+        if name in horizon_expressions:
+            raise ValueError(
+                f"integrated component cost {name!r} collides with a horizon "
+                "expression projection"
+            )
+        horizon_expressions[name] = expression
+    for name, expression in horizon_expressions.items():
+        if name in expressions:
+            raise ValueError(
+                f"duplicate component result expression projection {name!r}"
+            )
+        native_shape = tuple(int(dimension) for dimension in expression.shape)
+        expressions[name] = ResultProjectionSpec(
+            name,
+            native_shape,
+            native_shape,
+            "horizon",
+        )
+    return ResultProjectionRegistry(
+        variables=variables,
+        expressions=expressions,
     )
 
 

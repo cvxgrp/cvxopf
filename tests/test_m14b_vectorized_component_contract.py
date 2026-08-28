@@ -29,6 +29,7 @@ from cvxopf._component_assembly import (
     prepare_components,
     publish_vectorized_component_expressions,
     publish_vectorized_component_variables,
+    vectorized_component_result_projections,
 )
 from cvxopf._temporal_assembly import HorizonVariableSpec
 from cvxopf.problem import OPFBuild
@@ -177,6 +178,7 @@ def test_vectorized_component_is_built_once_with_builder_owned_variable():
     assert contribution.model.injection.inv_base_mva.value == pytest.approx(0.01)
     assert contribution.model.stage_cost_rate.shape == (4,)
     assert contribution.cost_expression_name == "test_cost"
+    assert contribution.variable_specs["p"].shape(4) == (2, 4)
     assert contribution.model.expressions["test_power"] is variable
     assert all(
         constraint.is_dcp()
@@ -238,6 +240,24 @@ def test_vectorized_aggregation_integration_and_publication_remain_horizon_nativ
     assert costs["test_cost"].value == pytest.approx(4.0)
 
 
+def test_vectorized_component_publication_retains_typed_result_projections():
+    contributions = assemble_component_vectorized(_prepared(), _context())
+    aggregate = aggregate_vectorized_contributions(contributions)
+    costs = integrate_vectorized_component_stage_costs(contributions, 0.5)
+
+    projections = vectorized_component_result_projections(
+        aggregate,
+        integrated_component_costs=costs,
+    )
+
+    assert projections.variables["p"].internal_shape(4) == (2, 4)
+    assert projections.variables["p"].public_shape(4) == (4, 2)
+    assert projections.expressions["test_power"].temporal_view == "interval"
+    assert projections.expressions["test_terminal_power"].temporal_view == "horizon"
+    assert projections.expressions["test_cost"].temporal_view == "horizon"
+    assert projections.expressions["test_cost"].public_shape(4) == ()
+
+
 def test_vectorized_stage_cost_integration_requires_convex_rate_vector():
     with pytest.raises(ValueError, match="one-dimensional"):
         integrate_vectorized_stage_cost_rate(cp.Constant(1.0), 1.0)
@@ -254,6 +274,7 @@ def test_vectorized_aggregation_rejects_flat_namespace_collisions():
     other = replace(
         contribution,
         variables={"other": other_variable},
+        variable_specs={"other": HorizonVariableSpec("other", (2,))},
         model=replace(
             contribution.model,
             expressions={"test_power": other_variable},

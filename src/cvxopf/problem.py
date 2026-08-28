@@ -42,6 +42,7 @@ from cvxopf.hvdc import (
 from cvxopf.generator import DispatchableGenerator, _case_with_generators
 from cvxopf.load import Load
 from cvxopf._component_adapters import LoadInputs
+from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 
 
@@ -235,6 +236,10 @@ class OPFBuild:
         Temporal graph representation retained as build provenance. Existing
         single- and multistep builders use ``"stepwise"`` until the M14
         horizon-vectorized implementation is selected explicitly.
+    result_projections : ResultProjectionRegistry
+        Immutable variable/expression schemas used only by vectorized result
+        extraction to move time from the final internal axis to the first
+        public axis. Stepwise extraction retains its existing list contract.
     """
 
     prob: cp.Problem
@@ -244,6 +249,9 @@ class OPFBuild:
     is_convex: bool
     expressions: dict[str, Any] = field(default_factory=dict)
     temporal_assembly: TemporalAssembly = "stepwise"
+    result_projections: ResultProjectionRegistry = field(
+        default_factory=ResultProjectionRegistry
+    )
 
     @property
     def canonicalization_backend(self) -> CanonicalizationBackend:

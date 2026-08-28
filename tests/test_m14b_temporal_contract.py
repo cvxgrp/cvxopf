@@ -5,10 +5,13 @@ import pytest
 
 from cvxopf._temporal_assembly import (
     HorizonVariableSpec,
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
     TemporalFieldSpec,
     VariableBoxFamily,
     box_representation_decision,
     broadcast_static_bound,
+    merge_result_projection_registries,
     pending_component_box_families,
     pending_component_box_pairs,
     prepare_box_bounds,
@@ -40,7 +43,12 @@ def test_temporal_field_shapes_and_axis_round_trip(
 
 def test_scalar_interval_field_and_boundary_variable_lift_one_axis():
     interval = TemporalFieldSpec("rate", (), "interval")
-    boundary = HorizonVariableSpec("soc", (3,), "boundary")
+    boundary = HorizonVariableSpec(
+        "soc",
+        (3,),
+        "boundary",
+        result_view="post_step_boundaries",
+    )
 
     assert interval.internal_shape(7) == (7,)
     assert boundary.shape(7) == (3, 8)
@@ -230,6 +238,111 @@ def test_multistep_t1_preserves_interval_and_boundary_axes():
     assert boundary_internal.shape == (2, 2)
     assert np.array_equal(interval.to_public(interval_internal, 1), interval_public)
     assert np.array_equal(boundary.to_public(boundary_internal, 1), boundary_public)
+
+
+def test_interval_result_projection_moves_time_first_and_keeps_t1_unsqueezed():
+    projection = ResultProjectionSpec("Pg", (2,), (2,), "interval")
+    values = np.array([[1.0], [2.0]])
+
+    public = projection.project(values, 1)
+
+    assert projection.internal_shape(1) == (2, 1)
+    assert projection.public_shape(1) == (1, 2)
+    assert public.shape == (1, 2)
+    np.testing.assert_array_equal(public, [[1.0, 2.0]])
+
+
+def test_boundary_result_projection_selects_post_step_states_explicitly():
+    projection = ResultProjectionSpec("soc", (2,), (2,), "post_step_boundaries")
+    values = np.array([[10.0, 11.0, 12.0], [20.0, 21.0, 22.0]])
+
+    public = projection.project(values, 2)
+
+    assert projection.internal_shape(2) == (2, 3)
+    assert projection.public_shape(2) == (2, 2)
+    np.testing.assert_array_equal(public, [[11.0, 21.0], [12.0, 22.0]])
+
+
+def test_result_projection_can_publish_all_boundaries_or_reshape_native_axes():
+    boundaries = ResultProjectionSpec("state", (2,), (2,), "all_boundaries")
+    flattened = ResultProjectionSpec("v", (2, 1), (2,), "interval")
+
+    np.testing.assert_array_equal(
+        boundaries.project(np.array([[1.0, 2.0], [3.0, 4.0]]), 1),
+        [[1.0, 3.0], [2.0, 4.0]],
+    )
+    voltage = flattened.project(np.arange(6).reshape(2, 1, 3), 3)
+    assert voltage.shape == (3, 2)
+    np.testing.assert_array_equal(voltage, [[0, 3], [1, 4], [2, 5]])
+
+
+def test_horizon_result_projection_has_no_temporal_axis():
+    projection = ResultProjectionSpec("ens", (2, 1), (2,), "horizon")
+
+    public = projection.project(np.array([[3.0], [4.0]]), 8)
+
+    assert public.shape == (2,)
+    np.testing.assert_array_equal(public, [3.0, 4.0])
+
+
+def test_result_projection_rejects_shape_and_coordinate_drift():
+    with pytest.raises(ValueError, match="same number of coordinates"):
+        ResultProjectionSpec("bad", (2,), (3,), "interval")
+    with pytest.raises(ValueError, match="only by removing singleton axes"):
+        ResultProjectionSpec("reordered", (2, 3), (3, 2), "interval")
+    with pytest.raises(ValueError, match="only by removing singleton axes"):
+        ResultProjectionSpec("moved_singleton", (2, 1), (1, 2), "interval")
+    projection = ResultProjectionSpec("Pg", (2,), (2,), "interval")
+    with pytest.raises(ValueError, match="internal shape"):
+        projection.project(np.ones((2, 4)), 3)
+
+
+def test_horizon_variable_retains_its_public_result_projection():
+    interval = HorizonVariableSpec("Pg", (3,))
+    boundary = HorizonVariableSpec(
+        "soc",
+        (2,),
+        "boundary",
+        result_view="post_step_boundaries",
+    )
+    voltage = HorizonVariableSpec(
+        "v",
+        (4, 1),
+        public_native_shape=(4,),
+    )
+
+    assert interval.result_projection().temporal_view == "interval"
+    assert boundary.result_projection().temporal_view == "post_step_boundaries"
+    assert voltage.result_projection().public_native_shape == (4,)
+
+    with pytest.raises(ValueError, match="only by removing singleton axes"):
+        HorizonVariableSpec("bad", (2, 3), public_native_shape=(3, 2))
+
+
+def test_boundary_variable_requires_deliberate_public_result_view():
+    with pytest.raises(ValueError, match="explicit public result view"):
+        HorizonVariableSpec("soc", (2,), "boundary")
+
+
+def test_result_projection_registry_is_immutable_source_specific_and_mergeable():
+    variable = ResultProjectionSpec("Pg", (2,), (2,), "interval")
+    expression = ResultProjectionSpec("p_net", (3,), (3,), "interval")
+    registry = merge_result_projection_registries(
+        ResultProjectionRegistry(variables={"Pg": variable}),
+        ResultProjectionRegistry(expressions={"p_net": expression}),
+    )
+
+    assert registry.projection_for("variable", "Pg") is variable
+    assert registry.projection_for("expression", "p_net") is expression
+    with pytest.raises(TypeError):
+        registry.variables["other"] = variable
+    with pytest.raises(ValueError, match="no declared"):
+        registry.projection_for("variable", "missing")
+    with pytest.raises(ValueError, match="duplicate variable"):
+        merge_result_projection_registries(
+            registry,
+            ResultProjectionRegistry(variables={"Pg": variable}),
+        )
 
 
 @pytest.mark.parametrize(

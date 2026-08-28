@@ -17,6 +17,12 @@ import numpy as np
 Formulation = Literal["ac", "lossy_dc", "singlenode_dc"]
 TemporalClass = Literal["static", "interval", "boundary"]
 BoxRepresentation = Literal["explicit", "leaf"]
+ResultTemporalView = Literal[
+    "interval",
+    "all_boundaries",
+    "post_step_boundaries",
+    "horizon",
+]
 BoxDecisionAuthority = Literal[
     "m14a1_qualified",
     "existing_production",
@@ -104,6 +110,159 @@ class TemporalFieldSpec:
 
 
 @dataclass(frozen=True)
+class ResultProjectionSpec:
+    """Typed projection from one internal value to its public result layout.
+
+    Vectorized builders retain one time-last CVXPY object.  This schema makes
+    the public layout explicit instead of asking result extraction to infer a
+    temporal axis from a name or a coincidentally matching shape.
+    """
+
+    name: str
+    internal_native_shape: tuple[int, ...]
+    public_native_shape: tuple[int, ...]
+    temporal_view: ResultTemporalView
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("result projection name must be nonempty")
+        _validate_native_shape(self.internal_native_shape, allow_zero=True)
+        _validate_native_shape(self.public_native_shape, allow_zero=True)
+        if self.temporal_view not in {
+            "interval",
+            "all_boundaries",
+            "post_step_boundaries",
+            "horizon",
+        }:
+            raise ValueError(f"invalid result temporal view {self.temporal_view!r}")
+        if int(np.prod(self.internal_native_shape, dtype=int)) != int(
+            np.prod(self.public_native_shape, dtype=int)
+        ):
+            raise ValueError(
+                "internal and public native result shapes must contain the "
+                "same number of coordinates"
+            )
+        remaining_public = iter(self.public_native_shape)
+        expected_public = next(remaining_public, None)
+        for dimension in self.internal_native_shape:
+            if dimension == expected_public:
+                expected_public = next(remaining_public, None)
+            elif dimension != 1:
+                break
+        else:
+            if expected_public is None:
+                return
+        raise ValueError(
+            "public native result shape must be obtained from the internal "
+            "native shape only by removing singleton axes"
+        )
+
+    def internal_shape(self, horizon_steps: int) -> tuple[int, ...]:
+        """Return the exact solved-value shape required by this projection."""
+        _validate_horizon_steps(horizon_steps)
+        if self.temporal_view == "horizon":
+            return self.internal_native_shape
+        length = horizon_steps + (
+            self.temporal_view in {"all_boundaries", "post_step_boundaries"}
+        )
+        return self.internal_native_shape + (length,)
+
+    def public_shape(self, horizon_steps: int) -> tuple[int, ...]:
+        """Return the exact public result shape produced by this projection."""
+        _validate_horizon_steps(horizon_steps)
+        if self.temporal_view == "horizon":
+            return self.public_native_shape
+        length = horizon_steps + (self.temporal_view == "all_boundaries")
+        return (length,) + self.public_native_shape
+
+    def project(self, values: np.ndarray, horizon_steps: int) -> np.ndarray:
+        """Validate and project a solved time-last value exactly once."""
+        array = np.asarray(values)
+        expected = self.internal_shape(horizon_steps)
+        if array.shape != expected:
+            raise ValueError(
+                f"result source {self.name!r} must have internal shape "
+                f"{expected}, got {array.shape}"
+            )
+        if self.temporal_view == "horizon":
+            return np.reshape(array, self.public_native_shape)
+        if self.temporal_view == "post_step_boundaries":
+            array = array[..., 1:]
+        time_first = np.moveaxis(array, -1, 0)
+        return np.reshape(time_first, self.public_shape(horizon_steps))
+
+
+@dataclass(frozen=True)
+class ResultProjectionRegistry:
+    """Immutable source-specific projection registry for one OPF build."""
+
+    variables: Mapping[str, ResultProjectionSpec] = field(default_factory=dict)
+    expressions: Mapping[str, ResultProjectionSpec] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        variables = dict(self.variables)
+        expressions = dict(self.expressions)
+        for source_kind, projections in (
+            ("variable", variables),
+            ("expression", expressions),
+        ):
+            mismatches = sorted(
+                name
+                for name, projection in projections.items()
+                if projection.name != name
+            )
+            if mismatches:
+                raise ValueError(
+                    f"{source_kind} result projection keys must match their "
+                    f"declared names: {mismatches}"
+                )
+        object.__setattr__(self, "variables", MappingProxyType(variables))
+        object.__setattr__(self, "expressions", MappingProxyType(expressions))
+
+    def projection_for(
+        self,
+        source_kind: Literal["variable", "expression"],
+        name: str,
+    ) -> ResultProjectionSpec:
+        """Return one required projection with a source-specific error."""
+        if source_kind not in {"variable", "expression"}:
+            raise ValueError(f"unknown result projection source {source_kind!r}")
+        projections = self.variables if source_kind == "variable" else self.expressions
+        try:
+            return projections[name]
+        except KeyError as error:
+            raise ValueError(
+                f"vectorized result {source_kind} {name!r} has no declared "
+                "public projection"
+            ) from error
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether no source has a public projection."""
+        return not self.variables and not self.expressions
+
+
+def merge_result_projection_registries(
+    *registries: ResultProjectionRegistry,
+) -> ResultProjectionRegistry:
+    """Merge disjoint registries without silently replacing a declaration."""
+    variables: dict[str, ResultProjectionSpec] = {}
+    expressions: dict[str, ResultProjectionSpec] = {}
+    for registry in registries:
+        for source_name, source, destination in (
+            ("variable", registry.variables, variables),
+            ("expression", registry.expressions, expressions),
+        ):
+            duplicates = set(destination).intersection(source)
+            if duplicates:
+                raise ValueError(
+                    f"duplicate {source_name} result projections: {sorted(duplicates)}"
+                )
+            destination.update(source)
+    return ResultProjectionRegistry(variables=variables, expressions=expressions)
+
+
+@dataclass(frozen=True)
 class HorizonVariableSpec:
     """Declarative schema for one interval or boundary CVXPY variable."""
 
@@ -111,6 +270,10 @@ class HorizonVariableSpec:
     native_shape: tuple[int, ...]
     temporal_class: Literal["interval", "boundary"] = "interval"
     attributes: Mapping[str, object] = field(default_factory=dict)
+    public_native_shape: tuple[int, ...] | None = None
+    result_view: (
+        Literal["interval", "all_boundaries", "post_step_boundaries"] | None
+    ) = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -118,13 +281,52 @@ class HorizonVariableSpec:
         _validate_native_shape(self.native_shape, allow_zero=False)
         if self.temporal_class not in {"interval", "boundary"}:
             raise ValueError("horizon variables must be interval or boundary")
+        public_native_shape = (
+            self.native_shape
+            if self.public_native_shape is None
+            else self.public_native_shape
+        )
+        _validate_native_shape(public_native_shape, allow_zero=False)
+        view = self.result_view
+        if view is None:
+            if self.temporal_class == "boundary":
+                raise ValueError(
+                    "boundary variables require an explicit public result view"
+                )
+            view = "interval"
+        if self.temporal_class == "interval" and view != "interval":
+            raise ValueError("interval variables require an interval result view")
+        if self.temporal_class == "boundary" and view not in {
+            "all_boundaries",
+            "post_step_boundaries",
+        }:
+            raise ValueError("boundary variables require a boundary result view")
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
+        object.__setattr__(self, "public_native_shape", public_native_shape)
+        object.__setattr__(self, "result_view", view)
+        ResultProjectionSpec(
+            self.name,
+            self.native_shape,
+            public_native_shape,
+            view,
+        )
 
     def shape(self, horizon_steps: int) -> tuple[int, ...]:
         """Return the variable's time-last horizon shape."""
         return TemporalFieldSpec(
             self.name, self.native_shape, self.temporal_class
         ).internal_shape(horizon_steps)
+
+    def result_projection(self) -> ResultProjectionSpec:
+        """Return the public projection carried by this variable schema."""
+        assert self.public_native_shape is not None
+        assert self.result_view is not None
+        return ResultProjectionSpec(
+            self.name,
+            self.native_shape,
+            self.public_native_shape,
+            self.result_view,
+        )
 
 
 def broadcast_static_bound(

@@ -2,9 +2,11 @@
 
 ## Status
 
-**In progress; M14b open.** The frozen legacy Case9 and Case118 scaling
-ladders completed, and the formulation-specific leaf-bound gate passed.
-Together these records authorize the horizon-assembly work now in progress.
+**In progress; M14b core compatibility contract implemented.** The frozen
+legacy Case9 and Case118 scaling ladders completed, and the formulation-
+specific leaf-bound gate passed. The typed horizon, one-call assembly,
+aggregation/publication, and public-result projection slices are implemented;
+focused component-box qualification is next.
 The M14a baseline is bound to:
 
 - execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;
@@ -394,6 +396,20 @@ The compatibility adapter must be designed and tested explicitly. It must not
 materialize thousands of new CVXPY objects merely to recreate the old internal
 list representation. If an internal/public representation must change, freeze
 that change through a separately reviewed typed contract before implementation.
+
+The implemented compatibility boundary uses an immutable, source-specific
+projection registry on each vectorized `OPFBuild`. Every extracted variable or
+expression declares its internal native shape, public native shape, and
+interval, boundary, or horizon view. Interval values move time first exactly
+once; storage SoC explicitly omits the retained initial boundary when restoring
+the existing `(T, n_storage)` result; horizon totals remain native; and `T=1`
+stays unsqueezed. Public native shapes may differ only by removing explicitly
+declared singleton axes, never by permuting or reinterpreting physical axes.
+Component model expressions are interval-valued; terminal expressions and
+integrated component costs are horizon-valued. Missing declarations, missing
+required sources even without an accepted primal, or dimensional drift fail
+extraction. The adapter retains the original horizon CVXPY objects and never
+reconstructs a per-step object list.
 
 ### M14c — Vectorized lossy DC
 
