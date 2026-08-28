@@ -2,19 +2,29 @@
 
 ## Status and authority
 
-M14b is open. It is authorized by the immutable M14a legacy baseline and the
-M14a.1 leaf-bound qualification record. The typed horizon, one-call assembly,
-aggregation/publication, and compatibility-result projection slices are now
-implemented. The reusable component-box probe harness, seven formulation-local
-gates, fresh-process runner, and immutable result schema are implemented; the
-clean authoritative execution is next. M14b keeps the public stepwise/CPP path
-available and unchanged by default.
+M14b is complete. It is authorized by the immutable M14a legacy baseline and
+the M14a.1 leaf-bound qualification record. The typed horizon, one-call
+assembly, aggregation/publication, compatibility-result projection, and
+component-box qualification slices are complete. M14b keeps the public
+stepwise/CPP path available and unchanged by default, and hands the frozen
+assembly contract to M14c.
+
+The authoritative component-box record was executed from commit
+`028b46e2f0af16fbff90a9bc991770f0267280a5`, has source fingerprint
+`45e2e91e95594b3418065c256ef476c70d14f7f679d1606a71f2fc34c57ac03b`, and
+is promoted as `M14B_COMPONENT_BOX_RESULTS.json` with SHA-256
+`2bdf5eda5d545a49e66afd01eeca7083bd3d81d54dfb5604ba62667c270815bf`
+in result commit `252b8c8d0cf243c4661c7aa0700f28f039afb8d2`.
 
 The frozen representation decisions are:
 
 - lossy DC: leaf bounds are authorized for dispatchable `Pg` and network
   `p_flows`;
 - single-node DC: leaf bounds are authorized for dispatchable `Pg`;
+- lossy DC: leaf bounds are also authorized for storage real power and SoC,
+  nondispatchable real power, load-shed fraction, and HVDC from-terminal power;
+- single-node DC: leaf bounds are also authorized for storage real power and
+  SoC, nondispatchable real power, and load-shed fraction;
 - AC: M14a.1 is isolated compatibility evidence only. No new AC leaf-bound
   migration is authorized. The existing production voltage leaf attribute is
   preserved, while generator and component operating boxes remain explicit;
@@ -119,6 +129,12 @@ mismatched leaf arm selects explicit inequalities for that formulation/family
 without blocking other gates or M14b. Preliminary dirty-tree runs are
 diagnostic only and cannot change the production decision registry.
 
+The authoritative run accepted all seven formulation-local pairs and qualified
+all nine formulation/family decisions for leaf bounds. This result applies only
+to the tested lossy-DC and single-node component boxes under SCIPY
+canonicalization and CLARABEL. It does not authorize AC leaf-bound migration
+and is not a comparative runtime or RSS result.
+
 ## Delivery order
 
 1. **Complete:** freeze typed temporal-field and variable-representation
@@ -127,10 +143,10 @@ diagnostic only and cannot change the production decision registry.
    without calling scalar hooks `T` times.
 3. **Complete:** implement compatibility publication and typed extraction
    without recreating a length-`T` CVXPY object list.
-4. **Pre-execution implementation complete:** execute the focused component-box
-   matrix from a clean commit, promote its immutable record, and freeze the
-   resulting local decisions.
-5. **Pending:** hand the completed assembly contract to M14c's vectorized
+4. **Complete:** the focused component-box matrix was executed from a clean
+   commit, its immutable record was promoted, and all nine local decisions were
+   frozen.
+5. **Next:** hand the completed assembly contract to M14c's vectorized
    lossy-DC builder.
 
 Structural tests cover time-last shapes, `T=1`, static broadcasting, interval

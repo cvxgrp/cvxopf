@@ -2,13 +2,13 @@
 
 ## Status
 
-**In progress; M14b core compatibility contract implemented.** The frozen
+**In progress; M14b complete, M14c next.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
 the reusable seven-gate component-box harness and fresh-process runner are also
-implemented. A clean authoritative component-box execution and promotion
-remain before the M14c handoff.
+complete. The authoritative component-box record qualified all nine tested
+lossy-DC and single-node decisions and freezes the assembly contract for M14c.
 The M14a baseline is bound to:
 
 - execution commit `1dd5e36dcae5ad9c8176b1d1202f1055acf95c03`;
@@ -24,6 +24,18 @@ All paired and binding-probe gates passed. Lossy DC selects leaf bounds for
 compatibility for `Pg`, `Qg`, and `v` but retains explicit inequalities because
 the isolated fixture does not retire the production lifted-DNLP and terminal-
 policy risk.
+
+The immutable M14b component-box result is bound to execution commit
+`028b46e2f0af16fbff90a9bc991770f0267280a5`, source fingerprint
+`45e2e91e95594b3418065c256ef476c70d14f7f679d1606a71f2fc34c57ac03b`, and
+promoted-record SHA-256
+`2bdf5eda5d545a49e66afd01eeca7083bd3d81d54dfb5604ba62667c270815bf`;
+the result was promoted in commit
+`252b8c8d0cf243c4661c7aa0700f28f039afb8d2`.
+All seven formulation-local pairs passed and all nine tested component-box
+decisions select leaf bounds. The result is limited to the tested lossy-DC and
+single-node boxes under SCIPY canonicalization and CLARABEL; it neither
+authorizes AC migration nor establishes a runtime or RSS advantage.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,
@@ -393,6 +405,12 @@ faces, objective/component costs, public results, independent physical
 residuals, canonical structure, and solver classification. A box may remain
 explicit without blocking vectorization; qualification controls only its
 representation.
+
+The authoritative M14b matrix completed all seven pairs and froze leaf bounds
+for lossy-DC storage power/SoC, nondispatchable power, load-shed fraction, and
+HVDC input power, plus single-node storage power/SoC, nondispatchable power, and
+load-shed fraction. This closes M14b and opens M14c; AC retains the explicit
+component-box decisions above.
 
 The compatibility adapter must be designed and tested explicitly. It must not
 materialize thousands of new CVXPY objects merely to recreate the old internal
