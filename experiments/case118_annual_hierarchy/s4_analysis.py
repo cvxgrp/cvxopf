@@ -35,11 +35,11 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 
 DEFAULT_DESTINATION = Path("experiments/case118_annual_hierarchy/S4_RESULTS.json")
 EXPECTED_EQUIVALENCE_DIMENSIONS: Mapping[str, int] = {
-    "scalar_variables": 6000,
-    "scalar_equalities": 2932,
-    "explicit_scalar_inequalities": 7584,
+    "scalar_variables": 6004,
+    "scalar_equalities": 2936,
+    "explicit_scalar_inequalities": 0,
     "other_scalar_constraints": 0,
-    "constraint_objects": 364,
+    "constraint_objects": 7,
 }
 EXPECTED_EQUIVALENCE_INPUT_SHA256 = (
     "8ea38cc285c4a1efba9e0c640cd410edbb6bc252cf7a09cbcd26c5d2e6712268"
@@ -186,6 +186,8 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         "equivalent",
         "mismatches",
         "formulation",
+        "temporal_assembly",
+        "canonicalization_backend",
         "public_dimensions",
         "streaming_dimensions",
         "public_status",
@@ -247,6 +249,9 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         equivalence.get("equivalent") is not True
         or equivalence.get("horizon_steps") != 24
         or equivalence.get("mismatches") != []
+        or equivalence.get("temporal_assembly") != fixture.temporal_assembly
+        or equivalence.get("canonicalization_backend")
+        != fixture.canonicalization_backend
         or equivalence.get("public_dimensions")
         != equivalence.get("streaming_dimensions")
         or equivalence.get("public_dimensions") != EXPECTED_EQUIVALENCE_DIMENSIONS
@@ -291,10 +296,32 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         or worker.get("context_matches") is not True
         or worker.get("start_context") != context
         or worker.get("end_context") != context
+        or _mapping(worker.get("outer_plan"), "S4 worker outer plan").get(
+            "temporal_assembly"
+        )
+        != fixture.temporal_assembly
+        or _mapping(worker.get("outer_plan"), "S4 worker outer plan").get(
+            "canonicalization_backend"
+        )
+        != fixture.canonicalization_backend
     ):
         raise ValueError("S4 execution did not retain one accepted provenance chain")
     if context.get("source_fingerprint") != s4_source_fingerprint():
         raise ValueError("S4 tracked source fingerprint differs from execution")
+    if (
+        context.get("temporal_assembly") != fixture.temporal_assembly
+        or context.get("canonicalization_backend") != fixture.canonicalization_backend
+        or context.get("m14c_integration_checkpoint")
+        != fixture.m14c_integration_checkpoint
+        or context.get("m14c_source_commit") != fixture.m14c_source_commit
+        or context.get("big_experiment_parent_commit")
+        != fixture.big_experiment_parent_commit
+        or context.get("m14c_merge_base_commit") != fixture.m14c_merge_base_commit
+        or context.get("prefix_ladder_executed") is not True
+        or context.get("annual_execution_authorized") is not True
+        or context.get("m14c_integration_sha256") != fixture.m14c_integration_sha256
+    ):
+        raise ValueError("S4 execution integration provenance differs from fixture")
     if supervision.get("outer_plan_sha256") != sha256_path(outer_path):
         raise ValueError("S4 supervision outer-plan identity mismatch")
     policy = _mapping(supervision.get("resource_policy"), "S4 resource policy")
@@ -330,6 +357,11 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
     )
     if not outer.accepted_primal or outer.boundary_soc_mwh is None:
         raise ValueError("S4 annual outer plan is not independently accepted")
+    if (
+        outer.temporal_assembly != fixture.temporal_assembly
+        or outer.canonicalization_backend != fixture.canonicalization_backend
+    ):
+        raise ValueError("S4 outer archive has the wrong temporal representation")
     dimensions = _mapping(worker.get("dimensions"), "S4 worker dimensions")
     if dimensions != _archived_dimensions(outer_path):
         raise ValueError("S4 structural counts do not reproduce from the archive")
@@ -359,6 +391,15 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         "classification": "accepted",
         "horizon_steps": fixture.inputs.horizon_steps,
         "delta_hours": fixture.inputs.delta,
+        "temporal_assembly": outer.temporal_assembly,
+        "canonicalization_backend": outer.canonicalization_backend,
+        "m14c_integration_checkpoint": fixture.m14c_integration_checkpoint,
+        "m14c_source_commit": fixture.m14c_source_commit,
+        "big_experiment_parent_commit": fixture.big_experiment_parent_commit,
+        "m14c_merge_base_commit": fixture.m14c_merge_base_commit,
+        "prefix_ladder_executed": fixture.prefix_ladder_executed,
+        "annual_execution_authorized": fixture.annual_execution_authorized,
+        "m14c_integration_sha256": fixture.m14c_integration_sha256,
         "storage_device_ids": list(fixture.storage_device_ids),
         "objective": _number(outer.result.get("objective"), "S4 objective"),
         "terminal_soc_residual_mwh_abs": terminal_residual,

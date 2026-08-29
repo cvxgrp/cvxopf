@@ -28,7 +28,11 @@ from experiments.case118_annual_hierarchy.s4_equivalence import (
     EQUIVALENCE_HORIZON_STEPS,
     run_s4_outer_equivalence,
 )
-from experiments.case118_annual_hierarchy.s4_fixture import S4ExecutionLimits
+from experiments.case118_annual_hierarchy.s4_fixture import (
+    S4_CANONICALIZATION_BACKEND,
+    S4_TEMPORAL_ASSEMBLY,
+    S4ExecutionLimits,
+)
 from experiments.case118_annual_hierarchy.streaming_archive import (
     write_verified_outer_plan_archive,
 )
@@ -57,15 +61,17 @@ def test_s4_outer_seam_matches_public_controller_before_ac_construction() -> Non
     assert report["equivalent"] is True
     assert report["mismatches"] == []
     assert report["formulation"] == "lossy_dc"
+    assert report["temporal_assembly"] == S4_TEMPORAL_ASSEMBLY == "vectorized"
+    assert report["canonicalization_backend"] == S4_CANONICALIZATION_BACKEND == "SCIPY"
     assert (
         report["public_dimensions"]
         == report["streaming_dimensions"]
         == {
-            "scalar_variables": 6000,
-            "scalar_equalities": 2932,
-            "explicit_scalar_inequalities": 7584,
+            "scalar_variables": 6004,
+            "scalar_equalities": 2936,
+            "explicit_scalar_inequalities": 0,
             "other_scalar_constraints": 0,
-            "constraint_objects": 364,
+            "constraint_objects": 7,
         }
     )
     assert report["public_status"] == report["streaming_status"] == "optimal"
@@ -143,6 +149,8 @@ def test_s4_worker_executes_only_outer_lifecycle_and_archives_acceptance(
         policy=compact.policy,
         solve_config=compact.solve_config,
         scenario_hash="test-scenario",
+        temporal_assembly=S4_TEMPORAL_ASSEMBLY,
+        canonicalization_backend=S4_CANONICALIZATION_BACKEND,
     )
     context = {
         "git_commit": "test-commit",
@@ -164,6 +172,8 @@ def test_s4_worker_executes_only_outer_lifecycle_and_archives_acceptance(
         "worker",
     )
     assert worker["classification"] == "accepted"
+    assert worker["outer_plan"]["temporal_assembly"] == "vectorized"
+    assert worker["outer_plan"]["canonicalization_backend"] == "SCIPY"
     assert (tmp_path / "outer-plan.json.gz").is_file()
     samples = cast(list[Mapping[str, object]], worker["resource_samples"])
     assert [sample["phase"] for sample in samples] == [
@@ -189,11 +199,29 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
         solve_config_sha256=solve_config_sha256(compact.solve_config),
         scenario_hash="test-scenario",
         storage_device_ids=compact.storage_device_ids,
+        temporal_assembly=S4_TEMPORAL_ASSEMBLY,
+        canonicalization_backend=S4_CANONICALIZATION_BACKEND,
+        m14c_integration_checkpoint="integration-checkpoint",
+        m14c_source_commit="m14c-source",
+        big_experiment_parent_commit="big-parent",
+        m14c_merge_base_commit="merge-base",
+        prefix_ladder_executed=True,
+        annual_execution_authorized=True,
+        m14c_integration_sha256="integration-hash",
     )
     context = {
         "git_commit": "test-commit",
         "git_clean": True,
         "source_fingerprint": "test-source",
+        "temporal_assembly": S4_TEMPORAL_ASSEMBLY,
+        "canonicalization_backend": S4_CANONICALIZATION_BACKEND,
+        "m14c_integration_checkpoint": "integration-checkpoint",
+        "m14c_source_commit": "m14c-source",
+        "big_experiment_parent_commit": "big-parent",
+        "m14c_merge_base_commit": "merge-base",
+        "prefix_ladder_executed": True,
+        "annual_execution_authorized": True,
+        "m14c_integration_sha256": "integration-hash",
     }
     monkeypatch.setattr(run_s4, "load_s4_fixture", lambda: fixture)
     monkeypatch.setattr(run_s4, "_safe_execution_context", lambda: context)
@@ -250,6 +278,8 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
                 "horizon_steps": 24,
                 "mismatches": [],
                 "formulation": "lossy_dc",
+                "temporal_assembly": S4_TEMPORAL_ASSEMBLY,
+                "canonicalization_backend": S4_CANONICALIZATION_BACKEND,
                 "public_dimensions": s4_analysis.EXPECTED_EQUIVALENCE_DIMENSIONS,
                 "streaming_dimensions": (s4_analysis.EXPECTED_EQUIVALENCE_DIMENSIONS),
                 "public_status": "optimal",
@@ -312,6 +342,11 @@ def test_s4_supervisor_retains_worker_launch_failure(
     }
     monkeypatch.setattr(run_s4, "execution_context", lambda: context)
     monkeypatch.setattr(run_s4, "_safe_execution_context", lambda: context)
+    monkeypatch.setattr(
+        run_s4,
+        "load_s4_fixture",
+        lambda: SimpleNamespace(annual_execution_authorized=True),
+    )
     monkeypatch.setattr(run_s4, "outer_equivalence_gate", lambda: {"equivalent": True})
 
     captured_command: list[str] = []
@@ -365,6 +400,11 @@ def test_s4_supervisor_retains_rss_limit_without_promoting_worker(
     monkeypatch.setattr(run_s4, "S4_EXECUTION_LIMITS", limits)
     monkeypatch.setattr(run_s4, "execution_context", lambda: context)
     monkeypatch.setattr(run_s4, "_safe_execution_context", lambda: context)
+    monkeypatch.setattr(
+        run_s4,
+        "load_s4_fixture",
+        lambda: SimpleNamespace(annual_execution_authorized=True),
+    )
     monkeypatch.setattr(run_s4, "outer_equivalence_gate", lambda: {"equivalent": True})
     monkeypatch.setattr(run_s4.subprocess, "Popen", lambda *args, **kwargs: process)
     monkeypatch.setattr(
@@ -388,3 +428,26 @@ def test_s4_supervisor_retains_rss_limit_without_promoting_worker(
     assert result["worker_result"] is None
     assert result["outer_plan_sha256"] is None
     assert not (directory / "active-worker.json").exists()
+
+
+def test_s4_supervisor_rejects_unauthorized_annual_run_before_output_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "s4"
+    fixture = SimpleNamespace(annual_execution_authorized=False)
+    monkeypatch.setattr(run_s4, "load_s4_fixture", lambda: fixture)
+    monkeypatch.setattr(
+        run_s4,
+        "execution_context",
+        lambda: pytest.fail("execution context must not be captured"),
+    )
+    monkeypatch.setattr(
+        run_s4,
+        "outer_equivalence_gate",
+        lambda: pytest.fail("equivalence must not run before authorization"),
+    )
+
+    with pytest.raises(ValueError, match="annual execution is not authorized"):
+        run_s4.run_s4(directory)
+
+    assert not directory.exists()

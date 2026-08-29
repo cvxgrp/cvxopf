@@ -29,6 +29,7 @@
 \title{CVXOPF: multiscale optimization for battery resilience}
 \subtitle{From nonlinear power flow to month-scale hierarchical control}
 \author{Bennet Meyers}
+\institute{\url{https://github.com/cvxgrp/cvxopf}}
 \date{August 26, 2026}
 
 \begin{document}
@@ -37,7 +38,7 @@
   \titlepage
 \end{frame}
 
-\begin{frame}{The research goal}
+\begin{frame}{Research objectives}
   \textbf{How can we plan battery energy over long horizons while respecting
   the nonlinear AC network physics that determine whether each action is realizable?}
   \vspace{0.7em}
@@ -61,7 +62,7 @@
   \centering\large The project thesis: \textbf{plan energy globally; realize power flow locally.}
 \end{frame}
 
-\begin{frame}{Why intertemporal optimization matters}
+\begin{frame}{Intertemporal storage operation}
   \begin{columns}[c,onlytextwidth]
     \column{0.57\textwidth}
     \includegraphics[width=\textwidth,height=0.69\textheight,keepaspectratio]{../../experiments/battery_terminal/readme_intertemporal_storage.png}
@@ -75,87 +76,186 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{A common modeling system now spans the research questions}
-  \small
-  \begin{center}
-  \begin{tikzpicture}[scale=0.82,transform shape,node distance=6mm and 8mm,
+
+\begin{frame}[shrink=5]{Current modeling capabilities}
+	\small
+	\begin{columns}[T,onlytextwidth]
+		\column{0.48\textwidth}
+		\begin{block}{Network and formulations}
+			\begin{itemize}\tightitems
+				\item nonlinear AC OPF through CVXPY DNLP/IPOPT
+				\item convex lossy-DC and single-node formulations
+				\item active branch status and two-terminal AC thermal limits
+				\item sparse and dense network representations
+			\end{itemize}
+		\end{block}
+		\begin{block}{Intertemporal control}
+			\begin{itemize}\tightitems
+				\item single- and multistep problems
+				\item hard, shortfall, and soft terminal policies
+				\item public hierarchical DC--AC orchestration
+			\end{itemize}
+		\end{block}
+		\column{0.48\textwidth}
+		\begin{block}{First-class components}
+			\begin{itemize}\tightitems
+				\item dispatchable and nondispatchable generation
+				\item batteries with real/reactive capability and cycling cost
+				\item fixed and economically sheddable loads
+				\item lossy controllable HVDC links
+			\end{itemize}
+		\end{block}
+		\begin{block}{Research discipline}
+			\begin{itemize}\tightitems
+				\item typed identities and stable failure schemas
+				\item explicit objective time units
+				\item retained audit residuals and reproducible experiments
+			\end{itemize}
+		\end{block}
+	\end{columns}
+\end{frame}
+
+\begin{frame}{Component models across network formulations}
+  \centering
+  \large A shared component model makes DC planning and AC realization parts of
+  \textbf{one mathematical system}.
+  \normalsize
+  \vspace{0.5em}
+
+  \begin{tikzpicture}[scale=0.84,transform shape,node distance=5mm and 8mm,
     box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum height=9mm,align=center},
+    form/.style={draw=mutedgreen,rounded corners,fill=mutedgreen!7,minimum width=28mm,minimum height=9mm,align=center},
     arr/.style={-{Latex[length=2mm]},thick,customblue}]
-    \node[box] (data) {network + profiles\\\scriptsize stable device identity};
-    \node[box,right=of data] (components) {component models\\\scriptsize generators, renewables, storage, loads, HVDC};
-    \node[box,right=of components] (assembly) {typed assembly\\\scriptsize variables, injections, constraints, costs};
-    \node[box,below=of assembly] (forms) {formulations\\\scriptsize AC, lossy DC, single-node DC};
-    \node[box,left=of forms] (solve) {solve + audit\\\scriptsize stable results and residual gates};
-    \node[box,left=of solve] (hier) {hierarchical control\\\scriptsize signposts, feedback, recovery};
+    \node[box] (data) {network + profiles\\\scriptsize identity-aligned inputs};
+    \node[box,right=of data] (components) {component-owned mathematics\\\scriptsize variables, injections, constraints, costs};
+    \node[box,right=of components] (assembly) {generic typed assembly\\\scriptsize common horizon and result contracts};
+    \node[form,below left=7mm and 23mm of assembly] (ac) {nonlinear AC};
+    \node[form,right=6mm of ac] (dc) {lossy DC};
+    \node[form,right=6mm of dc] (single) {single-node DC};
+    \node[box,below=8mm of dc] (hier) {hierarchical studies\\\scriptsize state constraints passed between fidelity levels};
     \draw[arr] (data)--(components); \draw[arr] (components)--(assembly);
-    \draw[arr] (assembly)--(forms); \draw[arr] (forms)--(solve); \draw[arr] (solve)--(hier);
+    \draw[arr] (assembly)--(ac); \draw[arr] (assembly)--(dc); \draw[arr] (assembly)--(single);
+    \draw[arr] (ac)--(hier); \draw[arr] (dc)--(hier); \draw[arr] (single)--(hier);
   \end{tikzpicture}
-  \end{center}
-  \begin{itemize}
-    \item Components contribute their own mathematics through a typed contract.
-    \item Formulation builders aggregate those contributions generically, so storage, load, and network semantics survive across layers.
+  \vspace{0.45em}
+  \begin{itemize}\tightitems
+    \item Formulation builders supply network equations; components retain the same identities, operating semantics, and costs in every formulation.
+    \item Demonstrated: lossy-DC SoC signposts coordinate AC realization. Proposed: a single-node layer could pass an aggregate storage-energy equality into a networked lossy-DC layer.
   \end{itemize}
 \end{frame}
 
-\begin{frame}[shrink=5]{What the software can model today}
-  \small
+\begin{frame}[shrink=3]{Branch-limit formulations: direct and lifted}
   \begin{columns}[T,onlytextwidth]
-    \column{0.48\textwidth}
-    \begin{block}{Network and formulations}
-      \begin{itemize}\tightitems
-        \item nonlinear AC OPF through CVXPY DNLP/IPOPT
-        \item convex lossy-DC and single-node formulations
-        \item active branch status and two-terminal AC thermal limits
-        \item sparse and dense network representations
-      \end{itemize}
-    \end{block}
-    \begin{block}{Intertemporal control}
-      \begin{itemize}\tightitems
-        \item single- and multistep problems
-        \item hard, shortfall, and soft terminal policies
-        \item public hierarchical DC--AC orchestration
-      \end{itemize}
-    \end{block}
-    \column{0.48\textwidth}
-    \begin{block}{First-class components}
-      \begin{itemize}\tightitems
-        \item dispatchable and nondispatchable generation
-        \item batteries with real/reactive capability and cycling cost
-        \item fixed and economically sheddable loads
-        \item lossy controllable HVDC links
-      \end{itemize}
-    \end{block}
-    \begin{block}{Research discipline}
-      \begin{itemize}\tightitems
-        \item typed identities and stable failure schemas
-        \item explicit objective time units
-        \item retained audit residuals and reproducible experiments
-      \end{itemize}
-    \end{block}
+    \column{0.47\textwidth}
+    \centering
+    \textbf{Direct constraint}
+    \[
+      P_e(V)^2 + Q_e(V)^2 \leq \overline S_e^2
+    \]
+    \scriptsize Put the nonlinear voltage-based terminal-flow expressions
+    directly inside the thermal inequality.
+
+    \column{0.47\textwidth}
+    \centering
+    \textbf{Lifted constraint}
+    \[
+      \widehat P_e=P_e(V),\quad \widehat Q_e=Q_e(V),
+      \qquad
+      \widehat P_e^2 + \widehat Q_e^2 \leq \overline S_e^2
+    \]
+    \scriptsize Name the same terminal powers with auxiliary variables, then
+    constrain those variables. Here $e\in\{\mathrm{from},\mathrm{to}\}$.
   \end{columns}
+  \vspace{0.2em}
+  \centering
+  \includegraphics[width=0.98\textwidth,height=0.55\textheight,keepaspectratio]{formulation_results.pdf}
+  \small The terminal flows agree below $4.5\times10^{-14}$ p.u.; on case57,
+  lifting reduced solve time by 27$\times$ (sparse) and 110$\times$ (dense).
 \end{frame}
 
-\begin{frame}[shrink=3]{Equivalent mathematics can have radically different numerical behavior}
+\begin{frame}{CVXOPF--Pypower comparison}
   \centering
-  \includegraphics[width=0.98\textwidth,height=0.68\textheight,keepaspectratio]{formulation_results.pdf}
-  \begin{itemize}\small\tightitems
-    \item Direct and lifted branch-terminal equations agree below $4.5\times10^{-14}$ p.u.; paired objectives agree to solver precision.
-    \item Lifting adds variables and equalities but separates nonlinear voltage expressions from quadratic thermal inequalities.
-    \item On case57, the lifted structure was 27$\times$ faster in sparse form and 110$\times$ faster in dense form.
+  \textbf{Four matched variants of the 9-bus AC-OPF test case}\par
+  \small CVXOPF and Pypower solved each variant independently;
+  entries show CVXOPF / Pypower objective values.
+  \vspace{0.5em}
+
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    & \textbf{No controllable DC links} & \textbf{Three controllable DC links} \\
+    \midrule
+    Smooth quadratic costs
+      & 5296.69 / 5296.69
+      & 5262.04 / 5314.28 \quad (1.0\%) \\
+    Piecewise-linear costs
+      & 5322.94 / 5322.94
+      & \textbf{5469.04 / 6249.87 \quad (14.3\%)} \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.8em}
+
+  \begin{itemize}\tightitems
+    \item The cases differed only in generator cost representation (smooth or PWL) and the presence of three controllable DC links.
+    \item The solvers agreed without DC links; with smooth costs and DC links, their objectives differed by only 1.0\%.
+    \item With both PWL costs and controllable DC links, Pypower returned 6249.87 even though CVXOPF found a matched-feasible point costing 5469.04: Pypower was \textbf{at least 14.3\% suboptimal}.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Terminal energy is an economic decision, not a boundary detail}
+\begin{frame}{Cross-evaluation of solver solutions}
+  \begin{columns}[c,onlytextwidth]
+    \column{0.47\textwidth}
+    \centering
+    \textbf{The decisive comparison}
+    \vspace{0.5em}
+
+    \[
+      x_{\mathrm{CVXOPF}} \in \mathcal F_{\mathrm{Pypower}}
+    \]
+    \[
+      \begin{aligned}
+        J(x_{\mathrm{CVXOPF}}) &= 5469.04,\\
+        J(x_{\mathrm{Pypower}}) &= 6249.87,
+      \end{aligned}
+    \]
+    \[
+      \Delta J = 780.83
+    \]
+    \small Worst reconstructed constraint residual:
+    $2.7\times10^{-9}$.
+
+    \column{0.49\textwidth}
+    \small
+    \begin{itemize}\tightitems
+      \item Cross-evaluated objective values agree.
+      \item The CVXOPF point satisfies Pypower's neutralized feasible set, including its fixed converter-loss law.
+      \item Pypower's returned point is therefore demonstrably suboptimal.
+      \item Accepted explanation: DNLP canonicalization replaces PWL kinks with a smooth epigraph problem, helping the local solver reach a better basin.
+      \item This does \textbf{not} establish global optimality; AC OPF remains nonconvex.
+    \end{itemize}
+  \end{columns}
+  \vspace{0.5em}
+  \centering\small Independent feasibility audits are stronger evidence than
+  agreement with a familiar solver.
+\end{frame}
+
+\begin{frame}{Representative 96-hour scenarios}
   \centering
-  \includegraphics[width=0.98\textwidth,height=0.68\textheight,keepaspectratio]{terminal_policy_results.pdf}
+  \includegraphics[width=0.98\textwidth,height=0.78\textheight,keepaspectratio]{representative_scenarios.pdf}
+  \par\scriptsize Regime labels describe energy conditions across the full window;
+  the moderate case has the largest instantaneous net-load peak.
+\end{frame}
+
+\begin{frame}{Battery terminal-energy policies}
+  \centering
+  \includegraphics[width=0.98\textwidth,height=0.65\textheight,keepaspectratio]{terminal_policy_results.pdf}
   \begin{itemize}\small\tightitems
-    \item The sampled fixed-terminal value is empirically convex and piecewise smooth.
-    \item Linear penalties recover a hard target beyond a marginal-value threshold; quadratic penalties create a smooth tradeoff.
-    \item Terminal policy therefore encodes the value or obligation attached to energy beyond the modeled horizon.
+    \item In each regime, the sampled fixed-terminal value is empirically convex and piecewise smooth.
+    \item Linear penalties recover a hard target beyond a marginal-value threshold; quadratic penalties create a smooth tradeoff, encoding the value attached to energy beyond the horizon.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Long-horizon energy states can coordinate short-horizon AC solves}
+\begin{frame}{DC signposts for rolling AC OPF}
   \centering
   \includegraphics[width=0.98\textwidth,height=0.68\textheight,keepaspectratio]{locality_and_handoff.pdf}
   \begin{itemize}\small\tightitems
@@ -164,35 +264,59 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The hierarchical controller closes the loop}
-  \centering
-  \begin{tikzpicture}[node distance=8mm and 12mm,
-    box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum width=31mm,minimum height=13mm,align=center},
-    arr/.style={-{Latex[length=2.5mm]},very thick,customblue}]
-    \node[box] (outer) {long-horizon DC\\\scriptsize feasible SoC signposts};
-    \node[box,right=of outer] (window) {short AC window\\\scriptsize hard/soft endpoint};
-    \node[box,right=of window] (action) {accept first action\\\scriptsize audited AC dispatch};
-    \node[box,below=of window] (state) {realized state feedback\\\scriptsize SoC + causal warm start};
-    \draw[arr] (outer)--(window); \draw[arr] (window)--(action);
-    \draw[arr] (action)|-(state); \draw[arr] (state)-|(outer);
-  \end{tikzpicture}
-  \vspace{1em}
+\begin{frame}{Frozen planning and closed-loop replanning}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \centering
+    \textbf{Frozen outer plan}
+    \vspace{0.35em}
+
+    \begin{tikzpicture}[node distance=4.5mm,
+      box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum width=39mm,minimum height=9mm,align=center},
+      arr/.style={-{Latex[length=2.2mm]},thick,customblue}]
+      \node[box] (outerf) {solve long-horizon DC once};
+      \node[box,below=of outerf] (signf) {fixed SoC signpost sequence};
+      \node[box,below=of signf] (acf) {solve next AC window};
+      \node[box,below=of acf] (statef) {execute first action\\\scriptsize carry realized SoC forward};
+      \draw[arr] (outerf)--(signf); \draw[arr] (signf)--(acf);
+      \draw[arr] (acf)--(statef);
+      \draw[arr] (statef.east) -- ++(7mm,0) |- (acf.east);
+    \end{tikzpicture}
+
+    \column{0.48\textwidth}
+    \centering
+    \textbf{Closed-loop outer replanning}
+    \vspace{0.35em}
+
+    \begin{tikzpicture}[node distance=4.5mm,
+      box/.style={draw=mutedgreen,rounded corners,fill=mutedgreen!7,minimum width=39mm,minimum height=9mm,align=center},
+      arr/.style={-{Latex[length=2.2mm]},thick,mutedgreen}]
+      \node[box] (outerr) {solve remaining-horizon DC};
+      \node[box,below=of outerr] (signr) {select next SoC signpost};
+      \node[box,below=of signr] (acr) {solve next AC window};
+      \node[box,below=of acr] (stater) {execute first action\\\scriptsize observe realized SoC};
+      \draw[arr] (outerr)--(signr); \draw[arr] (signr)--(acr);
+      \draw[arr] (acr)--(stater);
+      \draw[arr] (stater.east) -- ++(7mm,0) |- (outerr.east);
+    \end{tikzpicture}
+  \end{columns}
+  \vspace{0.6em}
   \begin{itemize}\tightitems
-    \item The outer model maintains the energy plan; the inner model realizes the next action with AC voltage, reactive-power, loss, and thermal physics.
-    \item Realized state—not an imagined DC action—feeds the next decision.
+    \item Both use audited AC actions and realized-state handoff; replanning additionally updates the outer trajectory from realized state and new information.
+    \item The 96-hour study shows that continuous outer replanning is available, but not always necessary: a coherent frozen plan can remain AC-realizable.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The first 96-hour study exposed two different failure mechanisms}
+\begin{frame}{96-hour hierarchical study}
   \centering
-  \includegraphics[width=0.92\textwidth,height=0.55\textheight,keepaspectratio]{m17_policy_outcomes.pdf}
+  \includegraphics[width=0.96\textwidth,height=0.58\textheight,keepaspectratio]{m17_soc_trajectories.pdf}
   \begin{itemize}\tightitems
-    \item \textbf{Numerical/local-solver sensitivity:} flat-start IPOPT reported infeasible at one hard-target window; six alternate starts solved the identical problem.
-    \item \textbf{Genuine loss of terminal viability:} soft deviations left 128.1 MW required charging in the last hour, but only 123.6 MW aggregate headroom.
+    \item \textbf{Hard targets:} both the frozen and repeatedly replanned controllers track the initial DC energy trajectory closely while realizing it through AC-feasible actions.
+    \item \textbf{Soft targets:} both controllers diverge as expected when the configured penalty favors operating flexibility over exact signpost agreement; a consistent soft policy would also soften and solve the final endpoint.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Causal initialization recovery works in the reference scenario}
+\begin{frame}{Causal warm-start recovery}
   \begin{columns}[T,onlytextwidth]
     \column{0.58\textwidth}
     \textbf{Frozen 96-hour recovery experiment}
@@ -212,7 +336,7 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Case118 makes the computational boundary visible}
+\begin{frame}{Case118 computational scaling}
   \begin{columns}[T,onlytextwidth]
     \column{0.54\textwidth}
     \textbf{Six-hour rated AC pilot}
@@ -231,7 +355,7 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{The hierarchy has progressed from hours to a month}
+\begin{frame}{Scaling from 96 hours to one month}
   \small
   \begin{center}
   \begin{tikzpicture}[scale=0.80,transform shape,node distance=5mm,
@@ -253,7 +377,7 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Process recycling controls memory without changing the science}
+\begin{frame}{Process recycling and memory use}
   \centering
   \includegraphics[width=0.98\textwidth,height=0.69\textheight,keepaspectratio]{recycling_memory.pdf}
   \begin{itemize}\small\tightitems
@@ -263,7 +387,7 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The annual study separates planning, partitioning, and execution}
+\begin{frame}{Annual-study execution architecture}
   \centering
   \begin{tikzpicture}[scale=0.88,transform shape,node distance=7mm and 10mm,
     box/.style={draw=customblue,rounded corners,fill=customblue!7,minimum width=30mm,minimum height=13mm,align=center},
@@ -282,7 +406,7 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Annual failure identifies the next milestone}
+\begin{frame}{Annual-study resource limit}
   \begin{columns}[T,onlytextwidth]
     \column{0.50\textwidth}
     \textbf{What the failed workers established}
@@ -304,14 +428,15 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{What we have learned}
+\begin{frame}{Key findings}
+  \small
   \begin{enumerate}\tightitems
-    \item \textbf{Model structure matters computationally.} Equivalent nonlinear formulations can differ by orders of magnitude in tractability.
-    \item \textbf{Terminal energy is part of the scientific model.} Hard obligations, reserve floors, and soft value functions answer different questions.
-    \item \textbf{DC signposts can coordinate AC realizations.} The layers need shared state, not identical trajectories.
-    \item \textbf{Feedback is not recursive feasibility.} Soft deviations can consume the remaining ability to satisfy a terminal obligation.
-    \item \textbf{Solver recovery is operationally relevant.} Causal warm starts distinguish numerical failure from demonstrated physical infeasibility.
-    \item \textbf{Scaling requires both algebra and systems engineering.} Time-vectorized graphs, supervision, immutable artifacts, recycling, and sharding are part of doing the science correctly.
+    \item \textbf{Formulation matters.} Equivalent branch constraints differed radically in solve time; CVXOPF also proved Pypower at least 14.3\% suboptimal in one matched case.
+    \item \textbf{Terminal energy is a policy choice.} Hard targets, reserve floors, and soft penalties answer different physical and economic questions.
+    \item \textbf{Hierarchical DC--AC control works.} Long-horizon DC signposts coordinated rolling AC network solves across 96 hours.
+    \item \textbf{Frozen and replanned control both worked.} Hard policies tracked the DC plan; soft policies traded exact tracking for flexibility as intended. This scenario did not require continuous replanning.
+    \item \textbf{Initialization is part of solve policy.} Causal warm starts and target-free recovery resolved failures that flat starts misclassified as infeasibility.
+    \item \textbf{Long horizons need multiple scaling tools.} Time vectorization, copper-plate outer models, and overlapping AC shards offer complementary paths to multi-year studies.
   \end{enumerate}
 \end{frame}
 
@@ -339,23 +464,191 @@
 
 \appendix
 
-\begin{frame}{Appendix: load shedding is now a first-class reliability decision}
+\begin{frame}{Appendix: AC network formulation}
+  \textbf{Full nonlinear network realization}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Preserved physics}
+    \begin{itemize}\small\tightitems
+      \item voltage magnitude and phase angle at every bus
+      \item nonlinear active and reactive nodal balance
+      \item complex branch admittance, fixed transformer taps, and phase shifts
+      \item voltage bounds and a reference angle
+      \item apparent-power limits at both branch terminals
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Computational role}
+    \begin{itemize}\small\tightitems
+      \item accepts active and reactive device contributions
+      \item reports terminal flows, voltages, and physical losses
+      \item nonconvex formulation canonicalized through CVXPY DNLP
+      \item solved locally with IPOPT; accepted results are not global certificates
+      \item used as the high-fidelity realization layer
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: lossy-DC network formulation}
+  \textbf{Convex network-aware planning model}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Preserved structure}
+    \begin{itemize}\small\tightitems
+      \item signed active-power flow on every in-service branch
+      \item active-power conservation at every bus
+      \item branch flow limits and device location
+      \item convex generator and component costs
+      \item resistance-weighted quadratic flow penalty
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Approximation and role}
+    \begin{itemize}\small\tightitems
+      \item omits voltage magnitude and reactive power
+      \item the quadratic ``loss'' term regularizes costly flow; nodal conservation itself remains lossless
+      \item convex QP solved with CLARABEL
+      \item retains congestion and spatial delivery constraints
+      \item used for long-horizon network planning and battery signposts
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: single-node network formulation}
+  \textbf{Copper-plate economic dispatch}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Preserved structure}
+    \begin{itemize}\small\tightitems
+      \item one aggregate active-power balance per interval
+      \item generator, load, storage, and renewable device limits
+      \item storage dynamics and terminal policies
+      \item time-integrated device costs
+      \item device-level identities and reporting
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Omissions and role}
+    \begin{itemize}\small\tightitems
+      \item no buses, branch flows, congestion, or transmission losses
+      \item no voltage or reactive power
+      \item HVDC links make an explicit null contribution after network collapse
+      \item convex QP solved with CLARABEL
+      \item cheapest outer model for very long horizons and aggregate energy signposts
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: dispatchable generators}
+  \textbf{\texttt{DispatchableGenerator}} represents a conventional generator at one bus.
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Configured data}
+    \begin{itemize}\small\tightitems
+      \item bus, status, and voltage setpoint
+      \item active-power minimum and maximum
+      \item reactive-power minimum and maximum
+      \item polynomial or piecewise-linear operating cost
+      \item startup and shutdown costs retained for data fidelity, but currently inactive
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Model contribution}
+    \begin{itemize}\small\tightitems
+      \item active injection in every formulation
+      \item reactive injection and limits in AC
+      \item optional AC voltage-setpoint enforcement
+      \item time-integrated operating cost
+      \item MATPOWER generator and cost rows convert to the same object
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: nondispatchable generation}
+  \textbf{\texttt{NondispatchableUnit}} represents inverter-coupled wind, solar, or another availability-limited source.
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Configured data}
+    \begin{itemize}\small\tightitems
+      \item bus and stable device identity
+      \item available active power
+      \item apparent-power rating
+      \item optional device-aligned time series of availability
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Model contribution}
+    \begin{itemize}\small\tightitems
+      \item dispatch between zero and available power
+      \item curtailment reported as availability minus dispatch
+      \item joint active/reactive inverter circle in AC
+      \item explicit active-power availability and rating bounds in DC
+      \item no reactive variable in DC formulations
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: ideal storage}
+  \textbf{\texttt{StorageUnitIdeal}} represents a lossless battery with intertemporal energy state.
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Configured data}
+    \begin{itemize}\small\tightitems
+      \item bus, stable identity, power rating, and energy capacity
+      \item initial state of charge
+      \item cycling-cost weight
+      \item optional hard or soft terminal policy, target, and weight
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Model contribution}
+    \begin{itemize}\small\tightitems
+      \item positive real power denotes discharge
+      \item $q_t=q_{t-1}-\Delta b_t$ with $0\leq q_t\leq Q$
+      \item active/reactive power circle in AC; symmetric active-power bound in DC
+      \item integrated one-way-throughput penalty
+      \item equality, reserve-floor, and linear or quadratic terminal policies
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: controllable HVDC links}
+  \textbf{\texttt{HVDCLink}} represents a controllable transfer through paired terminal injections.
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \textbf{Configured data}
+    \begin{itemize}\small\tightitems
+      \item from/to buses and stable device identity
+      \item signed transfer minimum and maximum
+      \item proportional loss percentage
+      \item polynomial transfer cost
+      \item optional device-aligned time-varying bounds
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Model contribution}
+    \begin{itemize}\small\tightitems
+      \item injections at both terminals enter nodal balance
+      \item direction-aware proportional-loss equality
+      \item forward-only, reverse-only, bidirectional, or pinned operation
+      \item symmetric cost on transfer magnitude
+      \item explicit null contribution in the single-node formulation
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Appendix: loads and load shedding}
+  \textbf{\texttt{Load}} represents an identified active/reactive demand channel with an optional shedding policy.
   \begin{itemize}\tightitems
-    \item Loads have stable identities, fixed active/reactive demand, optional shedding eligibility, fractional caps, and VOLL-like costs.
+    \item Configured data include bus, stable identity, signed active demand, optional reactive demand, shedding cost, and maximum shed fraction.
+    \item With no shedding cost, the load is fixed and introduces no decision variable; an explicit load fleet replaces the complete MATPOWER load fleet.
     \item The model reports served load, shed load, fraction shed, energy not served, and integrated shedding cost.
     \item In the controlled single-node case, shedding below the relevant generator marginal cost and full service above it produce the expected economic phase transition.
-    \item Explicit time-varying inequalities and leaf-bound representations agreed to solver precision; explicit inequalities were retained for clarity and uniformity.
+    \item AC models active and reactive service together; DC retains reactive demand as input metadata without optimizing reactive service.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Appendix: scientific boundaries}
+\begin{frame}{Appendix: scope and limitations}
   \small
   \begin{itemize}\tightitems
     \item AC results are accepted local solutions from CVXPY DNLP/IPOPT, not global-optimality certificates.
     \item Results establish behavior for the frozen case9/Tracy and synthetic Case118 scenarios; they are not universal reliability claims.
     \item The current lossy-DC formulation penalizes a resistance proxy but retains lossless nodal conservation; AC provides the physical-loss realization.
     \item The reactive-support tie-breaker is a planned experiment, not a completed result.
-    \item The historical DNLP/Pypower HVDC cross-evaluation needs reconciliation with the current post-branch-limit implementation before reuse as a headline result.
+    \item The CVXOPF/Pypower cross-evaluation intentionally neutralizes branch limits in both models; it does not characterize the current branch-constrained default.
   \end{itemize}
 \end{frame}
 

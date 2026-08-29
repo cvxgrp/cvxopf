@@ -12,7 +12,13 @@ from typing import Mapping, Sequence, cast
 
 import numpy as np
 
-from cvxopf import ACAttemptRecord, HierarchicalInputs, HierarchicalPolicy, OPFBuild
+from cvxopf import (
+    ACAttemptRecord,
+    HierarchicalInputs,
+    HierarchicalPolicy,
+    OPFBuild,
+    TemporalAssembly,
+)
 
 from experiments.case118_annual_hierarchy.audit import ProbeAudit, audit_probe
 from experiments.case118_annual_hierarchy.p0_fixture import policy_sha256
@@ -92,6 +98,8 @@ def _structural_signature(build: OPFBuild) -> dict[str, object]:
         for parameter in sorted(build.prob.parameters(), key=lambda item: item.name())
     ]
     return {
+        "temporal_assembly": build.temporal_assembly,
+        "canonicalization_backend": build.canonicalization_backend,
         "variables": variable_records,
         "constraints": constraint_records,
         "parameters": parameter_records,
@@ -321,6 +329,8 @@ def outer_plan_archive_payload(
         "storage_device_ids": list(outer.storage_device_ids),
         "policy_sha256": outer.policy_sha256,
         "solve_config_sha256": outer.solve_config_sha256,
+        "temporal_assembly": outer.temporal_assembly,
+        "canonicalization_backend": outer.canonicalization_backend,
         "signpost_sha256": outer.signpost_sha256,
         "global_boundary_indices": outer.global_boundary_indices.tolist(),
         "boundary_soc_mwh": (
@@ -479,6 +489,10 @@ def load_verified_outer_plan_archive(
         delta_hours=float(cast(float, payload["delta_hours"])),
         policy_sha256=str(payload["policy_sha256"]),
         solve_config_sha256=str(payload["solve_config_sha256"]),
+        temporal_assembly=cast(
+            TemporalAssembly, payload.get("temporal_assembly", "stepwise")
+        ),
+        canonicalization_backend=str(payload.get("canonicalization_backend", "CPP")),
         signpost_sha256=str(payload["signpost_sha256"]),
         global_boundary_indices=np.asarray(
             payload["global_boundary_indices"], dtype=int

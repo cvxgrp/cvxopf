@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "checkpoint": "big-experiment-pre-prefix-integration",
+  "m14c_source_commit": "0ef895b5e665fdb3a8fffab60292329ed22fd32b",
+  "big_experiment_parent_commit": "6a9cd130b7817f2ac6fbca2ce0de634da8967b25",
+  "merge_base_commit": "f7a120c991202e9024405539c2bcd3ab74ff7f1e",
+  "temporal_assembly": "vectorized",
+  "canonicalization_backend": "SCIPY",
+  "s4_fixture": {
+    "case": "815ed943bb2e38dc4da0ad176c0df5fd95b09d352000378987849acbd1eb46ca",
+    "load_p": "2f1845f158ed5149b36cb5587d579c09d821d475e02285d2e348f6521bf27764",
+    "load_q": "e11d9fe44698056270896f6134735d5f1300da774b65b10bbb942ac5f4baf90b",
+    "nondispatchable": "529e2cd33f57c16b9ca5702d2c023e4739d1fedf43d1134456cd1a9ab2c4245b",
+    "input_fingerprint": "1a6040898ebb4af4680bae5461a92002d0d1cff74e5e8421f79ad324068278f1",
+    "scenario": "223b239aa5fa83d2144e57efc9517ab415927de2f211e039d23ac0cccca34370"
+  },
+  "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
+  "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
+  "prefix_ladder_executed": false,
+  "annual_execution_authorized": false
+}

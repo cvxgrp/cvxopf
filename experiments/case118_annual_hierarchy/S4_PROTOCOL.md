@@ -20,6 +20,8 @@ S4 and remain gates for S4b/S5.
   shedding; and
 - the exact frozen CLARABEL outer options, construction options, identities,
   tolerances, and one-hour timestep used by the hierarchy.
+- explicit `temporal_assembly="vectorized"` with SCIPY canonicalization,
+  selected separately from the unchanged numerical solver configuration.
 
 `s4_fixture.load_s4_fixture()` is the sole materialization path. It validates
 the complete case, input arrays, identities, policy, solver configuration,
@@ -32,8 +34,9 @@ snapshot and policy boundary used by the streaming hierarchy. Before annual
 execution, a characterized 24-hour fixture must compare this seam with the
 public hierarchical controller's retained outer plan on:
 
-- formulation identity and exact scalar variable, scalar equality, and scalar
-  inequality counts (reported separately from result-array dimensions);
+- formulation and temporal-representation identity and exact vectorized scalar
+  variable, equality, and explicit-inequality counts (reported separately from
+  result-array dimensions and not required to equal the legacy stepwise graph);
 - storage and boundary identities;
 - accepted status/classification and objective;
 - complete public result arrays and boundary SoC trajectory;
@@ -50,6 +53,25 @@ independently requiring the streaming value to be zero.
 
 The public comparison may stop before AC construction. A standalone similar
 lossy-DC model is not equivalent evidence.
+
+## M14c integration amendment — 2026-08-29
+
+The reviewed vectorized lossy-DC implementation is integrated from M14c source
+commit `0ef895b5e665fdb3a8fffab60292329ed22fd32b` into `big-experiment` parent
+commit `6a9cd130b7817f2ac6fbca2ce0de634da8967b25`. The immutable integration record
+binds those parents and the unchanged S4 fixture, policy, solve-configuration,
+and scenario hashes. Both the public-controller outer and the streaming seam
+must explicitly report `vectorized` temporal assembly and `SCIPY`
+canonicalization on the 24-hour gate. This amendment changes representation,
+not the frozen physical problem, hierarchy policy, CLARABEL options, resource
+limits, or acceptance tolerances.
+
+The uncommitted integration checkpoint does not authorize or execute the 24-,
+168-, or 720-hour prefix ladder or the annual run. Review and commitment of a
+clean integration checkpoint authorize only that ordered prefix ladder. Annual
+execution remains unauthorized until accepted ladder evidence is reviewed and
+`M14C_INTEGRATION.json` explicitly records both `prefix_ladder_executed=true`
+and `annual_execution_authorized=true` in a subsequent clean checkpoint.
 
 ## Resource and supervision contract
 

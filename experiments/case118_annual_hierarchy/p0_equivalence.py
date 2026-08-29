@@ -109,6 +109,8 @@ def _json(value: object) -> object:
 def _signature(build: OPFBuild) -> Mapping[str, object]:
     variables = variables_by_name(build)
     return {
+        "temporal_assembly": build.temporal_assembly,
+        "canonicalization_backend": build.canonicalization_backend,
         "variables": [
             {"name": name, "shape": list(variables[name].shape)}
             for name in sorted(variables)

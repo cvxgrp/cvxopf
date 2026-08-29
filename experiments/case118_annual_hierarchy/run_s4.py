@@ -41,6 +41,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 
 SCHEMA_VERSION = 1
 S4_SOURCE_FILES = (
+    "experiments/m14_time_vectorization/M14C_INTEGRATION.json",
+    "experiments/m14_time_vectorization/M14C_PROTOCOL.md",
     "experiments/case118_annual_hierarchy/S4_PROTOCOL.md",
     "experiments/case118_annual_hierarchy/audit.py",
     "experiments/case118_annual_hierarchy/p0_fixture.py",
@@ -119,6 +121,15 @@ def execution_context() -> Mapping[str, object]:
         "component_hashes": dict(fixture.hashes),
         "policy_sha256": fixture.policy_sha256,
         "solve_config_sha256": fixture.solve_config_sha256,
+        "temporal_assembly": fixture.temporal_assembly,
+        "canonicalization_backend": fixture.canonicalization_backend,
+        "m14c_integration_checkpoint": fixture.m14c_integration_checkpoint,
+        "m14c_source_commit": fixture.m14c_source_commit,
+        "big_experiment_parent_commit": fixture.big_experiment_parent_commit,
+        "m14c_merge_base_commit": fixture.m14c_merge_base_commit,
+        "prefix_ladder_executed": fixture.prefix_ladder_executed,
+        "annual_execution_authorized": fixture.annual_execution_authorized,
+        "m14c_integration_sha256": fixture.m14c_integration_sha256,
         "software_versions": dict(_software_versions()),
         "platform": platform.platform(),
         "architecture": platform.machine(),
@@ -211,6 +222,7 @@ def _worker(
             fixture.policy,
             fixture.solve_config,
             phase_observer=observe,
+            temporal_assembly=fixture.temporal_assembly,
         )
         if outer.build is not None:
             dimensions = _problem_dimensions(outer.build)
@@ -263,6 +275,8 @@ def _worker(
                 "status": outer.audit.status,
                 "audit_residuals": dict(outer.audit.residuals),
                 "solve_wall_seconds": outer.wall_time_seconds,
+                "temporal_assembly": outer.temporal_assembly,
+                "canonicalization_backend": outer.canonicalization_backend,
                 "artifact": None
                 if archive is None
                 else {
@@ -317,6 +331,12 @@ def run_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
     directory = directory.expanduser().resolve()
     if directory.exists():
         raise FileExistsError("S4 output directory already exists")
+    fixture = load_s4_fixture()
+    if not fixture.annual_execution_authorized:
+        raise ValueError(
+            "S4 annual execution is not authorized; complete and review the frozen "
+            "24/168/720-hour prefix ladder first"
+        )
     context = execution_context()
     if context.get("git_clean") is not True:
         raise ValueError("S4 execution requires a clean committed worktree")

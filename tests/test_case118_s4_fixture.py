@@ -10,11 +10,18 @@ from experiments.case118_annual_hierarchy.p0_fixture import (
 )
 from experiments.case118_annual_hierarchy.scenario import PILOT_GRID
 from experiments.case118_annual_hierarchy.s4_fixture import (
+    BIG_EXPERIMENT_PARENT_COMMIT,
+    M14C_INTEGRATION_PATH,
+    M14C_INTEGRATION_CHECKPOINT,
+    M14C_MERGE_BASE_COMMIT,
+    M14C_SOURCE_COMMIT,
+    S4_CANONICALIZATION_BACKEND,
     S4_DELTA_HOURS,
     S4_EXPECTED_HASHES,
     S4_EXECUTION_LIMITS,
     S4_HORIZON_STEPS,
     S4_OUTPUT_DIRECTORY,
+    S4_TEMPORAL_ASSEMBLY,
     S4ExecutionLimits,
     load_s4_fixture,
 )
@@ -38,12 +45,20 @@ def test_s4_fixture_loads_exact_frozen_annual_problem() -> None:
     assert solve_config_sha256(fixture.solve_config) == fixture.solve_config_sha256
     assert fixture.policy_sha256 == P0_EXPECTED_POLICY_SHA256
     assert fixture.solve_config_sha256 == P0_EXPECTED_SOLVE_CONFIG_SHA256
+    assert fixture.temporal_assembly == S4_TEMPORAL_ASSEMBLY == "vectorized"
+    assert fixture.canonicalization_backend == S4_CANONICALIZATION_BACKEND == "SCIPY"
+    assert fixture.m14c_integration_checkpoint == M14C_INTEGRATION_CHECKPOINT
+    assert fixture.m14c_source_commit == M14C_SOURCE_COMMIT
+    assert fixture.big_experiment_parent_commit == BIG_EXPERIMENT_PARENT_COMMIT
+    assert fixture.m14c_merge_base_commit == M14C_MERGE_BASE_COMMIT
+    assert fixture.prefix_ladder_executed is False
+    assert fixture.annual_execution_authorized is False
+    assert len(fixture.m14c_integration_sha256) == 64
+    assert M14C_INTEGRATION_PATH.is_file()
 
 
 def test_s4_execution_boundary_matches_frozen_protocol() -> None:
-    assert S4_OUTPUT_DIRECTORY.as_posix().endswith(
-        "results/s4_annual_outer_rated"
-    )
+    assert S4_OUTPUT_DIRECTORY.as_posix().endswith("results/s4_annual_outer_rated")
     assert S4_EXECUTION_LIMITS == S4ExecutionLimits(
         child_rss_mib=16_384.0,
         worker_wall_seconds=7_200.0,

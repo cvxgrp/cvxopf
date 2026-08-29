@@ -344,8 +344,15 @@ def served_and_shed_expressions(
     fraction: cp.Variable | None,
     sheddable_indices: np.ndarray,
     nload: int,
+    *,
+    interval_axis: int | None = None,
 ) -> dict[str, cp.Expression]:
-    """Construct device-aligned served and conditional shedding channels."""
+    """Construct device-aligned served and conditional shedding channels.
+
+    ``interval_axis`` identifies the time axis for a horizon expression.  The
+    device axis remains first, so the same algebra owns scalar and time-last
+    assembly while interval totals retain their time dimension.
+    """
     expressions: dict[str, cp.Expression] = {
         "p_load": p_load_mw,
         "q_load": q_load_mvar,
@@ -360,12 +367,17 @@ def served_and_shed_expressions(
     scatter[sheddable_indices, np.arange(nsheddable)] = 1.0
     p_shed = cp.multiply(fraction, p_eligible_mw[sheddable_indices])
     q_shed = cp.multiply(fraction, q_load_mvar[sheddable_indices])
+    p_total = (
+        cp.sum(p_shed)
+        if interval_axis is None
+        else cp.sum(p_shed, axis=1 - interval_axis)
+    )
     expressions.update(
         {
             "p_load_shed": p_shed,
             "q_load_shed": q_shed,
             "load_shed_fraction": fraction,
-            "p_load_shed_total": cp.sum(p_shed),
+            "p_load_shed_total": p_total,
             "p_load_served": p_load_mw - scatter @ p_shed,
             "q_load_served": q_load_mvar - scatter @ q_shed,
         }
@@ -376,9 +388,16 @@ def served_and_shed_expressions(
 def shedding_cost_rate(
     p_load_shed: cp.Expression,
     cost_per_mwh: np.ndarray,
+    *,
+    interval_axis: int | None = None,
 ) -> cp.Expression:
     """Return the linear value-of-lost-load stage-cost rate."""
-    return cp.sum(cp.multiply(cost_per_mwh, p_load_shed))
+    weighted = cp.multiply(cost_per_mwh, p_load_shed)
+    return (
+        cp.sum(weighted)
+        if interval_axis is None
+        else cp.sum(weighted, axis=1 - interval_axis)
+    )
 
 
 def coupling_constraints() -> list[cp.Constraint]:

@@ -14,7 +14,6 @@ from experiments.case118_annual_hierarchy.p0_fixture import (
     policy_sha256,
 )
 from experiments.case118_annual_hierarchy.run_s0 import ROOT
-from experiments.case118_annual_hierarchy.run_s2 import s2_source_fingerprint
 from experiments.case118_annual_hierarchy.s2_fixture import (
     S2_HORIZON_STEPS,
     load_s2_fixture,
@@ -140,8 +139,9 @@ def _validated_source() -> tuple[Mapping[str, object], list[Mapping[str, object]
         raise ValueError("S2 outer-plan hash mismatch")
     if S2_OUTER_PATH.read_bytes() != TRACKED_OUTER_PATH.read_bytes():
         raise ValueError("tracked and S2 outer plans are not byte-identical")
-    if s2_source_fingerprint() != HISTORICAL_SOURCE_FINGERPRINT:
-        raise ValueError("frozen S2 source fingerprint mismatch")
+    provenance = _mapping(metadata.get("provenance"), "S2 metadata provenance")
+    if provenance.get("source_fingerprint") != HISTORICAL_SOURCE_FINGERPRINT:
+        raise ValueError("tracked S2 source fingerprint mismatch")
 
     fixture = load_s2_fixture()
     policy = frozen_p0_policy()

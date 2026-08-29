@@ -29,6 +29,7 @@ from cvxopf import (
     HierarchicalSolveAudit,
     IPOPTStartEvidence,
     OPFBuild,
+    TemporalAssembly,
     StorageUnitIdeal,
     build_opf_multistep,
     extract_results,
@@ -88,11 +89,23 @@ class StreamingOuterPlan:
     delta_hours: float
     policy_sha256: str
     solve_config_sha256: str
+    temporal_assembly: TemporalAssembly
+    canonicalization_backend: str
     signpost_sha256: str
     global_boundary_indices: np.ndarray
     boundary_soc_mwh: np.ndarray | None
 
     def __post_init__(self) -> None:
+        expected_backend = {
+            "stepwise": "CPP",
+            "vectorized": "SCIPY",
+        }.get(self.temporal_assembly)
+        if expected_backend is None:
+            raise ValueError("outer temporal assembly is unsupported")
+        if self.canonicalization_backend != expected_backend:
+            raise ValueError(
+                "outer canonicalization backend disagrees with temporal assembly"
+            )
         indices = np.asarray(self.global_boundary_indices, dtype=int).copy()
         if indices.ndim != 1 or not np.array_equal(
             indices, np.arange(self.horizon_steps + 1)
@@ -357,6 +370,8 @@ def build_window(
     start: int,
     stop: int,
     storage: Sequence[StorageUnitIdeal],
+    *,
+    temporal_assembly: TemporalAssembly = "stepwise",
 ) -> OPFBuild:
     """Build one exact global slice through the existing public OPF builder."""
     if not (0 <= start < stop <= inputs.horizon_steps):
@@ -372,6 +387,7 @@ def build_window(
             _copy_case(inputs.case),
             T=stop - start,
             formulation=formulation,
+            temporal_assembly=temporal_assembly,
             options=deepcopy(inputs.options),
             delta=inputs.delta,
             generators=[replace(unit) for unit in inputs.generators],
@@ -682,6 +698,7 @@ def solve_frozen_outer(
     solve_config: HierarchicalSolveConfig,
     *,
     phase_observer: OuterPhaseObserver | None = None,
+    temporal_assembly: TemporalAssembly = "stepwise",
 ) -> StreamingOuterPlan:
     """Build and solve the one retained full-horizon lossy-DC plan."""
     validate_streaming_policy(policy)
@@ -689,7 +706,14 @@ def solve_frozen_outer(
     storage = tuple(replace(unit) for unit in inputs.storage)
     if phase_observer is not None:
         phase_observer("before_construction")
-    build = build_window(inputs, "lossy_dc", 0, inputs.horizon_steps, storage)
+    build = build_window(
+        inputs,
+        "lossy_dc",
+        0,
+        inputs.horizon_steps,
+        storage,
+        temporal_assembly=temporal_assembly,
+    )
     if phase_observer is not None:
         phase_observer("after_construction")
     exception = None
@@ -742,6 +766,8 @@ def solve_frozen_outer(
         delta_hours=inputs.delta,
         policy_sha256=policy_sha256(policy),
         solve_config_sha256=solve_config_sha256(solve_config),
+        temporal_assembly=build.temporal_assembly,
+        canonicalization_backend=build.canonicalization_backend,
         signpost_sha256=_signpost_sha256(
             _storage_ids(storage), global_indices, boundaries
         ),

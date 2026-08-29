@@ -673,6 +673,28 @@ def gen_cost_expr(gencost: np.ndarray, Pg_MW) -> cp.Expression:
     return cp.Constant(expression)
 
 
+def horizon_cost_rate(
+    gencost: np.ndarray,
+    Pg_MW: cp.Expression,
+    horizon_steps: int,
+) -> cp.Expression:
+    """Return one generation cost-rate value per interval.
+
+    A fleet containing only constant polynomial costs legitimately produces a
+    scalar expression.  Horizon assembly still requires a length-``T`` rate,
+    so broadcast that scalar without changing the per-interval cost meaning.
+    """
+    expression = gen_cost_expr(gencost, Pg_MW)
+    if expression.is_scalar():
+        return cp.multiply(np.ones(horizon_steps), expression)
+    if expression.shape != (horizon_steps,):
+        raise ValueError(
+            "vectorized generation cost must be scalar or horizon-shaped, "
+            f"got {expression.shape}"
+        )
+    return expression
+
+
 def gen_from_matpower(gen: np.ndarray, gencost: np.ndarray) -> list:
     """
     Build DispatchableGenerator objects from MATPOWER gen/gencost tables.

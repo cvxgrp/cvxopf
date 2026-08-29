@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 from pathlib import Path
 from typing import Mapping, cast
 
@@ -14,6 +15,7 @@ from cvxopf import (
     HierarchicalPolicy,
     HierarchicalSolveConfig,
     OPFOptions,
+    TemporalAssembly,
     gen_from_matpower,
 )
 from experiments.case118_annual_hierarchy.p0_fixture import (
@@ -40,6 +42,15 @@ from experiments.case118_annual_hierarchy.streaming_runner import (
 
 S4_HORIZON_STEPS = HOURS_PER_YEAR
 S4_DELTA_HOURS = 1.0
+S4_TEMPORAL_ASSEMBLY: TemporalAssembly = "vectorized"
+S4_CANONICALIZATION_BACKEND = "SCIPY"
+M14C_INTEGRATION_CHECKPOINT = "big-experiment-pre-prefix-integration"
+M14C_SOURCE_COMMIT = "0ef895b5e665fdb3a8fffab60292329ed22fd32b"
+BIG_EXPERIMENT_PARENT_COMMIT = "6a9cd130b7817f2ac6fbca2ce0de634da8967b25"
+M14C_MERGE_BASE_COMMIT = "f7a120c991202e9024405539c2bcd3ab74ff7f1e"
+M14C_INTEGRATION_PATH = (
+    Path(__file__).parents[1] / "m14_time_vectorization" / "M14C_INTEGRATION.json"
+)
 S4_OUTPUT_DIRECTORY = Path(
     "experiments/case118_annual_hierarchy/results/s4_annual_outer_rated"
 )
@@ -62,6 +73,15 @@ class S4Fixture:
     solve_config: HierarchicalSolveConfig
     policy_sha256: str
     solve_config_sha256: str
+    temporal_assembly: TemporalAssembly
+    canonicalization_backend: str
+    m14c_integration_checkpoint: str
+    m14c_source_commit: str
+    big_experiment_parent_commit: str
+    m14c_merge_base_commit: str
+    prefix_ladder_executed: bool
+    annual_execution_authorized: bool
+    m14c_integration_sha256: str
     hashes: Mapping[str, str]
     start_timestamp: str
     stop_timestamp: str
@@ -120,6 +140,49 @@ def _scenario_sha256(hashes: Mapping[str, str]) -> str:
     return digest.hexdigest()
 
 
+def _integration_provenance(
+    hashes: Mapping[str, str], policy_hash: str, solve_config_hash: str
+) -> tuple[str, str, str, str, bool, bool, str]:
+    payload = cast(Mapping[str, object], json.loads(M14C_INTEGRATION_PATH.read_text()))
+    if payload.get("schema_version") != 1:
+        raise ValueError("M14c integration schema mismatch")
+    if payload.get("temporal_assembly") != S4_TEMPORAL_ASSEMBLY:
+        raise ValueError("M14c integration temporal assembly mismatch")
+    if payload.get("canonicalization_backend") != S4_CANONICALIZATION_BACKEND:
+        raise ValueError("M14c integration canonicalization backend mismatch")
+    if payload.get("s4_fixture") != hashes:
+        raise ValueError("M14c integration S4 fixture hashes mismatch")
+    if payload.get("policy_sha256") != policy_hash:
+        raise ValueError("M14c integration policy hash mismatch")
+    if payload.get("solve_config_sha256") != solve_config_hash:
+        raise ValueError("M14c integration solve-configuration hash mismatch")
+    if payload.get("checkpoint") != M14C_INTEGRATION_CHECKPOINT:
+        raise ValueError("M14c integration checkpoint mismatch")
+    if payload.get("m14c_source_commit") != M14C_SOURCE_COMMIT:
+        raise ValueError("M14c integration source commit mismatch")
+    if payload.get("big_experiment_parent_commit") != BIG_EXPERIMENT_PARENT_COMMIT:
+        raise ValueError("M14c integration target-parent commit mismatch")
+    if payload.get("merge_base_commit") != M14C_MERGE_BASE_COMMIT:
+        raise ValueError("M14c integration merge-base commit mismatch")
+    prefix_ladder_executed = payload.get("prefix_ladder_executed")
+    annual_execution_authorized = payload.get("annual_execution_authorized")
+    if not isinstance(prefix_ladder_executed, bool):
+        raise ValueError("M14c prefix-ladder authority must be boolean")
+    if not isinstance(annual_execution_authorized, bool):
+        raise ValueError("M14c annual-execution authority must be boolean")
+    if annual_execution_authorized and not prefix_ladder_executed:
+        raise ValueError("M14c annual execution requires a completed prefix ladder")
+    return (
+        M14C_INTEGRATION_CHECKPOINT,
+        M14C_SOURCE_COMMIT,
+        BIG_EXPERIMENT_PARENT_COMMIT,
+        M14C_MERGE_BASE_COMMIT,
+        prefix_ladder_executed,
+        annual_execution_authorized,
+        hashlib.sha256(M14C_INTEGRATION_PATH.read_bytes()).hexdigest(),
+    )
+
+
 def load_s4_fixture(*, verify_hashes: bool = True) -> S4Fixture:
     """Materialize the full rated annual inputs without constructing a model."""
     case = load_pglib_case118()
@@ -157,12 +220,32 @@ def load_s4_fixture(*, verify_hashes: bool = True) -> S4Fixture:
         for name, expected in S4_EXPECTED_HASHES.items():
             if hashes[name] != expected:
                 raise ValueError(f"S4 {name} hash mismatch")
+    policy_hash = policy_sha256(policy)
+    solve_hash = solve_config_sha256(solve_config)
+    (
+        integration_checkpoint,
+        m14c_source_commit,
+        big_parent_commit,
+        merge_base_commit,
+        prefix_ladder_executed,
+        annual_execution_authorized,
+        integration_hash,
+    ) = _integration_provenance(hashes, policy_hash, solve_hash)
     return S4Fixture(
         inputs=inputs,
         policy=policy,
         solve_config=solve_config,
-        policy_sha256=policy_sha256(policy),
-        solve_config_sha256=solve_config_sha256(solve_config),
+        policy_sha256=policy_hash,
+        solve_config_sha256=solve_hash,
+        temporal_assembly=S4_TEMPORAL_ASSEMBLY,
+        canonicalization_backend=S4_CANONICALIZATION_BACKEND,
+        m14c_integration_checkpoint=integration_checkpoint,
+        m14c_source_commit=m14c_source_commit,
+        big_experiment_parent_commit=big_parent_commit,
+        m14c_merge_base_commit=merge_base_commit,
+        prefix_ladder_executed=prefix_ladder_executed,
+        annual_execution_authorized=annual_execution_authorized,
+        m14c_integration_sha256=integration_hash,
         hashes=hashes,
         start_timestamp=str(pilot.df_load_p.index[0]),
         stop_timestamp=str(pilot.df_load_p.index[-1]),
@@ -174,7 +257,10 @@ __all__ = [
     "S4_EXPECTED_HASHES",
     "S4_EXECUTION_LIMITS",
     "S4_HORIZON_STEPS",
+    "M14C_INTEGRATION_PATH",
     "S4_OUTPUT_DIRECTORY",
+    "S4_TEMPORAL_ASSEMBLY",
+    "S4_CANONICALIZATION_BACKEND",
     "S4ExecutionLimits",
     "S4Fixture",
     "load_s4_fixture",

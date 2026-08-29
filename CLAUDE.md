@@ -13,9 +13,12 @@ supporting multiple formulations:
 - **AC-OPF** via CVXPY's disciplined nonlinear programming (DNLP) framework,
   solved via IPOPT (nonconvex)
 - **Lossy DC OPF** as a convex QP, solved via CLARABEL
+- **Single-node DC dispatch** as a convex copper-plate QP, solved via CLARABEL
 
-It is designed for power systems research, with a focus on extensibility to
-multi-step optimization and energy storage models.
+It is designed for long-horizon power-system resilience research. The package
+combines reusable device models, multistep optimization, and hierarchical
+convex-to-AC execution so broad planning studies retain a deliberate path back
+to nonlinear network physics.
 
 The package is developed by the CVX Group at Stanford.
 
@@ -64,7 +67,13 @@ https://www.incontrolpodcast.com/1632769/episodes/12444508-ep10-stephen-boyd-lin
 
 ## Repository layout
 
-`src/cvxopf/`: `problem.py` (public API), `ac_problem.py` / `dc_problem.py` / `singlenode_dc_problem.py` (per-formulation builders), `network.py`, `cost.py`, `data.py`, `results.py`, and one module per grid component (`storage.py`, `nondispatchable.py`, `hvdc.py`, `generator.py`). `testcases/` holds MATPOWER cases (case9–case118, PWL and dcline variants). `tests/`, `examples/`, `notebooks/`, and `scripts/` are top-level. Run `find src tests examples -name '*.py'` for the current file list.
+`src/cvxopf/` contains the public build and hierarchical APIs, formulation
+builders, shared typed component assembly, result extraction, and one module
+per grid component (`generator.py`, `storage.py`, `nondispatchable.py`,
+`hvdc.py`, and `load.py`). `testcases/` holds MATPOWER cases (case9–case118,
+including PWL and dcline variants). `tests/`, `examples/`, `experiments/`,
+`notebooks/`, `plans/`, and `scripts/` are top-level. Use `rg --files` for the
+current inventory; do not treat this summary as an exhaustive file list.
 
 ---
 
@@ -76,7 +85,8 @@ Always use `uv run` so the correct virtual environment and extras are used:
 uv run --extra dev pytest tests/ -v
 ```
 
-Expected result: all tests pass (baseline currently 865; run to confirm)
+Expected result: all tests pass; use the collected count from the current
+branch rather than a fixed historical test count.
 
 To run a single test file:
 
@@ -117,6 +127,7 @@ Install with: `uv sync --extra dev --extra notebook`
 |---|---|---|---|
 | `False` | `"ac"` | `cp.IPOPT` | `True` |
 | `True` | `"lossy_dc"` | `cp.CLARABEL` | `False` |
+| `True` | `"singlenode_dc"` | `cp.CLARABEL` | `False` |
 
 ```python
 build = build_opf(case9(), formulation="ac")
@@ -284,7 +295,6 @@ without API changes. Planned future formulations:
 
 | Key | Description |
 |---|---|
-| `"fast_decoupled"` | Fast-decoupled AC (convex) |
 | `"socp"` | SOCP relaxation (convex) |
 
 To add a new formulation, follow the complete formulation-extension contract
@@ -348,7 +358,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | `prob` | `cp.Problem` | The CVXPY problem |
 | `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
 | `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
-| `formulation` | str | `"ac"` or `"lossy_dc"` |
+| `formulation` | str | `"ac"`, `"lossy_dc"`, or `"singlenode_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 
 ### `StorageUnitIdeal` fields
@@ -402,32 +412,38 @@ not use reactive power in optimization.
 
 ## Module responsibilities
 
-`problem.py` is the **only** public-facing module. It imports from
-`ac_problem.py` and `dc_problem.py` inside functions (not at module level)
-to avoid circular imports. The import chain is:
+`problem.py` owns the public OPF build boundary, while `hierarchical.py` owns
+the public hierarchical-control boundary. Package-level exports in
+`cvxopf.__init__` provide convenience imports. Formulation modules must remain
+independent of one another. The principal dependency direction is:
 
 ```
 problem.py    →  storage.py              (StorageUnitIdeal, re-exported)
 problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
 problem.py    →  generator.py            (DispatchableGenerator, case normalization)
+problem.py    →  load.py                 (Load, MATPOWER conversion, time-series preparation)
 problem.py    →  ac_problem.py           (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
+problem.py    →  singlenode_dc_problem.py (deferred, inside functions)
 formulation builders → _component_adapters.py (central component registry)
 _component_adapters.py → component modules (typed bindings to owned models)
 formulation builders → _component_assembly.py (generic contribution assembly)
 ac_problem.py →  network.py, data.py
 dc_problem.py →  network.py, data.py
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
-results.py    →  problem.py             (OPFBuild type only, unchanged)
+hierarchical.py → problem.py            (reviewed outer/inner build API)
+results.py    →  problem.py             (OPFBuild type boundary)
 storage.py    →  cvxpy, numpy           (no other cvxopf imports)
 nondispatchable.py → data.py, cvxpy, numpy
 hvdc.py       →  data.py, cvxpy, numpy
+load.py       →  cvxpy, numpy
 ```
 
 `ac_problem.py` must not import from `dc_problem.py` and vice versa.
 
-All four device modules now follow the M16 component pattern. See
-`plans/milestone-16-unify-components.md`.
+All five public device families—dispatchable generation, storage,
+nondispatchable generation, HVDC, and loads—follow the typed M16+ component
+pattern. See `plans/milestone-16-plus-component-adapters.md`.
 
 See [`PROJECT_FLOWCHART.md`](PROJECT_FLOWCHART.md) for the as-built
 problem-construction architecture, component lifecycle, ownership boundaries,
@@ -515,8 +531,8 @@ is the sole place DNLP rules apply.
 
 Every device contribution — operating constraints, horizon-level temporal
 constraints, injection terms, and cost expressions for generators, storage,
-nondispatchable units, and HVDC — must pass the ordinary DCP rules on its own.
-No device model may rely on DNLP. Temporal constraints include state
+nondispatchable units, HVDC, and loads — must pass the ordinary DCP rules on
+their own. No device model may rely on DNLP. Temporal constraints include state
 transitions and temporal boundary conditions; keep those categories distinct
 inside the device implementation.
 
@@ -531,14 +547,14 @@ Why this invariant matters:
   `ac_problem.py` Section 2. Anyone writing or reviewing a device model only
   needs the DCP rules below. (Do not change Section 2's DNLP flow definitions
   without understanding the paper — already a hard rule in "What not to do".)
-- **SOCP (Milestone 11) integrates for free.** SOCP is a convex relaxation
+- **SOCP (Milestone 11) reuses the device layer.** SOCP is a convex relaxation
   whose *network* physics are themselves DCP (second-order cone constraints on
   lifted variables — no DNLP bypass anywhere), making it the first fully-DCP
   network formulation. Because every device is already DCP, the SOCP
-  constructor composes the existing device methods unchanged; the only new work
-  is the cone network model plus a `socp_operating_constraints` fork for the
-  (few, if any) components whose feasible region differs in the lifted space.
-  Getting the M16 component contract right pre-pays SOCP's integration cost.
+  constructor can compose the existing DCP device contributions. The new work
+  remains substantial—network variables, cone constraints, audits, results,
+  and explicit component capability declarations—but does not require a second
+  implementation of every device model.
 
 When you add or edit a device model, assert `is_dcp()` on its constraints and
 cost **directly** (per-object checks below) — a device term that only passes
@@ -605,8 +621,9 @@ Variable units are **not** uniform across all CVXPY variable types:
   `p`, `q`) are in **per-unit** internally (divided by `baseMVA`) and scaled
   to engineering units (MW, MVAr) in `extract_results`.
 - **Storage variables** (`b`, `b_q`, `soc`), **nondispatchable variables**
-  (`p_nd`, `q_nd`), and **HVDC variables** (`p_hvdc_in`, `p_hvdc_out`) are in
-  **engineering units** internally (MW, MVAr, MWh).
+  (`p_nd`, `q_nd`), **HVDC variables** (`p_hvdc_in`, `p_hvdc_out`), and load
+  power parameters and expressions are in **engineering units** internally
+  (MW, MVAr, MWh). The load interruption-fraction variable is dimensionless.
   They are **not** divided by `baseMVA` at declaration and are **not**
   multiplied by `baseMVA` in `extract_results`. They enter the nodal balance
   divided by `baseMVA` at the point of constraint construction — that division
@@ -627,11 +644,12 @@ Variable units are **not** uniform across all CVXPY variable types:
   This matters for the DC formulation; AC bypasses DCP via DNLP/IPOPT.
 
 ### Multi-step structure
-`build_opf_multistep` builds a **single `cp.Problem`** containing T sets
+`build_opf_multistep` builds a **single `cp.Problem`** containing `T` sets
 of per-step variables and constraints. The objective integrates per-step cost
 rates using the global interval duration `delta`, then adds horizon-boundary
-costs once. Coupling constraints (e.g., battery SoC dynamics) are passed via
-`coupling_constraints` and appended without modification.
+costs once. Component-owned horizon hooks contribute temporal dynamics and
+terminal policies. The optional `coupling_constraints` argument carries
+additional caller-supplied constraints and is appended without modification.
 
 ### Incidence matrices
 There are two distinct incidence matrices in `network.py`:
@@ -667,18 +685,11 @@ multiplication path, causing `CvxpyDeprecationWarning`.
 This expression is a stage-cost rate; shared assembly multiplies its horizon
 sum by `delta`, so `aging_weight` has objective units/MWh of throughput.
 
-`_make_step_constraints` (AC) is organised into five labelled sections in
-fixed order, with Section 4b added for nondispatchable constraints:
-  1. Reference bus angle fix
-  2. Power flow definitions
-  3. Nodal power balance (exactly one `p ==` and one `q ==` constraint;
-     all injection terms — storage and nondispatchable — combined here)
-  4. Storage operating constraints
-  4b. Nondispatchable operating constraints
-  5. Voltage setpoint pinning
-
-This function owns all balance constraints (Section 3 emits exactly one
-`p ==` and one `q ==`).
+The AC network builder owns reference-angle constraints, nonlinear branch-flow
+definitions, nodal balance, voltage limits, and branch operating limits.
+Device operating sets and injections reach those balances through shared
+component assembly; do not reconstruct device constraints inside the network
+builder.
 
 Storage keys are absent from `build.data` when `storage=None`; the detection
 contract is `"ns" in build.data`.
@@ -719,14 +730,14 @@ is present.
 | 4 — AC branch terminal flows and limits | ✅ Complete | Exact signed terminal-flow reporting in MATPOWER row order; positive finite `rateA` enforced as an apparent-power limit at both terminals by default. See `plans/milestone-4-branch-limits.md`. |
 | 5 — Battery/storage model hook | ✅ Complete | `StorageUnitIdeal`; `storage=` and `delta=` on `build_opf` / `build_opf_multistep`. AC apparent-power circle, DC real-power box; SoC cross-step coupling; L1 aging cost. See `plans/milestone-5-storage.md`. |
 | 6 — Lossy DC OPF and multi-formulation architecture | ✅ Complete | |
-| 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, silently dropped by `singlenode_dc`. Gate 6b is consistency-based, not a Pypower value-match. `LOSS0`/reactive/voltage-control deferred to M15. See `plans/milestone-7-hvdc.md` (incl. the `dcline` column map and MVP-vs-M15 subtable) and `experiments/dnlp_vs_pypower/`. |
+| 7 — HVDC transmission links | ✅ Complete | `HVDCLink`; `hvdc=` on `build_opf` / `build_opf_multistep`, `df_hvdc_min=`/`df_hvdc_max=` on multistep; `hvdc_from_dcline` MATPOWER importer. Signed nodal injections (Convention B), proportional loss on fixed-direction links; applies to `ac` and `lossy_dc`, with an explicit null capability in `singlenode_dc` because network collapse eliminates both terminals. Gate 6b is consistency-based, not a Pypower value-match. `LOSS0`/reactive/voltage-control deferred to M15. See `plans/milestone-7-hvdc.md` (incl. the `dcline` column map and MVP-vs-M15 subtable) and `experiments/dnlp_vs_pypower/`. |
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC retains separate availability and apparent-power-rating bounds; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
 | 11 — SOCP (convex) network model | 🔲 Future | |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
-| 13 — Implement cvxpy parameters for problem data | 🔲 Future | Faster resolves of same problem over new data |
-| 14 — Time-vectorized multistep formulations | 🟧 Next / blocking | Replace per-step CVXPY expression graphs with time-indexed matrix expressions and sparse temporal operators while preserving formulation, failure, audit, and result contracts. Vectorized lossy DC is the first delivery and blocks resumption of the Case118 annual S4 outer solve after macOS killed the repeated annual graph under extreme compressed-memory pressure. See `plans/milestone-14-time-vectorization.md`. |
+| 13 — Extend CVXPY parameterization for problem data | 🔲 Future | Faster repeated solves of the same graph over new data |
+| 14 — Time-vectorized multistep formulations | 🟧 M14c integration / blocking | M14a's frozen baseline, M14a.1/M14b's formulation-specific leaf decisions, and M14c's explicit vectorized lossy-DC builder are complete on the M14 branch. The reviewed implementation is being integrated into `big-experiment`; the frozen S4 prefix ladder and annual run remain blocked until that integration checkpoint passes. AC permits no new leaf-bound migration. See `plans/milestone-14-time-vectorization.md`, `experiments/m14_time_vectorization/M14B_PROTOCOL.md`, and `experiments/m14_time_vectorization/M14C_PROTOCOL.md`. |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | ✅ Complete | The capstone controller passes **identity-aligned SoC signposts only** (not other setpoints) from long-horizon `lossy_dc` planning into short AC-OPF windows, executes only residual-checked target-conditioned first actions, supports causal shifted initialization with audited recovery, and retains the complete plan/attempt tree. M17 fixes the validated `lossy_dc`→`ac` workflow; configurable formulations and additional layers are M21. See `plans/milestone-17-hierarchical-dc-ac.md`. |
@@ -734,6 +745,7 @@ is present.
 | 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
 | 20 — AC voltage and reactive-dispatch regularization | 🔲 Future | Characterize whether reactive/voltage bound activity reflects physical support, unpriced nonuniqueness, or local-solver selection. Then add optional, normalized, time-integrated AC operating preferences with exact disabled-policy compatibility and measured economic displacement. No voltage-stability, market-pricing, or global-uniqueness claim. See `plans/milestone-20-ac-voltage-reactive-regularization.md`. |
 | 21 — Configurable and extensible formulation hierarchies | 🔲 Future | Generalize the completed M17 controller behind typed layer adapters and explicit, identity-aligned handoffs while preserving exact `lossy_dc`→`ac` compatibility. Support selectable planning formulations and validate a reference `singlenode_dc`→`socp`→`ac` hierarchy after M11 freezes SOCP relaxation and audit semantics. This remains a closed set of reviewed repository formulations, not an unrestricted plugin framework. See `plans/milestone-21-configurable-hierarchy.md`. |
+| 22 — Nonconvex load-group penalties | 🔲 Future | Add identity-aligned interactions among groups of sheddable loads, beginning with mutually exclusive customer-group shedding and soft bilinear joint-shedding penalties. Use convex-hull or McCormick relaxation, typed deterministic rounding, and fixed-policy physical polishing; validate with exact small references, congested lossy-DC cases, and AC realization. See `plans/milestone-22-nonconvex-load-group-penalties.md`. |
 
 ---
 
@@ -768,11 +780,12 @@ uv run scripts/generate_pypower_fixtures.py
 ```
 
 This runs in an isolated sandbox with `pypower==5.1.19` and `numpy==2.2.6`.
-The numpy pin is required because pypower uses `numpy.in1d` which was
-removed in numpy 2.0. Do not run this script with the main package
+The NumPy pin is required because PYPOWER uses `numpy.in1d`, which was removed
+in NumPy 2.3. Do not run this script with the main package
 environment.
 
 Regenerate fixtures only if:
+
 - A new test case is added to the package
 - A suspected bug in an existing fixture needs to be ruled out
 
@@ -791,9 +804,12 @@ docstring.
 
 ## Fresh coding sessions
 
-1. Read `CLAUDE.md` (this document) before touching code
-2. Run `uv run --extra dev pytest tests/` first to confirm baseline
-3. Check `git log --oneline -10` to orient on recent work
+1. Read `CLAUDE.md` before touching code.
+2. Inspect `git status --short` and preserve unrelated user changes.
+3. Check `git log --oneline -10` and the relevant milestone or experiment
+   plan to orient on recent work.
+4. Run proportionate baseline verification before editing; use the full suite
+   when the change or active stage requires it.
 
 ---
 
@@ -832,9 +848,9 @@ docstring.
 - Do not select a lossy loss branch for a zero-straddling box
   (`p_min_t < 0 < p_max_t`) — the lossy branch is valid only for a
   fixed-direction box (`p_min_t >= 0` or `p_max_t <= 0`)
-- Do not forward `hvdc`/`df_hvdc_min`/`df_hvdc_max` to `singlenode_dc` as a
-  live component — the singlenode builders accept and silently drop them
-  (no `"n_hvdc"` key, no `UserWarning`)
+- Do not treat HVDC as a live component in `singlenode_dc`. Its registered
+  capability is explicitly `NULL` because collapsing both terminals removes
+  the link from the physical model (no `"n_hvdc"` key and no warning).
 - Do not skip the singlenode structural exceptions: `_parse_singlenode_dc_case`
   does not call `validate_case` (empty branch table by design), and
   `Pd_series` is shape `(T,)`, not `(T, nb)` — the formulation has no per-bus

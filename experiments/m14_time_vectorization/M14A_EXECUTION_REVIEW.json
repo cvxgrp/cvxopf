@@ -1,0 +1,14 @@
+{
+  "execution_commit": "1dd5e36dcae5ad9c8176b1d1202f1055acf95c03",
+  "execution_source_fingerprint": "02567a6928cede7d51d555affb84107e480a87adf748676f0e2ed2e598232e1b",
+  "paths": [
+    "experiments/dnlp_vs_pypower/REPORT.tex",
+    "experiments/dnlp_vs_pypower/demo.py",
+    "presentations/weekly_update_20260826/cvxopf_project_update.synctex(busy)",
+    "presentations/weekly_update_20260826/cvxopf_project_update.tex"
+  ],
+  "reason": "During the final 8760-step worker, the experiment owner corrected an older DNLP experiment while preparing the project presentation. These files are outside the frozen M14 execution-source registry; the execution commit and M14 source fingerprint remained unchanged.",
+  "reviewed_on": "2026-08-26",
+  "schema_version": 1,
+  "scope": "non_execution_worktree_changes"
+}

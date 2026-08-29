@@ -16,7 +16,11 @@ from experiments.case118_annual_hierarchy.p0_fixture import (
     policy_sha256,
     solve_config_sha256,
 )
-from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
+from experiments.case118_annual_hierarchy.s4_fixture import (
+    S4_CANONICALIZATION_BACKEND,
+    S4_TEMPORAL_ASSEMBLY,
+    load_s4_fixture,
+)
 from experiments.case118_annual_hierarchy.streaming_runner import (
     execution_input_sha256,
     solve_frozen_outer,
@@ -142,7 +146,10 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
     try:
         try:
             public_solver.solve_hierarchical_opf(
-                inputs, fixture.policy, fixture.solve_config
+                inputs,
+                fixture.policy,
+                fixture.solve_config,
+                outer_temporal_assembly=S4_TEMPORAL_ASSEMBLY,
             )
         except _OuterCaptured:
             pass
@@ -151,12 +158,28 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
     if len(captured) != 1:
         raise RuntimeError("public outer interception did not capture exactly one plan")
     public = captured[0]
-    streaming = solve_frozen_outer(inputs, fixture.policy, fixture.solve_config)
+    streaming = solve_frozen_outer(
+        inputs,
+        fixture.policy,
+        fixture.solve_config,
+        temporal_assembly=S4_TEMPORAL_ASSEMBLY,
+    )
     if public.build is None or streaming.build is None:
         raise RuntimeError("equivalence gate requires both live outer builds")
     mismatches: list[str] = []
     if public.build.formulation != streaming.build.formulation:
         mismatches.append("formulation")
+    if public.build.temporal_assembly != streaming.build.temporal_assembly:
+        mismatches.append("temporal_assembly")
+    if (
+        public.build.canonicalization_backend
+        != streaming.build.canonicalization_backend
+    ):
+        mismatches.append("canonicalization_backend")
+    if public.build.temporal_assembly != S4_TEMPORAL_ASSEMBLY:
+        mismatches.append("unexpected_temporal_assembly")
+    if public.build.canonicalization_backend != S4_CANONICALIZATION_BACKEND:
+        mismatches.append("unexpected_canonicalization_backend")
     public_dimensions = _problem_dimensions(cast(OPFBuild, public.build))
     streaming_dimensions = _problem_dimensions(streaming.build)
     if public_dimensions != streaming_dimensions:
@@ -211,7 +234,12 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
         "result_sha256": _digest(public.result),
         "boundary_sha256": _digest(public.boundary_soc_mwh),
         "structure_sha256": _digest(
-            {"formulation": public.build.formulation, "dimensions": public_dimensions}
+            {
+                "formulation": public.build.formulation,
+                "temporal_assembly": public.build.temporal_assembly,
+                "canonicalization_backend": public.build.canonicalization_backend,
+                "dimensions": public_dimensions,
+            }
         ),
     }
     streaming_fingerprints = {
@@ -221,6 +249,8 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
         "structure_sha256": _digest(
             {
                 "formulation": streaming.build.formulation,
+                "temporal_assembly": streaming.build.temporal_assembly,
+                "canonicalization_backend": streaming.build.canonicalization_backend,
                 "dimensions": streaming_dimensions,
             }
         ),
@@ -233,6 +263,8 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
         "equivalent": not mismatches,
         "mismatches": mismatches,
         "formulation": streaming.build.formulation,
+        "temporal_assembly": streaming.temporal_assembly,
+        "canonicalization_backend": streaming.canonicalization_backend,
         "public_dimensions": public_dimensions,
         "streaming_dimensions": streaming_dimensions,
         "public_status": public.audit.status,

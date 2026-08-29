@@ -51,7 +51,12 @@ from cvxopf.generator import (
 from cvxopf.hvdc import HVDCLink
 from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
-from cvxopf.problem import OPFBuild, OPFOptions, build_opf_multistep
+from cvxopf.problem import (
+    OPFBuild,
+    OPFOptions,
+    TemporalAssembly,
+    build_opf_multistep,
+)
 from cvxopf.results import extract_results
 from cvxopf.storage import StorageUnitIdeal, storage_cost_expr
 
@@ -216,6 +221,8 @@ def _build_window(
     start: int,
     stop: int,
     storage: tuple[StorageUnitIdeal, ...],
+    *,
+    temporal_assembly: TemporalAssembly = "stepwise",
 ) -> OPFBuild:
     if not 0 <= start < stop <= snapshot.horizon_steps:
         raise ValueError(f"invalid half-open interval [{start}, {stop})")
@@ -231,6 +238,7 @@ def _build_window(
             deepcopy(snapshot.case),
             T=stop - start,
             formulation=formulation,
+            temporal_assembly=temporal_assembly,
             options=deepcopy(snapshot.options),
             generators=list(deepcopy(snapshot.generators)),
             loads=list(deepcopy(snapshot.loads)),
@@ -759,10 +767,16 @@ def _solve_outer(
     solve_config: HierarchicalSolveConfig,
     iteration: int,
     realized_soc: Mapping[str, float],
+    outer_temporal_assembly: TemporalAssembly = "stepwise",
 ) -> OuterPlanRecord:
     storage = _outer_storage(snapshot, realized_soc)
     build = _build_window(
-        snapshot, "lossy_dc", iteration, snapshot.horizon_steps, storage
+        snapshot,
+        "lossy_dc",
+        iteration,
+        snapshot.horizon_steps,
+        storage,
+        temporal_assembly=outer_temporal_assembly,
     )
     exception = None
     started = perf_counter()
@@ -1477,6 +1491,8 @@ def solve_hierarchical_opf(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
+    *,
+    outer_temporal_assembly: TemporalAssembly = "stepwise",
 ) -> HierarchicalResult:
     """Execute receding-window AC control from lossy-DC energy signposts.
 
@@ -1490,6 +1506,10 @@ def solve_hierarchical_opf(
         raise TypeError("policy must be HierarchicalPolicy")
     if not isinstance(solve_config, HierarchicalSolveConfig):
         raise TypeError("solve_config must be HierarchicalSolveConfig")
+    if outer_temporal_assembly not in {"stepwise", "vectorized"}:
+        raise ValueError(
+            "outer_temporal_assembly must be 'stepwise' or 'vectorized'"
+        )
     snapshot = _execution_snapshot(inputs)
     ids = snapshot.storage_device_ids
     realized = _initial_soc(snapshot)
@@ -1507,13 +1527,23 @@ def solve_hierarchical_opf(
         if policy.outer_policy == "frozen":
             if frozen_plan is None:
                 frozen_plan = _solve_outer(
-                    snapshot, policy, solve_config, 0, realized
+                    snapshot,
+                    policy,
+                    solve_config,
+                    0,
+                    realized,
+                    outer_temporal_assembly,
                 )
                 plans[frozen_plan.outer_plan_id] = frozen_plan
             outer = frozen_plan
         else:
             outer = _solve_outer(
-                snapshot, policy, solve_config, iteration, realized
+                snapshot,
+                policy,
+                solve_config,
+                iteration,
+                realized,
+                outer_temporal_assembly,
             )
             plans[outer.outer_plan_id] = outer
         if not outer.audit.accepted_primal:
