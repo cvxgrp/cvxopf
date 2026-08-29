@@ -8,25 +8,44 @@ lossy DC OPF (convex QP), and single-node DC dispatch (convex QP).
 
 ## Motivation
 
-Grid resiliency events rarely happen in an instant. The most dangerous
-scenarios unfold over days: solar suppressed by sustained weather systems,
-load elevated beyond seasonal norms, and battery storage depleted by
-controllers that optimize for the current hour. Studying the 
-behavior of the modern grid under these conditions and developing optimal
-control policies requires an optimization framework that is simultaneously
-time-aware and physically grounded, that is able to plan dispatch strategy 
-across a full multi-day horizon and able to enforce the AC network
-constraints that determine whether a plan is actually executable. 
+Grid resilience events rarely happen in an instant. The most consequential
+scenarios can unfold over days, months, or longer: weather suppresses renewable
+generation, demand remains elevated, geographically concentrated resources are
+damaged, recovery is gradual, and short-sighted controllers deplete storage
+before the system reaches its most constrained period. Studying these events
+requires an optimization framework that is both time-aware and physically
+grounded: it must coordinate decisions across long horizons while retaining
+the AC network constraints that determine whether a plan is realizable.
 
-`cvxopf` is designed with this application in mind. It formulates optimal power
-flow problems using CVXPY, supports nonlinear AC-OPF, a convex lossy DC relaxation,
-and single-node economic dispatch from a single entry point (with more to
-come), and handles multi-step
-optimization with time-varying load, battery storage, and nondispatchable generation
-(wind, solar, hydro) natively. The intended use case is resiliency research:
-studying how battery controllers should behave under adverse multi-day
-conditions, how much temporal foresight matters, and how well convex
-approximations track AC feasibility across extended horizons.
+`cvxopf` is designed for that research problem. From one modeling framework it
+supports nonlinear AC-OPF, convex lossy DC OPF, and single-node economic
+dispatch, together with multistep load, generation, storage, and transmission
+models. It is not intended merely as another OPF wrapper. It is the foundation
+for a scientifically coherent method for studying long-duration, uncertain,
+and compound resilience events without giving up access to nonlinear network
+physics.
+
+Long horizons preserve modeled storage, resource, damage, and recovery states
+across sequential events. Convex formulations make planning and broad scenario
+screening tractable. Selected nonlinear AC-OPF intervals can then redispatch
+active power, reactive support, and voltage state within the AC feasible set,
+rather than merely checking a fixed coarse-model dispatch.
+
+The larger research program is organized around the chain
+
+```text
+rare-event uncertainty
+        -> long-horizon adaptive planning
+        -> convex ensemble screening
+        -> nonlinear AC realization
+        -> audited resilience conclusions
+```
+
+The implemented package already provides the multi-fidelity component models,
+intertemporal storage, hierarchical DC-to-AC state handoff, nonlinear-solver
+recovery, and independent residual audits that support this direction.
+General stochastic investment planning and GPU-batched uncertainty ensembles
+remain research extensions rather than current package claims.
 
 Storage is treated as an intertemporal network device, not as a sequence of
 independent power injections. A multi-step solve co-optimizes the complete
@@ -49,38 +68,40 @@ terminal state; the causal greedy controllers are terminal-blind. Their lower
 dispatchable-energy totals are not improvements where they accompany unserved
 load.*
 
-Because it is built on CVXPY, the problem structure is transparent and
-composable. Researchers can modify objectives, add contingency constraints,
-or experiment with formulations — including multi-forecast Model Predictive
-Control — without rewriting solver interfaces.
+Because it is built on CVXPY, the mathematical structure is transparent and
+composable. Researchers can add device models, objectives, and operating
+constraints or study alternative network formulations without rewriting
+solver interfaces.
 
 ## Overview
 
 `cvxopf` formulates optimal power flow problems using CVXPY and solves them
 with appropriate solvers. It is designed to:
 
-- Run MATPOWER/Pypower test cases out of the box
-- Support multiple OPF formulations from a single entry point
-- Support single-shot optimization over multiple time steps
-- Accept time-varying nodal load as pandas DataFrames
+- Run MATPOWER/Pypower test cases out of the box.
+- Support multiple OPF formulations from a single entry point.
+- Support single-shot optimization over multiple time steps.
+- Accept time-varying nodal load as pandas DataFrames.
 - Model storage as a first-class intertemporal device with state-of-charge
-  coupling and configurable terminal policies
+  coupling and configurable terminal policies.
 - Model nondispatchable generators (wind, solar, run-of-river hydro) with
-  curtailable output and reactive power support
+  curtailable output and reactive power support.
 - Model loads as first-class, identity-aligned devices with optional
-  single-solve shedding and energy-not-served reporting
+  single-solve shedding and energy-not-served reporting.
 - Coordinate long-horizon convex battery planning with audited short-horizon
-  AC execution through the public hierarchical controller
+  AC execution through the public hierarchical controller.
 
 ### Methodology
 
 Many individual capabilities exposed by `cvxopf`, including multi-period OPF
 and intertemporal storage, also appear in other power-system optimization
 packages. The central contribution here is their organization within a
-[disciplined convex programming (DCP)](https://www.cvxpy.org/tutorial/dcp/) and [disciplined nonlinear programming
-(DNLP)](https://www.cvxpy.org/tutorial/dnlp/index.html) methodology: device dynamics, costs, and operating sets remain convex
-wherever the model permits, while the nonconvexity of the full AC formulation
-is confined to the network-flow physics.
+[disciplined convex programming (DCP)](https://www.cvxpy.org/tutorial/dcp/)
+and [disciplined nonlinear programming
+(DNLP)](https://www.cvxpy.org/tutorial/dnlp/index.html) methodology. Device
+dynamics, costs, and operating sets remain convex wherever the model permits,
+while the nonconvexity of the full AC formulation is confined to the
+network-flow physics.
 
 This separation supports the implemented hierarchical solve structure. A
 globally solvable, long-horizon convex layer determines intertemporal energy
@@ -101,6 +122,33 @@ time-series alignment and optional interruption policies. Shedding is an
 affine extension of the load feasible set with a high linear value-of-lost-load
 cost in the original optimization problem; it is not a lexicographic pass, an
 anonymous balance slack, or a second feasibility-restoration solve.
+
+#### Economic decisions from modeled primitives
+
+CVXOPF constructs economic dispatch from explicit physical and economic
+primitives:
+
+- generator cost curves;
+- load and renewable availability;
+- network limits and either physical AC losses or a documented DC loss proxy;
+- storage dynamics, cycling cost, and terminal policy (with ideal efficiency
+  in the current `StorageUnitIdeal` model);
+- load-shedding cost; and
+- the evolving intertemporal system state.
+
+Exogenous electricity-price trajectories are not first-class inputs to the
+current model. Dispatch costs and scarcity consequences are represented
+directly, while marginal values arise endogenously from the optimization. This
+distinction is especially important in black-sky studies: a historical price
+series reflects a different network state, asset fleet, market design, and
+damage condition. Using that scalar signal to stand in for widespread outages,
+physical scarcity, customer consequences, and months of recovery would ask it
+to reconstruct interactions that the model had omitted.
+
+This does not imply that tariffs, contracts, or other explicit economic rules
+can never be modeled. When they are part of the scientific question, they
+should enter transparently as defined costs or constraints rather than serve
+as substitutes for available physical structure.
 
 AC voltage magnitudes and reactive dispatch are currently governed by their
 physical bounds and network equations but are generally not assigned an
@@ -186,7 +234,7 @@ bus: no branch flows, no transmission limits, no losses, no reactive power —
 just total generation equals total load. It is the classic economic dispatch
 problem, useful as a fast baseline and for large-horizon energy planning.
 
-### Hierarchical DC to AC control
+### Hierarchical DC-to-AC control
 
 `solve_hierarchical_opf()` implements the project's reviewed two-layer
 workflow. The outer `lossy_dc` problem plans the full remaining horizon. Each
@@ -246,10 +294,10 @@ failure, and provenance contracts.
 References:
 
 - AC OPF: *Disciplined Nonlinear Programming*,
-  https://stanford.edu/~boyd/papers/dnlp.html,
-  https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb
+  [paper](https://stanford.edu/~boyd/papers/dnlp.html) and
+  [power-flow example](https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb).
 - Lossy DC OPF: *Convex Optimization with Smart Grid Examples*,
-  https://doi.org/10.2172/3018252
+  [technical report](https://doi.org/10.2172/3018252).
 
 ## Prerequisites
 
@@ -257,6 +305,7 @@ References:
 installed before running `pip install cvxopf`.
 
 **Ubuntu / Debian**
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev gfortran
@@ -269,11 +318,13 @@ sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev gfortran
 > with a linker error (`cannot find -llapack`, `cannot find -lblas`).
 
 **macOS**
+
 ```bash
 brew install ipopt
 ```
 
 **Windows** (conda recommended)
+
 ```bash
 conda install -c conda-forge ipopt
 ```
@@ -440,8 +491,8 @@ and OPF configurations. The results should look something like this:
 
 ## Multi-step example
 
-Time-varying load is passed as a DataFrame — one row per timestep, one
-column per bus. This is the foundation for resiliency studies: feed in
+Time-varying load is passed as a DataFrame — one row per time step, one
+column per bus. This is the foundation for resilience studies: feed in
 a multi-day solar and load profile and the optimizer plans dispatch
 across the full horizon in a single solve.
 
@@ -548,9 +599,9 @@ and [`case9_multistep_load_shedding.py`](examples/case9_multistep_load_shedding.
 
 ## Battery storage example
 
-Battery state-of-charge evolves across timesteps, coupling decisions made
+Battery state of charge evolves across time steps, coupling decisions made
 at hour 1 to feasibility at hour 72. This intertemporal coupling is why
-multi-step optimization matters for resiliency: the optimizer can see that
+multistep optimization matters for resilience: the optimizer can see that
 conditions worsen on day 3 and hold reserves accordingly rather than
 depleting storage on day 1.
 
@@ -712,12 +763,16 @@ src/cvxopf/           Core package
   storage.py          Storage component: data, injections, constraints, cost
   nondispatchable.py  ND component: data, injections, and constraints
   hvdc.py             HVDC component and MATPOWER dcline conversion
+  load.py             Fixed and explicitly sheddable load component
+  hierarchical.py     Hierarchical DC-to-AC controller and audit records
   testcases/          Built-in MATPOWER test cases (case9 — case118)
 tests/                Pytest test suite
 tests/fixtures/       Committed Pypower reference outputs (static)
 scripts/              Fixture and test case generation scripts
 notebooks/            Interactive marimo notebooks
 examples/             Runnable example scripts
+experiments/          Reviewed scientific studies and retained protocols
+plans/                Milestone plans and implementation records
 ```
 
 ## Development
@@ -793,8 +848,12 @@ package environment.
 - [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
-- [ ] Implement cvxpy parameters for problem data
-- [ ] Vectorize time constraints (currently built with iterative loop)
+- [ ] Extend CVXPY parameterization for faster repeated solves
+- [ ] M14 time-vectorized multistep formulations: add a time-last tensor
+  assembly mode alongside the retained stepwise CVXPY builder, with explicit
+  canonicalization-backend selection and shared formulation/result semantics.
+  This is the current scaling priority and blocks resumption of the Case118
+  annual S4 outer solve (see `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)
@@ -818,3 +877,7 @@ package environment.
   nonuniqueness and local-solver selection, then add only scientifically
   justified AC operating preferences (see
   `plans/milestone-20-ac-voltage-reactive-regularization.md`)
+- [ ] Nonconvex load-group penalties: model interactions such as mutually
+  exclusive customer-group shedding using relaxation, deterministic rounding,
+  and fixed-policy polishing (see
+  `plans/milestone-22-nonconvex-load-group-penalties.md`)

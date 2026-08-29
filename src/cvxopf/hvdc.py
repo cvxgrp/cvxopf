@@ -244,8 +244,8 @@ def _hvdc_static_box(links: list) -> tuple:
     Return (p_min, p_max) as (n_hvdc,) numpy arrays in MW.
 
     Reads p_min_mw and p_max_mw directly from each HVDCLink. Used by the
-    single-step builder and as the tile source for multistep when
-    df_hvdc_min/df_hvdc_max are not provided.
+    single-step builder and as the static broadcast source for vectorized
+    multistep assembly when df_hvdc_min/df_hvdc_max are not provided.
     """
     p_min = np.array([lnk.p_min_mw for lnk in links], dtype=float)
     p_max = np.array([lnk.p_max_mw for lnk in links], dtype=float)
@@ -349,30 +349,59 @@ def dc_operating_constraints(
     step : int
         Time-step index used in UserWarning messages.
     """
-    coeff_vec = np.empty(len(links))
-    for k, lnk in enumerate(links):
-        loss_frac = lnk.loss_percent / 100.0
-        if p_min_t[k] >= 0:
-            coeff_vec[k] = -1.0 / (1.0 - loss_frac)
-        elif p_max_t[k] <= 0:
-            coeff_vec[k] = -(1.0 - loss_frac)
-        else:
-            coeff_vec[k] = -1.0
-            if loss_frac != 0.0:
-                warnings.warn(
-                    f"HVDC link {k} at step {step}: box [{p_min_t[k]}, {p_max_t[k]}] "
-                    f"straddles zero with loss_percent={lnk.loss_percent}; "
-                    f"falling back to lossless branch (p_out = -p_in). "
-                    f"Full sign-switching loss model deferred to Milestone 15.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+    coeff_vec = loss_branch_coefficients(
+        links, p_min_t, p_max_t, step_offset=step
+    )
 
     return [
         p_min_t <= p_in,
         p_in <= p_max_t,
         p_out == cp.multiply(coeff_vec, p_in),
     ]
+
+
+def loss_branch_coefficients(
+    links: list,
+    p_min_mw: np.ndarray,
+    p_max_mw: np.ndarray,
+    *,
+    step_offset: int = 0,
+) -> np.ndarray:
+    """Select the signed HVDC loss branch for device or time-last boxes."""
+    lower = np.asarray(p_min_mw, dtype=float)
+    upper = np.asarray(p_max_mw, dtype=float)
+    if lower.shape != upper.shape or lower.ndim not in {1, 2}:
+        raise ValueError("HVDC loss boxes must be aligned device or time-last arrays")
+    if lower.shape[0] != len(links):
+        raise ValueError("HVDC loss-box device axis must match the link fleet")
+    coefficients = np.empty_like(lower)
+    for link_index, link in enumerate(links):
+        loss_fraction = link.loss_percent / 100.0
+        link_lower = lower[link_index]
+        link_upper = upper[link_index]
+        positive = link_lower >= 0.0
+        negative = (~positive) & (link_upper <= 0.0)
+        coefficients[link_index] = np.where(
+            positive,
+            -1.0 / (1.0 - loss_fraction),
+            np.where(negative, -(1.0 - loss_fraction), -1.0),
+        )
+        straddling = ~(positive | negative)
+        if loss_fraction != 0.0 and np.any(straddling):
+            steps = np.flatnonzero(np.atleast_1d(straddling)) + step_offset
+            for step in steps:
+                index = 0 if lower.ndim == 1 else int(step - step_offset)
+                warnings.warn(
+                    f"HVDC link {link_index} at step {int(step)}: box "
+                    f"[{np.atleast_1d(link_lower)[index]}, "
+                    f"{np.atleast_1d(link_upper)[index]}] straddles zero with "
+                    f"loss_percent={link.loss_percent}; falling back to lossless "
+                    "branch (p_out = -p_in). Full sign-switching loss model "
+                    "deferred to Milestone 15.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+    return coefficients
 
 
 def ac_operating_constraints(
