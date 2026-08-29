@@ -59,20 +59,28 @@ from cvxopf._component_adapter import (
     HorizonContext,
     PreparationContext,
     StepContext,
+    VectorizedContext,
 )
 from cvxopf._component_assembly import (
     PreparedComponents,
     aggregate_horizon_contributions,
     aggregate_step_contributions,
+    aggregate_vectorized_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    assemble_component_vectorized,
     integrate_component_stage_costs,
     integrate_stage_cost_rates,
+    integrate_vectorized_component_stage_costs,
+    integrate_vectorized_stage_cost_rate,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
     publish_component_metadata,
     publish_component_variables,
+    publish_vectorized_component_expressions,
+    publish_vectorized_component_variables,
+    vectorized_component_result_projections,
 )
 from cvxopf._component_adapters import (
     HVDCInputs,
@@ -90,6 +98,14 @@ from cvxopf.nondispatchable import (
 from cvxopf.hvdc import (
     HVDCLink,
 )
+from cvxopf._temporal_assembly import (
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
+    VariableBoxFamily,
+    box_representation_decision,
+    merge_result_projection_registries,
+    prepare_box_bounds,
+)
 
 if TYPE_CHECKING:
     from cvxopf.problem import OPFBuild
@@ -98,15 +114,16 @@ if TYPE_CHECKING:
 # MATPOWER column indices
 # ---------------------------------------------------------------------------
 
-PD         = 2
-BR_R       = 2
-BR_STATUS  = 10
-RATE_A     = 5
+PD = 2
+BR_R = 2
+BR_STATUS = 10
+RATE_A = 5
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_dc_case(
     case: dict,
@@ -118,6 +135,7 @@ def _parse_dc_case(
     generators: list[DispatchableGenerator] | None = None,
     horizon_steps: int = 1,
     nd_available_mw: np.ndarray | None = None,
+    nondispatchable_inputs: NondispatchableInputs | None = None,
     hvdc_inputs: HVDCInputs | None = None,
     load_inputs: LoadInputs | None = None,
     is_multistep: bool = False,
@@ -136,15 +154,15 @@ def _parse_dc_case(
     case, ext_to_int = reindex_case_to_consecutive(case)
 
     baseMVA = float(case["baseMVA"])
-    bus     = case["bus"]
-    branch  = case["branch"]
-    nb      = bus.shape[0]
-    nl      = branch.shape[0]
+    bus = case["bus"]
+    branch = case["branch"]
+    nb = bus.shape[0]
+    nl = branch.shape[0]
 
-    A  = make_branch_node_incidence_matrix(case)
+    A = make_branch_node_incidence_matrix(case)
 
     # branch resistances (p.u.)
-    r = branch[:, BR_R].astype(float) / 1.0   # already dimensionless p.u.
+    r = branch[:, BR_R].astype(float) / 1.0  # already dimensionless p.u.
 
     # branch flow limits (p.u.), with sentinel substitution for rateA=0
     f_max = np.zeros(nl)
@@ -171,10 +189,7 @@ def _parse_dc_case(
     component_ext_to_int = (
         ext_to_int
         if ext_to_int is not None
-        else {
-            int(bus_id): int(bus_id)
-            for bus_id in bus[:, 0]
-        }
+        else {int(bus_id): int(bus_id) for bus_id in bus[:, 0]}
     )
     ext_bus_ids = set(component_ext_to_int.keys())
 
@@ -187,7 +202,7 @@ def _parse_dc_case(
         delta=delta,
         is_multistep=is_multistep,
     )
-    if nondispatchable and nd_available_mw is None:
+    if nondispatchable and nd_available_mw is None and nondispatchable_inputs is None:
         nd_available_mw = np.array(
             [[unit.p_available for unit in nondispatchable]],
             dtype=float,
@@ -203,26 +218,30 @@ def _parse_dc_case(
         nondispatchable_inputs=(
             None
             if not nondispatchable
-            else NondispatchableInputs(nd_available_mw)
+            else (
+                nondispatchable_inputs
+                if nondispatchable_inputs is not None
+                else NondispatchableInputs(nd_available_mw)
+            )
         ),
         hvdc_links=hvdc or (),
         hvdc_inputs=hvdc_inputs,
     )
     components = prepare_components(requests, "lossy_dc", preparation)
-    load_p_mw = (
-        np.asarray(components.flat_data["load_p_mw"], dtype=float)
-        if load_inputs is None else load_inputs.p_mw[0]
-    )
+    load_p_mw = np.asarray(components.flat_data["_load_p_mw_by_step"], dtype=float)[0]
     Pd = np.asarray(components.flat_data["Cload"]) @ load_p_mw / baseMVA
 
     formulation_data = dict(
-        case=case, baseMVA=baseMVA,
-        nb=nb, nl=nl,
+        case=case,
+        baseMVA=baseMVA,
+        nb=nb,
+        nl=nl,
         ext_to_int=ext_to_int,
         _component_ext_to_int=component_ext_to_int,
         ext_bus_ids=ext_bus_ids,
         A=A,
-        r=r, f_max=f_max,
+        r=r,
+        f_max=f_max,
         Pd=Pd,
         loss_weight=options.loss_weight,
         _components=components,
@@ -253,10 +272,12 @@ def _make_dc_step_constraints(
 
 def _make_dc_step_cost(
     component_cost_rate,
-    r, p_flows, loss_weight,
+    r,
+    p_flows,
+    loss_weight,
 ) -> tuple[cp.Expression, cp.Expression]:
     """Build the total and network-loss DC stage-cost rates."""
-    L     = cp.sum(cp.multiply(r, cp.square(p_flows)))
+    L = cp.sum(cp.multiply(r, cp.square(p_flows)))
     loss_cost = cp.multiply(loss_weight, L)
     return component_cost_rate + loss_cost, loss_cost
 
@@ -264,6 +285,7 @@ def _make_dc_step_cost(
 # ---------------------------------------------------------------------------
 # Public builders (called from problem.py dispatch)
 # ---------------------------------------------------------------------------
+
 
 def _build_lossy_dc_single(
     case: dict,
@@ -290,7 +312,13 @@ def _build_lossy_dc_single(
         )
 
     d = _parse_dc_case(
-        case, options, storage, delta, nondispatchable, hvdc, generators,
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        hvdc,
+        generators,
         loads=loads,
         load_participates_when_empty=loads is not None,
     )
@@ -310,7 +338,8 @@ def _build_lossy_dc_single(
     constr, p_net_expr = _make_dc_step_constraints(
         p_flows,
         step_aggregate.injection.p_pu,
-        d["A"], d["f_max"],
+        d["A"],
+        d["f_max"],
         step_aggregate.operating_constraints,
     )
     constr.extend(step_aggregate.network_constraints)
@@ -318,7 +347,9 @@ def _build_lossy_dc_single(
     assert step_aggregate.cost is not None
     step_cost_rate, loss_cost_rate = _make_dc_step_cost(
         step_aggregate.cost,
-        d["r"], p_flows, d["loss_weight"],
+        d["r"],
+        p_flows,
+        d["loss_weight"],
     )
     cost = integrate_stage_cost_rates([step_cost_rate], delta)
     component_costs = integrate_component_stage_costs(
@@ -341,7 +372,7 @@ def _build_lossy_dc_single(
         cost = cost + horizon_aggregate.terminal_cost
     constr.extend(horizon_aggregate.constraints)
 
-    prob      = cp.Problem(cp.Minimize(cost), constr)
+    prob = cp.Problem(cp.Minimize(cost), constr)
     variables = dict(p_flows=p_flows)
     variables = publish_component_variables(
         [step_components],
@@ -350,10 +381,13 @@ def _build_lossy_dc_single(
     )
 
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], nl=d["nl"],
+        baseMVA=d["baseMVA"],
+        nb=d["nb"],
+        nl=d["nl"],
         ext_to_int=d["ext_to_int"],
         A=d["A"],
-        r=d["r"], f_max=d["f_max"],
+        r=d["r"],
+        f_max=d["f_max"],
         Pd=d["Pd"],
         loss_weight=d["loss_weight"],
     )
@@ -363,9 +397,7 @@ def _build_lossy_dc_single(
     compatibility_expressions.update(component_costs)
     compatibility_expressions["dc_loss_cost"] = dc_loss_cost
     if storage_terminal_cost is not None:
-        compatibility_expressions["storage_terminal_cost"] = (
-            storage_terminal_cost
-        )
+        compatibility_expressions["storage_terminal_cost"] = storage_terminal_cost
     expressions = publish_component_expressions(
         [step_aggregate],
         horizon_aggregate,
@@ -374,8 +406,11 @@ def _build_lossy_dc_single(
     )
 
     return OPFBuild(
-        prob=prob, variables=variables, data=data,
-        formulation="lossy_dc", is_convex=True,
+        prob=prob,
+        variables=variables,
+        data=data,
+        formulation="lossy_dc",
+        is_convex=True,
         expressions=expressions,
     )
 
@@ -422,9 +457,7 @@ def _build_lossy_dc_multistep(
         hvdc,
         generators,
         horizon_steps=T,
-        nd_available_mw=(
-            None if df_nd is None else df_nd.to_numpy(dtype=float)
-        ),
+        nd_available_mw=(None if df_nd is None else df_nd.to_numpy(dtype=float)),
         hvdc_inputs=(
             None
             if not hvdc
@@ -440,12 +473,12 @@ def _build_lossy_dc_multistep(
     )
     Pd_series = load_inputs.p_mw @ d["Cload"].T / d["baseMVA"]
 
-    p_flows_list    = []
+    p_flows_list = []
     component_steps = []
     step_aggregates = []
     components: PreparedComponents = d["_components"]
     p_net_expr_list = []
-    all_constr      = []
+    all_constr = []
     step_cost_rates = []
     loss_cost_rates = []
 
@@ -468,14 +501,17 @@ def _build_lossy_dc_multistep(
         step_constr, p_net_expr_t = _make_dc_step_constraints(
             p_flows_t,
             step_aggregate.injection.p_pu,
-            d["A"], d["f_max"],
+            d["A"],
+            d["f_max"],
             step_aggregate.operating_constraints,
         )
         step_constr.extend(step_aggregate.network_constraints)
         assert step_aggregate.cost is not None
         step_cost_rate, loss_cost_rate = _make_dc_step_cost(
             step_aggregate.cost,
-            d["r"], p_flows_t, d["loss_weight"],
+            d["r"],
+            p_flows_t,
+            d["loss_weight"],
         )
 
         all_constr.extend(step_constr)
@@ -516,10 +552,13 @@ def _build_lossy_dc_multistep(
     )
 
     data = dict(
-        baseMVA=d["baseMVA"], nb=d["nb"], nl=d["nl"],
+        baseMVA=d["baseMVA"],
+        nb=d["nb"],
+        nl=d["nl"],
         ext_to_int=d["ext_to_int"],
         A=d["A"],
-        r=d["r"], f_max=d["f_max"],
+        r=d["r"],
+        f_max=d["f_max"],
         loss_weight=d["loss_weight"],
         T=T,
         Pd_series=Pd_series,
@@ -530,9 +569,7 @@ def _build_lossy_dc_multistep(
     compatibility_expressions.update(component_costs)
     compatibility_expressions["dc_loss_cost"] = dc_loss_cost
     if storage_terminal_cost is not None:
-        compatibility_expressions["storage_terminal_cost"] = (
-            storage_terminal_cost
-        )
+        compatibility_expressions["storage_terminal_cost"] = storage_terminal_cost
     expressions = publish_component_expressions(
         step_aggregates,
         horizon_aggregate,
@@ -541,7 +578,217 @@ def _build_lossy_dc_multistep(
     )
 
     return OPFBuild(
-        prob=prob, variables=variables, data=data,
-        formulation="lossy_dc", is_convex=True,
+        prob=prob,
+        variables=variables,
+        data=data,
+        formulation="lossy_dc",
+        is_convex=True,
         expressions=expressions,
+    )
+
+
+def _build_lossy_dc_vectorized(
+    case: dict,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
+    T: int,
+    options,
+    coupling_constraints: list,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    df_nd: pd.DataFrame | None = None,
+    *,
+    hvdc=None,
+    df_hvdc_min=None,
+    df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs,
+    load_participates_when_empty: bool = False,
+    nd_inputs: NondispatchableInputs | None = None,
+    hvdc_inputs: HVDCInputs | None = None,
+) -> "OPFBuild":
+    """Build one time-last, horizon-vectorized lossy-DC problem."""
+    from cvxopf.problem import OPFBuild
+
+    del df_P, df_Q
+    if storage:
+        warnings.warn(
+            "Storage apparent_power_rating is applied as a real power limit "
+            "only for formulation='lossy_dc'. Reactive power is not modelled "
+            "in the DC formulation.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    d = _parse_dc_case(
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        hvdc,
+        generators,
+        horizon_steps=T,
+        nd_available_mw=(
+            None
+            if nd_inputs is not None or df_nd is None
+            else df_nd.to_numpy(dtype=float)
+        ),
+        nondispatchable_inputs=nd_inputs,
+        hvdc_inputs=(
+            hvdc_inputs
+            if hvdc_inputs is not None or not hvdc
+            else HVDCInputs(
+                df_hvdc_min.to_numpy(dtype=float),
+                df_hvdc_max.to_numpy(dtype=float),
+            )
+        ),
+        load_inputs=load_inputs,
+        is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
+    )
+    components: PreparedComponents = d["_components"]
+    context = VectorizedContext(
+        "lossy_dc",
+        T,
+        delta,
+        d["baseMVA"],
+        d["_component_ext_to_int"],
+        DCNetworkState(),
+    )
+    component_contributions = assemble_component_vectorized(components, context)
+    component_aggregate = aggregate_vectorized_contributions(component_contributions)
+    component_injection = component_aggregate.model.injection.p_pu
+    component_cost_rate = component_aggregate.model.stage_cost_rate
+    if component_injection is None or component_cost_rate is None:
+        raise RuntimeError(
+            "lossy-DC vectorized assembly requires active injection and cost"
+        )
+
+    flow_decision = box_representation_decision(
+        "lossy_dc", VariableBoxFamily.DC_BRANCH_FLOW
+    )
+    if flow_decision.representation != "leaf":
+        raise RuntimeError("lossy-DC branch flow is not qualified for leaf bounds")
+    flow_box = prepare_box_bounds(
+        -np.asarray(d["f_max"]),
+        np.asarray(d["f_max"]),
+        native_shape=(d["nl"],),
+        horizon_steps=T,
+        lower_temporal_class="static",
+        upper_temporal_class="static",
+        variable_temporal_class="interval",
+    )
+    p_flows = cp.Variable(
+        (d["nl"], T),
+        name="p_flows",
+        bounds=[flow_box.lower, flow_box.upper],
+    )
+    p_net = component_injection
+    loss_cost_rate = cp.multiply(
+        d["loss_weight"],
+        cp.sum(
+            cp.multiply(
+                np.asarray(d["r"])[:, np.newaxis],
+                cp.square(p_flows),
+            ),
+            axis=0,
+        ),
+    )
+    total_cost = integrate_vectorized_stage_cost_rate(
+        component_cost_rate + loss_cost_rate,
+        delta,
+    )
+    component_costs = integrate_vectorized_component_stage_costs(
+        component_contributions,
+        delta,
+    )
+    dc_loss_cost = integrate_vectorized_stage_cost_rate(loss_cost_rate, delta)
+    terminal_cost = component_aggregate.model.horizon.terminal_cost
+    if terminal_cost is not None:
+        total_cost = total_cost + terminal_cost
+
+    constraints = [d["A"] @ p_flows + p_net == 0]
+    constraints.extend(component_aggregate.model.operating_constraints)
+    constraints.extend(component_aggregate.model.network_constraints)
+    constraints.extend(component_aggregate.model.horizon.constraints)
+    constraints.extend(coupling_constraints)
+    problem = cp.Problem(cp.Minimize(total_cost), constraints)
+
+    variables = publish_vectorized_component_variables(
+        component_aggregate,
+        {"p_flows": p_flows},
+    )
+    compatibility_expressions: dict[str, cp.Expression] = {
+        "p_net": p_net,
+        "dc_loss_cost": dc_loss_cost,
+        **component_costs,
+    }
+    expressions = publish_vectorized_component_expressions(
+        component_aggregate,
+        compatibility_expressions,
+    )
+    load_temporal_class = components.flat_data["_load_p_temporal_class"]
+    if load_temporal_class == "static":
+        static_pd = (
+            np.asarray(components.flat_data["_load_p_mw_source"])
+            @ d["Cload"].T
+            / d["baseMVA"]
+        )
+        pd_series = np.broadcast_to(static_pd[np.newaxis, :], (T, d["nb"]))
+    elif load_temporal_class == "interval":
+        pd_series = (
+            np.asarray(components.flat_data["_load_p_mw_by_step"])
+            @ d["Cload"].T
+            / d["baseMVA"]
+        )
+    else:
+        raise RuntimeError(
+            "vectorized lossy-DC load temporal provenance must be static or interval"
+        )
+    data = publish_component_metadata(
+        components,
+        {
+            "baseMVA": d["baseMVA"],
+            "nb": d["nb"],
+            "nl": d["nl"],
+            "ext_to_int": d["ext_to_int"],
+            "A": d["A"],
+            "r": d["r"],
+            "f_max": d["f_max"],
+            "loss_weight": d["loss_weight"],
+            "T": T,
+            "Pd_series": pd_series,
+        },
+    )
+    network_projections = ResultProjectionRegistry(
+        variables={
+            "p_flows": ResultProjectionSpec(
+                "p_flows", (d["nl"],), (d["nl"],), "interval"
+            )
+        },
+        expressions={
+            "p_net": ResultProjectionSpec("p_net", (d["nb"],), (d["nb"],), "interval"),
+            "dc_loss_cost": ResultProjectionSpec("dc_loss_cost", (), (), "horizon"),
+        },
+    )
+    component_projections = vectorized_component_result_projections(
+        component_aggregate,
+        integrated_component_costs=component_costs,
+    )
+    return OPFBuild(
+        prob=problem,
+        variables=variables,
+        data=data,
+        formulation="lossy_dc",
+        is_convex=True,
+        expressions=expressions,
+        temporal_assembly="vectorized",
+        result_projections=merge_result_projection_registries(
+            network_projections,
+            component_projections,
+        ),
     )

@@ -90,7 +90,7 @@ def test_stepwise_source_graph_baseline(formulation, expected):
     assert _digest(record) == SOURCE_GRAPH_DIGESTS[formulation]
 
 
-def test_temporal_selector_is_closed_and_vectorized_is_reserved():
+def test_temporal_selector_is_closed_and_vectorized_scope_is_explicit():
     active, reactive = _frames(1)
     with pytest.raises(ValueError, match="temporal_assembly"):
         build_opf_multistep(
@@ -100,7 +100,7 @@ def test_temporal_selector_is_closed_and_vectorized_is_reserved():
             T=1,
             temporal_assembly="other",  # type: ignore[arg-type]
         )
-    with pytest.raises(NotImplementedError, match="M14b"):
+    with pytest.raises(NotImplementedError, match="only.*lossy_dc"):
         build_opf_multistep(
             case9(),
             active,
@@ -108,6 +108,17 @@ def test_temporal_selector_is_closed_and_vectorized_is_reserved():
             T=1,
             temporal_assembly="vectorized",
         )
+
+    build = build_opf_multistep(
+        case9(),
+        active,
+        reactive,
+        T=1,
+        formulation="lossy_dc",
+        temporal_assembly="vectorized",
+    )
+    assert build.temporal_assembly == "vectorized"
+    assert build.canonicalization_backend == "SCIPY"
 
 
 def test_single_step_build_records_stepwise_provenance():

@@ -41,7 +41,11 @@ from cvxopf.hvdc import (
 )
 from cvxopf.generator import DispatchableGenerator, _case_with_generators
 from cvxopf.load import Load
-from cvxopf._component_adapters import LoadInputs
+from cvxopf._component_adapters import (
+    HVDCInputs,
+    LoadInputs,
+    NondispatchableInputs,
+)
 from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 
@@ -348,6 +352,12 @@ def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
     }
 
 
+def _get_vectorized_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.dc_problem import _build_lossy_dc_vectorized
+
+    return {"lossy_dc": _build_lossy_dc_vectorized}
+
+
 def _validate_temporal_delta(delta: float) -> None:
     """Validate the global time-step duration at the public API boundary."""
     if isinstance(delta, (bool, np.bool_)) or not isinstance(delta, Real):
@@ -370,6 +380,7 @@ def _normalize_multistep_load_inputs(
     df_load_q: pd.DataFrame | None,
     T: int,
     formulation: str,
+    temporal_assembly: TemporalAssembly,
 ) -> tuple[LoadInputs, bool]:
     """Select and normalize exactly one public multistep load-input mode."""
     explicit = loads is not None
@@ -392,7 +403,11 @@ def _normalize_multistep_load_inputs(
                 f"T={T} but df_P has {p_pu.shape[0]} rows; they must match."
             )
         base_mva = float(case["baseMVA"])
-        return LoadInputs(p_pu * base_mva, q_pu * base_mva), False
+        return LoadInputs(
+            p_pu * base_mva,
+            q_pu * base_mva,
+            vectorized_assembly=temporal_assembly == "vectorized",
+        ), False
 
     if df_P is not None or df_Q is not None:
         raise ValueError(
@@ -401,22 +416,43 @@ def _normalize_multistep_load_inputs(
         )
     assert loads is not None
     if df_load_p is None:
-        p_mw = np.tile([unit.p_load_mw for unit in loads], (T, 1))
+        p_static = np.asarray([unit.p_load_mw for unit in loads], dtype=float)
+        if temporal_assembly == "vectorized":
+            p_mw = p_static
+            p_temporal_class = "static"
+        else:
+            p_mw = np.tile(p_static, (T, 1))
+            p_temporal_class = "interval"
     else:
         p_mw = align_device_dataframe(df_load_p, loads, T, "df_load_p")
+        p_temporal_class = "interval"
     if df_load_q is None:
-        q_mvar = np.tile(
+        q_static = np.asarray(
             [0.0 if unit.q_load_mvar is None else unit.q_load_mvar for unit in loads],
-            (T, 1),
+            dtype=float,
         )
+        if temporal_assembly == "vectorized":
+            q_mvar = q_static
+            q_temporal_class = "static"
+        else:
+            q_mvar = np.tile(q_static, (T, 1))
+            q_temporal_class = "interval"
     else:
         q_mvar = align_device_dataframe(df_load_q, loads, T, "df_load_q")
+        q_temporal_class = "interval"
     has_reactive = np.asarray(
         [unit.q_load_mvar is not None for unit in loads], dtype=bool
     )
     if df_load_q is not None:
         has_reactive[:] = True
-    return LoadInputs(p_mw, q_mvar, has_reactive), True
+    return LoadInputs(
+        p_mw,
+        q_mvar,
+        has_reactive,
+        p_temporal_class=p_temporal_class,
+        q_temporal_class=q_temporal_class,
+        vectorized_assembly=temporal_assembly == "vectorized",
+    ), True
 
 
 # ---------------------------------------------------------------------------
@@ -567,21 +603,21 @@ def build_opf_multistep(
     df_load_p : pd.DataFrame | None, optional
         Explicit-load active trajectories in MW. Columns must exactly match
         unique ``Load.device_id`` values and are aligned to device order. If
-        omitted, each load's static ``p_load_mw`` is tiled across the horizon.
+        omitted, each load's static ``p_load_mw`` is broadcast across the horizon.
     df_load_q : pd.DataFrame | None, optional
         Explicit-load reactive trajectories in MVAr with the same identity
         contract. May define a trajectory when static ``q_load_mvar`` is
         ``None``. DC formulations retain this input for reporting, warn, and
         do not use it in optimization. If omitted, static reactive values
-        (with ``None`` represented numerically as zero) are tiled.
+        (with ``None`` represented numerically as zero) are broadcast.
     T : int
         Number of time steps. Must equal the row count of every supplied load
-        trajectory; static explicit-load fallback is tiled to this length.
+        trajectory; static explicit-load fallback is broadcast to this length.
     temporal_assembly : {"stepwise", "vectorized"}, optional
         Temporal graph representation. ``"stepwise"`` preserves the existing
-        per-interval builder and remains the compatibility default. The
-        ``"vectorized"`` selector is reserved by M14 and is rejected until
-        its horizon-level implementation is available.
+        per-interval builder and remains the compatibility default.
+        ``"vectorized"`` explicitly selects the M14 time-last lossy-DC path;
+        other formulations reject that pairing until separately qualified.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).
@@ -609,8 +645,9 @@ def build_opf_multistep(
         Shape (T, nnd) where nnd = len(nondispatchable).
         Columns must exactly match the units' unique, nonempty ``device_id``
         values; arbitrary input order is aligned to device-list order.
-        If None and nondispatchable is not None, the p_available field
-        from each NondispatchableUnit is tiled across all T steps.
+        If None and nondispatchable is not None, each unit's ``p_available``
+        is used across all T steps. The vectorized path preserves it as static
+        broadcast data; the stepwise path retains its historical tile.
     generators : list[DispatchableGenerator] | None, optional
         Dispatchable generators. If None, convert the case dict's
         ``gen``/``gencost`` tables at build time.
@@ -624,11 +661,6 @@ def build_opf_multistep(
         options = OPFOptions()
     if temporal_assembly not in {"stepwise", "vectorized"}:
         raise ValueError("temporal_assembly must be 'stepwise' or 'vectorized'")
-    if temporal_assembly == "vectorized":
-        raise NotImplementedError(
-            "temporal_assembly='vectorized' is reserved for the M14b "
-            "horizon-level implementation"
-        )
     if coupling_constraints is None:
         coupling_constraints = []
     if generators is not None and len(generators) == 0:
@@ -644,9 +676,22 @@ def build_opf_multistep(
         raise ValueError(
             f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
         )
+    if temporal_assembly == "vectorized" and formulation != "lossy_dc":
+        raise NotImplementedError(
+            "temporal_assembly='vectorized' is currently supported only for "
+            "formulation='lossy_dc'"
+        )
 
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(
-        case, df_P, df_Q, loads, df_load_p, df_load_q, T, formulation
+        case,
+        df_P,
+        df_Q,
+        loads,
+        df_load_p,
+        df_load_q,
+        T,
+        formulation,
+        temporal_assembly,
     )
     if formulation in {"lossy_dc", "singlenode_dc"} and (
         (not explicit_load_mode and df_Q is not None)
@@ -661,21 +706,43 @@ def build_opf_multistep(
             stacklevel=2,
         )
 
+    nd_inputs: NondispatchableInputs | None = None
     # Normalize ND availability once at the public API boundary.
     if nondispatchable:
         if df_nd is None:
+            fallback_action = (
+                "using static p_available from each NondispatchableUnit "
+                "across all T steps."
+                if temporal_assembly == "vectorized"
+                else "tiling p_available from each NondispatchableUnit "
+                "across all T steps."
+            )
             warnings.warn(
-                "df_nd not provided; tiling p_available from each "
-                "NondispatchableUnit across all T steps.",
+                f"df_nd not provided; {fallback_action}",
                 UserWarning,
                 stacklevel=2,
             )
-            nd_available = np.tile(
-                [unit.p_available for unit in nondispatchable], (T, 1)
+            nd_available = np.asarray(
+                [unit.p_available for unit in nondispatchable], dtype=float
             )
+            nd_temporal_class = "static"
         else:
             nd_available = _parse_nd_timeseries(df_nd, T, nondispatchable)
-        df_nd = pd.DataFrame(nd_available)
+            nd_temporal_class = "interval"
+        if temporal_assembly == "vectorized":
+            nd_inputs = NondispatchableInputs(
+                nd_available,
+                temporal_class=nd_temporal_class,
+                vectorized_assembly=True,
+            )
+            df_nd = None
+        else:
+            if nd_temporal_class == "static":
+                nd_available = np.broadcast_to(
+                    nd_available[np.newaxis, :],
+                    (T, len(nondispatchable)),
+                )
+            df_nd = pd.DataFrame(nd_available)
     elif df_nd is not None:
         warnings.warn(
             "df_nd is ignored because no nondispatchable units were provided.",
@@ -684,18 +751,35 @@ def build_opf_multistep(
         )
         df_nd = None
 
-    # HVDC frame handling: tile static box or validate provided frames.
+    hvdc_inputs: HVDCInputs | None = None
+    # HVDC frame handling: preserve static boxes or validate provided frames.
     if hvdc and formulation != "singlenode_dc":
         if df_hvdc_min is None and df_hvdc_max is None:
+            fallback_action = (
+                "using the static box from HVDCLink bounds across all T steps."
+                if temporal_assembly == "vectorized"
+                else "tiling static box from HVDCLink bounds across all T steps."
+            )
             warnings.warn(
-                "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
-                "HVDCLink bounds across all T steps.",
+                f"df_hvdc_min/df_hvdc_max not provided; {fallback_action}",
                 UserWarning,
                 stacklevel=2,
             )
             p_min_static, p_max_static = _hvdc_static_box(hvdc)
-            df_hvdc_min = pd.DataFrame(np.tile(p_min_static, (T, 1)))
-            df_hvdc_max = pd.DataFrame(np.tile(p_max_static, (T, 1)))
+            if temporal_assembly == "vectorized":
+                hvdc_inputs = HVDCInputs(
+                    p_min_static,
+                    p_max_static,
+                    temporal_class="static",
+                    vectorized_assembly=True,
+                )
+            else:
+                df_hvdc_min = pd.DataFrame(
+                    np.broadcast_to(p_min_static[np.newaxis, :], (T, len(hvdc)))
+                )
+                df_hvdc_max = pd.DataFrame(
+                    np.broadcast_to(p_max_static[np.newaxis, :], (T, len(hvdc)))
+                )
         elif df_hvdc_min is None or df_hvdc_max is None:
             raise ValueError("df_hvdc_min and df_hvdc_max must be provided together.")
         else:
@@ -710,8 +794,18 @@ def build_opf_multistep(
                     f"box invariant p_min <= p_max violated."
                 )
             aligned_ids = [link.device_id for link in hvdc]
-            df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
-            df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
+            if temporal_assembly == "vectorized":
+                hvdc_inputs = HVDCInputs(
+                    mins,
+                    maxs,
+                    temporal_class="interval",
+                    vectorized_assembly=True,
+                )
+                df_hvdc_min = None
+                df_hvdc_max = None
+            else:
+                df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
+                df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
     elif not hvdc and (df_hvdc_min is not None or df_hvdc_max is not None):
         warnings.warn(
             "df_hvdc_min/df_hvdc_max are ignored because no HVDC links were provided.",
@@ -724,8 +818,18 @@ def build_opf_multistep(
     normalized_case = (
         _case_with_generators(case, generators) if generators is not None else case
     )
+    selected_builders = (
+        _get_vectorized_multistep_builders()
+        if temporal_assembly == "vectorized"
+        else builders
+    )
+    vectorized_inputs = (
+        {"nd_inputs": nd_inputs, "hvdc_inputs": hvdc_inputs}
+        if temporal_assembly == "vectorized"
+        else {}
+    )
     return _finalize_temporal_assembly(
-        builders[formulation](
+        selected_builders[formulation](
             normalized_case,
             df_P,
             df_Q,
@@ -743,6 +847,7 @@ def build_opf_multistep(
             loads=loads,
             load_inputs=load_inputs,
             load_participates_when_empty=explicit_load_mode,
+            **vectorized_inputs,
         ),
         temporal_assembly,
     )
