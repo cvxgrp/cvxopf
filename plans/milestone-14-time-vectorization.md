@@ -2,8 +2,8 @@
 
 ## Status
 
-**In progress; M14c branch-local implementation complete and integration under
-review.** The frozen
+**In progress; M14c integration and prefix-ladder implementation are complete,
+with pre-execution review pending.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -39,15 +39,22 @@ single-node boxes under SCIPY canonicalization and CLARABEL; it neither
 authorizes AC migration nor establishes a runtime or RSS advantage.
 
 The reviewed branch-local M14c implementation is commit
-`0ef895b5e665fdb3a8fffab60292329ed22fd32b`. It is being integrated into
+`0ef895b5e665fdb3a8fffab60292329ed22fd32b`. It was integrated into
 `big-experiment` from parent commit
-`6a9cd130b7817f2ac6fbca2ce0de634da8967b25`. The integration retains the
+`6a9cd130b7817f2ac6fbca2ce0de634da8967b25` by no-ff merge commit
+`360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`. The integration retains the
 unchanged frozen S4 scenario, policy, and solver hashes and explicitly selects
 the vectorized lossy-DC path with SCIPY canonicalization. The 24-, 168-, and
-720-hour prefix ladder and annual execution remain unexecuted. A reviewed clean
-integration commit authorizes only the ordered prefix ladder. Annual execution
-remains unauthorized until accepted 24/168/720-hour evidence is reviewed and
-the integration authority record is explicitly updated.
+720-hour prefix ladder and annual execution remain unexecuted. This reviewed
+clean integration commit authorizes only the ordered prefix ladder. Annual
+execution remains unauthorized until accepted 24/168/720-hour evidence is
+reviewed and the integration authority record is explicitly updated.
+
+The ordered fresh-worker runner, typed 24/168/720-hour fixture and resource
+registry, independent analyzer, immutable promotion boundary, and synthetic
+process-control tests are implemented. Their default output remains absent;
+no prefix has been executed, no ladder result has been promoted, and the
+annual authority record remains unchanged.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,

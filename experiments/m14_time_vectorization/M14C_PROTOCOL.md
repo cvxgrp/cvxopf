@@ -114,6 +114,58 @@ horizons are not attempted automatically. No automatic retry, limit increase,
 or backend substitution is permitted. A reviewed rerun uses a fresh output
 directory and is recorded as a separate attempt.
 
+### Prefix-ladder implementation checkpoint
+
+The supervised ladder is implemented by
+`run_m14c_prefix_ladder.py`, with typed prefix construction and limits in
+`m14c_prefix_fixture.py` and independent reconstruction in
+`m14c_prefix_analysis.py`. The authoritative default output root is
+`experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder`, which
+must not exist before launch. Execution requires a clean committed descendant
+of integration commit `360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`, the
+unchanged pre-ladder integration record, and a passing retained S4 seam gate.
+
+The root retains immutable `execution-context.json` and
+`outer-equivalence.json`, an atomic `ladder-progress.json`, and, when the
+supervisor reaches a catchable terminal state, immutable `ladder-result.json`.
+Each attempted point uses a fresh `prefix-NNNN/` worker directory containing
+its exact execution context, worker log, and immutable supervision record.
+The worker result can be absent after launch failure or supervisor
+interruption. A verified outer-plan archive is written only after an accepted
+solve, but the final supervision may still be nonaccepted if a resource or
+interruption event occurs after that publication. Source,
+integration lineage, annual fixture hashes, prefix input/scenario hashes,
+policy, solve configuration, representation, backend, software/machine
+context, resource policy, phase samples, and artifact hashes are retained.
+The progress and terminal registries record the ordered attempted and accepted
+horizons and the first stopping horizon. Catchable parent interruption
+terminates and joins the worker before retaining an explicit, nonpromotable
+partial lifecycle. An unfinalized progress root can be reconstructed as a
+partial scientific record but is never resumed or promoted, including the
+narrow state where all three prefixes are accepted but the immutable terminal
+record has not yet been published. If interruption occurs while terminating a
+worker for an already observed resource crossing, the first frozen resource
+trigger remains the primary classification and the interruption is retained
+as auxiliary evidence. `worker_launch_failure` is reserved for failure of the
+fresh-process launch itself; ordinary active-marker, sampling, termination, or
+wait errors after launch are retained separately as `supervisor_failure`
+unless an already observed resource trigger has priority.
+
+Execution sources and analysis sources have separate fingerprints: the former
+binds every module that can affect construction, solve, supervision, or
+archives, while the latter adds the analyzer itself. Analyzer-only corrections
+therefore remain explicit without misrepresenting the worker source identity.
+
+The analyzer reproduces every accepted audit and terminal signpost from the
+archived public result, checks structural counts and the complete
+worker/supervisor provenance chain, and validates retained abnormal outcomes
+without relabeling them. It may immutably promote only a complete accepted
+ladder as `M14C_PREFIX_LADDER_RESULTS.json`. Promotion records
+`qualified_for_annual_review=true` but deliberately retains
+`annual_execution_authorized=false`; review and a separate authority update
+remain required before S4 can launch. Partial analysis remains in the ignored
+execution directory and cannot occupy the authoritative tracked destination.
+
 M14c advances only after all of the following pass:
 
 1. structural tests for time-last network variables, sparse operators, leaf
