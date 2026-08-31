@@ -80,6 +80,14 @@ the underlying timing boundaries match. Performance is descriptive: a small,
 zero, or negative speedup does not invalidate an already accepted vectorized
 ladder.
 
+Timing comparability is classified explicitly from a shared production/model
+fingerprint over `src/cvxopf` and the frozen S4 fixture/model/audit files, plus
+platform, architecture, and software versions. Harness-specific commits and
+fingerprints remain visible provenance but do not by themselves make the
+production comparison unmatched. Ratios remain descriptive when the shared
+contexts differ; the analyzer must list every mismatched field rather than
+imply a controlled same-binary or same-environment comparison.
+
 ## Scientific gate
 
 Each accepted stepwise point must independently satisfy the frozen M14c/S4
@@ -88,6 +96,10 @@ mathematical tolerances for objective, component costs, storage trajectories,
 terminal signposts, and other uniquely determined quantities. Alternative
 feasible optimal values remain allowed only for genuinely nonunique
 coordinates when both arms pass the complete physical and optimality gates.
+In particular, lossy-DC `p_flows` are not coordinate-equality-gated because
+zero-resistance cycles can make branch flows nonunique. Their schema and shape
+must match, both arms must independently pass the complete branch/nodal audit,
+and objective and component-cost equivalence remain mandatory.
 
 A mathematical or audit mismatch blocks annual authorization. A performance
 result never does. A retained resource or process boundary is descriptive
