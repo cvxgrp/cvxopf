@@ -69,7 +69,8 @@ reason to repeat the accepted vectorized ladder.
 The analyzer reports, for each horizon and each production path:
 
 - the measurements above at their actual retained resolution;
-- objective and declared component costs;
+- objective and declared component costs, including independently reconstructed
+  lossy-DC network-loss cost and the resulting objective-accounting residual;
 - accepted-primal status and the complete independent residual audit;
 - storage identities, boundary indices, and terminal SoC signposts; and
 - canonical/source structural counts as representation-specific

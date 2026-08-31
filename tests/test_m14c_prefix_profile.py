@@ -143,8 +143,9 @@ def test_declared_component_costs_are_named_and_finite() -> None:
     reference = runner.validate_reference_ladder()[24]
     outer, _, _, _ = analysis._load_point(reference["directory"], 24, reference=True)
     costs = analysis._declared_component_costs(outer, 24)
-    assert {"generation_cost", "storage_cost"} <= costs.keys()
+    assert {"generation_cost", "storage_cost", "dc_loss_cost"} <= costs.keys()
     assert all(np.isfinite(value) for value in costs.values())
+    assert abs(float(outer.result["objective"]) - sum(costs.values())) <= 1e-6
 
 
 def test_context_comparability_retains_source_and_environment_mismatches() -> None:

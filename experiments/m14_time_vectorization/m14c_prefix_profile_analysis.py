@@ -44,6 +44,7 @@ from experiments.m14_time_vectorization.run_m14c_prefix_profile import (
 ABSOLUTE_TOLERANCE = 2e-5
 RELATIVE_TOLERANCE = 1e-9
 RESIDUAL_GATED_NONUNIQUE_FIELDS = frozenset({"p_flows"})
+BR_R = 2
 ANALYSIS_FILES = (
     *PROFILE_SOURCE_FILES,
     "experiments/m14_time_vectorization/m14c_prefix_profile_analysis.py",
@@ -318,7 +319,18 @@ def _declared_component_costs(
     generation_cost = fixture.inputs.delta * sum(
         float(gen_cost_expr(gencost, cp.Constant(row)).value) for row in pg
     )
-    costs: dict[str, float] = {"generation_cost": generation_cost}
+    branch_resistance = np.asarray(fixture.inputs.case["branch"], dtype=float)[:, BR_R]
+    base_mva = float(fixture.inputs.case["baseMVA"])
+    branch_flow_pu = np.asarray(outer.result["p_flows"], dtype=float) / base_mva
+    dc_loss_cost = (
+        fixture.inputs.delta
+        * fixture.inputs.options.loss_weight
+        * float(np.sum(branch_resistance * np.square(branch_flow_pu)))
+    )
+    costs: dict[str, float] = {
+        "generation_cost": generation_cost,
+        "dc_loss_cost": dc_loss_cost,
+    }
     for name, value in outer.result.items():
         if name.endswith("_cost"):
             costs[name] = _number(value, f"component cost {name}")
@@ -411,6 +423,8 @@ def analyze_profile(
         mismatches = _result_mismatches(vector.result, stepwise.result)
         vector_costs = _declared_component_costs(vector, horizon)
         stepwise_costs = _declared_component_costs(stepwise, horizon)
+        vector_objective = float(cast(float, vector.result["objective"]))
+        stepwise_objective = float(cast(float, stepwise.result["objective"]))
         if vector_costs.keys() != stepwise_costs.keys():
             mismatches.append("component_cost_schema")
         component_costs = {}
@@ -480,12 +494,17 @@ def analyze_profile(
                     step_context,
                 ),
                 "objective": {
-                    "vectorized": float(cast(float, vector.result["objective"])),
-                    "stepwise": float(cast(float, stepwise.result["objective"])),
-                    "absolute_difference": abs(
-                        float(cast(float, vector.result["objective"]))
-                        - float(cast(float, stepwise.result["objective"]))
-                    ),
+                    "vectorized": vector_objective,
+                    "stepwise": stepwise_objective,
+                    "absolute_difference": abs(vector_objective - stepwise_objective),
+                    "accounting_residual": {
+                        "vectorized": abs(
+                            vector_objective - sum(vector_costs.values())
+                        ),
+                        "stepwise": abs(
+                            stepwise_objective - sum(stepwise_costs.values())
+                        ),
+                    },
                 },
                 "component_costs": component_costs,
                 "audit": {
