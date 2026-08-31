@@ -184,8 +184,11 @@ M14c advances only after all of the following pass:
 6. explicit SCIPY provenance on vectorized solves and CPP provenance on legacy
    comparison solves;
 7. the 24-, 168-, and 720-step Case118 scaling ladder within the frozen
-   resource limits above; and
-8. strict mypy, Ruff, the complete test suite, and `git diff --check`.
+   resource limits above;
+8. the non-promotional `stepwise + CPP` profile of those same frozen prefixes,
+   compared with the accepted `vectorized + SCIPY` artifacts under
+   `M14C_PROFILING_PROTOCOL.md`; and
+9. strict mypy, Ruff, the complete test suite, and `git diff --check`.
 
 Independent audits remain authoritative for scientific acceptance. Source and
 canonical object counts are characterized by representation rather than
@@ -199,8 +202,11 @@ committed implementation, the reviewed M14c commit is integrated into
 integration checkpoint must record the exact M14c and `big-experiment` source
 commits, rerun those branch-local gates, verify the unchanged S4 fixture,
 policy, solver, scenario, and provenance hashes, and then run the ordered
-frozen-S4 prefix ladder before annual execution. The M14 branch does not
-recreate a parallel S4 fixture or supervisor.
+frozen-S4 vectorized prefix ladder. Before annual authority is updated, the
+accepted vectorized artifacts are compared with fresh supervised
+`stepwise + CPP` executions of the same prefixes under
+`M14C_PROFILING_PROTOCOL.md`. The M14 branch does not recreate a parallel S4
+fixture or supervisor.
 
 The first authorized 8,760-step execution then uses the exact frozen Case118
 S4 fixture, supervisor, provenance, archive, equivalence, and analysis
@@ -231,9 +237,11 @@ review and a fresh output directory.
    equivalence gates on the M14 branch.
 5. Integrate the reviewed implementation into `big-experiment` and verify the
    unchanged S4 fixture and execution contract.
-6. Run the ordered 24-, 168-, and 720-hour frozen-S4 prefix ladder and freeze
-   its evidence.
-7. Authorize the single annual M14c/S4 execution only after review of all
+6. Run the ordered 24-, 168-, and 720-hour frozen-S4 vectorized prefix ladder
+   and freeze its evidence.
+7. Run and review the non-promotional `stepwise + CPP` profile against those
+   accepted prefix artifacts.
+8. Authorize the single annual M14c/S4 execution only after review of all
    cheaper gates.
 
 ## Non-goals

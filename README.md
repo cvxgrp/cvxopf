@@ -850,11 +850,13 @@ package environment.
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
 - [ ] M14 time-vectorized multistep formulations: the explicit time-last
-  lossy-DC path is branch-locally complete and is being integrated into the
-  Case118 `big-experiment` branch. The retained stepwise builder remains the
-  default. A reviewed integration commit authorizes the frozen S4 prefix ladder
-  only; the annual solve remains blocked until that ladder passes review and
-  annual authority is explicitly recorded (see
+  lossy-DC path is integrated into the Case118 `big-experiment` branch and its
+  vectorized 24/168/720 prefix ladder is accepted. The retained stepwise
+  builder remains the
+  default. The vectorized frozen S4 24/168/720 prefix ladder is accepted. The
+  annual solve remains blocked until the non-promotional stepwise/CPP profile
+  of those same prefixes is reviewed and annual authority is explicitly
+  recorded (see
   `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)

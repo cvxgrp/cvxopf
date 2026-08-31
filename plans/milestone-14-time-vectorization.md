@@ -2,8 +2,8 @@
 
 ## Status
 
-**In progress; M14c integration and prefix-ladder implementation are complete,
-with pre-execution review pending.** The frozen
+**In progress; M14c integration and the vectorized 24/168/720 prefix ladder are
+complete, with the pre-annual representation profile next.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -45,16 +45,19 @@ The reviewed branch-local M14c implementation is commit
 `360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`. The integration retains the
 unchanged frozen S4 scenario, policy, and solver hashes and explicitly selects
 the vectorized lossy-DC path with SCIPY canonicalization. The 24-, 168-, and
-720-hour prefix ladder and annual execution remain unexecuted. This reviewed
-clean integration commit authorizes only the ordered prefix ladder. Annual
-execution remains unauthorized until accepted 24/168/720-hour evidence is
-reviewed and the integration authority record is explicitly updated.
+720-hour vectorized prefix ladder completed from clean commit
+`2f0f95288e5e50ff32c94c7667ea44121f719fa4`; all three points were accepted
+within the frozen resource limits. Annual execution remains unauthorized until
+that evidence and the pre-annual stepwise/CPP profile are reviewed and the
+integration authority record is explicitly updated.
 
 The ordered fresh-worker runner, typed 24/168/720-hour fixture and resource
 registry, independent analyzer, immutable promotion boundary, and synthetic
-process-control tests are implemented. Their default output remains absent;
-no prefix has been executed, no ladder result has been promoted, and the
-annual authority record remains unchanged.
+process-control tests are implemented. The completed vectorized result remains
+in its ignored execution tree and the annual authority record remains
+unchanged. Before that authority can be updated, the same prefixes must run in
+fresh supervised workers through the retained production comparison path,
+`stepwise + CPP`, under `M14C_PROFILING_PROTOCOL.md`.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,
@@ -543,6 +546,15 @@ For each implemented formulation:
    and `T`. At minimum, include short AC windows and the lossy-DC scaling
    ladder; do not extrapolate the annual DC result to short nonlinear AC.
 
+For M14c, the lossy-DC row of that matrix is an explicit pre-annual checkpoint.
+It reuses the accepted `vectorized + SCIPY` 24/168/720 artifacts and runs the
+identical frozen prefixes as `stepwise + CPP`, each in a fresh supervised
+worker. The comparison is non-promotional and descriptive for performance;
+only a mathematical or audit mismatch blocks progression. No artificial
+backend/assembly cross-product is required. The exact evidence and timing
+boundaries are frozen in
+`experiments/m14_time_vectorization/M14C_PROFILING_PROTOCOL.md`.
+
 Strict mypy, Ruff, the complete test suite, and `git diff --check` remain
 required repository gates.
 
@@ -562,8 +574,10 @@ are true:
    S4 limits: 16,384 MiB child RSS, 7,200 seconds worker wall time, 10,800
    seconds total supervisor wall time, and one-second polling;
 6. no OS memory-pressure termination occurs;
-7. the independently reconstructed outer audit is accepted; and
-8. execution occurs from a clean committed source with a fresh output
+7. the independently reconstructed outer audit is accepted;
+8. the non-promotional 24/168/720 `stepwise + CPP` profile is complete and
+   reviewed against the accepted `vectorized + SCIPY` artifacts; and
+9. execution occurs from a clean committed source with a fresh output
    directory.
 
 The new annual result must identify the vectorized execution commit. It is not
