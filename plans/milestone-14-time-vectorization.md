@@ -496,7 +496,7 @@ reconstructs a per-step object list.
 
 ### M14c — Vectorized lossy DC
 
-**Open.** The authoritative implementation and execution contract is frozen in
+**Complete.** The authoritative implementation and execution contract is frozen in
 `experiments/m14_time_vectorization/M14C_PROTOCOL.md`. M14c consumes the
 completed M14b representation registry and retains explicit caller selection,
 the stepwise default, and formulation-specific SCIPY provenance.
