@@ -351,7 +351,7 @@ No stage may silently advance after a failed gate.
 | Pre-S3 recycling comparison (complete) | 3 × 64 h | Compare uninterrupted, 32-interval, and 16-interval worker lifetimes | Completed 192/192 accepted intervals; exact causal trajectories; observed peak RSS 20,025.5, 19,501.7, and 17,926.3 MiB respectively |
 | S3 (complete) | 720 h | One-month frozen hierarchy and memory-retention study using selected `recycle_every_16` policy | Completed 720/720 accepted intervals with 44 planned restarts, three successful copied-target-free recoveries, no abnormal stop, and independently reconstructed numerical/resource evidence |
 | S4 (complete; accepted annual outer promoted) | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted vectorized/SCIPY/CLARABEL outer primal and independent audit are retained in `S4_RESULTS.json`; its immutable signposts now open S4b planning |
-| S4b | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Sequential shard equivalence, fresh-process execution, deterministic merge/audit, and a resource-bounded parallel demonstration all pass before S5 |
+| S4b (open; boundary rule frozen) | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Materialize the immutable manifest, characterize the partition-boundary effect, then pass partitioned-policy process equivalence, fresh-process execution, deterministic merge/audit, and the bounded two-worker demonstration before S5 |
 | S5 | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | All shards completed and merged into one boundary-continuous annual record, or an explicit partial-horizon scientific record |
 | S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
 | S7 | — | Analysis, reproducibility record, and conclusions | Independent reconstruction of all reported totals and hashes |
@@ -360,21 +360,22 @@ Direct AC is a characterization comparator at small horizons only. Failure to
 build or solve larger direct AC cases is itself a recorded scaling result; it
 is not a reason to weaken the hierarchical acceptance gate.
 
-### S4 time-vectorization hold
+### Historical S4 time-vectorization hold — resolved
 
-S4 is paused after repeated annual workers reached the same
+Before M14c, S4 was paused after repeated annual workers reached the same
 construction/canonicalization phase and received `SIGKILL`. The detached fourth
 attempt ruled out the Codex command resource group: macOS reported that it was
 killing the largest compressed process at `198602 MB`, while the experiment
 supervisor had sampled 11,973 MiB peak RSS and had triggered none of its frozen
 resource limits. No worker produced an outer primal or outer-plan artifact.
 
-This is a time-axis construction boundary, not solver-certified infeasibility
-and not evidence against the hierarchical formulation. The `big-experiment`
-execution program is on hold until
-[`M14`](milestone-14-time-vectorization.md) delivers and verifies the vectorized
-lossy-DC horizon path. S4 then restarts from a new clean execution commit and a
-fresh output directory; none of the failed workers is resumable.
+This remains time-axis construction-boundary evidence, not solver-certified
+infeasibility and not evidence against the hierarchical formulation. M14c
+subsequently delivered the vectorized lossy-DC path. Clean `attempt_005` solved
+and independently audited the complete 8,760-hour outer in 104.62 supervised
+seconds with 5,962.6 MiB peak RSS, and the accepted result is promoted in
+`S4_RESULTS.json`. None of the historical failed workers was resumed or
+reinterpreted. The experiment is no longer on this hold; S4b is now open.
 
 S2 is complete as a resource-boundary stage, with the complete scientific
 trajectory obtained through an explicitly exploratory continuation. It is not
@@ -446,8 +447,11 @@ authoritative annual S4 solve.
 
 ### Pre-S5 sharding and parallel-execution qualification
 
-S4b establishes that the annual AC realization can be executed as independent,
-restartable jobs without changing the scientific problem. It does not add a
+S4b establishes that the frozen partitioned annual AC policy can be executed as
+independent, restartable jobs. Adding forced shard boundaries can truncate AC
+windows and therefore is itself a scientific policy choice; S4b separately
+characterizes that boundary effect against the ordinary uninterrupted
+controller. It does not add a
 cluster scheduler or make scheduler-specific behavior part of `cvxopf`. The
 experiment provides a scheduler-neutral, installable execution command that
 accepts one frozen annual manifest, one shard identifier, and one output
@@ -484,20 +488,24 @@ silently repair their own boundary conditions. Consequently, successful shards
 form one storage-continuous annual trajectory even when their wall-clock
 execution order differs.
 
-S4b must pass four gates:
+S4b must pass five gate families:
 
-1. **Partition equivalence.** On a bounded frozen reference horizon, an
-   uninterrupted execution and a sequential execution of the same intervals as
-   shards agree within the existing scientific tolerances on boundary states,
-   accepted intervals, residuals, attempts, and reconstructed trajectory
-   quantities.
-2. **Independent execution.** Every test shard succeeds in a fresh process
+1. **Boundary-effect characterization.** On a bounded frozen horizon, compare
+   the ordinary uninterrupted controller with a one-process controller using
+   the declared shard boundary. Both must pass independently; differences
+   caused by truncated boundary windows are retained rather than equality-
+   gated away.
+2. **Partitioned-policy process equivalence.** The one-process partitioned
+   execution and sequential fresh-process shards using identical forced
+   boundaries agree within existing tolerances on boundary states, accepted
+   intervals, residuals, attempts, and reconstructed trajectory quantities.
+3. **Independent execution.** Every test shard succeeds in a fresh process
    using only its manifest entry and declared immutable inputs; no predecessor
    in-memory state or undeclared local artifact is required.
-3. **Merge validation.** The merger rejects missing, duplicated, overlapping,
+4. **Merge validation.** The merger rejects missing, duplicated, overlapping,
    misconfigured, or boundary-discontinuous shard records and deterministically
    reconstructs global interval order and all additive and extremal summaries.
-4. **Resource-bounded parallel demonstration.** At least two shards run
+5. **Resource-bounded parallel demonstration.** At least two shards run
    concurrently under a predeclared aggregate memory budget, with per-worker
    and aggregate peak memory, CPU time, elapsed wall time, and restart/recovery
    behavior retained. If the qualification host cannot safely support two AC
@@ -505,8 +513,11 @@ S4b must pass four gates:
    but S5 parallel execution remains unauthorized until the parallel gate is
    demonstrated on a suitably provisioned host.
 
-Passing S4b establishes portability and semantic equivalence, not universal
-parallel efficiency. S5 records requested versus achieved concurrency and
+Passing S4b establishes portability and process equivalence for the frozen
+partitioned policy, plus a bounded characterization of its difference from the
+ordinary uninterrupted controller. It does not establish that adding shard
+boundaries is semantically inert or claim universal parallel efficiency. S5
+records requested versus achieved concurrency and
 keeps scheduler waiting time distinct from model construction, solver, merge,
 and total elapsed time. The frozen manifest remains runnable serially when
 available memory does not permit concurrent AC workers.
