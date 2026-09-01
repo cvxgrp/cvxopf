@@ -31,9 +31,8 @@ def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -
     assert len(runner.profile_source_fingerprint()) == 64
 
 
-def test_conditioned_fixture_supersedes_historical_reference_chain() -> None:
-    with pytest.raises(ValueError, match="incomplete"):
-        runner.validate_reference_ladder()
+def test_conditioned_reference_chain_is_complete() -> None:
+    assert tuple(runner.validate_reference_ladder()) == (24, 168, 720)
 
 
 def test_sigterm_handler_raises_catchable_supervisor_interruption() -> None:
@@ -41,10 +40,7 @@ def test_sigterm_handler_raises_catchable_supervisor_interruption() -> None:
         runner._sigterm_handler(15, object())
 
 
-def test_profile_context_freezes_production_pair_and_reference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(runner, "PREFIX_LADDER_OUTPUT_DIRECTORY", HISTORICAL_REFERENCE)
+def test_profile_context_freezes_production_pair_and_reference() -> None:
     context = runner.profile_execution_context(24)
     assert context["temporal_assembly"] == "stepwise"
     assert context["canonicalization_backend"] == "CPP"
@@ -52,7 +48,7 @@ def test_profile_context_freezes_production_pair_and_reference(
     assert context["reference_canonicalization_backend"] == "SCIPY"
     assert context["prefix_ladder_executed"] is False
     assert context["annual_execution_authorized"] is False
-    assert context["shared_production_matches_reference"] is False
+    assert context["shared_production_matches_reference"] is True
     assert len(str(context["m14c_integration_sha256"])) == 64
     assert (
         context["reference_ladder_result_sha256"]
@@ -63,7 +59,6 @@ def test_profile_context_freezes_production_pair_and_reference(
 def test_analyzer_validates_complete_stepwise_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(runner, "PREFIX_LADDER_OUTPUT_DIRECTORY", HISTORICAL_REFERENCE)
     context = dict(runner.profile_execution_context(24))
     context["git_clean"] = True
     monkeypatch.setattr(

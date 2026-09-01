@@ -119,9 +119,11 @@ directory and is recorded as a separate attempt.
 The supervised ladder is implemented by
 `run_m14c_prefix_ladder.py`, with typed prefix construction and limits in
 `m14c_prefix_fixture.py` and independent reconstruction in
-`m14c_prefix_analysis.py`. The authoritative default output root is
-`experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder_conditioned`, which
-must not exist before launch. Execution requires a clean committed descendant
+`m14c_prefix_analysis.py`. The reviewed conditioned rerun is retained at
+`experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder_conditioned_attempt_002`.
+The unsuffixed root retains the environment-only failed first attempt, in which
+RSS process inspection was denied before any prefix was accepted. Execution
+requires a clean committed descendant
 of integration commit `360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`, the
 unchanged pre-ladder integration record, and a passing retained S4 seam gate.
 

@@ -54,9 +54,9 @@ PROFILE_OUTPUT_DIRECTORY = Path(
     "experiments/m14_time_vectorization/results/m14c_case118_prefix_profile"
 )
 REFERENCE_LADDER_RESULT_SHA256 = (
-    "1c66941363d59cc29374eee2201eb2e2cf0a5393b4bfb76edfe3b99aef7cbca6"
+    "40213412e6cc0fcaf5c89ea5028aff22e529b10576b1a00eb99cd2ccead147fb"
 )
-REFERENCE_EXECUTION_COMMIT = "2f0f95288e5e50ff32c94c7667ea44121f719fa4"
+REFERENCE_EXECUTION_COMMIT = "b69e64ac86c8c8290ee906bd7665b23e56eed224"
 EXPECTED_WORKER_PHASES = (
     "worker_start",
     "before_construction",

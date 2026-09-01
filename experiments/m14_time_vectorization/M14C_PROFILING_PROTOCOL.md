@@ -8,8 +8,9 @@ non-promotional comparison: it neither requalifies nor replaces the accepted
 vectorized prefix ladder, and it cannot authorize annual execution by itself.
 
 The comparison uses exactly the frozen Case118 S4 prefixes at `T = 24`, `168`,
-and `720`. The completed vectorized evidence is read from
-`results/m14c_case118_prefix_ladder`; it is never modified. Each comparison
+and `720`. The approved conditioned vectorized evidence is read from
+`results/m14c_case118_prefix_ladder_conditioned_attempt_002`; it is never
+modified. Each comparison
 point runs the same prefix in a new supervised process with:
 
 - `temporal_assembly="stepwise"`;
@@ -25,11 +26,16 @@ of this checkpoint. They may be characterized separately, but they are not
 needed to attribute the two production paths actually retained by M14.
 
 The reference execution commit is
-`2f0f95288e5e50ff32c94c7667ea44121f719fa4`. Its immutable
+`b69e64ac86c8c8290ee906bd7665b23e56eed224`. Its immutable
 `ladder-result.json` SHA-256 is
-`1c66941363d59cc29374eee2201eb2e2cf0a5393b4bfb76edfe3b99aef7cbca6`.
+`40213412e6cc0fcaf5c89ea5028aff22e529b10576b1a00eb99cd2ccead147fb`.
 The profiling runner must verify that identity and the complete referenced
 artifact chain before starting its first worker.
+
+The initial conditioned output root is retained separately as an environment-
+only failed attempt: sandbox process inspection was denied before any prefix
+was accepted. The reviewed `attempt_002` tree is the complete accepted
+reference and is the only tree used by this comparison.
 
 ## Frozen execution sequence
 

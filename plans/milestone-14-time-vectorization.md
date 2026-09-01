@@ -59,12 +59,13 @@ uniqueness claim.
 Annual execution remains unauthorized until the conditioned 24/168/720 ladder
 and its corresponding comparison evidence are reviewed.
 
-The ordered fresh-worker runner, typed 24/168/720-hour fixture and resource
-registry, independent analyzer, immutable promotion boundary, and synthetic
-process-control tests are implemented. The conditioned authority record keeps
-both prefix and annual booleans false. The conditioned vectorized ladder must
-run first; only after it is accepted can matching stepwise/CPP comparison
-evidence be regenerated under `M14C_PROFILING_PROTOCOL.md`.
+The conditioned 24/168/720-hour vectorized ladder completed from clean commit
+`b69e64ac86c8c8290ee906bd7665b23e56eed224`, passed independent
+reconstruction, and was promoted at commit
+`c10d0f0ccf61e953fc1c586804c27d5975454e10`. The authority record keeps both
+prefix and annual booleans false while the matching conditioned stepwise/CPP
+comparison is executed under `M14C_PROFILING_PROTOCOL.md`. Only after that
+evidence is reviewed may annual authority be updated.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,
