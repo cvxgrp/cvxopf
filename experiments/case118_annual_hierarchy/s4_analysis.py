@@ -322,6 +322,10 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         or context.get("m14c_merge_base_commit") != fixture.m14c_merge_base_commit
         or context.get("prefix_ladder_executed") is not True
         or context.get("annual_execution_authorized") is not True
+        or context.get("m14c_representation_disposition_sha256")
+        != fixture.m14c_representation_disposition_sha256
+        or context.get("m14c_prefix_ladder_results_sha256")
+        != fixture.m14c_prefix_ladder_results_sha256
         or context.get("m14c_integration_sha256") != fixture.m14c_integration_sha256
     ):
         raise ValueError("S4 execution integration provenance differs from fixture")
@@ -406,6 +410,12 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         "m14c_merge_base_commit": fixture.m14c_merge_base_commit,
         "prefix_ladder_executed": fixture.prefix_ladder_executed,
         "annual_execution_authorized": fixture.annual_execution_authorized,
+        "m14c_representation_disposition_sha256": (
+            fixture.m14c_representation_disposition_sha256
+        ),
+        "m14c_prefix_ladder_results_sha256": (
+            fixture.m14c_prefix_ladder_results_sha256
+        ),
         "m14c_integration_sha256": fixture.m14c_integration_sha256,
         "storage_device_ids": list(fixture.storage_device_ids),
         "objective": _number(outer.result.get("objective"), "S4 objective"),

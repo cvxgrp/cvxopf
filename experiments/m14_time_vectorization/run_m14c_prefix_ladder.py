@@ -103,12 +103,24 @@ def prefix_source_paths() -> tuple[Path, ...]:
     return result
 
 
-def prefix_source_fingerprint() -> str:
+def prefix_source_fingerprint(commit: str | None = None) -> str:
+    """Hash the prefix source at the working tree or a retained execution commit."""
     digest = hashlib.sha256()
     for path in prefix_source_paths():
-        digest.update(path.relative_to(ROOT).as_posix().encode())
+        relative = path.relative_to(ROOT).as_posix()
+        payload = (
+            path.read_bytes()
+            if commit is None
+            else subprocess.run(
+                ["git", "show", f"{commit}:{relative}"],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+        )
+        digest.update(relative.encode())
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(payload)
         digest.update(b"\0")
     return digest.hexdigest()
 

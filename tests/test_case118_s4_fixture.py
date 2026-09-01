@@ -18,6 +18,9 @@ from experiments.case118_annual_hierarchy.s4_fixture import (
     M14C_INTEGRATION_PATH,
     M14C_INTEGRATION_CHECKPOINT,
     M14C_MERGE_BASE_COMMIT,
+    M14C_PREFIX_LADDER_RESULTS_SHA256,
+    M14C_REPRESENTATION_DISPOSITION_PATH,
+    M14C_REPRESENTATION_DISPOSITION_SHA256,
     M14C_SOURCE_COMMIT,
     S4_CANONICALIZATION_BACKEND,
     S4_DELTA_HOURS,
@@ -88,14 +91,43 @@ def test_s4_fixture_loads_exact_frozen_annual_problem() -> None:
     assert fixture.m14c_source_commit == M14C_SOURCE_COMMIT
     assert fixture.big_experiment_parent_commit == BIG_EXPERIMENT_PARENT_COMMIT
     assert fixture.m14c_merge_base_commit == M14C_MERGE_BASE_COMMIT
-    assert fixture.prefix_ladder_executed is False
-    assert fixture.annual_execution_authorized is False
+    assert fixture.prefix_ladder_executed is True
+    assert fixture.annual_execution_authorized is True
+    assert fixture.m14c_representation_disposition_sha256 == (
+        M14C_REPRESENTATION_DISPOSITION_SHA256
+    )
+    assert fixture.m14c_prefix_ladder_results_sha256 == (
+        M14C_PREFIX_LADDER_RESULTS_SHA256
+    )
+    assert hashlib.sha256(
+        M14C_REPRESENTATION_DISPOSITION_PATH.read_bytes()
+    ).hexdigest() == (M14C_REPRESENTATION_DISPOSITION_SHA256)
+    disposition = json.loads(M14C_REPRESENTATION_DISPOSITION_PATH.read_text())
+    historical = disposition["historical_profile"]
+    assert historical["retrospective_reclassification"] is False
+    assert historical["mismatch_disposition"]["Pg"] == (
+        "solver_resolution_certificate_limited_not_mathematically_nonunique"
+    )
+    assert [
+        record["maximum_pg_difference_mw"]
+        for record in historical["observed_mismatches"]
+    ] == [0.02298733018034227, 0.2320286542567942, 0.5758110961889997]
+    scientific = disposition["scientific_disposition"]
+    assert scientific["certificate_limited_coordinates"] == ["dispatchable_generation"]
+    assert scientific["derived_differences"] == [
+        "p_net",
+        "generation_cost",
+        "dc_loss_cost",
+        "storage_cost",
+    ]
     assert len(fixture.m14c_integration_sha256) == 64
     assert M14C_INTEGRATION_PATH.is_file()
 
 
 def test_s4_execution_boundary_matches_frozen_protocol() -> None:
-    assert S4_OUTPUT_DIRECTORY.as_posix().endswith("results/s4_annual_outer_rated")
+    assert S4_OUTPUT_DIRECTORY.as_posix().endswith(
+        "results/s4_annual_outer_rated_attempt_005"
+    )
     assert S4_EXECUTION_LIMITS == S4ExecutionLimits(
         child_rss_mib=16_384.0,
         worker_wall_seconds=7_200.0,

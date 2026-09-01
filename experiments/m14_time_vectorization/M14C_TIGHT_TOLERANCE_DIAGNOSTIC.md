@@ -70,3 +70,31 @@ The output directory is
 `results/m14c_case118_tight_tolerance_conditioned`. It is ignored and immutable
 per execution. A completed diagnostic still leaves annual execution blocked
 until an explicit scientific review and separate authority update.
+
+## Reviewed post-diagnostic disposition
+
+The completed diagnostic is retained at SHA-256
+`cf51b169ffb35d5ca519462a4a38b31713538ce0e66f245d41f72be16c753a36`.
+All six native CLARABEL solves returned `Solved`; both representations passed
+the complete physical and bound audits; and the objective separation at 24,
+168, and 720 hours was smaller than the sum of the corresponding native
+absolute primal-dual gaps. The original profiling mismatch remains unchanged
+and is not retrospectively waived.
+
+Prospectively, stepwise/CPP and vectorized/SCIPY lossy DC are accepted as
+equivalent representations for this frozen study. Intermediate storage-power,
+storage-SoC, and branch-flow trajectories are weakly identified and are not
+coordinate-equality gates. Objective certificate coverage, complete audits,
+terminal storage obligations, nondispatchable output, identities, and public
+result schemas remain gates. The vectorized trajectory is the authoritative
+annual policy realization. Its observed several-MWh signpost sensitivity is a
+limitation on interpretation of downstream hierarchical AC results.
+
+The historical `Pg` mismatch is classified separately as solver-resolution
+and certificate-limited, not as mathematical nonuniqueness. The retained
+`p_net`, generation-cost, loss-cost, and storage-cost differences are derived
+consequences of the accepted alternative storage/dispatch trajectory. The
+tracked disposition retains their observed magnitudes at every horizon.
+
+The tracked disposition and subsequent annual authority are recorded in
+`M14C_REPRESENTATION_DISPOSITION.json` and `M14C_INTEGRATION.json`.

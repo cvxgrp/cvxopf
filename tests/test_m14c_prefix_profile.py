@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Mapping
 
 import numpy as np
@@ -48,7 +49,7 @@ def test_profile_context_freezes_production_pair_and_reference() -> None:
     assert context["reference_canonicalization_backend"] == "SCIPY"
     assert context["prefix_ladder_executed"] is False
     assert context["annual_execution_authorized"] is False
-    assert context["shared_production_matches_reference"] is True
+    assert context["shared_production_matches_reference"] is False
     assert len(str(context["m14c_integration_sha256"])) == 64
     assert (
         context["reference_ladder_result_sha256"]
@@ -56,20 +57,20 @@ def test_profile_context_freezes_production_pair_and_reference() -> None:
     )
 
 
-def test_analyzer_validates_complete_stepwise_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    context = dict(runner.profile_execution_context(24))
-    context["git_clean"] = True
-    monkeypatch.setattr(
-        analysis,
-        "profile_source_fingerprint",
-        lambda: str(context["source_fingerprint"]),
+@pytest.mark.parametrize("horizon", (24, 168, 720))
+def test_analyzer_validates_complete_stepwise_context(horizon: int) -> None:
+    context = json.loads(
+        (
+            runner.ROOT
+            / runner.PROFILE_OUTPUT_DIRECTORY
+            / f"stepwise-{horizon:04d}"
+            / "execution-context.json"
+        ).read_text()
     )
-    analysis._validate_stepwise_context(context, 24)
+    analysis._validate_stepwise_context(context, horizon)
     context["annual_execution_authorized"] = True
     with pytest.raises(ValueError, match="context"):
-        analysis._validate_stepwise_context(context, 24)
+        analysis._validate_stepwise_context(context, horizon)
 
 
 def test_profile_refuses_dirty_source_before_output(
@@ -98,7 +99,7 @@ def test_profile_validates_reference_chain_before_output(
         "validate_reference_ladder",
         lambda: (_ for _ in ()).throw(ValueError("reference drift")),
     )
-    with pytest.raises(ValueError, match="reference drift"):
+    with pytest.raises(ValueError, match="closed after annual authorization"):
         runner.run_profile(directory)
     assert not directory.exists()
 
@@ -283,6 +284,16 @@ def test_profile_result_never_authorizes_annual_execution(
     monkeypatch.setattr(runner, "validate_reference_ladder", lambda: {})
     monkeypatch.setattr(
         runner,
+        "load_prefix_fixture",
+        lambda horizon: SimpleNamespace(
+            annual=SimpleNamespace(
+                prefix_ladder_executed=False,
+                annual_execution_authorized=False,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        runner,
         "profile_execution_context",
         lambda horizon: {"horizon_steps": horizon, "git_clean": True},
     )
@@ -317,6 +328,16 @@ def test_profile_retains_root_record_after_supervisor_interruption(
         ),
     )
     monkeypatch.setattr(runner, "validate_reference_ladder", lambda: {})
+    monkeypatch.setattr(
+        runner,
+        "load_prefix_fixture",
+        lambda horizon: SimpleNamespace(
+            annual=SimpleNamespace(
+                prefix_ladder_executed=False,
+                annual_execution_authorized=False,
+            )
+        ),
+    )
     monkeypatch.setattr(
         runner,
         "profile_execution_context",

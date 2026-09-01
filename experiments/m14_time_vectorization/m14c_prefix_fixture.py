@@ -17,6 +17,10 @@ from experiments.case118_annual_hierarchy.streaming_runner import (
 
 
 M14C_INTEGRATION_COMMIT = "360aaf5f75d7bf2d4b2ec1672d319af90bd8626e"
+PRE_LADDER_INTEGRATION_CHECKPOINT = "big-experiment-conditioned-pre-prefix"
+PRE_LADDER_INTEGRATION_SHA256 = (
+    "3cdd1974d150290fcae22317ef86c8d381b4b8af69997d3b2b8f2145630b65d3"
+)
 PREFIX_LADDER_HORIZONS = (24, 168, 720)
 PREFIX_EXPECTED_HASHES: Mapping[int, Mapping[str, str]] = {
     24: {
@@ -106,12 +110,13 @@ def prefix_inputs(inputs: HierarchicalInputs, horizon_steps: int) -> Hierarchica
 
 
 def load_prefix_fixture(horizon_steps: int) -> PrefixFixture:
-    """Materialize and bind one prefix to the unchanged annual S4 authority."""
+    """Materialize one frozen prefix under the current annual S4 authority.
+
+    Execution runners enforce their own lifecycle authority. Keeping fixture
+    materialization independent permits reconstruction of historical ladder and
+    profiling artifacts after the authority advances.
+    """
     annual = load_s4_fixture()
-    if annual.prefix_ladder_executed or annual.annual_execution_authorized:
-        raise ValueError(
-            "prefix execution requires the pre-ladder integration authority"
-        )
     inputs = prefix_inputs(annual.inputs, horizon_steps)
     input_sha256 = execution_input_sha256(inputs)
     scenario_sha256 = _prefix_scenario_sha256(

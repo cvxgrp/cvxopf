@@ -44,27 +44,16 @@ def test_prefix_fixture_freezes_exact_order_limits_and_s4_prefixes() -> None:
         assert point.inputs.df_nd is not None and annual.inputs.df_nd is not None
         assert point.inputs.df_nd.equals(annual.inputs.df_nd.iloc[:horizon])
         assert point.inputs.storage == annual.inputs.storage
-        assert annual.prefix_ladder_executed is False
-        assert annual.annual_execution_authorized is False
+        assert annual.prefix_ladder_executed is True
+        assert annual.annual_execution_authorized is True
         assert point.input_sha256 == PREFIX_EXPECTED_HASHES[horizon]["input"]
         assert point.scenario_sha256 == PREFIX_EXPECTED_HASHES[horizon]["scenario"]
 
 
-@pytest.mark.parametrize(
-    ("prefix_executed", "annual_authorized"), [(True, False), (True, True)]
-)
-def test_prefix_fixture_rejects_post_ladder_authority(
-    monkeypatch: pytest.MonkeyPatch,
-    prefix_executed: bool,
-    annual_authorized: bool,
-) -> None:
-    annual = SimpleNamespace(
-        prefix_ladder_executed=prefix_executed,
-        annual_execution_authorized=annual_authorized,
-    )
-    monkeypatch.setattr(prefix_fixture, "load_s4_fixture", lambda: annual)
-    with pytest.raises(ValueError, match="pre-ladder"):
-        prefix_fixture.load_prefix_fixture(24)
+def test_prefix_fixture_remains_reconstructable_after_authority_advances() -> None:
+    point = prefix_fixture.load_prefix_fixture(24)
+    assert point.annual.prefix_ladder_executed is True
+    assert point.annual.annual_execution_authorized is True
 
 
 def test_prefix_source_registry_binds_runner_analyzer_and_recursive_package() -> None:
@@ -93,17 +82,18 @@ def test_prefix_source_registry_binds_runner_analyzer_and_recursive_package() ->
 def test_historical_execution_context_allows_new_analyzer_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context = dict(runner.ladder_execution_context())
+    context = json.loads(
+        (
+            runner.ROOT
+            / runner.PREFIX_LADDER_OUTPUT_DIRECTORY
+            / "execution-context.json"
+        ).read_text()
+    )
     context.update(
         {
-            "git_commit": "a" * 40,
-            "git_clean": True,
             "platform": "different-analysis-platform",
             "architecture": "different-analysis-architecture",
         }
-    )
-    monkeypatch.setattr(
-        analysis, "prefix_source_fingerprint", lambda: context["source_fingerprint"]
     )
     monkeypatch.setattr(analysis, "_git", lambda *args: M14C_INTEGRATION_COMMIT)
     analysis._validate_execution_context(context)

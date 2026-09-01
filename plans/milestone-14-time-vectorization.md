@@ -2,8 +2,8 @@
 
 ## Status
 
-**In progress; M14c integration is complete and the conditioned vectorized
-24/168/720 prefix ladder is next.** The frozen
+**In progress; M14c vectorized lossy DC is qualified and the Case118 annual
+S4 outer solve is authorized next.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -56,20 +56,22 @@ fleet-wide selection criterion, and the approximately `0.24–0.25%` synthetic
 objective perturbation. This conditions generator dispatch and reduces
 representation sensitivity; it is not a real-economics or full-trajectory
 uniqueness claim.
-Annual execution remains unauthorized until the conditioned 24/168/720 ladder
-and its corresponding comparison evidence are reviewed.
-
 The conditioned 24/168/720-hour vectorized ladder completed from clean commit
 `b69e64ac86c8c8290ee906bd7665b23e56eed224`, passed independent
 reconstruction, and was promoted at commit
 `c10d0f0ccf61e953fc1c586804c27d5975454e10`. The authority record keeps both
 prefix and annual booleans false while the matching conditioned stepwise/CPP
-comparison is executed under `M14C_PROFILING_PROTOCOL.md`. Only after that
-evidence is reviewed may annual authority be updated.
+comparison was executed under `M14C_PROFILING_PROTOCOL.md`. The original
+comparison mismatch is preserved. The subsequent tight-tolerance diagnostic
+passed all audits and bounded every objective difference by the paired native
+CLARABEL gaps. The tracked scientific disposition now accepts both
+representations for this study, selects vectorized/SCIPY as the authoritative
+annual realization, and explicitly authorizes annual S4 execution after this
+checkpoint is reviewed and committed.
 
-The Case118 annual hierarchy experiment remains paused at S4 until the annual
-lossy-DC outer problem passes the remaining M14 construction,
-canonicalization, solve, equivalence, and resource gates below.
+The Case118 annual hierarchy experiment may resume at S4 after this authority
+checkpoint is reviewed and committed. The annual solve itself remains subject
+to its frozen construction, solve, audit, provenance, and resource gates.
 
 ## Motivation
 
@@ -308,6 +310,22 @@ the complete physical residual audit and achieve the accepted optimal objective
 and declared cost decomposition. The comparison record identifies which fields
 are equality-gated, residual-gated, or classified as nonunique alternatives;
 it may not waive a mismatch after inspecting the outcome.
+
+For the frozen Case118 annual study, the original conditioned profiling
+mismatch is retained as historical evidence. The reviewed tight-tolerance
+diagnostic bound in `M14C_REPRESENTATION_DISPOSITION.json` prospectively
+accepts stepwise/CPP and vectorized/SCIPY lossy DC as equivalent: both complete
+audits pass and objective differences are covered by paired native solver
+certificates. Intermediate storage and branch-flow paths are weakly identified;
+the vectorized path is the authoritative annual realization. Terminal
+obligations, nondispatchable output, identities, result schemas, physical
+audits, and certificate-supported objective agreement remain gates. Downstream
+hierarchical AC conclusions must acknowledge the observed several-MWh outer
+signpost sensitivity.
+Dispatchable-generation differences are certificate-limited solver-resolution
+effects, not a declaration of mathematical nonuniqueness. Net-injection and
+component-cost differences are retained as derived consequences of the
+accepted alternative trajectory.
 
 ### Representation-aware structural equivalence
 

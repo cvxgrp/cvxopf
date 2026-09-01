@@ -27,6 +27,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 )
 from experiments.m14_time_vectorization.m14c_prefix_fixture import (
     M14C_INTEGRATION_COMMIT,
+    PRE_LADDER_INTEGRATION_CHECKPOINT,
+    PRE_LADDER_INTEGRATION_SHA256,
     PREFIX_EXECUTION_LIMITS,
     PREFIX_EXPECTED_HASHES,
     PREFIX_LADDER_HORIZONS,
@@ -132,14 +134,14 @@ def _validate_execution_context(context: Mapping[str, object]) -> None:
         not isinstance(commit, str)
         or len(commit) != 40
         or context.get("git_clean") is not True
-        or context.get("source_fingerprint") != prefix_source_fingerprint()
+        or context.get("source_fingerprint") != prefix_source_fingerprint(commit)
         or context.get("m14c_integration_commit") != M14C_INTEGRATION_COMMIT
-        or context.get("m14c_integration_sha256") != annual.m14c_integration_sha256
+        or context.get("m14c_integration_sha256") != PRE_LADDER_INTEGRATION_SHA256
         or context.get("generator_quadratic_cost") != annual.generator_quadratic_cost
         or context.get("generator_conditioning_evidence_sha256")
         != annual.generator_conditioning_evidence_sha256
         or context.get("m14c_integration_checkpoint")
-        != annual.m14c_integration_checkpoint
+        != PRE_LADDER_INTEGRATION_CHECKPOINT
         or context.get("m14c_source_commit") != annual.m14c_source_commit
         or context.get("big_experiment_parent_commit")
         != annual.big_experiment_parent_commit

@@ -120,7 +120,8 @@ immutable output root before any annual authority update.
 ## Resource and supervision contract
 
 The authoritative output directory is
-`experiments/case118_annual_hierarchy/results/s4_annual_outer_rated` and must
+`experiments/case118_annual_hierarchy/results/s4_annual_outer_rated_attempt_005`
+and must
 not exist at launch. One supervising parent starts one fresh worker process and
 samples current child RSS every second.
 

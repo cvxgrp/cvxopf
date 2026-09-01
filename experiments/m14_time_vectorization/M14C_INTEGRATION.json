@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "checkpoint": "big-experiment-conditioned-pre-prefix",
+  "checkpoint": "big-experiment-conditioned-annual-authorized",
   "m14c_source_commit": "0ef895b5e665fdb3a8fffab60292329ed22fd32b",
   "big_experiment_parent_commit": "6a9cd130b7817f2ac6fbca2ce0de634da8967b25",
   "merge_base_commit": "f7a120c991202e9024405539c2bcd3ab74ff7f1e",
@@ -22,6 +22,11 @@
   },
   "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
   "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
-  "prefix_ladder_executed": false,
-  "annual_execution_authorized": false
+  "representation_disposition": {
+    "path": "experiments/m14_time_vectorization/M14C_REPRESENTATION_DISPOSITION.json",
+    "sha256": "74b38999a60c1cded3840273d9caaf9c115bbe257313fda30c448398c5178beb"
+  },
+  "prefix_ladder_results_sha256": "8c5e5cee101489fe708f7a8c501268c98515bf71583e3bda76fa8073f38cb779",
+  "prefix_ladder_executed": true,
+  "annual_execution_authorized": true
 }

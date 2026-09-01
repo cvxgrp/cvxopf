@@ -211,6 +211,8 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
         m14c_merge_base_commit="merge-base",
         prefix_ladder_executed=True,
         annual_execution_authorized=True,
+        m14c_representation_disposition_sha256="representation-disposition",
+        m14c_prefix_ladder_results_sha256="prefix-ladder-results",
         m14c_integration_sha256="integration-hash",
     )
     context = {
@@ -227,6 +229,8 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
         "m14c_merge_base_commit": "merge-base",
         "prefix_ladder_executed": True,
         "annual_execution_authorized": True,
+        "m14c_representation_disposition_sha256": "representation-disposition",
+        "m14c_prefix_ladder_results_sha256": "prefix-ladder-results",
         "m14c_integration_sha256": "integration-hash",
     }
     monkeypatch.setattr(run_s4, "load_s4_fixture", lambda: fixture)

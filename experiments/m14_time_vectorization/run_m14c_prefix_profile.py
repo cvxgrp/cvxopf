@@ -41,6 +41,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 )
 from experiments.m14_time_vectorization.m14c_prefix_fixture import (
     M14C_INTEGRATION_COMMIT,
+    PRE_LADDER_INTEGRATION_CHECKPOINT,
+    PRE_LADDER_INTEGRATION_SHA256,
     PREFIX_EXECUTION_LIMITS,
     PREFIX_LADDER_HORIZONS,
     PREFIX_LADDER_OUTPUT_DIRECTORY,
@@ -126,12 +128,24 @@ def profile_source_paths() -> tuple[Path, ...]:
     return result
 
 
-def profile_source_fingerprint() -> str:
+def profile_source_fingerprint(commit: str | None = None) -> str:
+    """Hash profile sources at the working tree or a retained execution commit."""
     digest = hashlib.sha256()
     for path in profile_source_paths():
-        digest.update(path.relative_to(ROOT).as_posix().encode())
+        relative = path.relative_to(ROOT).as_posix()
+        payload = (
+            path.read_bytes()
+            if commit is None
+            else subprocess.run(
+                ["git", "show", f"{commit}:{relative}"],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+        )
+        digest.update(relative.encode())
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(payload)
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -202,9 +216,9 @@ def validate_reference_ladder(
         or context.get("git_commit") != REFERENCE_EXECUTION_COMMIT
         or context.get("git_clean") is not True
         or context.get("m14c_integration_commit") != M14C_INTEGRATION_COMMIT
-        or context.get("m14c_integration_sha256") != fixture.m14c_integration_sha256
+        or context.get("m14c_integration_sha256") != PRE_LADDER_INTEGRATION_SHA256
         or context.get("m14c_integration_checkpoint")
-        != fixture.m14c_integration_checkpoint
+        != PRE_LADDER_INTEGRATION_CHECKPOINT
         or context.get("m14c_source_commit") != fixture.m14c_source_commit
         or context.get("big_experiment_parent_commit")
         != fixture.big_experiment_parent_commit
@@ -337,15 +351,15 @@ def profile_execution_context(horizon_steps: int) -> Mapping[str, object]:
         "policy_sha256": fixture.annual.policy_sha256,
         "solve_config_sha256": fixture.annual.solve_config_sha256,
         "m14c_integration_commit": M14C_INTEGRATION_COMMIT,
-        "m14c_integration_sha256": fixture.annual.m14c_integration_sha256,
-        "m14c_integration_checkpoint": fixture.annual.m14c_integration_checkpoint,
+        "m14c_integration_sha256": PRE_LADDER_INTEGRATION_SHA256,
+        "m14c_integration_checkpoint": PRE_LADDER_INTEGRATION_CHECKPOINT,
         "m14c_source_commit": fixture.annual.m14c_source_commit,
         "big_experiment_parent_commit": fixture.annual.big_experiment_parent_commit,
         "m14c_merge_base_commit": fixture.annual.m14c_merge_base_commit,
         "annual_component_hashes": dict(fixture.annual.hashes),
         "annual_scenario_sha256": fixture.annual.scenario_hash,
-        "prefix_ladder_executed": fixture.annual.prefix_ladder_executed,
-        "annual_execution_authorized": fixture.annual.annual_execution_authorized,
+        "prefix_ladder_executed": False,
+        "annual_execution_authorized": False,
         "temporal_assembly": "stepwise",
         "canonicalization_backend": "CPP",
         "generator_quadratic_cost": fixture.annual.generator_quadratic_cost,
@@ -717,6 +731,9 @@ def run_profile(directory: Path = PROFILE_OUTPUT_DIRECTORY) -> Mapping[str, obje
         raise ValueError("M14c prefix profiling requires a clean committed worktree")
     if _git("merge-base", M14C_INTEGRATION_COMMIT, "HEAD") != M14C_INTEGRATION_COMMIT:
         raise ValueError("profiling source lacks reviewed integration ancestry")
+    authority = load_prefix_fixture(PREFIX_LADDER_HORIZONS[0]).annual
+    if authority.prefix_ladder_executed or authority.annual_execution_authorized:
+        raise ValueError("M14c prefix profiling is closed after annual authorization")
     validate_reference_ladder()
     contexts = {h: profile_execution_context(h) for h in PREFIX_LADDER_HORIZONS}
     directory.mkdir(parents=True)

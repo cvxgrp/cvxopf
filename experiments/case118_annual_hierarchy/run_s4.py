@@ -42,6 +42,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 SCHEMA_VERSION = 1
 S4_SOURCE_FILES = (
     "experiments/m14_time_vectorization/M14C_INTEGRATION.json",
+    "experiments/m14_time_vectorization/M14C_REPRESENTATION_DISPOSITION.json",
+    "experiments/m14_time_vectorization/M14C_PREFIX_LADDER_RESULTS.json",
     "experiments/m14_time_vectorization/M14C_PROTOCOL.md",
     "experiments/case118_annual_hierarchy/S4_PROTOCOL.md",
     "experiments/case118_annual_hierarchy/audit.py",
@@ -133,6 +135,12 @@ def execution_context() -> Mapping[str, object]:
         "m14c_merge_base_commit": fixture.m14c_merge_base_commit,
         "prefix_ladder_executed": fixture.prefix_ladder_executed,
         "annual_execution_authorized": fixture.annual_execution_authorized,
+        "m14c_representation_disposition_sha256": (
+            fixture.m14c_representation_disposition_sha256
+        ),
+        "m14c_prefix_ladder_results_sha256": (
+            fixture.m14c_prefix_ladder_results_sha256
+        ),
         "m14c_integration_sha256": fixture.m14c_integration_sha256,
         "software_versions": dict(_software_versions()),
         "platform": platform.platform(),

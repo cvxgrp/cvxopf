@@ -337,3 +337,26 @@ multistep formulations is now the blocking software milestone, with vectorized
 lossy DC as the first delivery. S4 will restart only after the M14 annual
 resumption gate passes, from a new clean execution commit and fresh output
 directory.
+
+## 2026-09-01 — M14c annual authority disposition
+
+The conditioned vectorized 24/168/720-hour ladder passed, while the separately
+retained stepwise/CPP profile remained a mismatch under its original frozen
+coordinate gate. A non-promotional tight-tolerance diagnostic reran both
+representations at all three horizons with native CLARABEL primal-dual
+evidence. All six solves returned `Solved`, both representations passed the
+complete physical and bounds audits, and every objective separation was
+covered by the sum of the paired native absolute gaps.
+
+The original profile is not retrospectively reclassified. The tracked
+`M14C_REPRESENTATION_DISPOSITION.json` prospectively accepts stepwise/CPP and
+vectorized/SCIPY lossy DC as equivalent representations for this frozen study.
+Intermediate storage and branch-flow trajectories are treated as weakly
+identified, and vectorized/SCIPY is selected as the authoritative annual policy
+realization. The observed several-MWh signpost sensitivity remains an explicit
+limitation when interpreting downstream hierarchical AC results.
+
+The M14c integration authority now records the completed conditioned ladder
+and authorizes the annual S4 outer solve after this clean checkpoint is reviewed
+and committed. The diagnostic itself remains non-promotional and its retained
+record continues to report `annual_execution_authorized=false`.

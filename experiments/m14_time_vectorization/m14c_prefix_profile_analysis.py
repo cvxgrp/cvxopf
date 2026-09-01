@@ -25,6 +25,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 )
 from experiments.m14_time_vectorization.m14c_prefix_fixture import (
     M14C_INTEGRATION_COMMIT,
+    PRE_LADDER_INTEGRATION_CHECKPOINT,
+    PRE_LADDER_INTEGRATION_SHA256,
     PREFIX_LADDER_HORIZONS,
     PREFIX_LADDER_OUTPUT_DIRECTORY,
     load_prefix_fixture,
@@ -119,16 +121,16 @@ def _validate_stepwise_context(context: Mapping[str, object], horizon: int) -> N
     fixture = load_prefix_fixture(horizon)
     limits = fixture.limits
     commit = context.get("git_commit")
-    production_fingerprint = shared_production_fingerprint()
+    if not isinstance(commit, str) or len(commit) != 40:
+        raise ValueError("stepwise profile execution commit is invalid")
+    production_fingerprint = shared_production_fingerprint(commit)
     reference_production_fingerprint = shared_production_fingerprint(
         REFERENCE_EXECUTION_COMMIT
     )
     if (
         context.get("schema_version") != SCHEMA_VERSION
-        or not isinstance(commit, str)
-        or len(commit) != 40
         or context.get("git_clean") is not True
-        or context.get("source_fingerprint") != profile_source_fingerprint()
+        or context.get("source_fingerprint") != profile_source_fingerprint(commit)
         or context.get("shared_production_fingerprint") != production_fingerprint
         or context.get("reference_shared_production_fingerprint")
         != reference_production_fingerprint
@@ -140,10 +142,9 @@ def _validate_stepwise_context(context: Mapping[str, object], horizon: int) -> N
         or context.get("policy_sha256") != fixture.annual.policy_sha256
         or context.get("solve_config_sha256") != fixture.annual.solve_config_sha256
         or context.get("m14c_integration_commit") != M14C_INTEGRATION_COMMIT
-        or context.get("m14c_integration_sha256")
-        != fixture.annual.m14c_integration_sha256
+        or context.get("m14c_integration_sha256") != PRE_LADDER_INTEGRATION_SHA256
         or context.get("m14c_integration_checkpoint")
-        != fixture.annual.m14c_integration_checkpoint
+        != PRE_LADDER_INTEGRATION_CHECKPOINT
         or context.get("m14c_source_commit") != fixture.annual.m14c_source_commit
         or context.get("big_experiment_parent_commit")
         != fixture.annual.big_experiment_parent_commit

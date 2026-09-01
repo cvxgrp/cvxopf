@@ -179,6 +179,22 @@ are frozen in `M14C_GENERATOR_CONDITIONING_PROTOCOL.md`; the amendment
 conditions generator dispatch and does not assert a unique storage or
 branch-flow trajectory.
 
+The conditioned prefix ladder subsequently passed at 24, 168, and 720 hours.
+The original stepwise/CPP versus vectorized/SCIPY profile retained a mismatch
+under its frozen coordinate gate. A separately frozen tight-tolerance
+diagnostic then established that both representations pass complete audits and
+that every observed objective separation is covered by the paired native
+CLARABEL optimality certificates. The historical mismatch remains intact.
+`M14C_REPRESENTATION_DISPOSITION.json` prospectively accepts the two lossy-DC
+representations for this study, treats intermediate storage and branch-flow
+trajectories as weakly identified, selects the vectorized trajectory as the
+authoritative annual policy realization, and requires the several-MWh
+signpost sensitivity to be carried into downstream AC interpretation.
+Dispatchable-generation differences are retained as solver-resolution and
+certificate-limited rather than declared mathematically nonunique; `p_net` and
+component-cost differences are recorded as consequences of the accepted
+alternative trajectory.
+
 M14c advances only after all of the following pass:
 
 1. structural tests for time-last network variables, sparse operators, leaf

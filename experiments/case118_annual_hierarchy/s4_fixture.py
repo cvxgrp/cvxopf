@@ -52,15 +52,33 @@ S4_GENERATOR_CONDITIONING_EVIDENCE_SHA256 = (
 S4_GENERATOR_CONDITIONING_RAW_SHA256 = (
     "2de21da15aac1bc58ecfc70c2b11a56cbbe67ba7905ab376b717bb02fd9d6aac"
 )
-M14C_INTEGRATION_CHECKPOINT = "big-experiment-conditioned-pre-prefix"
+M14C_INTEGRATION_CHECKPOINT = "big-experiment-conditioned-annual-authorized"
 M14C_SOURCE_COMMIT = "0ef895b5e665fdb3a8fffab60292329ed22fd32b"
 BIG_EXPERIMENT_PARENT_COMMIT = "6a9cd130b7817f2ac6fbca2ce0de634da8967b25"
 M14C_MERGE_BASE_COMMIT = "f7a120c991202e9024405539c2bcd3ab74ff7f1e"
 M14C_INTEGRATION_PATH = (
     Path(__file__).parents[1] / "m14_time_vectorization" / "M14C_INTEGRATION.json"
 )
+M14C_REPRESENTATION_DISPOSITION_PATH = M14C_INTEGRATION_PATH.with_name(
+    "M14C_REPRESENTATION_DISPOSITION.json"
+)
+M14C_REPRESENTATION_DISPOSITION_SHA256 = (
+    "74b38999a60c1cded3840273d9caaf9c115bbe257313fda30c448398c5178beb"
+)
+M14C_PREFIX_LADDER_RESULTS_SHA256 = (
+    "8c5e5cee101489fe708f7a8c501268c98515bf71583e3bda76fa8073f38cb779"
+)
+M14C_TIGHT_DIAGNOSTIC_RESULTS_SHA256 = (
+    "cf51b169ffb35d5ca519462a4a38b31713538ce0e66f245d41f72be16c753a36"
+)
+M14C_HISTORICAL_PROFILE_RESULT_SHA256 = (
+    "49cf9270ddaaf07a0c1529bf23440b0e6bf68fabc918a36e5f65b6420514b16a"
+)
+M14C_HISTORICAL_PROFILE_ANALYSIS_SHA256 = (
+    "e0d7ef556c6b1ad698764d3f0ccc565fdaaf1d4ee52411b4c8ddf22d8f3df458"
+)
 S4_OUTPUT_DIRECTORY = Path(
-    "experiments/case118_annual_hierarchy/results/s4_annual_outer_rated"
+    "experiments/case118_annual_hierarchy/results/s4_annual_outer_rated_attempt_005"
 )
 S4_EXPECTED_HASHES: Mapping[str, str] = {
     "case": "815ed943bb2e38dc4da0ad176c0df5fd95b09d352000378987849acbd1eb46ca",
@@ -91,6 +109,8 @@ class S4Fixture:
     m14c_merge_base_commit: str
     prefix_ladder_executed: bool
     annual_execution_authorized: bool
+    m14c_representation_disposition_sha256: str
+    m14c_prefix_ladder_results_sha256: str
     m14c_integration_sha256: str
     hashes: Mapping[str, str]
     start_timestamp: str
@@ -169,7 +189,7 @@ def _condition_generator_costs(
 
 def _integration_provenance(
     hashes: Mapping[str, str], policy_hash: str, solve_config_hash: str
-) -> tuple[str, str, str, str, bool, bool, str]:
+) -> tuple[str, str, str, str, bool, bool, str, str, str]:
     payload = cast(Mapping[str, object], json.loads(M14C_INTEGRATION_PATH.read_text()))
     if payload.get("schema_version") != 1:
         raise ValueError("M14c integration schema mismatch")
@@ -202,6 +222,93 @@ def _integration_provenance(
         raise ValueError("M14c integration target-parent commit mismatch")
     if payload.get("merge_base_commit") != M14C_MERGE_BASE_COMMIT:
         raise ValueError("M14c integration merge-base commit mismatch")
+    disposition = payload.get("representation_disposition")
+    expected_disposition_path = M14C_REPRESENTATION_DISPOSITION_PATH.relative_to(
+        Path(__file__).parents[2]
+    ).as_posix()
+    if not isinstance(disposition, Mapping):
+        raise ValueError("M14c representation disposition is missing")
+    if disposition.get("path") != expected_disposition_path:
+        raise ValueError("M14c representation disposition path mismatch")
+    disposition_hash = hashlib.sha256(
+        M14C_REPRESENTATION_DISPOSITION_PATH.read_bytes()
+    ).hexdigest()
+    if (
+        disposition.get("sha256") != M14C_REPRESENTATION_DISPOSITION_SHA256
+        or disposition_hash != M14C_REPRESENTATION_DISPOSITION_SHA256
+    ):
+        raise ValueError("M14c representation disposition hash mismatch")
+    disposition_payload = cast(
+        Mapping[str, object],
+        json.loads(M14C_REPRESENTATION_DISPOSITION_PATH.read_text()),
+    )
+    historical = disposition_payload.get("historical_profile")
+    diagnostic = disposition_payload.get("tight_tolerance_diagnostic")
+    scientific = disposition_payload.get("scientific_disposition")
+    if not all(
+        isinstance(value, Mapping) for value in (historical, diagnostic, scientific)
+    ):
+        raise ValueError("M14c representation evidence is incomplete")
+    historical = cast(Mapping[str, object], historical)
+    diagnostic = cast(Mapping[str, object], diagnostic)
+    scientific = cast(Mapping[str, object], scientific)
+    comparisons = diagnostic.get("comparisons")
+    mismatch_disposition = historical.get("mismatch_disposition")
+    observed_mismatches = historical.get("observed_mismatches")
+    if not isinstance(mismatch_disposition, Mapping):
+        raise ValueError("M14c historical mismatch disposition is incomplete")
+    if not isinstance(observed_mismatches, list) or not all(
+        isinstance(item, Mapping) for item in observed_mismatches
+    ):
+        raise ValueError("M14c historical mismatch evidence is incomplete")
+    historical_records = cast(list[Mapping[str, object]], observed_mismatches)
+    if not isinstance(comparisons, list) or not all(
+        isinstance(item, Mapping) for item in comparisons
+    ):
+        raise ValueError("M14c tight diagnostic comparisons are incomplete")
+    comparison_records = cast(list[Mapping[str, object]], comparisons)
+    if (
+        disposition_payload.get("schema_version") != 1
+        or disposition_payload.get("classification")
+        != "equivalent_representations_for_case118_annual_study"
+        or historical.get("classification") != "mismatch_under_original_coordinate_gate"
+        or historical.get("result_sha256") != M14C_HISTORICAL_PROFILE_RESULT_SHA256
+        or historical.get("analysis_sha256") != M14C_HISTORICAL_PROFILE_ANALYSIS_SHA256
+        or historical.get("retrospective_reclassification") is not False
+        or mismatch_disposition.get("Pg")
+        != "solver_resolution_certificate_limited_not_mathematically_nonunique"
+        or mismatch_disposition.get("p_net")
+        != "derived_from_alternative_storage_trajectory"
+        or [item.get("horizon_steps") for item in historical_records] != [24, 168, 720]
+        or diagnostic.get("result_sha256") != M14C_TIGHT_DIAGNOSTIC_RESULTS_SHA256
+        or diagnostic.get("classification") != "accepted"
+        or diagnostic.get("annual_execution_authorized") is not False
+        or [item.get("horizon_steps") for item in comparison_records] != [24, 168, 720]
+        or any(
+            item.get("objective_difference_within_combined_native_gap") is not True
+            for item in comparison_records
+        )
+        or scientific.get("equivalent_for_this_study") is not True
+        or scientific.get("authoritative_annual_policy_realization")
+        != "vectorized_scipy"
+        or scientific.get("weakly_identified_coordinates")
+        != [
+            "intermediate_storage_power",
+            "intermediate_storage_soc",
+            "branch_flow",
+        ]
+        or scientific.get("certificate_limited_coordinates")
+        != ["dispatchable_generation"]
+        or scientific.get("derived_differences")
+        != ["p_net", "generation_cost", "dc_loss_cost", "storage_cost"]
+        or disposition_payload.get("prefix_ladder_executed") is not True
+        or disposition_payload.get("annual_execution_authorized") is not True
+        or disposition_payload.get("prefix_ladder_results_sha256")
+        != M14C_PREFIX_LADDER_RESULTS_SHA256
+    ):
+        raise ValueError("M14c representation disposition is not authoritative")
+    if payload.get("prefix_ladder_results_sha256") != M14C_PREFIX_LADDER_RESULTS_SHA256:
+        raise ValueError("M14c prefix-ladder result hash mismatch")
     prefix_ladder_executed = payload.get("prefix_ladder_executed")
     annual_execution_authorized = payload.get("annual_execution_authorized")
     if not isinstance(prefix_ladder_executed, bool):
@@ -217,6 +324,8 @@ def _integration_provenance(
         M14C_MERGE_BASE_COMMIT,
         prefix_ladder_executed,
         annual_execution_authorized,
+        disposition_hash,
+        M14C_PREFIX_LADDER_RESULTS_SHA256,
         hashlib.sha256(M14C_INTEGRATION_PATH.read_bytes()).hexdigest(),
     )
 
@@ -267,6 +376,8 @@ def load_s4_fixture(*, verify_hashes: bool = True) -> S4Fixture:
         merge_base_commit,
         prefix_ladder_executed,
         annual_execution_authorized,
+        disposition_hash,
+        prefix_ladder_results_hash,
         integration_hash,
     ) = _integration_provenance(hashes, policy_hash, solve_hash)
     return S4Fixture(
@@ -287,6 +398,8 @@ def load_s4_fixture(*, verify_hashes: bool = True) -> S4Fixture:
         m14c_merge_base_commit=merge_base_commit,
         prefix_ladder_executed=prefix_ladder_executed,
         annual_execution_authorized=annual_execution_authorized,
+        m14c_representation_disposition_sha256=disposition_hash,
+        m14c_prefix_ladder_results_sha256=prefix_ladder_results_hash,
         m14c_integration_sha256=integration_hash,
         hashes=hashes,
         start_timestamp=str(pilot.df_load_p.index[0]),
@@ -303,6 +416,10 @@ __all__ = [
     "S4_GENERATOR_CONDITIONING_EVIDENCE_SHA256",
     "S4_GENERATOR_CONDITIONING_RAW_SHA256",
     "M14C_INTEGRATION_PATH",
+    "M14C_REPRESENTATION_DISPOSITION_PATH",
+    "M14C_REPRESENTATION_DISPOSITION_SHA256",
+    "M14C_PREFIX_LADDER_RESULTS_SHA256",
+    "M14C_TIGHT_DIAGNOSTIC_RESULTS_SHA256",
     "S4_OUTPUT_DIRECTORY",
     "S4_TEMPORAL_ASSEMBLY",
     "S4_CANONICALIZATION_BACKEND",
