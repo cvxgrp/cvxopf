@@ -123,6 +123,10 @@ def execution_context() -> Mapping[str, object]:
         "solve_config_sha256": fixture.solve_config_sha256,
         "temporal_assembly": fixture.temporal_assembly,
         "canonicalization_backend": fixture.canonicalization_backend,
+        "generator_quadratic_cost": fixture.generator_quadratic_cost,
+        "generator_conditioning_evidence_sha256": (
+            fixture.generator_conditioning_evidence_sha256
+        ),
         "m14c_integration_checkpoint": fixture.m14c_integration_checkpoint,
         "m14c_source_commit": fixture.m14c_source_commit,
         "big_experiment_parent_commit": fixture.big_experiment_parent_commit,

@@ -135,6 +135,9 @@ def _validate_execution_context(context: Mapping[str, object]) -> None:
         or context.get("source_fingerprint") != prefix_source_fingerprint()
         or context.get("m14c_integration_commit") != M14C_INTEGRATION_COMMIT
         or context.get("m14c_integration_sha256") != annual.m14c_integration_sha256
+        or context.get("generator_quadratic_cost") != annual.generator_quadratic_cost
+        or context.get("generator_conditioning_evidence_sha256")
+        != annual.generator_conditioning_evidence_sha256
         or context.get("m14c_integration_checkpoint")
         != annual.m14c_integration_checkpoint
         or context.get("m14c_source_commit") != annual.m14c_source_commit

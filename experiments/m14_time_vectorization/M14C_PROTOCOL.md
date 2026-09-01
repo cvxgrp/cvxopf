@@ -120,7 +120,7 @@ The supervised ladder is implemented by
 `run_m14c_prefix_ladder.py`, with typed prefix construction and limits in
 `m14c_prefix_fixture.py` and independent reconstruction in
 `m14c_prefix_analysis.py`. The authoritative default output root is
-`experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder`, which
+`experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder_conditioned`, which
 must not exist before launch. Execution requires a clean committed descendant
 of integration commit `360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`, the
 unchanged pre-ladder integration record, and a passing retained S4 seam gate.
@@ -165,6 +165,17 @@ ladder as `M14C_PREFIX_LADDER_RESULTS.json`. Promotion records
 `annual_execution_authorized=false`; review and a separate authority update
 remain required before S4 can launch. Partial analysis remains in the ignored
 execution directory and cannot occupy the authoritative tracked destination.
+
+The 2026-08-31 S4 conditioning amendment adds `c2 = 1e-4` to every
+dispatchable generator while preserving inherited `c0` and `c1`. This changes
+the frozen input/scenario hashes and supersedes the earlier unconditioned
+prefix result. The ordered ladder described here must therefore be rerun from
+the conditioned fixture; the prior accepted run remains historical evidence
+only and cannot authorize annual execution. The exact diagnostic runner,
+tested alternatives, selection criterion, and bounded economic perturbation
+are frozen in `M14C_GENERATOR_CONDITIONING_PROTOCOL.md`; the amendment
+conditions generator dispatch and does not assert a unique storage or
+branch-flow trajectory.
 
 M14c advances only after all of the following pass:
 

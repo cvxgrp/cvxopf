@@ -11,6 +11,11 @@ from experiments.m14_time_vectorization import m14c_prefix_profile_analysis as a
 from experiments.m14_time_vectorization import run_m14c_prefix_profile as runner
 
 
+HISTORICAL_REFERENCE = Path(
+    "experiments/m14_time_vectorization/results/m14c_case118_prefix_ladder"
+)
+
+
 def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -> None:
     relative = {
         path.relative_to(runner.ROOT).as_posix()
@@ -26,11 +31,9 @@ def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -
     assert len(runner.profile_source_fingerprint()) == 64
 
 
-def test_complete_historical_reference_chain_verifies() -> None:
-    assert tuple(runner.validate_reference_ladder()) == (24, 168, 720)
-    assert runner.shared_production_fingerprint() == (
-        runner.shared_production_fingerprint(runner.REFERENCE_EXECUTION_COMMIT)
-    )
+def test_conditioned_fixture_supersedes_historical_reference_chain() -> None:
+    with pytest.raises(ValueError, match="incomplete"):
+        runner.validate_reference_ladder()
 
 
 def test_sigterm_handler_raises_catchable_supervisor_interruption() -> None:
@@ -38,7 +41,10 @@ def test_sigterm_handler_raises_catchable_supervisor_interruption() -> None:
         runner._sigterm_handler(15, object())
 
 
-def test_profile_context_freezes_production_pair_and_reference() -> None:
+def test_profile_context_freezes_production_pair_and_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner, "PREFIX_LADDER_OUTPUT_DIRECTORY", HISTORICAL_REFERENCE)
     context = runner.profile_execution_context(24)
     assert context["temporal_assembly"] == "stepwise"
     assert context["canonicalization_backend"] == "CPP"
@@ -46,7 +52,7 @@ def test_profile_context_freezes_production_pair_and_reference() -> None:
     assert context["reference_canonicalization_backend"] == "SCIPY"
     assert context["prefix_ladder_executed"] is False
     assert context["annual_execution_authorized"] is False
-    assert context["shared_production_matches_reference"] is True
+    assert context["shared_production_matches_reference"] is False
     assert len(str(context["m14c_integration_sha256"])) == 64
     assert (
         context["reference_ladder_result_sha256"]
@@ -57,6 +63,7 @@ def test_profile_context_freezes_production_pair_and_reference() -> None:
 def test_analyzer_validates_complete_stepwise_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(runner, "PREFIX_LADDER_OUTPUT_DIRECTORY", HISTORICAL_REFERENCE)
     context = dict(runner.profile_execution_context(24))
     context["git_clean"] = True
     monkeypatch.setattr(
@@ -139,13 +146,12 @@ def test_branch_flows_are_residual_gated_but_schema_bound() -> None:
     assert analysis._result_mismatches(left, right) == ["p_flows.schema"]
 
 
-def test_declared_component_costs_are_named_and_finite() -> None:
-    reference = runner.validate_reference_ladder()[24]
-    outer, _, _, _ = analysis._load_point(reference["directory"], 24, reference=True)
-    costs = analysis._declared_component_costs(outer, 24)
-    assert {"generation_cost", "storage_cost", "dc_loss_cost"} <= costs.keys()
-    assert all(np.isfinite(value) for value in costs.values())
-    assert abs(float(outer.result["objective"]) - sum(costs.values())) <= 1e-6
+def test_historical_outer_is_rejected_by_conditioned_fixture() -> None:
+    root = runner.ROOT / HISTORICAL_REFERENCE
+    result = json.loads((root / "ladder-result.json").read_text())
+    reference = result["records"][0]
+    with pytest.raises(ValueError, match="input fingerprint mismatch"):
+        analysis._load_point(root / reference["directory"], 24, reference=True)
 
 
 def test_context_comparability_retains_source_and_environment_mismatches() -> None:

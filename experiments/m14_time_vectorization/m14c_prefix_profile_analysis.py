@@ -155,6 +155,10 @@ def _validate_stepwise_context(context: Mapping[str, object], horizon: int) -> N
         or context.get("annual_execution_authorized") is not False
         or context.get("temporal_assembly") != "stepwise"
         or context.get("canonicalization_backend") != "CPP"
+        or context.get("generator_quadratic_cost")
+        != fixture.annual.generator_quadratic_cost
+        or context.get("generator_conditioning_evidence_sha256")
+        != fixture.annual.generator_conditioning_evidence_sha256
         or context.get("reference_temporal_assembly") != "vectorized"
         or context.get("reference_canonicalization_backend") != "SCIPY"
         or context.get("reference_ladder_result_sha256")

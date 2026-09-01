@@ -17,7 +17,9 @@ S4 and remain gates for S4b/S5.
 - each storage device initially at 50% SoC and constrained to return to 50% at
   annual boundary 8,760;
 - enforced branch ratings, explicit generator/load/device fleets, and no load
-  shedding; and
+  shedding;
+- a synthetic quadratic coefficient `c2 = 1e-4` on every dispatchable
+  generator, retaining each inherited constant and linear coefficient; and
 - the exact frozen CLARABEL outer options, construction options, identities,
   tolerances, and one-hour timestep used by the hierarchy.
 - explicit `temporal_assembly="vectorized"` with SCIPY canonicalization,
@@ -72,6 +74,48 @@ clean integration checkpoint authorize only that ordered prefix ladder. Annual
 execution remains unauthorized until accepted ladder evidence is reviewed and
 `M14C_INTEGRATION.json` explicitly records both `prefix_ladder_executed=true`
 and `annual_execution_authorized=true` in a subsequent clean checkpoint.
+
+## Generator-cost conditioning amendment — 2026-08-31
+
+The imported Case118 fleet contains no quadratic generation costs: 19 units
+have purely linear costs and 35 have zero production cost. Tight CLARABEL and
+MOSEK diagnostics showed that this weak curvature permits materially different
+intermediate generator/storage trajectories with nearly identical objective
+values. The frozen S4 numerical case therefore adds `c2 = 1e-4` to every
+dispatchable polynomial cost while retaining the inherited `c0` and `c1`.
+This is an explicit synthetic conditioning choice for the numerical study, not
+a claim about real generator economics or a unique complete trajectory. It
+conditions dispatchable generation and reduces representation sensitivity;
+storage and branch-flow coordinates may remain nonunique.
+
+The small reviewed sensitivity set compared the unconditioned case, bus-69
+curvature at `1e-4` and `1e-3`, and fleet-wide curvature at `1e-4`. The
+bus-only results improved but remained horizon-sensitive and nonmonotone. The
+fleet-wide `1e-4` rule was the simplest tested choice that robustly reduced the
+objective gap at both 24 and 168 hours while preserving every audit. This is a
+deliberate economic perturbation: it changes the unconditioned stepwise
+objective by about `0.249%` at 24 hours and `0.243%` at 168 hours, and the
+largest added marginal term over the declared generator boxes is `0.2364`
+cost/MWh.
+
+The reviewed 24/168-hour conditioning diagnostic passed every scientific and
+bounds audit. Relative to the unconditioned tight-CLARABEL comparison, the
+stepwise/vectorized objective difference fell from `0.01989` to `0.000078` at
+24 hours and from `0.20005` to `0.0000079` at 168 hours. The retained evidence
+is summarized by tracked record
+`M14C_GENERATOR_CONDITIONING.json`, SHA-256
+`c10d344c3985982f19b2e039134318f5eba70dc8b2e81cc21fd5433419d9abbe`.
+Its ignored complete result has SHA-256
+`2de21da15aac1bc58ecfc70c2b11a56cbbe67ba7905ab376b717bb02fd9d6aac`.
+The tracked
+`M14C_GENERATOR_CONDITIONING_PROTOCOL.md` and byte-identical tracked runner
+`m14c_generator_conditioning.py` preserve the selection rationale and exact
+reproduction path.
+
+This amendment changes the S4 input and scenario hashes and supersedes the
+earlier prefix-ladder evidence. Annual execution remains unauthorized. The
+conditioned 24/168/720 ladder must be executed and reviewed from the new
+immutable output root before any annual authority update.
 
 ## Resource and supervision contract
 

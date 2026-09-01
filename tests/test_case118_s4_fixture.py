@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
+
 import numpy as np
 
 from experiments.case118_annual_hierarchy.p0_fixture import (
@@ -19,12 +23,17 @@ from experiments.case118_annual_hierarchy.s4_fixture import (
     S4_DELTA_HOURS,
     S4_EXPECTED_HASHES,
     S4_EXECUTION_LIMITS,
+    S4_GENERATOR_CONDITIONING_EVIDENCE_SHA256,
+    S4_GENERATOR_QUADRATIC_COST,
     S4_HORIZON_STEPS,
     S4_OUTPUT_DIRECTORY,
     S4_TEMPORAL_ASSEMBLY,
     S4ExecutionLimits,
     load_s4_fixture,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_s4_fixture_loads_exact_frozen_annual_problem() -> None:
@@ -47,6 +56,34 @@ def test_s4_fixture_loads_exact_frozen_annual_problem() -> None:
     assert fixture.solve_config_sha256 == P0_EXPECTED_SOLVE_CONFIG_SHA256
     assert fixture.temporal_assembly == S4_TEMPORAL_ASSEMBLY == "vectorized"
     assert fixture.canonicalization_backend == S4_CANONICALIZATION_BACKEND == "SCIPY"
+    assert fixture.generator_quadratic_cost == S4_GENERATOR_QUADRATIC_COST == 1e-4
+    assert (
+        fixture.generator_conditioning_evidence_sha256
+        == S4_GENERATOR_CONDITIONING_EVIDENCE_SHA256
+    )
+    evidence_path = M14C_INTEGRATION_PATH.with_name("M14C_GENERATOR_CONDITIONING.json")
+    assert hashlib.sha256(evidence_path.read_bytes()).hexdigest() == (
+        fixture.generator_conditioning_evidence_sha256
+    )
+    evidence = json.loads(evidence_path.read_text())
+    for key in ("diagnostic_runner", "protocol"):
+        artifact = evidence[key]
+        path = ROOT / artifact["path"]
+        assert path.is_file()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == artifact["sha256"]
+    assert (
+        evidence["diagnostic_script_sha256"]
+        == (evidence["diagnostic_runner"]["sha256"])
+    )
+    rationale = evidence["selection_rationale"]
+    assert rationale["generator_count"] == 54
+    assert rationale["maximum_added_marginal_cost_per_mwh"] == 0.2364
+    assert [item["scope"] for item in rationale["tested_alternatives"]] == [
+        "none",
+        "bus_69",
+        "bus_69",
+        "all_dispatchable_generators",
+    ]
     assert fixture.m14c_integration_checkpoint == M14C_INTEGRATION_CHECKPOINT
     assert fixture.m14c_source_commit == M14C_SOURCE_COMMIT
     assert fixture.big_experiment_parent_commit == BIG_EXPERIMENT_PARENT_COMMIT
@@ -90,3 +127,10 @@ def test_s4_fixture_freezes_scientific_semantics() -> None:
     )
     assert inputs.options.enforce_branch_limits is True
     assert inputs.options.init_flat is True
+    assert len(inputs.generators) == 54
+    assert all(
+        unit.cost_type == "polynomial"
+        and unit.cost_coeffs is not None
+        and unit.cost_coeffs[2] == S4_GENERATOR_QUADRATIC_COST
+        for unit in inputs.generators
+    )

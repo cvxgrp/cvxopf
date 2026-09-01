@@ -42,7 +42,7 @@ EXPECTED_EQUIVALENCE_DIMENSIONS: Mapping[str, int] = {
     "constraint_objects": 7,
 }
 EXPECTED_EQUIVALENCE_INPUT_SHA256 = (
-    "8ea38cc285c4a1efba9e0c640cd410edbb6bc252cf7a09cbcd26c5d2e6712268"
+    "54c86688e700c0166c3d0eafdab46d24095b055cdef589c3e7c8f7bb50c01630"
 )
 ANALYSIS_SOURCE_FILES = (
     *S4_SOURCE_FILES,
@@ -311,6 +311,9 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
     if (
         context.get("temporal_assembly") != fixture.temporal_assembly
         or context.get("canonicalization_backend") != fixture.canonicalization_backend
+        or context.get("generator_quadratic_cost") != fixture.generator_quadratic_cost
+        or context.get("generator_conditioning_evidence_sha256")
+        != fixture.generator_conditioning_evidence_sha256
         or context.get("m14c_integration_checkpoint")
         != fixture.m14c_integration_checkpoint
         or context.get("m14c_source_commit") != fixture.m14c_source_commit
@@ -393,6 +396,10 @@ def analyze_s4(directory: Path = S4_OUTPUT_DIRECTORY) -> Mapping[str, object]:
         "delta_hours": fixture.inputs.delta,
         "temporal_assembly": outer.temporal_assembly,
         "canonicalization_backend": outer.canonicalization_backend,
+        "generator_quadratic_cost": fixture.generator_quadratic_cost,
+        "generator_conditioning_evidence_sha256": (
+            fixture.generator_conditioning_evidence_sha256
+        ),
         "m14c_integration_checkpoint": fixture.m14c_integration_checkpoint,
         "m14c_source_commit": fixture.m14c_source_commit,
         "big_experiment_parent_commit": fixture.big_experiment_parent_commit,

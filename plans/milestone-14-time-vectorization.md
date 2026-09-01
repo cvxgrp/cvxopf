@@ -2,8 +2,8 @@
 
 ## Status
 
-**In progress; M14c integration and the vectorized 24/168/720 prefix ladder are
-complete, with the pre-annual representation profile next.** The frozen
+**In progress; M14c integration is complete and the conditioned vectorized
+24/168/720 prefix ladder is next.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -42,22 +42,29 @@ The reviewed branch-local M14c implementation is commit
 `0ef895b5e665fdb3a8fffab60292329ed22fd32b`. It was integrated into
 `big-experiment` from parent commit
 `6a9cd130b7817f2ac6fbca2ce0de634da8967b25` by no-ff merge commit
-`360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`. The integration retains the
-unchanged frozen S4 scenario, policy, and solver hashes and explicitly selects
+`360aaf5f75d7bf2d4b2ec1672d319af90bd8626e`. The integration explicitly selects
 the vectorized lossy-DC path with SCIPY canonicalization. The 24-, 168-, and
 720-hour vectorized prefix ladder completed from clean commit
 `2f0f95288e5e50ff32c94c7667ea44121f719fa4`; all three points were accepted
-within the frozen resource limits. Annual execution remains unauthorized until
-that evidence and the pre-annual stepwise/CPP profile are reviewed and the
-integration authority record is explicitly updated.
+within the frozen resource limits. A later numerical-conditioning review added
+`c2 = 1e-4` to every dispatchable generator because the imported fleet had no
+quadratic production costs. The conditioned 24/168-hour gate reduced the
+representation objective differences to `7.8e-5` and `7.9e-6`, but the new
+input/scenario hashes supersede the original ladder for annual authority.
+The tracked conditioning protocol records the bus-only alternatives, the
+fleet-wide selection criterion, and the approximately `0.24–0.25%` synthetic
+objective perturbation. This conditions generator dispatch and reduces
+representation sensitivity; it is not a real-economics or full-trajectory
+uniqueness claim.
+Annual execution remains unauthorized until the conditioned 24/168/720 ladder
+and its corresponding comparison evidence are reviewed.
 
 The ordered fresh-worker runner, typed 24/168/720-hour fixture and resource
 registry, independent analyzer, immutable promotion boundary, and synthetic
-process-control tests are implemented. The completed vectorized result remains
-in its ignored execution tree and the annual authority record remains
-unchanged. Before that authority can be updated, the same prefixes must run in
-fresh supervised workers through the retained production comparison path,
-`stepwise + CPP`, under `M14C_PROFILING_PROTOCOL.md`.
+process-control tests are implemented. The conditioned authority record keeps
+both prefix and annual booleans false. The conditioned vectorized ladder must
+run first; only after it is accepted can matching stepwise/CPP comparison
+evidence be regenerated under `M14C_PROFILING_PROTOCOL.md`.
 
 The Case118 annual hierarchy experiment remains paused at S4 until the annual
 lossy-DC outer problem passes the remaining M14 construction,

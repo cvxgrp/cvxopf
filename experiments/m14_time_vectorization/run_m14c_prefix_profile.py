@@ -348,6 +348,10 @@ def profile_execution_context(horizon_steps: int) -> Mapping[str, object]:
         "annual_execution_authorized": fixture.annual.annual_execution_authorized,
         "temporal_assembly": "stepwise",
         "canonicalization_backend": "CPP",
+        "generator_quadratic_cost": fixture.annual.generator_quadratic_cost,
+        "generator_conditioning_evidence_sha256": (
+            fixture.annual.generator_conditioning_evidence_sha256
+        ),
         "reference_temporal_assembly": "vectorized",
         "reference_canonicalization_backend": "SCIPY",
         "reference_ladder_result_sha256": REFERENCE_LADDER_RESULT_SHA256,

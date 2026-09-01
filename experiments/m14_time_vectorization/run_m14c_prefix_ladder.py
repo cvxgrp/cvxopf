@@ -148,6 +148,10 @@ def prefix_execution_context(horizon_steps: int) -> Mapping[str, object]:
         "solve_config_sha256": annual.solve_config_sha256,
         "temporal_assembly": annual.temporal_assembly,
         "canonicalization_backend": annual.canonicalization_backend,
+        "generator_quadratic_cost": annual.generator_quadratic_cost,
+        "generator_conditioning_evidence_sha256": (
+            annual.generator_conditioning_evidence_sha256
+        ),
         "resource_policy": _limit_payload(fixture.limits),
         "software_versions": dict(_software_versions()),
         "platform": platform.platform(),
@@ -187,6 +191,8 @@ def ladder_execution_context() -> Mapping[str, object]:
         "solve_config_sha256",
         "temporal_assembly",
         "canonicalization_backend",
+        "generator_quadratic_cost",
+        "generator_conditioning_evidence_sha256",
         "software_versions",
         "platform",
         "architecture",

@@ -151,6 +151,8 @@ def test_s4_worker_executes_only_outer_lifecycle_and_archives_acceptance(
         scenario_hash="test-scenario",
         temporal_assembly=S4_TEMPORAL_ASSEMBLY,
         canonicalization_backend=S4_CANONICALIZATION_BACKEND,
+        generator_quadratic_cost=1e-4,
+        generator_conditioning_evidence_sha256="conditioning-evidence",
     )
     context = {
         "git_commit": "test-commit",
@@ -201,6 +203,8 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
         storage_device_ids=compact.storage_device_ids,
         temporal_assembly=S4_TEMPORAL_ASSEMBLY,
         canonicalization_backend=S4_CANONICALIZATION_BACKEND,
+        generator_quadratic_cost=1e-4,
+        generator_conditioning_evidence_sha256="conditioning-evidence",
         m14c_integration_checkpoint="integration-checkpoint",
         m14c_source_commit="m14c-source",
         big_experiment_parent_commit="big-parent",
@@ -215,6 +219,8 @@ def test_s4_analysis_reconstructs_worker_archive_without_trusting_acceptance(
         "source_fingerprint": "test-source",
         "temporal_assembly": S4_TEMPORAL_ASSEMBLY,
         "canonicalization_backend": S4_CANONICALIZATION_BACKEND,
+        "generator_quadratic_cost": 1e-4,
+        "generator_conditioning_evidence_sha256": "conditioning-evidence",
         "m14c_integration_checkpoint": "integration-checkpoint",
         "m14c_source_commit": "m14c-source",
         "big_experiment_parent_commit": "big-parent",
