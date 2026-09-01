@@ -125,13 +125,20 @@ def test_diagnostic_comparison_retains_tight_solver_and_bounds_evidence() -> Non
             "objective": 10.0,
             "components": {"generation_cost": 9.0, "dc_loss_cost": 1.0},
         },
-        "solver_statistics": {"clarabel": {"relative_gap": 1e-11}},
+        "solver_statistics": {
+            "clarabel": {"relative_gap": 1e-11, "absolute_gap": 1e-6}
+        },
         "bounds_audit": {"accepted": True, "residuals": {"maximum_abs": 0.0}},
     }
     comparison = diagnostic._comparison(payload, payload)
     assert comparison["objective_absolute_difference"] == 0.0
+    assert comparison["combined_native_absolute_gap"] == 2e-6
+    assert comparison["objective_difference_within_combined_native_gap"] is True
     assert comparison["p_flows_coordinate_comparison"] == ("residual_gated_nonunique")
-    assert comparison["stepwise_clarabel"] == {"relative_gap": 1e-11}
+    assert comparison["stepwise_clarabel"] == {
+        "relative_gap": 1e-11,
+        "absolute_gap": 1e-6,
+    }
     assert comparison["stepwise_bounds_audit"] == payload["bounds_audit"]
 
 

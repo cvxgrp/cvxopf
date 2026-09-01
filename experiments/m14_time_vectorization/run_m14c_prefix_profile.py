@@ -51,7 +51,7 @@ from experiments.m14_time_vectorization.m14c_prefix_fixture import (
 
 SCHEMA_VERSION = 1
 PROFILE_OUTPUT_DIRECTORY = Path(
-    "experiments/m14_time_vectorization/results/m14c_case118_prefix_profile"
+    "experiments/m14_time_vectorization/results/m14c_case118_prefix_profile_conditioned"
 )
 REFERENCE_LADDER_RESULT_SHA256 = (
     "40213412e6cc0fcaf5c89ea5028aff22e529b10576b1a00eb99cd2ccead147fb"

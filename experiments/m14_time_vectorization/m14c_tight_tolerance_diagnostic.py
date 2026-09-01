@@ -44,16 +44,16 @@ from experiments.m14_time_vectorization.run_m14c_prefix_profile import (
 
 SCHEMA_VERSION = 1
 DIAGNOSTIC_OUTPUT_DIRECTORY = Path(
-    "experiments/m14_time_vectorization/results/m14c_case118_tight_tolerance_diagnostic"
+    "experiments/m14_time_vectorization/results/m14c_case118_tight_tolerance_conditioned"
 )
 PROFILE_RESULT_SHA256 = (
-    "25077b64f41aa054ac04383e1c7c898da5139203e9bdc1c1c9994521971cff73"
+    "49cf9270ddaaf07a0c1529bf23440b0e6bf68fabc918a36e5f65b6420514b16a"
 )
 PROFILE_ANALYSIS_SHA256 = (
-    "b019795be48b1340a75d2cfcf8c471587748a20b4a1b2f10bdacb8059d37489b"
+    "e0d7ef556c6b1ad698764d3f0ccc565fdaaf1d4ee52411b4c8ddf22d8f3df458"
 )
 PROFILE_SHARED_PRODUCTION_FINGERPRINT = (
-    "be9133707e9e7358ba22c5a57c907a88ede57b8acd2abb1ab17c99600cd1a706"
+    "4965f489552955328d538c840cf57480e1667c9b2915cc19e81d14fc451d39d6"
 )
 TIGHT_CLARABEL_OPTIONS: Mapping[str, float] = {
     "tol_gap_abs": 1e-10,
@@ -571,16 +571,30 @@ def _comparison(
     vector_accounting = cast(Mapping[str, object], vectorized["objective_accounting"])
     step_components = cast(Mapping[str, object], step_accounting["components"])
     vector_components = cast(Mapping[str, object], vector_accounting["components"])
+    objective_absolute_difference = abs(
+        float(cast(float, step_accounting["objective"]))
+        - float(cast(float, vector_accounting["objective"]))
+    )
+    stepwise_clarabel = cast(Mapping[str, object], stepwise["solver_statistics"])[
+        "clarabel"
+    ]
+    vectorized_clarabel = cast(Mapping[str, object], vectorized["solver_statistics"])[
+        "clarabel"
+    ]
+    combined_absolute_gap = float(
+        cast(Mapping[str, object], stepwise_clarabel)["absolute_gap"]
+    ) + float(cast(Mapping[str, object], vectorized_clarabel)["absolute_gap"])
     return {
-        "objective_absolute_difference": abs(
-            float(cast(float, step_accounting["objective"]))
-            - float(cast(float, vector_accounting["objective"]))
+        "objective_absolute_difference": objective_absolute_difference,
+        "combined_native_absolute_gap": combined_absolute_gap,
+        "objective_difference_within_combined_native_gap": (
+            objective_absolute_difference <= combined_absolute_gap
         ),
-        "objective_relative_difference": abs(
-            float(cast(float, step_accounting["objective"]))
-            - float(cast(float, vector_accounting["objective"]))
-        )
-        / max(1.0, abs(float(cast(float, vector_accounting["objective"])))),
+        "objective_relative_difference": objective_absolute_difference
+        / max(
+            1.0,
+            abs(float(cast(float, vector_accounting["objective"]))),
+        ),
         "component_cost_absolute_differences": {
             name: abs(
                 float(cast(float, step_components[name]))
@@ -593,12 +607,8 @@ def _comparison(
             for name in ("Pg", "b", "soc", "p_net")
         },
         "p_flows_coordinate_comparison": "residual_gated_nonunique",
-        "stepwise_clarabel": cast(Mapping[str, object], stepwise["solver_statistics"])[
-            "clarabel"
-        ],
-        "vectorized_clarabel": cast(
-            Mapping[str, object], vectorized["solver_statistics"]
-        )["clarabel"],
+        "stepwise_clarabel": stepwise_clarabel,
+        "vectorized_clarabel": vectorized_clarabel,
         "stepwise_bounds_audit": stepwise["bounds_audit"],
         "vectorized_bounds_audit": vectorized["bounds_audit"],
     }

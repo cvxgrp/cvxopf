@@ -2,8 +2,9 @@
 
 ## Purpose and status
 
-This post-hoc diagnostic investigates the small objective differences observed
-by the accepted M14c prefix profiling study. It is separate from the
+This post-hoc diagnostic investigates the small objective and trajectory
+differences observed by the completed conditioned M14c profile, whose frozen
+exact-coordinate gate classified the comparison as a mismatch. It is separate from the
 authoritative vectorized ladder and from the descriptive profiling record. It
 cannot promote a result, alter `M14C_INTEGRATION.json`, or authorize annual
 execution.
@@ -48,9 +49,11 @@ Each arm retains:
   status captured directly from the solver result before CVXPY discards those
   fields.
 
-The root comparison reports objective and component-cost differences, solver
-gaps, maximum coordinate differences for `Pg`, storage power, storage SoC, and
-net injection, and the complete bound/audit maxima. Branch-flow coordinates
+The root comparison reports objective and component-cost differences, each
+native solver gap, their combined absolute certificate scale, whether the
+objective separation is covered by that scale, maximum coordinate differences
+for `Pg`, storage power, storage SoC, and net injection, and the complete
+bound/audit maxima. Branch-flow coordinates
 remain residual-gated because zero-resistance cycles make them genuinely
 nonunique.
 
@@ -64,6 +67,6 @@ persists materially beyond the retained solver gaps, the explicit-bound and
 leaf-bound formulations require further investigation.
 
 The output directory is
-`results/m14c_case118_tight_tolerance_diagnostic`. It is ignored and immutable
+`results/m14c_case118_tight_tolerance_conditioned`. It is ignored and immutable
 per execution. A completed diagnostic still leaves annual execution blocked
 until an explicit scientific review and separate authority update.
