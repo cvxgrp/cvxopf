@@ -2,8 +2,8 @@
 
 ## Status
 
-**In progress; M14c vectorized lossy DC is qualified and the Case118 annual
-S4 outer solve is authorized next.** The frozen
+**In progress; M14c vectorized lossy DC and the Case118 annual S4 outer solve
+are complete.** The frozen
 legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
@@ -69,9 +69,20 @@ representations for this study, selects vectorized/SCIPY as the authoritative
 annual realization, and explicitly authorizes annual S4 execution after this
 checkpoint is reviewed and committed.
 
-The Case118 annual hierarchy experiment may resume at S4 after this authority
-checkpoint is reviewed and committed. The annual solve itself remains subject
-to its frozen construction, solve, audit, provenance, and resource gates.
+The authoritative annual solve completed from clean commit
+`ab2375cddcb4823a47610123ae2b0d8cd8c8f33d` in 93.95 solver seconds and
+104.62 supervised seconds, with a 5,962.6 MiB peak RSS. Its complete physical,
+terminal, identity, provenance, and resource audits passed, so the same solve
+closes M14c's annual scaling gate and supplies S4's accepted outer trajectory.
+The promoted compact S4 record has SHA-256
+`f8194ef39d18084f90d0d6216bd1a7ee85a889bf3699571fd9f7f2b3c3dc4947`.
+
+A post-hoc, non-promotional default-solver characterization then compared
+OSQP, SCS, and HiGHS at 24, 168, 720, and 8,760 hours, with the earlier
+CLARABEL and MOSEK evidence retained alongside it. Only HiGHS at 24 hours
+passed among the twelve new arms; none of the alternative solvers produced an
+accepted annual result. This descriptive matrix does not change solver policy:
+CLARABEL remains authoritative for the frozen Case118 study.
 
 ## Motivation
 

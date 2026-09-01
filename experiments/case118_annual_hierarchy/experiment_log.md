@@ -360,3 +360,36 @@ The M14c integration authority now records the completed conditioned ladder
 and authorizes the annual S4 outer solve after this clean checkpoint is reviewed
 and committed. The diagnostic itself remains non-promotional and its retained
 record continues to report `annual_execution_authorized=false`.
+
+## 2026-09-01 — S4 annual outer accepted after M14c vectorization
+
+The authorized `attempt_005` run solved the complete conditioned 8,760-hour
+Case118 lossy-DC outer through the vectorized/SCIPY path. CLARABEL returned an
+accepted solution in 93.95 solver seconds; total supervised wall time was
+104.62 seconds and peak RSS was 5,962.6 MiB. Independent reconstruction passed
+the nodal balance, branch, SoC recurrence, terminal, identity, provenance, and
+resource gates. The annual objective is `675904016.1678729`, and the immutable
+outer archive SHA-256 is
+`6e7d88e8eed39de4a0141b0fe3c8a146fd2ae298a3d3ddc2768ae57247e87031`.
+
+The compact `S4_RESULTS.json` records `accepted_for_s4b=true`. This single run
+therefore closes the M14c annual scaling gate and supplies the accepted S4
+outer trajectory; it is not a duplicate qualification run. The compact
+record's SHA-256 is
+`f8194ef39d18084f90d0d6216bd1a7ee85a889bf3699571fd9f7f2b3c3dc4947`.
+
+## 2026-09-01 — Post-hoc default-solver characterization
+
+A separately declared, non-promotional matrix tested OSQP, SCS, and HiGHS with
+default settings and a five-minute per-arm limit on the same conditioned
+vectorized/SCIPY problem at 24, 168, 720, and 8,760 hours. Only HiGHS at 24
+hours passed the frozen audit. OSQP and SCS returned residual-rejected primals
+at shorter horizons, HiGHS failed at 168 hours and timed out thereafter, and
+none produced an accepted annual solution. The matched annual MOSEK timing arm
+also failed with native status `UNKNOWN` and no usable primal after 177.48
+seconds.
+
+The record is descriptive and specific to this scenario, machine, software
+stack, and default configurations. It does not claim a universal solver
+ranking or authorize tuned comparisons. CLARABEL remains the authoritative
+solver for the frozen Case118 hierarchy.

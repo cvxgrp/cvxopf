@@ -850,13 +850,14 @@ package environment.
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
 - [ ] M14 time-vectorized multistep formulations: the explicit time-last
-  lossy-DC path is integrated into the Case118 `big-experiment` branch and its
-  conditioned vectorized 24/168/720 prefix ladder is accepted. The retained
+  lossy-DC path is integrated into the Case118 `big-experiment` branch; its
+  conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
+  accepted. The retained
   stepwise builder remains the default. The historical stepwise/CPP profiling
   mismatch and the certificate-backed tight-tolerance disposition are both
-  tracked; vectorized/SCIPY is the authoritative Case118 annual realization.
-  Annual S4 execution is authorized after the reviewed authority checkpoint
-  is committed (see
+  tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual
+  realization. A non-promotional default-solver matrix found no accepted
+  alternative annual arm (see
   `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
