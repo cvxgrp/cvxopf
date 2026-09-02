@@ -297,3 +297,6 @@ presentations/**/*.vrb
 # Local agent skills and configuration
 .agents/
 skills-lock.json
+
+# Generated outputs
+/outputs/
