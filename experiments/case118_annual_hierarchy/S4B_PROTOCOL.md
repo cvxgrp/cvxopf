@@ -2,11 +2,12 @@
 
 ## Status and scope
 
-**Open; shard-boundary rule frozen, manifest and execution implementation
-pending.** S4b qualifies scheduler-neutral partitioning of the accepted annual
-Case118 hierarchical AC realization. It does not alter the accepted S4 outer
-trajectory, tune boundaries against AC outcomes, add scheduler behavior to
-`cvxopf`, or execute the annual AC study.
+**Open; shard-boundary rule frozen and manifest derivation implemented for
+independent review; execution remains pending and unauthorized.** S4b qualifies
+scheduler-neutral partitioning of the accepted annual Case118 hierarchical AC
+realization. It does not alter the accepted S4 outer trajectory, tune boundaries
+against AC outcomes, add scheduler behavior to `cvxopf`, or execute the annual
+AC study.
 
 The only authoritative outer source is the accepted 8,760-hour
 `attempt_005` archive:
@@ -224,7 +225,6 @@ vectorization track and does not block Case118 S4b/S5.
 
 ## Stopping point
 
-This planning checkpoint freezes the scientific boundary rule and
-qualification contract only. Manifest publication, timeout implementation,
-worker/merger implementation, and numerical qualification require separate
-reviewed checkpoints.
+This implementation checkpoint publishes the immutable manifest only. Timeout
+implementation, worker/merger implementation, and numerical qualification
+require separate reviewed checkpoints and remain unauthorized.
