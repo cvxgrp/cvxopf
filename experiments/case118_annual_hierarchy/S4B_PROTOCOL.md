@@ -2,8 +2,8 @@
 
 ## Status and scope
 
-**Open; shard-boundary rule frozen and manifest derivation implemented for
-independent review; execution remains pending and unauthorized.** S4b qualifies
+**Open; shard-boundary rule frozen and immutable manifest derivation reviewed
+and committed; execution remains pending and unauthorized.** S4b qualifies
 scheduler-neutral partitioning of the accepted annual Case118 hierarchical AC
 realization. It does not alter the accepted S4 outer trajectory, tune boundaries
 against AC outcomes, add scheduler behavior to `cvxopf`, or execute the annual
