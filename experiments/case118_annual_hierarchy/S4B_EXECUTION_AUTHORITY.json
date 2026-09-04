@@ -1,0 +1,11 @@
+{
+  "annual_execution_authorized": false,
+  "classification": "reviewed_s4b_qualification_execution_authorized",
+  "execution_commit": "f521844f2696b4f659c000ffd709a6a3f3dd289c",
+  "execution_scope": "bounded_24h_qualification",
+  "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+  "qualification_execution_authorized": true,
+  "qualification_registry_sha256": "e9e695346df50af4d663454f9f750ec7b2c81d4ee1b6bbcb0e4c65f2884d7a3a",
+  "schema_version": 1,
+  "source_fingerprint": "ce327c8e022cb5f5c0cfb25d752e2b7977721ff2d230780f61c676623aecd664"
+}
