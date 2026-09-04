@@ -277,22 +277,9 @@ experiments/dnlp_vs_pypower/*.fls
 experiments/dnlp_vs_pypower/*.fdb_latexmk
 experiments/dnlp_vs_pypower/*.synctex.gz
 
-# Presentation outputs and LaTeX build byproducts
-presentations/**/*.pdf
-presentations/**/*.aux
-presentations/**/*.bbl
-presentations/**/*.bcf
-presentations/**/*.blg
-presentations/**/*.fdb_latexmk
-presentations/**/*.fls
-presentations/**/*.log
-presentations/**/*.nav
-presentations/**/*.out
-presentations/**/*.run.xml
-presentations/**/*.snm
-presentations/**/*.synctex.gz
-presentations/**/*.toc
-presentations/**/*.vrb
+# Local research and presentation material retained outside the public repository
+/experiments/ecosystem_positioning/
+/presentations/
 
 # Local agent skills and configuration
 .agents/
