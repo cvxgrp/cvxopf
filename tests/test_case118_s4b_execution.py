@@ -449,6 +449,13 @@ def test_analyzer_reconstructs_concurrency_resources_and_provenance() -> None:
         ],
     }
     assert s4b_analysis.validate_supervision(record) == record
+    sample = cast(dict[str, Any], cast(list[object], record["resource_samples"])[0])
+    sample["aggregate_cpu_seconds"] = 5.0 + 5e-14
+    assert s4b_analysis.validate_supervision(record) == record
+    sample["aggregate_cpu_seconds"] = 5.0 + 1e-6
+    with pytest.raises(ValueError, match="aggregate RSS sample is invalid"):
+        s4b_analysis.validate_supervision(record)
+    sample["aggregate_cpu_seconds"] = 5.0
     record["maximum_observed_concurrency"] = 1
     with pytest.raises(ValueError, match="concurrency does not reconstruct"):
         s4b_analysis.validate_supervision(record)

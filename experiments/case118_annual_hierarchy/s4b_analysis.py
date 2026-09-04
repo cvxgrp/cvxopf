@@ -176,7 +176,12 @@ def validate_supervision(value: object) -> Mapping[str, object]:
             or aggregate_cpu < 0.0
             or aggregate_identities != identity_union
             or aggregate != summed_rss
-            or aggregate_cpu != summed_cpu
+            or not np.isclose(
+                aggregate_cpu,
+                summed_cpu,
+                rtol=0.0,
+                atol=1e-9,
+            )
         ):
             raise ValueError("S4b aggregate RSS sample is invalid")
         reconstructed_aggregate_peak = max(reconstructed_aggregate_peak, aggregate)
