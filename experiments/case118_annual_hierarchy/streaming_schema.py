@@ -680,7 +680,7 @@ def validate_window_archive(
         elif terminal_policy != window_terminal_policy:
             raise ValueError("attempt terminal policies must match within a window")
         expected_transformation = (
-            ("flat" if iteration == 0 else "shifted_preceding")
+            ("flat" if iteration == trajectory_start else "shifted_preceding")
             if ordinal < 2
             else "copy_target_free"
             if ordinal == 2
@@ -712,7 +712,7 @@ def validate_window_archive(
         if state in {"not_needed_after_acceptance", "source_unavailable"}:
             expected_source_kind = None
             expected_source_id = None
-        elif ordinal in {0, 1, 6, 7, 8} and iteration == 0:
+        elif ordinal in {0, 1, 6, 7, 8} and iteration == trajectory_start:
             expected_source_kind = "generated_flat"
             expected_source_id = None
         elif ordinal in {0, 1, 6, 7, 8}:

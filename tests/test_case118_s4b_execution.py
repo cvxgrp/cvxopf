@@ -266,6 +266,42 @@ def test_five_minute_timeout_enters_causal_recovery_and_advances_once() -> None:
     )
 
 
+def test_independent_shard_start_uses_and_archives_flat_initialization() -> None:
+    fixture = load_p0_fixture(6)
+    snapshot = snapshot_inputs(fixture.inputs)
+    outer = solve_frozen_outer(snapshot, fixture.policy, fixture.solve_config)
+    initial = outer.target_at(3)
+
+    window = execute_streaming_window(
+        snapshot,
+        fixture.policy,
+        fixture.solve_config,
+        outer,
+        3,
+        initial,
+        None,
+        trajectory_start=3,
+        trajectory_stop=6,
+        trajectory_initial_soc_mwh=initial,
+    )
+
+    primary = window.attempts[0]
+    assert primary.transformation == "flat"
+    assert primary.source_kind == "generated_flat"
+    assert primary.source_attempt_id is None
+    archive = window_archive_payload(
+        window,
+        inputs=snapshot,
+        policy=fixture.policy,
+        outer=outer,
+        preceding_controlling_attempt_id=None,
+        trajectory_start=3,
+        trajectory_stop=6,
+        primary_attempt_budget_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
+    )
+    assert archive["preceding_controlling_attempt_id"] is None
+
+
 class _FakeProcess:
     def __init__(self) -> None:
         self.pid = 12345

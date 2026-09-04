@@ -801,9 +801,9 @@ def _validate_outer_binding(
         )
 
 
-def _p0_registry(iteration: int) -> tuple[_Slot, ...]:
+def _p0_registry(iteration: int, *, trajectory_start: int = 0) -> tuple[_Slot, ...]:
     """Register the case118 P0 policy's closed nine-slot lifecycle."""
-    causal = "flat" if iteration == 0 else "shifted_preceding"
+    causal = "flat" if iteration == trajectory_start else "shifted_preceding"
     slots = [
         _Slot(0, ATTEMPT_ROLES[0], causal),
         _Slot(1, ATTEMPT_ROLES[1], causal),
@@ -1316,7 +1316,7 @@ def execute_streaming_window(
     stop = min(iteration + policy.ac_window_steps, stop_boundary)
     target = outer.target_at(stop)
     ids = _storage_ids(inputs.storage)
-    slots = _p0_registry(iteration)
+    slots = _p0_registry(iteration, trajectory_start=trajectory_start)
     records: list[ACAttemptRecord] = []
     accepted: ACAttemptRecord | None = None
 
