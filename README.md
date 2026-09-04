@@ -886,3 +886,9 @@ package environment.
   exclusive customer-group shedding using relaxation, deterministic rounding,
   and fixed-policy polishing (see
   `plans/milestone-22-nonconvex-load-group-penalties.md`)
+- [ ] Unit commitment: add opt-in relaxed generator commitment to the convex
+  `lossy_dc` and `singlenode_dc` formulations, construct a fixed schedule with
+  a deterministic relax–partial-round–resolve–final-round–polish procedure,
+  and pass that schedule with polished SoC signposts into an explicitly
+  configured AC realization (see
+  `plans/milestone-23-unit-commitment.md`)
