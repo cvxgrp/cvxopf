@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "stage": "S0",
+  "status": "complete",
+  "selected_pilot_metadata": "S0_SELECTED_WINDOW_METADATA.json",
+  "repository_case118_comparator": {
+    "role": "implementation and scale comparator only; not a thermal-rating counterfactual",
+    "base_mva": 100.0,
+    "bus_count": 118,
+    "generator_count": 54,
+    "active_branch_count": 186,
+    "active_load_mw": 4242.0,
+    "reactive_load_mvar": 1438.0,
+    "active_generator_pmax_mw": 9966.2,
+    "positive_rate_a_mva": {
+      "count": 186,
+      "minimum": 9900.0,
+      "maximum": 9900.0
+    },
+    "array_sha256": {
+      "bus": "bd0cece8cd12e8ece1c46d51729497513779866416ebfe361b5192b3bbbc6524",
+      "gen": "f63683fd2b60a4c6d739e46f1801ed0bfdff0651ccbd52622387718c314a1c8d",
+      "branch": "728b12e0a1f3bb5d6db8bc5c5dfd2cc0cac0c322c9145ad528264a2d3d87d5f3",
+      "gencost": "16cd220e1b7fe440e130fc6ad506eb769a28cc61d36f0c2afcf82d44c033ef6f"
+    },
+    "different_entries_from_converted_pglib": {
+      "bus": 235,
+      "gen": 177,
+      "branch": 932,
+      "gencost": 108
+    }
+  },
+  "s1_resource_policy": {
+    "machine_scope": "the Apple-silicon workstation characterized by S0_SELECTED_WINDOW_METADATA.json",
+    "process_rss_limit_gib": 16.0,
+    "per_ac_solve_wall_time_minutes": 45.0,
+    "complete_s1_wall_time_hours": 2.0,
+    "rss_sampling_interval_seconds_maximum": 1.0,
+    "direct_ac_maximum_authorized_horizon_hours": 6,
+    "direct_ac_24_hour_classification": "not_authorized_by_s0_resource_gate",
+    "lossy_dc_24_hour_authorized": true,
+    "bounded_ac_and_hierarchical_measurements_authorized": true,
+    "stopping_rule": "terminate the child process and retain an explicit resource-boundary record when either the RSS or wall-time limit is reached"
+  }
+}

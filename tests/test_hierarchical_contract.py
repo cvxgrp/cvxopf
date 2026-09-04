@@ -50,12 +50,8 @@ def _inputs(**overrides):
         "generators": tuple(gen_from_matpower(case["gen"], case["gencost"])),
         "loads": (load,),
         "storage": (storage,),
-        "df_load_p": pd.DataFrame(
-            [[90.0], [95.0]], columns=["load-5"]
-        ),
-        "df_load_q": pd.DataFrame(
-            [[30.0], [31.0]], columns=["load-5"]
-        ),
+        "df_load_p": pd.DataFrame([[90.0], [95.0]], columns=["load-5"]),
+        "df_load_q": pd.DataFrame([[30.0], [31.0]], columns=["load-5"]),
     }
     values.update(overrides)
     return HierarchicalInputs(**values)
@@ -63,7 +59,9 @@ def _inputs(**overrides):
 
 def _build():
     variable = cp.Variable(1, name="x")
-    return OPFBuild(cp.Problem(cp.Minimize(cp.sum_squares(variable))), {}, {}, "ac", False)
+    return OPFBuild(
+        cp.Problem(cp.Minimize(cp.sum_squares(variable))), {}, {}, "ac", False
+    )
 
 
 def _audit(*, accepted=True, status="optimal", residuals=None, **overrides):
@@ -157,6 +155,29 @@ def _attempt(**overrides):
     return ACAttemptRecord(**values)
 
 
+def test_timeout_attempt_requires_complete_primary_start_and_typed_budget():
+    timeout = _attempt(
+        slot_state="timeout",
+        terminal_deviation_mwh=None,
+        solver_evidence=None,
+        result=None,
+        audit=None,
+        reason="primary_attempt_timeout:300.0s",
+        supplied_executed_action=False,
+        timeout_budget_seconds=300.0,
+    )
+    assert timeout.timeout_budget_seconds == 300.0
+
+    with pytest.raises(ValueError, match="every prepared model variable"):
+        replace(
+            timeout,
+            raw_start={"wrong": np.array([1.0])},
+            assigned_start={"wrong": np.array([1.0])},
+        )
+    with pytest.raises(ValueError, match="primary slot"):
+        replace(timeout, ordinal=1, role="target_free")
+
+
 def _outer_record(**overrides):
     values = {
         "outer_plan_id": "outer-000",
@@ -213,9 +234,7 @@ def _result(**overrides):
                 boundary_soc_mwh=np.array([[500.0], [500.0]]),
             )
         },
-        "ac_attempts": (
-            _attempt(local_interval_stop=1, global_interval_stop=1),
-        ),
+        "ac_attempts": (_attempt(local_interval_stop=1, global_interval_stop=1),),
         "executed_intervals": (_executed_interval(),),
         "realized_soc_mwh": np.array([[500.0], [500.0]]),
         "executed_b_mw": np.array([[0.0]]),
@@ -295,8 +314,7 @@ def _skipped_recovery_attempt(ordinal, *, iteration=0):
 
 def _recovery_registry(replacements=None, *, iteration=0):
     records = [
-        _skipped_recovery_attempt(index, iteration=iteration)
-        for index in range(9)
+        _skipped_recovery_attempt(index, iteration=iteration) for index in range(9)
     ]
     records[0] = _attempt(
         attempt_id=f"ac-{iteration:03d}-00",
@@ -413,9 +431,7 @@ class TestPolicy:
             )
         stricter = HierarchicalPolicy(
             ac_window_steps=5,
-            tolerances=HierarchicalAcceptanceTolerances(
-                ac_active_balance_pu_abs=5e-7
-            ),
+            tolerances=HierarchicalAcceptanceTolerances(ac_active_balance_pu_abs=5e-7),
         )
         assert stricter.tolerances.ac_active_balance_pu_abs == 5e-7
 
@@ -453,9 +469,7 @@ class TestSolveConfiguration:
             ("IPOPT", {"max_cpu_time": np.inf}, ValueError, "finite"),
         ],
     )
-    def test_each_solve_option_kind_is_validated(
-        self, solver, options, error, message
-    ):
+    def test_each_solve_option_kind_is_validated(self, solver, options, error, message):
         with pytest.raises(error, match=message):
             LayerSolveConfig(solver, options)
 
@@ -526,9 +540,7 @@ class TestInputs:
         missing = StorageUnitIdeal(7, 10.0, 20.0, 10.0)
         with pytest.raises(ValueError, match=r"storage\[0\].device_id"):
             _inputs(storage=(missing,))
-        duplicate = StorageUnitIdeal(
-            7, 10.0, 20.0, 10.0, device_id="battery-7"
-        )
+        duplicate = StorageUnitIdeal(7, 10.0, 20.0, 10.0, device_id="battery-7")
         with pytest.raises(ValueError, match="must be unique"):
             _inputs(storage=(_inputs().storage[0], duplicate))
 
@@ -566,21 +578,13 @@ class TestInputs:
 
     def test_load_frame_rejects_nonfinite_values(self):
         with pytest.raises(ValueError, match="finite"):
-            _inputs(
-                df_load_p=pd.DataFrame(
-                    [[90.0], [np.nan]], columns=["load-5"]
-                )
-            )
+            _inputs(df_load_p=pd.DataFrame([[90.0], [np.nan]], columns=["load-5"]))
 
     def test_trajectory_indices_are_unique_and_aligned(self):
-        p = pd.DataFrame(
-            [[90.0], [95.0]], columns=["load-5"], index=[0, 0]
-        )
+        p = pd.DataFrame([[90.0], [95.0]], columns=["load-5"], index=[0, 0])
         with pytest.raises(ValueError, match="index must be unique"):
             _inputs(df_load_p=p, df_load_q=None)
-        q = pd.DataFrame(
-            [[30.0], [31.0]], columns=["load-5"], index=[1, 2]
-        )
+        q = pd.DataFrame([[30.0], [31.0]], columns=["load-5"], index=[1, 2])
         with pytest.raises(ValueError, match="indices must match"):
             _inputs(df_load_q=q)
 
@@ -954,9 +958,7 @@ class TestAuditTree:
             ({"result": []}, TypeError, "result must be a mapping"),
         ],
     )
-    def test_outer_record_rejects_malformed_contracts(
-        self, overrides, error, message
-    ):
+    def test_outer_record_rejects_malformed_contracts(self, overrides, error, message):
         with pytest.raises(error, match=message):
             _outer_record(**overrides)
 
@@ -982,9 +984,7 @@ class TestAuditTree:
             ),
         ],
     )
-    def test_outer_terminal_residuals_follow_configured_mode(
-        self, mode, residuals
-    ):
+    def test_outer_terminal_residuals_follow_configured_mode(self, mode, residuals):
         plan = _outer_record(
             global_interval_stop=1,
             local_boundary_indices=np.array([0, 1]),
@@ -1058,7 +1058,7 @@ class TestAuditTree:
                     "dc_injection_reporting_mw_abs": 0.0,
                     "dc_nodal_balance_pu_abs": 2e-6,
                 }
-            )
+            ),
         )
         with pytest.raises(ValueError, match="outer plan.*exceeds"):
             _result(outer_plans={"outer-000": bad_outer})
@@ -1310,9 +1310,7 @@ class TestAuditTree:
             source_kind="attempt",
             source_attempt_id="target-free",
         )
-        attempts = _recovery_registry(
-            {1: target_free, 2: second_controller}
-        )
+        attempts = _recovery_registry({1: target_free, 2: second_controller})
 
         with pytest.raises(ValueError, match="exactly one action-supplying"):
             _result(
@@ -1593,9 +1591,7 @@ class TestAuditTree:
                         global_interval_stop=3,
                         local_boundary_indices=np.array([0, 1, 2, 3]),
                         global_boundary_indices=np.array([0, 1, 2, 3]),
-                        boundary_soc_mwh=np.array(
-                            [[500.0], [500.0], [500.0], [500.0]]
-                        ),
+                        boundary_soc_mwh=np.array([[500.0], [500.0], [500.0], [500.0]]),
                     ),
                     "outer-001": outer_one,
                     "outer-002": outer_two,
@@ -1693,9 +1689,7 @@ class TestAuditTree:
                 }
             ),
             executed_intervals=(
-                _executed_interval(
-                    controlling_attempt_id="flat-perturbation"
-                ),
+                _executed_interval(controlling_attempt_id="flat-perturbation"),
             ),
         )
 
@@ -1753,9 +1747,7 @@ class TestAuditTree:
             (3, {"seed": 99}, "seeds do not match"),
         ],
     )
-    def test_recovery_registry_matches_declared_policy(
-        self, ordinal, changes, message
-    ):
+    def test_recovery_registry_matches_declared_policy(self, ordinal, changes, message):
         malformed = list(_recovery_registry())
         malformed[ordinal] = replace(malformed[ordinal], **changes)
         with pytest.raises(ValueError, match=message):

@@ -1,0 +1,686 @@
+{
+  "attempts": [
+    {
+      "assigned_start_sha256": "09c02ebd4ccc867df7521e5496e916fcc89ab94ea1f016b009598f9507419123",
+      "attempt_id": "ac-080-00-primary_controlling",
+      "audit": {
+        "accepted_primal": false,
+        "exception": null,
+        "identity_error": null,
+        "missing_or_nonfinite_fields": [],
+        "outcome": "unusable_primal",
+        "residuals": {
+          "ac_active_balance_pu_abs": 0.010072707814368016,
+          "ac_reactive_balance_pu_abs": 4.950919453605706e-07,
+          "branch_mva_abs": 0.0,
+          "branch_normalized_squared_residual": 0.0,
+          "soc_recurrence_mwh_abs": 9.379164112033322e-13,
+          "terminal_soc_mwh_abs": 0.0,
+          "voltage_bound_pu_abs": 0.0
+        },
+        "solver_num_iters": "Not available",
+        "solver_setup_time_seconds": null,
+        "solver_solve_time_seconds": null,
+        "status": "user_limit"
+      },
+      "auxiliary_x0_count": 185,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "20956de668ce005d83c556ce927e17e4af7b577ea389ca5a9f15ca89b5d4428d",
+      "model_x0_count": 745,
+      "object_identity_preserved": true,
+      "ordinal": 0,
+      "raw_start_sha256": "09c02ebd4ccc867df7521e5496e916fcc89ab94ea1f016b009598f9507419123",
+      "reason_class": null,
+      "result_schema": {
+        "Pg": [
+          5,
+          3
+        ],
+        "Qg": [
+          5,
+          3
+        ],
+        "Va_deg": [
+          5,
+          9
+        ],
+        "Vm": [
+          5,
+          9
+        ],
+        "b": [
+          5,
+          1
+        ],
+        "b_q": [
+          5,
+          1
+        ],
+        "branch_p_from": [
+          5,
+          9
+        ],
+        "branch_p_to": [
+          5,
+          9
+        ],
+        "branch_q_from": [
+          5,
+          9
+        ],
+        "branch_q_to": [
+          5,
+          9
+        ],
+        "branch_s_from": [
+          5,
+          9
+        ],
+        "branch_s_to": [
+          5,
+          9
+        ],
+        "curtailment": [
+          5,
+          7
+        ],
+        "objective": "scalar",
+        "p_load": [
+          5,
+          3
+        ],
+        "p_load_served": [
+          5,
+          3
+        ],
+        "p_nd": [
+          5,
+          7
+        ],
+        "p_net": [
+          5,
+          9
+        ],
+        "q_load": [
+          5,
+          3
+        ],
+        "q_load_served": [
+          5,
+          3
+        ],
+        "q_nd": [
+          5,
+          7
+        ],
+        "q_net": [
+          5,
+          9
+        ],
+        "soc": [
+          5,
+          1
+        ],
+        "status": "scalar",
+        "storage_cost": "scalar",
+        "storage_device_id_is_explicit": [
+          1
+        ],
+        "storage_device_ids": [
+          1
+        ],
+        "storage_terminal_deviation": [
+          1
+        ]
+      },
+      "results_sha256": "92e74a66ea22c4ddbe0a90856a962375e2ebbec98d20bdc3ad41b79af050c09b",
+      "role": "primary_controlling",
+      "scale": null,
+      "seed": null,
+      "slot_state": "executed",
+      "solver_executed": true,
+      "solver_x0_sha256": "903be1c265e608ca2e0e626e4050a25a274ac5d0d7dd7355e1cc70f73851c252",
+      "source_attempt_id": "ac-079-00-primary_controlling",
+      "source_kind": "attempt",
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": {
+        "battery_bus_7": 0.0
+      },
+      "transformation": "shifted_preceding",
+      "x0_verified": true
+    },
+    {
+      "assigned_start_sha256": "09c02ebd4ccc867df7521e5496e916fcc89ab94ea1f016b009598f9507419123",
+      "attempt_id": "ac-080-01-target_free",
+      "audit": {
+        "accepted_primal": true,
+        "exception": null,
+        "identity_error": null,
+        "missing_or_nonfinite_fields": [],
+        "outcome": "accepted",
+        "residuals": {
+          "ac_active_balance_pu_abs": 2.842170943040401e-16,
+          "ac_reactive_balance_pu_abs": 2.3092638912203257e-16,
+          "branch_mva_abs": 0.0,
+          "branch_normalized_squared_residual": 0.0,
+          "soc_recurrence_mwh_abs": 6.617444900424222e-24,
+          "voltage_bound_pu_abs": 0.0
+        },
+        "solver_num_iters": "Not available",
+        "solver_setup_time_seconds": null,
+        "solver_solve_time_seconds": null,
+        "status": "optimal"
+      },
+      "auxiliary_x0_count": 185,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "20956de668ce005d83c556ce927e17e4af7b577ea389ca5a9f15ca89b5d4428d",
+      "model_x0_count": 745,
+      "object_identity_preserved": true,
+      "ordinal": 1,
+      "raw_start_sha256": "09c02ebd4ccc867df7521e5496e916fcc89ab94ea1f016b009598f9507419123",
+      "reason_class": null,
+      "result_schema": {
+        "Pg": [
+          5,
+          3
+        ],
+        "Qg": [
+          5,
+          3
+        ],
+        "Va_deg": [
+          5,
+          9
+        ],
+        "Vm": [
+          5,
+          9
+        ],
+        "b": [
+          5,
+          1
+        ],
+        "b_q": [
+          5,
+          1
+        ],
+        "branch_p_from": [
+          5,
+          9
+        ],
+        "branch_p_to": [
+          5,
+          9
+        ],
+        "branch_q_from": [
+          5,
+          9
+        ],
+        "branch_q_to": [
+          5,
+          9
+        ],
+        "branch_s_from": [
+          5,
+          9
+        ],
+        "branch_s_to": [
+          5,
+          9
+        ],
+        "curtailment": [
+          5,
+          7
+        ],
+        "objective": "scalar",
+        "p_load": [
+          5,
+          3
+        ],
+        "p_load_served": [
+          5,
+          3
+        ],
+        "p_nd": [
+          5,
+          7
+        ],
+        "p_net": [
+          5,
+          9
+        ],
+        "q_load": [
+          5,
+          3
+        ],
+        "q_load_served": [
+          5,
+          3
+        ],
+        "q_nd": [
+          5,
+          7
+        ],
+        "q_net": [
+          5,
+          9
+        ],
+        "soc": [
+          5,
+          1
+        ],
+        "status": "scalar",
+        "storage_cost": "scalar",
+        "storage_device_id_is_explicit": [
+          1
+        ],
+        "storage_device_ids": [
+          1
+        ]
+      },
+      "results_sha256": "ad3c89d43dc3a573e6f8f7754e8d451518ee0e1041494d36a6a6f812397a4c9f",
+      "role": "target_free",
+      "scale": null,
+      "seed": null,
+      "slot_state": "executed",
+      "solver_executed": true,
+      "solver_x0_sha256": "903be1c265e608ca2e0e626e4050a25a274ac5d0d7dd7355e1cc70f73851c252",
+      "source_attempt_id": "ac-079-00-primary_controlling",
+      "source_kind": "attempt",
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "shifted_preceding",
+      "x0_verified": true
+    },
+    {
+      "assigned_start_sha256": "da5a06b84456ac0e9f7c1008f11671cbf4eb05afdf802ce3b4efe5db3f2a4e5a",
+      "attempt_id": "ac-080-02-copied_target_free",
+      "audit": {
+        "accepted_primal": true,
+        "exception": null,
+        "identity_error": null,
+        "missing_or_nonfinite_fields": [],
+        "outcome": "accepted",
+        "residuals": {
+          "ac_active_balance_pu_abs": 1.5774048733874226e-14,
+          "ac_reactive_balance_pu_abs": 4.919397572032319e-15,
+          "branch_mva_abs": 0.0,
+          "branch_normalized_squared_residual": 0.0,
+          "soc_recurrence_mwh_abs": 1.7679386871572583e-14,
+          "terminal_soc_mwh_abs": 0.0,
+          "voltage_bound_pu_abs": 0.0
+        },
+        "solver_num_iters": "Not available",
+        "solver_setup_time_seconds": null,
+        "solver_solve_time_seconds": null,
+        "status": "optimal"
+      },
+      "auxiliary_x0_count": 185,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "20956de668ce005d83c556ce927e17e4af7b577ea389ca5a9f15ca89b5d4428d",
+      "model_x0_count": 745,
+      "object_identity_preserved": true,
+      "ordinal": 2,
+      "raw_start_sha256": "da5a06b84456ac0e9f7c1008f11671cbf4eb05afdf802ce3b4efe5db3f2a4e5a",
+      "reason_class": null,
+      "result_schema": {
+        "Pg": [
+          5,
+          3
+        ],
+        "Qg": [
+          5,
+          3
+        ],
+        "Va_deg": [
+          5,
+          9
+        ],
+        "Vm": [
+          5,
+          9
+        ],
+        "b": [
+          5,
+          1
+        ],
+        "b_q": [
+          5,
+          1
+        ],
+        "branch_p_from": [
+          5,
+          9
+        ],
+        "branch_p_to": [
+          5,
+          9
+        ],
+        "branch_q_from": [
+          5,
+          9
+        ],
+        "branch_q_to": [
+          5,
+          9
+        ],
+        "branch_s_from": [
+          5,
+          9
+        ],
+        "branch_s_to": [
+          5,
+          9
+        ],
+        "curtailment": [
+          5,
+          7
+        ],
+        "objective": "scalar",
+        "p_load": [
+          5,
+          3
+        ],
+        "p_load_served": [
+          5,
+          3
+        ],
+        "p_nd": [
+          5,
+          7
+        ],
+        "p_net": [
+          5,
+          9
+        ],
+        "q_load": [
+          5,
+          3
+        ],
+        "q_load_served": [
+          5,
+          3
+        ],
+        "q_nd": [
+          5,
+          7
+        ],
+        "q_net": [
+          5,
+          9
+        ],
+        "soc": [
+          5,
+          1
+        ],
+        "status": "scalar",
+        "storage_cost": "scalar",
+        "storage_device_id_is_explicit": [
+          1
+        ],
+        "storage_device_ids": [
+          1
+        ],
+        "storage_terminal_deviation": [
+          1
+        ]
+      },
+      "results_sha256": "a0194d58dae8b1edb30b69370bada46a6bfd78776e424eedd464a38ba83a2b92",
+      "role": "copied_target_free",
+      "scale": null,
+      "seed": null,
+      "slot_state": "executed",
+      "solver_executed": true,
+      "solver_x0_sha256": "95e0cdd0a2e0f0f6d12976ea0df015485443394799f7d2bb4ca68ded943cd533",
+      "source_attempt_id": "ac-080-01-target_free",
+      "source_kind": "attempt",
+      "supplied_executed_action": true,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": {
+        "battery_bus_7": 0.0
+      },
+      "transformation": "copy_target_free",
+      "x0_verified": true
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-03-perturbed_target_free",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 3,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_target_free",
+      "scale": 0.0001,
+      "seed": 17008011,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_target_free",
+      "x0_verified": false
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-04-perturbed_target_free",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 4,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_target_free",
+      "scale": 0.001,
+      "seed": 17008012,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_target_free",
+      "x0_verified": false
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-05-perturbed_target_free",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 5,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_target_free",
+      "scale": 0.01,
+      "seed": 17008013,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_target_free",
+      "x0_verified": false
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-06-perturbed_causal",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 6,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_causal",
+      "scale": 0.0001,
+      "seed": 17008021,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_causal",
+      "x0_verified": false
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-07-perturbed_causal",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 7,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_causal",
+      "scale": 0.001,
+      "seed": 17008022,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_causal",
+      "x0_verified": false
+    },
+    {
+      "assigned_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "attempt_id": "ac-080-08-perturbed_causal",
+      "audit": null,
+      "auxiliary_x0_count": null,
+      "initial_soc_mwh": {
+        "battery_bus_7": 51.32207707866037
+      },
+      "interval_start": 80,
+      "interval_stop": 85,
+      "iteration": 80,
+      "layout_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "model_x0_count": null,
+      "object_identity_preserved": null,
+      "ordinal": 8,
+      "raw_start_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "reason_class": "earlier_controller_accepted",
+      "result_schema": null,
+      "results_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "role": "perturbed_causal",
+      "scale": 0.01,
+      "seed": 17008023,
+      "slot_state": "not_needed_after_acceptance",
+      "solver_executed": false,
+      "solver_x0_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "source_attempt_id": null,
+      "source_kind": null,
+      "supplied_executed_action": false,
+      "target_soc_mwh": {
+        "battery_bus_7": 390.3892130958457
+      },
+      "terminal_deviation_mwh": null,
+      "transformation": "perturb_causal",
+      "x0_verified": false
+    }
+  ],
+  "recovery_iteration": 80,
+  "schema_version": 1,
+  "source_artifact": {
+    "bytes": 3312008,
+    "sha256": "a6f8ce5c5e01325a5ef376df6855687ee342f1504c28cd614d76a7dcbead1beb"
+  }
+}
+

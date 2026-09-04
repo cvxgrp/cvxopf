@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "classification": "complete_non_promotional_characterization",
+  "authoritative_solver": "CLARABEL",
+  "solver_policy_changed": false,
+  "annual_execution_commit": "ab2375cddcb4823a47610123ae2b0d8cd8c8f33d",
+  "source_fingerprint": "e1019b73fb666fb6553ab9c6cf2249b6e25c2a4a15c40ca2e0ed41057e4c0c26",
+  "scenario_sha256": "94cbf310b7e5c911d66ff44a71f7f0a94bcc8271c65849cc3e6cd1c4050e3f07",
+  "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
+  "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
+  "temporal_assembly": "vectorized",
+  "canonicalization_backend": "SCIPY",
+  "generator_quadratic_cost": 0.0001,
+  "execution_environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "architecture": "arm64",
+    "python": "3.11.15",
+    "cvxpy": "1.9.2",
+    "clarabel": "0.11.1",
+    "osqp_package": "1.1.3",
+    "osqp_native_banner": "1.0.0",
+    "scs": "3.2.11",
+    "highs": "1.15.1",
+    "highs_commit": "04024d7",
+    "mosek": "11.2.3"
+  },
+  "matrix_contract": {
+    "solvers": ["OSQP", "SCS", "HIGHS"],
+    "horizons": [24, 168, 720, 8760],
+    "solver_configuration": "defaults",
+    "verbose": true,
+    "serial_order": "horizon_then_solver",
+    "automatic_retry": false,
+    "rss_limit_mib": 16384.0,
+    "wall_limit_seconds_per_arm": 300.0
+  },
+  "artifact_bindings": {
+    "tracked_protocol_path": "experiments/m14_time_vectorization/M14C_SOLVER_MATRIX_PROTOCOL.json",
+    "tracked_protocol_sha256": "9f696816f75d011edfea89815fa24ebb874b65596e5f5377d55b7ca5835b89b4",
+    "runner_path": "experiments/case118_annual_hierarchy/results/run_s4_solver_matrix.py",
+    "runner_sha256": "2dd7cd1348b0eb8b31a769217207a6ebfafe741785940b065f805397362966cb",
+    "raw_output_path": "experiments/case118_annual_hierarchy/results/s4_solver_matrix_001",
+    "protocol_sha256": "c80d3b9a9374166fab4b073ae1e72735419fc653f3abfb39a24fe47df4efcda7",
+    "reference_solvers_sha256": "01b1999214a6d7d528f62fc752eeb6ce928e3cb416d7963fff25453369bd01ef",
+    "matrix_result_sha256": "3b86245ec30af233c7d8d7e3ec5bf73c071481ad26094105d6816c34c22ea365",
+    "mosek_runner_path": "experiments/case118_annual_hierarchy/results/run_s4_mosek_timing.py",
+    "mosek_runner_sha256": "7b8756381b72832d4f8bfc1ee085f5ad3dd51a7a4a3c7530765f2f08db5dd7f0",
+    "mosek_raw_output_path": "experiments/case118_annual_hierarchy/results/s4_annual_outer_rated_mosek_timing_003",
+    "mosek_arm_result_sha256": "098b4c8a02984dc6002ec3fc687114bd47b790f519937fdb4035534f960fc40d",
+    "mosek_comparison_result_sha256": "8626526a3f57c7b22089c570ec62a2950c8dad6fc4f6a03964ac0d53e24d8fc9"
+  },
+  "clarabel_reference": [
+    {"horizon_steps": 24, "classification": "accepted", "solve_seconds": 0.16204683296382427, "supervisor_wall_seconds": 2.178911666967906, "peak_rss_mib": 208.78125, "objective": 2244351.18122342},
+    {"horizon_steps": 168, "classification": "accepted", "solve_seconds": 1.0474634999409318, "supervisor_wall_seconds": 3.2479467089287937, "peak_rss_mib": 361.71875, "objective": 14947705.172403263},
+    {"horizon_steps": 720, "classification": "accepted", "solve_seconds": 5.32229137502145, "supervisor_wall_seconds": 8.271989707951434, "peak_rss_mib": 866.109375, "objective": 64712400.341752246},
+    {"horizon_steps": 8760, "classification": "accepted", "solve_seconds": 93.94798083300702, "supervisor_wall_seconds": 104.61678908299655, "peak_rss_mib": 5962.625, "objective": 675904016.1678729}
+  ],
+  "mosek_reference": [
+    {"horizon_steps": 24, "classification": "accepted", "conditioned_input_match": false, "solve_seconds": 0.20323258300777525, "qualification": "historical unconditioned input; one thread"},
+    {"horizon_steps": 168, "classification": "accepted", "conditioned_input_match": false, "solve_seconds": 2.2088219170691445, "qualification": "historical unconditioned input; one thread"},
+    {"horizon_steps": 720, "classification": "rejected", "conditioned_input_match": false, "solve_seconds": 7.350984500022605, "qualification": "historical unconditioned input; one thread"},
+    {"horizon_steps": 8760, "classification": "failed", "conditioned_input_match": true, "solve_seconds": 177.48413949995302, "supervisor_wall_seconds": 179.75734133296646, "peak_rss_mib": 9287.015625, "qualification": "default tolerances and 14 threads; native MOSEK UNKNOWN with no usable primal"}
+  ],
+  "matrix_records": [
+    {"solver": "OSQP", "horizon_steps": 24, "classification": "residual_rejection", "result_status": "optimal", "solve_seconds": 1.250853499979712, "supervisor_wall_seconds": 3.024778416962363, "peak_rss_mib": 209.0625, "objective": 2244352.6668808754, "dc_nodal_balance_pu_abs": 0.00808200547493925, "soc_recurrence_mwh_abs": 0.001714428784652, "supervision_sha256": "38b34d611c0919ddc83c3d157a37450499776a69b8db4ade35b4222931d1544e"},
+    {"solver": "SCS", "horizon_steps": 24, "classification": "residual_rejection", "result_status": "optimal", "solve_seconds": 3.8447917089797556, "supervisor_wall_seconds": 6.035904666990973, "peak_rss_mib": 236.78125, "objective": 2244366.817559487, "dc_nodal_balance_pu_abs": 0.00003761264702916378, "soc_recurrence_mwh_abs": 0.000168483139844966, "supervision_sha256": "c370c17db43f4038a49859f93c3bda12e360b1321239b90d7e97a96f141a0106"},
+    {"solver": "HIGHS", "horizon_steps": 24, "classification": "accepted", "result_status": "optimal", "solve_seconds": 11.306125583010726, "supervisor_wall_seconds": 13.05620504100807, "peak_rss_mib": 379.625, "objective": 2244351.1814584276, "dc_nodal_balance_pu_abs": 5.663025604007999e-13, "soc_recurrence_mwh_abs": 2.6005864128819667e-12, "supervision_sha256": "f78b835c16ccb567b355b3f266c932b872460bd2f62fc208ba24b2c68ace8db2"},
+    {"solver": "OSQP", "horizon_steps": 168, "classification": "residual_rejection", "result_status": "user_limit", "solve_seconds": 11.328947458066978, "supervisor_wall_seconds": 14.078880707966164, "peak_rss_mib": 371.4375, "objective": 14948574.713435689, "dc_nodal_balance_pu_abs": 0.07855220732622001, "soc_recurrence_mwh_abs": 0.0005268749609115275, "supervision_sha256": "dae3d3e30a8082327892cfc613f06ee18308eba0c4e358e2ee6ab45040de73c6"},
+    {"solver": "SCS", "horizon_steps": 168, "classification": "residual_rejection", "result_status": "optimal", "solve_seconds": 70.27000949997455, "supervisor_wall_seconds": 72.32445395900868, "peak_rss_mib": 417.046875, "objective": 14947793.11452428, "dc_nodal_balance_pu_abs": 0.023421452521255333, "soc_recurrence_mwh_abs": 0.00004703131493589951, "supervision_sha256": "511e1a7e02c36053ca6ba331848c466708fb5bba13dba4b1c59940fe02b47fe0"},
+    {"solver": "HIGHS", "horizon_steps": 168, "classification": "solver_failure", "solve_seconds": 20.737996750045568, "supervisor_wall_seconds": 23.101860541966744, "peak_rss_mib": 388.9375, "qualification": "HiGHS reported the convex QP as non-convex", "supervision_sha256": "9083aaedd4052e617978a2c00da0bd7679493cc9d1aa379c43ce40d17dd1e056"},
+    {"solver": "OSQP", "horizon_steps": 720, "classification": "residual_rejection", "result_status": "optimal_inaccurate", "solve_seconds": 54.42741370899603, "supervisor_wall_seconds": 59.239924625027925, "peak_rss_mib": 805.4375, "objective": 64713617.67269743, "dc_nodal_balance_pu_abs": 0.21637787781333942, "soc_recurrence_mwh_abs": 0.01776065319043596, "supervision_sha256": "03ca6cb2a4d57327db115cf34dd8ca91e5e0c44b1f1bea571f63901f4034caa9"},
+    {"solver": "SCS", "horizon_steps": 720, "classification": "wall_limit", "supervisor_wall_seconds": 300.25385270791594, "peak_rss_mib": 1094.078125, "supervision_sha256": "291b8c1393de216b5afb6d2fca142de046d331308ed88f0954175739ceaa9a1f"},
+    {"solver": "HIGHS", "horizon_steps": 720, "classification": "wall_limit", "supervisor_wall_seconds": 300.17791562492494, "peak_rss_mib": 739.3125, "supervision_sha256": "78709c3efdc022b577b08bf22443a6a206a6888df8e2fa07d4fb1151e467775e"},
+    {"solver": "OSQP", "horizon_steps": 8760, "classification": "wall_limit", "supervisor_wall_seconds": 300.4290083750384, "peak_rss_mib": 5388.4375, "supervision_sha256": "cee6e27108885991bf1b7260c3e2e8d71040f5abdb2c7453b10bb4bf4296c8a1"},
+    {"solver": "SCS", "horizon_steps": 8760, "classification": "unusable_primal", "result_status": "unbounded", "solve_seconds": 9.567968999966979, "supervisor_wall_seconds": 12.05694333394058, "peak_rss_mib": 4951.6875, "qualification": "false unbounded classification relative to the accepted CLARABEL solution", "supervision_sha256": "2169d7cc7620ecc13089b354084d584b7ceeb2fbab2e8b9e3d06c4e2aa60d02e"},
+    {"solver": "HIGHS", "horizon_steps": 8760, "classification": "wall_limit", "supervisor_wall_seconds": 300.34635287499987, "peak_rss_mib": 5102.34375, "supervision_sha256": "5e585c2f1f3ca7d79ae80cda01a1e1d5c991c086a793236d53ec2165a22ff48c"}
+  ],
+  "summary": {
+    "accepted_alternative_arms": 1,
+    "total_alternative_arms": 12,
+    "accepted_alternative_annual_arms": 0,
+    "conclusion": "Under default solver configurations on this frozen machine and problem family, CLARABEL was the only solver to return accepted solutions at every horizon and the only solver to return an accepted annual solution.",
+    "scope_limit": "This is a descriptive, post-hoc characterization of one conditioned Case118 scenario and software stack, not a universal solver ranking or a tuned-solver benchmark."
+  }
+}

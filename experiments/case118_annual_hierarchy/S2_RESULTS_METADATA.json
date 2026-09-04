@@ -1,0 +1,55 @@
+{
+  "artifacts": {
+    "exploratory-continuation-001.json": {"bytes": 457, "sha256": "7d7939fd2ced9952ac321fcfe0692adc79cb2b1b8e1b82ab0b0c7e29e4cfc8cb"},
+    "supervision-000.json": {"bytes": 2941, "sha256": "a90cf8ad3859bf932aeb9054739f0f43ba095ae9d587701c3eca3584ae256efe"},
+    "trajectory/checkpoint.json": {"bytes": 25893, "sha256": "7e34a0ab1f00db2bfb164d1f9d6765231fdce8cd1a0f91f66dbc8230df546685"},
+    "trajectory/outer-plan.json.gz": {"bytes": 717010, "sha256": "b4ac7b18b6e913e96991d5bbe217b01462c81be5b55587cbad17b2ca589d0b90"},
+    "trajectory/window-000127.json.gz": {"bytes": 316315, "sha256": "e0fc56fa0b2ff7a055d9f83ca2cb37fdccd9b80aa448b16e484ee9d1e49a10c4"},
+    "trajectory/window-000167.json.gz": {"bytes": 118241, "sha256": "00eeadcc2e7802ea6b9de2441dfabfa690eabe613190dd673b79d6a67ffb041d"},
+    "worker-result-001.json": {"bytes": 2499, "sha256": "36e4b8b95f69d796e864948d5c24277c3dfc23c468a44d08519fd9a49a08d813"}
+  },
+  "execution": {
+    "authoritative": {"classification": "resource_limit", "completed_intervals": 128, "context_matches": false, "rss_limit_mib": 16384.0, "supervisor_peak_rss_mib": 19220.4375},
+    "continuation": {"classification": "completed", "completed_intervals": 168, "eligible_for_advancement_scope": "worker-local numerical and provenance checks only", "provenance_matches": true, "remaining_intervals_completed": 40, "rss_limit_mib": 24576.0, "wall_time_seconds": 2142.1923267910024},
+    "execution_commit": "3cd4229619792c3f7b20beba805d9fc2bf6bc54e",
+    "restart_boundary_completed_intervals": 128,
+    "stage_disposition": "complete_resource_boundary_stage_with_exploratory_full_trajectory"
+  },
+  "final_checkpoint": {
+    "completed_intervals": 168,
+    "path": "trajectory/checkpoint.json",
+    "restart_boundary_source": "supervision-000.json and immutable archive prefix"
+  },
+  "metrics": {
+    "accepted_controlling_attempts": 168,
+    "accepted_for_s3": true,
+    "active_loss_mwh": 19327.87324808998,
+    "completed_intervals": 168,
+    "controlling_solve_time_seconds": 13440.834131992946,
+    "cumulative_absolute_signpost_deviation_mwh": 2.247375618935621e-10,
+    "fixed_load_service_residual_mw_abs": 0.0,
+    "maximum_normalized_squared_thermal_residual": 3.700173046025965e-09,
+    "maximum_soc_recurrence_residual_mwh_abs": 7.645766071518313e-12,
+    "maximum_terminal_soc_deviation_mwh_abs": 5.684341886080802e-14,
+    "maximum_thermal_residual_mva": 2.775129814835964e-07,
+    "maximum_voltage_violation_pu": 0.0,
+    "recovery_windows": 0,
+    "renewable_curtailment_mwh": 4.954624010999935e-05,
+    "shifted_primary_opportunities": 167,
+    "shifted_primary_successes": 167,
+    "storage_throughput_mwh": {"storage_bus_105": 292.40283223370557, "storage_bus_41": 611.8057298773359, "storage_bus_65": 2517.240337736693, "storage_bus_89": 8.035959857822741e-05}
+  },
+  "provenance": {
+    "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
+    "scenario_sha256": "f602d67563d35e62df03cc716f82f0c3ba823813d0719c623b12a727f92ae12b",
+    "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
+    "source_fingerprint": "b62be721077ee5b5a3c61c93211197abeaf4e1ab5dabc2bc7d76b86b3520f4fd"
+  },
+  "resource_observations": {
+    "continuation_first_window_peak_rss_mib": 10431.265625,
+    "continuation_fresh_worker_rss_mib": 182.578125,
+    "continuation_maximum_safe_boundary_rss_mib": 17874.859375,
+    "supervisor_peak_before_termination_rss_mib": 19220.4375
+  },
+  "schema_version": 1
+}

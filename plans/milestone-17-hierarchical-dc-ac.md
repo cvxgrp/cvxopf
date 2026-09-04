@@ -823,12 +823,13 @@ pre-plan-construction failure path requires its own explicit public record; it
 is not silently represented by omitting both plan and attempts in S4.
 
 `AttemptSlotState` is the closed literal
-`Literal["executed", "construction_error", "source_unavailable",
+`Literal["executed", "timeout", "construction_error", "source_unavailable",
 "not_needed_after_acceptance"]`. The state determines the valid payload:
 
 | Slot state | Build | Raw/assigned model starts | Solver/`x0` evidence | Extracted result | Audit | Reason |
 |---|---|---|---|---|---|---|
 | `executed` | required | both required, including the generated flat start | required; complete `x0` and mapping retained | required, including unsuccessful schema-stable extraction | required | optional |
+| `timeout` | required | both required and namespace/shape aligned | absent because the external supervisor terminated the primary solve | absent | absent | required, with a positive typed timeout budget |
 | `construction_error` | optional | either may exist when reached | absent | absent | absent | required |
 | `source_unavailable` | absent | absent | absent | absent | absent | required |
 | `not_needed_after_acceptance` | absent | absent | absent | absent | absent | required |
@@ -841,9 +842,13 @@ slot is `executed` even if the solver errors, returns an ineligible status, or
 produces an unusable primal. Such outcomes retain their result and audit rather
 than being relabeled as construction failures.
 
+`timeout` is reserved for an externally supervised ordinal-zero primary. It
+retains the prepared model, initialization source, complete named start, and
+typed positive budget, but can never supply an executed action.
+
 No final `HierarchicalResult` contains a `pending` slot. Pending is permitted
 only as private transient orchestration state before a registered slot is
-resolved to one of the four public states. Record validation rejects every
+resolved to one of the five public states. Record validation rejects every
 state/payload combination not allowed by the table.
 
 #### As-built S4 module boundary

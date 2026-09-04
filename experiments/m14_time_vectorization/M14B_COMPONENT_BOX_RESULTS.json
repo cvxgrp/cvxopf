@@ -1,0 +1,3978 @@
+{
+  "audit_tolerance": 2e-06,
+  "canonicalization_backend": "SCIPY",
+  "cross_formulation_inference_permitted": false,
+  "decisions": {
+    "lossy_dc/hvdc_input_power": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "lossy_dc/load_shed_fraction": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "lossy_dc/nondispatchable_real_power": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "lossy_dc/storage_real_power": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "lossy_dc/storage_soc": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "singlenode_dc/load_shed_fraction": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "singlenode_dc/nondispatchable_real_power": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "singlenode_dc/storage_real_power": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    },
+    "singlenode_dc/storage_soc": {
+      "leaf_bounds_qualified": true,
+      "reason": "paired model and binding probe passed",
+      "selected_representation": "leaf"
+    }
+  },
+  "delta_hours": 1.0,
+  "execution_context": {
+    "git_commit": "028b46e2f0af16fbff90a9bc991770f0267280a5",
+    "machine": "arm64",
+    "packages": {
+      "clarabel": "0.11.1",
+      "cvxpy": "1.9.2",
+      "numpy": "2.4.6",
+      "scipy": "1.17.1"
+    },
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.11.15",
+    "source_fingerprint": "45e2e91e95594b3418065c256ef476c70d14f7f679d1606a71f2fc34c57ac03b",
+    "worktree_clean": true
+  },
+  "fresh_process_per_arm": true,
+  "horizon": 4,
+  "pair_absolute_tolerance": 2e-05,
+  "pairs": [
+    {
+      "binding_probe_absolute_residuals": {
+        "storage_real_power": 4.440892098500626e-16,
+        "storage_soc": 5.329070518200751e-15
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "storage_real_power",
+        "storage_soc"
+      ],
+      "component_cost_absolute_residuals": {
+        "storage_cost": 5.551115123125783e-17,
+        "storage_terminal_cost": 0.0
+      },
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_real_power",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 6,
+            "maximum_face_residual": 8.207168278318022e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.999999999985989,
+                3.999999999985989,
+                -3.999999999985989,
+                3.999999999985989
+              ],
+              [
+                2.9999999999179283,
+                -2.9999999999179283,
+                2.9999999999179283,
+                -2.9999999999179283
+              ],
+              [
+                -4.999999999994094,
+                4.999999999994094,
+                -4.999999999994094,
+                4.999999999994094
+              ]
+            ],
+            "variable": "b"
+          },
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_soc",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 8.204132140354549e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 7,
+            "values": [
+              [
+                2.3013027076165653e-11,
+                9.999999999976989,
+                2.3013027076165653e-11,
+                9.999999999976989,
+                2.3013027076165653e-11
+              ],
+              [
+                7.99999999991796,
+                8.204132140354549e-11,
+                7.99999999991796,
+                8.204132140354549e-11,
+                7.99999999991796
+              ],
+              [
+                1.0838593397325766e-11,
+                11.99999999998916,
+                1.0838593397325766e-11,
+                11.99999999998916,
+                1.0838593397325766e-11
+              ]
+            ],
+            "variable": "soc"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 64,
+          "coefficient_columns": 64,
+          "coefficient_nonzeros": 221,
+          "coefficient_rows": 140,
+          "equality_rows": 37,
+          "nonnegative_rows": 103,
+          "quadratic_nonzeros": 25,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "storage_cost": 0.27186839813739494,
+          "storage_terminal_cost": 0.060819355557017854
+        },
+        "device_ids": [
+          "equality",
+          "shortfall",
+          "soft"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "7420e91595b5546801ea3371c245a71db19e7de9b2ab96b28c5803ab9233ebc5",
+        "formulation": "lossy_dc",
+        "gate": "storage",
+        "objective": 9.2377274500941,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112033792,
+          "after_construction": 110755840,
+          "after_solve": 112574464
+        },
+        "public_results": {
+          "Pg": [
+            [
+              4.658070171859221,
+              4.58793587709721
+            ],
+            [
+              7.137417462965083,
+              6.944729880049209
+            ],
+            [
+              7.976511848305223,
+              8.025618079042774
+            ],
+            [
+              9.011494621943095,
+              8.91438497413565
+            ]
+          ],
+          "b": [
+            [
+              1.93924393291133,
+              1.0817587175238104,
+              1.732991300608427
+            ],
+            [
+              -1.9911691212657543,
+              1.1288945975831806,
+              0.780127180668283
+            ],
+            [
+              1.0056127664411099,
+              -0.8294876384366529,
+              -1.1782550553524525
+            ],
+            [
+              -0.9536875780866854,
+              -0.8117123005342471,
+              -0.1604797174578147
+            ]
+          ],
+          "p_flows": [
+            [
+              -1.4026858952294488
+            ],
+            [
+              -3.853751658300673
+            ],
+            [
+              0.9821246147463337
+            ],
+            [
+              -1.9421929561435889
+            ]
+          ],
+          "p_net": [
+            [
+              -1.4026858952294496,
+              1.402685895229447
+            ],
+            [
+              -3.853751658300671,
+              3.8537516583006735
+            ],
+            [
+              0.9821246147463327,
+              -0.982124614746331
+            ],
+            [
+              -1.9421929561435896,
+              1.9421929561435887
+            ]
+          ],
+          "soc": [
+            [
+              3.0607560670886698,
+              2.9182412824761825,
+              4.267008699391574
+            ],
+            [
+              5.051925188354424,
+              1.789346684892998,
+              3.486881518723291
+            ],
+            [
+              4.046312421913314,
+              2.6188343233296454,
+              4.665136574075744
+            ],
+            [
+              5.0,
+              3.43054662386389,
+              4.825616291533558
+            ]
+          ],
+          "storage_injection": [
+            [
+              1.93924393291133,
+              2.814750018132237
+            ],
+            [
+              -1.9911691212657543,
+              1.9090217782514636
+            ],
+            [
+              1.0056127664411099,
+              -2.007742693789105
+            ],
+            [
+              -0.9536875780866854,
+              -0.9721920179920618
+            ]
+          ],
+          "storage_terminal_deviation": [
+            0.0,
+            0.43054662386389,
+            -0.1743837084664417
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 2.7755575615628914e-15,
+          "component_injection_abs": 0.0,
+          "equality_terminal_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "shortfall_terminal_abs": 0.0,
+          "storage_cost_abs": 0.0,
+          "storage_initial_abs": 3.552713678800501e-15,
+          "storage_real_power_box_abs": 0.0,
+          "storage_recurrence_abs": 5.440092820663267e-15,
+          "storage_soc_box_abs": 0.0,
+          "storage_terminal_cost_abs": 0.0
+        },
+        "solve_time": 0.000226834,
+        "solver": "CLARABEL",
+        "solver_iterations": 8,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 14,
+          "equality_objects": 5,
+          "explicit_inequality_objects": 9,
+          "explicit_scalar_inequalities": 79,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 24,
+          "scalar_variables": 39,
+          "variable_objects": 4,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "b": [
+              3,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "soc": [
+              3,
+              5
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.009071624954231083,
+          "construction": 0.001818374963477254,
+          "solve": 0.0009357499657198787
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "7420e91595b5546801ea3371c245a71db19e7de9b2ab96b28c5803ab9233ebc5",
+      "formulation": "lossy_dc",
+      "gate": "storage",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_real_power",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 6,
+            "maximum_face_residual": 8.207212687239007e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.9999999999859885,
+                3.9999999999859885,
+                -3.9999999999859885,
+                3.9999999999859885
+              ],
+              [
+                2.999999999917928,
+                -2.999999999917928,
+                2.999999999917928,
+                -2.999999999917928
+              ],
+              [
+                -4.999999999994094,
+                4.999999999994094,
+                -4.999999999994094,
+                4.999999999994094
+              ]
+            ],
+            "variable": "b"
+          },
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_soc",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 8.204199473697239e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 7,
+            "values": [
+              [
+                2.3013256149782365e-11,
+                9.999999999976984,
+                2.3013256149782365e-11,
+                9.999999999976984,
+                2.3013256149782365e-11
+              ],
+              [
+                7.999999999917958,
+                8.204199473697239e-11,
+                7.999999999917958,
+                8.204199473697239e-11,
+                7.999999999917958
+              ],
+              [
+                1.0838730844929666e-11,
+                11.99999999998916,
+                1.0838730844929666e-11,
+                11.99999999998916,
+                1.0838730844929666e-11
+              ]
+            ],
+            "variable": "soc"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 64,
+          "coefficient_columns": 64,
+          "coefficient_nonzeros": 221,
+          "coefficient_rows": 140,
+          "equality_rows": 37,
+          "nonnegative_rows": 103,
+          "quadratic_nonzeros": 25,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "storage_cost": 0.271868398137395,
+          "storage_terminal_cost": 0.060819355557017854
+        },
+        "device_ids": [
+          "equality",
+          "shortfall",
+          "soft"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "7420e91595b5546801ea3371c245a71db19e7de9b2ab96b28c5803ab9233ebc5",
+        "formulation": "lossy_dc",
+        "gate": "storage",
+        "objective": 9.2377274500941,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112197632,
+          "after_construction": 110854144,
+          "after_solve": 112754688
+        },
+        "public_results": {
+          "Pg": [
+            [
+              4.6580701718592215,
+              4.587935877097211
+            ],
+            [
+              7.137417462965082,
+              6.944729880049209
+            ],
+            [
+              7.976511848305221,
+              8.025618079042776
+            ],
+            [
+              9.011494621943097,
+              8.914384974135652
+            ]
+          ],
+          "b": [
+            [
+              1.9392439329113298,
+              1.0817587175238104,
+              1.7329913006084272
+            ],
+            [
+              -1.9911691212657543,
+              1.1288945975831806,
+              0.7801271806682832
+            ],
+            [
+              1.0056127664411096,
+              -0.829487638436653,
+              -1.1782550553524525
+            ],
+            [
+              -0.9536875780866856,
+              -0.8117123005342471,
+              -0.16047971745781464
+            ]
+          ],
+          "p_flows": [
+            [
+              -1.4026858952294476
+            ],
+            [
+              -3.853751658300672
+            ],
+            [
+              0.982124614746331
+            ],
+            [
+              -1.942192956143589
+            ]
+          ],
+          "p_net": [
+            [
+              -1.4026858952294488,
+              1.4026858952294479
+            ],
+            [
+              -3.8537516583006717,
+              3.8537516583006735
+            ],
+            [
+              0.982124614746331,
+              -0.9821246147463301
+            ],
+            [
+              -1.9421929561435896,
+              1.9421929561435904
+            ]
+          ],
+          "soc": [
+            [
+              3.0607560670886698,
+              2.9182412824761825,
+              4.267008699391574
+            ],
+            [
+              5.051925188354423,
+              1.7893466848929973,
+              3.486881518723291
+            ],
+            [
+              4.046312421913314,
+              2.618834323329645,
+              4.665136574075744
+            ],
+            [
+              5.0,
+              3.4305466238638895,
+              4.825616291533558
+            ]
+          ],
+          "storage_injection": [
+            [
+              1.9392439329113298,
+              2.8147500181322376
+            ],
+            [
+              -1.9911691212657543,
+              1.9090217782514638
+            ],
+            [
+              1.0056127664411096,
+              -2.0077426937891056
+            ],
+            [
+              -0.9536875780866856,
+              -0.9721920179920618
+            ]
+          ],
+          "storage_terminal_deviation": [
+            0.0,
+            0.43054662386388953,
+            -0.1743837084664417
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 1.3322676295501878e-15,
+          "component_injection_abs": 0.0,
+          "equality_terminal_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "shortfall_terminal_abs": 0.0,
+          "storage_cost_abs": 0.0,
+          "storage_initial_abs": 3.9968028886505635e-15,
+          "storage_real_power_box_abs": 0.0,
+          "storage_recurrence_abs": 5.329070518200751e-15,
+          "storage_soc_box_abs": 0.0,
+          "storage_terminal_cost_abs": 0.0
+        },
+        "solve_time": 0.000245126,
+        "solver": "CLARABEL",
+        "solver_iterations": 8,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 10,
+          "equality_objects": 5,
+          "explicit_inequality_objects": 5,
+          "explicit_scalar_inequalities": 25,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 24,
+          "scalar_variables": 39,
+          "variable_objects": 4,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "b": [
+              3,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "soc": [
+              3,
+              5
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.010134708019904792,
+          "construction": 0.0022428749362006783,
+          "solve": 0.0009674580069258809
+        }
+      },
+      "objective_absolute_residual": 0.0,
+      "probe_only_objective_term_absolute_residuals": {},
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 1.7763568394002505e-15,
+        "b": 2.220446049250313e-16,
+        "p_flows": 2.7755575615628914e-15,
+        "p_net": 1.7763568394002505e-15,
+        "soc": 8.881784197001252e-16,
+        "storage_injection": 4.440892098500626e-16,
+        "storage_terminal_deviation": 4.440892098500626e-16
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "storage_real_power": 4.440892098500626e-16,
+        "storage_soc": 5.329070518200751e-15
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "storage_real_power",
+        "storage_soc"
+      ],
+      "component_cost_absolute_residuals": {
+        "storage_cost": 0.0,
+        "storage_terminal_cost": 0.0
+      },
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_real_power",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 6,
+            "maximum_face_residual": 8.207168278318022e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.999999999985989,
+                3.999999999985989,
+                -3.999999999985989,
+                3.999999999985989
+              ],
+              [
+                2.9999999999179283,
+                -2.9999999999179283,
+                2.9999999999179283,
+                -2.9999999999179283
+              ],
+              [
+                -4.999999999994094,
+                4.999999999994094,
+                -4.999999999994094,
+                4.999999999994094
+              ]
+            ],
+            "variable": "b"
+          },
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_soc",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 8.204132140354549e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 7,
+            "values": [
+              [
+                2.3013027076165653e-11,
+                9.999999999976989,
+                2.3013027076165653e-11,
+                9.999999999976989,
+                2.3013027076165653e-11
+              ],
+              [
+                7.99999999991796,
+                8.204132140354549e-11,
+                7.99999999991796,
+                8.204132140354549e-11,
+                7.99999999991796
+              ],
+              [
+                1.0838593397325766e-11,
+                11.99999999998916,
+                1.0838593397325766e-11,
+                11.99999999998916,
+                1.0838593397325766e-11
+              ]
+            ],
+            "variable": "soc"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 56,
+          "coefficient_columns": 56,
+          "coefficient_nonzeros": 193,
+          "coefficient_rows": 120,
+          "equality_rows": 33,
+          "nonnegative_rows": 87,
+          "quadratic_nonzeros": 17,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "storage_cost": 0.26673207547802114,
+          "storage_terminal_cost": 0.11257565110954426
+        },
+        "device_ids": [
+          "equality",
+          "shortfall",
+          "soft"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "ce0b74c522820db42ef1f4ceb1aa7b2da0bf4b832e192ce1ce403c1db1a62e2e",
+        "formulation": "singlenode_dc",
+        "gate": "storage",
+        "objective": 17.730304919332514,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112672768,
+          "after_construction": 111394816,
+          "after_solve": 113197056
+        },
+        "public_results": {
+          "Pg": [
+            [
+              9.266159072925888
+            ],
+            [
+              13.964272280365552
+            ],
+            [
+              15.832196808669465
+            ],
+            [
+              17.70012133735331
+            ]
+          ],
+          "b": [
+            [
+              1.8915094339374516,
+              1.1415094204787752,
+              1.7008220726579102
+            ],
+            [
+              -1.9945283018762696,
+              1.2354716846578013,
+              0.7947843368529379
+            ],
+            [
+              1.0228301887085944,
+              -0.7071698247423545,
+              -1.1478571726356774
+            ],
+            [
+              -0.9198113207699321,
+              -0.6698113340905466,
+              -0.11049868249280301
+            ]
+          ],
+          "p_net": [
+            2.4868995751603507e-14,
+            2.1316282072803006e-14,
+            2.842170943040401e-14,
+            2.842170943040401e-14
+          ],
+          "soc": [
+            [
+              3.108490566062494,
+              2.8584905795185134,
+              4.299177927342059
+            ],
+            [
+              5.103018867938731,
+              1.6230188948593542,
+              3.504393590489113
+            ],
+            [
+              4.080188679230119,
+              2.3301887196004114,
+              4.652250763124775
+            ],
+            [
+              5.000000000000025,
+              3.000000053689596,
+              4.762749445617566
+            ]
+          ],
+          "storage_injection": [
+            [
+              1.8915094339374516,
+              2.8423314931366854
+            ],
+            [
+              -1.9945283018762696,
+              2.0302560215107395
+            ],
+            [
+              1.0228301887085944,
+              -1.8550269973780318
+            ],
+            [
+              -0.9198113207699321,
+              -0.7803100165833496
+            ]
+          ],
+          "storage_terminal_deviation": [
+            2.4868995751603507e-14,
+            5.368959588025746e-08,
+            -0.2372505543824337
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 2.842170943040401e-14,
+          "component_injection_abs": 0.0,
+          "equality_terminal_abs": 2.4868995751603507e-14,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "shortfall_terminal_abs": 0.0,
+          "storage_cost_abs": 0.0,
+          "storage_initial_abs": 1.3558043576722412e-12,
+          "storage_real_power_box_abs": 0.0,
+          "storage_recurrence_abs": 1.3621326289126046e-12,
+          "storage_soc_box_abs": 0.0,
+          "storage_terminal_cost_abs": 0.0
+        },
+        "solve_time": 0.000208459,
+        "solver": "CLARABEL",
+        "solver_iterations": 8,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 11,
+          "equality_objects": 4,
+          "explicit_inequality_objects": 7,
+          "explicit_scalar_inequalities": 63,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 20,
+          "scalar_variables": 31,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "b": [
+              3,
+              4
+            ],
+            "soc": [
+              3,
+              5
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.007917999988421798,
+          "construction": 0.0014709170209243894,
+          "solve": 0.0008925410220399499
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "ce0b74c522820db42ef1f4ceb1aa7b2da0bf4b832e192ce1ce403c1db1a62e2e",
+      "formulation": "singlenode_dc",
+      "gate": "storage",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_real_power",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 6,
+            "maximum_face_residual": 8.207212687239007e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.9999999999859885,
+                3.9999999999859885,
+                -3.9999999999859885,
+                3.9999999999859885
+              ],
+              [
+                2.999999999917928,
+                -2.999999999917928,
+                2.999999999917928,
+                -2.999999999917928
+              ],
+              [
+                -4.999999999994094,
+                4.999999999994094,
+                -4.999999999994094,
+                4.999999999994094
+              ]
+            ],
+            "variable": "b"
+          },
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "storage_soc",
+            "fixed_coordinates": 0,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 8.204199473697239e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 7,
+            "values": [
+              [
+                2.3013256149782365e-11,
+                9.999999999976984,
+                2.3013256149782365e-11,
+                9.999999999976984,
+                2.3013256149782365e-11
+              ],
+              [
+                7.999999999917958,
+                8.204199473697239e-11,
+                7.999999999917958,
+                8.204199473697239e-11,
+                7.999999999917958
+              ],
+              [
+                1.0838730844929666e-11,
+                11.99999999998916,
+                1.0838730844929666e-11,
+                11.99999999998916,
+                1.0838730844929666e-11
+              ]
+            ],
+            "variable": "soc"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 56,
+          "coefficient_columns": 56,
+          "coefficient_nonzeros": 193,
+          "coefficient_rows": 120,
+          "equality_rows": 33,
+          "nonnegative_rows": 87,
+          "quadratic_nonzeros": 17,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "storage_cost": 0.26673207547802114,
+          "storage_terminal_cost": 0.11257565110954426
+        },
+        "device_ids": [
+          "equality",
+          "shortfall",
+          "soft"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "ce0b74c522820db42ef1f4ceb1aa7b2da0bf4b832e192ce1ce403c1db1a62e2e",
+        "formulation": "singlenode_dc",
+        "gate": "storage",
+        "objective": 17.730304919332518,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 113197056,
+          "after_construction": 111968256,
+          "after_solve": 113672192
+        },
+        "public_results": {
+          "Pg": [
+            [
+              9.266159072925893
+            ],
+            [
+              13.964272280365561
+            ],
+            [
+              15.83219680866947
+            ],
+            [
+              17.700121337353316
+            ]
+          ],
+          "b": [
+            [
+              1.8915094339374519,
+              1.1415094204787681,
+              1.7008220726579106
+            ],
+            [
+              -1.9945283018762694,
+              1.2354716846577942,
+              0.794784336852938
+            ],
+            [
+              1.0228301887085947,
+              -0.7071698247423618,
+              -1.1478571726356774
+            ],
+            [
+              -0.9198113207699318,
+              -0.6698113340905537,
+              -0.11049868249280315
+            ]
+          ],
+          "p_net": [
+            2.3092638912203256e-14,
+            2.4868995751603507e-14,
+            2.6645352591003757e-14,
+            2.842170943040401e-14
+          ],
+          "soc": [
+            [
+              3.108490566062494,
+              2.858490579518521,
+              4.299177927342059
+            ],
+            [
+              5.103018867938739,
+              1.6230188948594133,
+              3.5043935904891126
+            ],
+            [
+              4.080188679230118,
+              2.330188719600327,
+              4.652250763124775
+            ],
+            [
+              5.000000000000025,
+              3.0000000536896243,
+              4.762749445617566
+            ]
+          ],
+          "storage_injection": [
+            [
+              1.8915094339374519,
+              2.8423314931366788
+            ],
+            [
+              -1.9945283018762694,
+              2.0302560215107324
+            ],
+            [
+              1.0228301887085947,
+              -1.8550269973780393
+            ],
+            [
+              -0.9198113207699318,
+              -0.7803100165833569
+            ]
+          ],
+          "storage_terminal_deviation": [
+            2.4868995751603507e-14,
+            5.368962430196689e-08,
+            -0.2372505543824337
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 2.842170943040401e-14,
+          "component_injection_abs": 0.0,
+          "equality_terminal_abs": 2.4868995751603507e-14,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "shortfall_terminal_abs": 0.0,
+          "storage_cost_abs": 0.0,
+          "storage_initial_abs": 1.3558043576722412e-12,
+          "storage_real_power_box_abs": 0.0,
+          "storage_recurrence_abs": 1.4480638910185917e-12,
+          "storage_soc_box_abs": 0.0,
+          "storage_terminal_cost_abs": 0.0
+        },
+        "solve_time": 0.00019688,
+        "solver": "CLARABEL",
+        "solver_iterations": 8,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 7,
+          "equality_objects": 4,
+          "explicit_inequality_objects": 3,
+          "explicit_scalar_inequalities": 9,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 20,
+          "scalar_variables": 31,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "b": [
+              3,
+              4
+            ],
+            "soc": [
+              3,
+              5
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.008255832944996655,
+          "construction": 0.001508292043581605,
+          "solve": 0.0007170420140028
+        }
+      },
+      "objective_absolute_residual": 3.552713678800501e-15,
+      "probe_only_objective_term_absolute_residuals": {},
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 8.881784197001252e-15,
+        "b": 7.327471962526033e-15,
+        "p_net": 3.552713678800501e-15,
+        "soc": 8.43769498715119e-14,
+        "storage_injection": 7.549516567451064e-15,
+        "storage_terminal_deviation": 2.842170943040401e-14
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "nondispatchable_real_power": 5.399774218321567e-11
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "nondispatchable_real_power"
+      ],
+      "component_cost_absolute_residuals": {},
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "nondispatchable_real_power",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 4,
+            "maximum_face_residual": 2.373539495457986e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.3836502439235994e-11,
+                1.9999999997217413,
+                -5.399774218321567e-11,
+                0.9999999976264605
+              ],
+              [
+                2.999999999972334,
+                2.373539495457986e-09,
+                2.999999999972334,
+                2.766636656776906e-11
+              ],
+              [
+                2.7825861960995294e-10,
+                4.000000000053998,
+                -3.3836502439235994e-11,
+                5.000000000034967
+              ]
+            ],
+            "variable": "p_nd"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 24,
+          "coefficient_columns": 24,
+          "coefficient_nonzeros": 88,
+          "coefficient_rows": 68,
+          "equality_rows": 8,
+          "nonnegative_rows": 60,
+          "quadratic_nonzeros": 24,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {},
+        "device_ids": [
+          "solar-a",
+          "wind-b",
+          "solar-c"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "7e149d474078c3fa150196adab360df1550e5322bba7a42ca5ca47fb4ad94b7f",
+        "formulation": "lossy_dc",
+        "gate": "nondispatchable",
+        "objective": 31.09839024399847,
+        "probe_only_objective_terms": {
+          "nondispatchable_preference_probe_only": 21.09400000008698
+        },
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112394240,
+          "after_construction": 111280128,
+          "after_solve": 112951296
+        },
+        "public_results": {
+          "Pg": [
+            [
+              8.585365853661184,
+              8.41463414634459
+            ],
+            [
+              7.585365853661524,
+              7.41463414634521
+            ],
+            [
+              7.975609756100979,
+              8.024390243907346
+            ],
+            [
+              7.634146341467224,
+              7.365853658540992
+            ]
+          ],
+          "curtailment": [
+            [
+              -1.2628921748057157e-15,
+              2.0000000000027907,
+              2.9880542484761463e-12
+            ],
+            [
+              2.8896884884943574e-12,
+              1.053490628066811e-12,
+              2.7911006839076435e-12
+            ],
+            [
+              2.0000000000024523,
+              5.874412067896628e-12,
+              -8.026362482593246e-16
+            ],
+            [
+              4.4919623576333834e-13,
+              3.0000000000028155,
+              4.952482868247898e-12
+            ]
+          ],
+          "nondispatchable_injection": [
+            [
+              1.2628921748057157e-15,
+              4.9999999999942215
+            ],
+            [
+              1.9999999999971103,
+              4.999999999996155
+            ],
+            [
+              3.9999999999975477,
+              2.9999999999941265
+            ],
+            [
+              0.9999999999995508,
+              7.999999999992232
+            ]
+          ],
+          "p_flows": [
+            [
+              -3.414634146338812
+            ],
+            [
+              -3.4146341463413648
+            ],
+            [
+              0.9756097560985265
+            ],
+            [
+              -5.365853658533223
+            ]
+          ],
+          "p_nd": [
+            [
+              1.2628921748057157e-15,
+              2.9999999999972093,
+              1.999999999997012
+            ],
+            [
+              1.9999999999971103,
+              0.9999999999989465,
+              3.999999999997209
+            ],
+            [
+              3.9999999999975477,
+              2.9999999999941256,
+              8.026362482593246e-16
+            ],
+            [
+              0.9999999999995508,
+              2.9999999999971845,
+              4.9999999999950475
+            ]
+          ],
+          "p_net": [
+            [
+              -3.4146341463388143,
+              3.414634146338811
+            ],
+            [
+              -3.414634146341365,
+              3.414634146341365
+            ],
+            [
+              0.9756097560985264,
+              -0.9756097560985282
+            ],
+            [
+              -5.365853658533226,
+              5.365853658533224
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 2.6645352591003757e-15,
+          "availability_abs": 1.2628921748057157e-15,
+          "component_injection_abs": 0.0,
+          "curtailment_abs": 0.0,
+          "curtailment_nonnegative_abs": 1.2628921748057157e-15,
+          "nondispatchable_preference_probe_only_abs": 0.0,
+          "nondispatchable_real_power_box_abs": 1.2628921748057157e-15,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "rating_abs": 0.0
+        },
+        "solve_time": 0.000171585,
+        "solver": "CLARABEL",
+        "solver_iterations": 10,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 9,
+          "equality_objects": 2,
+          "explicit_inequality_objects": 7,
+          "explicit_scalar_inequalities": 60,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 8,
+          "scalar_variables": 24,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "p_nd": [
+              3,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.006753791938535869,
+          "construction": 0.002051625051535666,
+          "solve": 0.000702582998201251
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "7e149d474078c3fa150196adab360df1550e5322bba7a42ca5ca47fb4ad94b7f",
+      "formulation": "lossy_dc",
+      "gate": "nondispatchable",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "nondispatchable_real_power",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 4,
+            "maximum_face_residual": 2.3735440869585647e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                0.0,
+                1.9999999997217406,
+                0.0,
+                0.999999997626456
+              ],
+              [
+                2.9999999999723332,
+                2.3735440869585647e-09,
+                2.9999999999723332,
+                2.766653065476649e-11
+              ],
+              [
+                2.782592566431233e-10,
+                4.0,
+                0.0,
+                5.0
+              ]
+            ],
+            "variable": "p_nd"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 24,
+          "coefficient_columns": 24,
+          "coefficient_nonzeros": 76,
+          "coefficient_rows": 56,
+          "equality_rows": 8,
+          "nonnegative_rows": 48,
+          "quadratic_nonzeros": 24,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {},
+        "device_ids": [
+          "solar-a",
+          "wind-b",
+          "solar-c"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "7e149d474078c3fa150196adab360df1550e5322bba7a42ca5ca47fb4ad94b7f",
+        "formulation": "lossy_dc",
+        "gate": "nondispatchable",
+        "objective": 31.09839025251219,
+        "probe_only_objective_terms": {
+          "nondispatchable_preference_probe_only": 21.094000007801228
+        },
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112066560,
+          "after_construction": 110952448,
+          "after_solve": 112607232
+        },
+        "public_results": {
+          "Pg": [
+            [
+              8.585365853788277,
+              8.41463414666083
+            ],
+            [
+              7.585365853840819,
+              7.414634146833889
+            ],
+            [
+              7.975609756297657,
+              8.024390244346685
+            ],
+            [
+              7.634146341719182,
+              7.365853659118404
+            ]
+          ],
+          "curtailment": [
+            [
+              0.0,
+              2.0000000003194267,
+              1.2971201890366046e-10
+            ],
+            [
+              2.7729618601313177e-10,
+              6.873013269625972e-11,
+              3.2868197052948744e-10
+            ],
+            [
+              2.0000000003232885,
+              3.210538501718929e-10,
+              0.0
+            ],
+            [
+              2.2262491850000288e-10,
+              3.000000000329883,
+              2.850777391927295e-10
+            ]
+          ],
+          "nondispatchable_injection": [
+            [
+              0.0,
+              4.9999999995508615
+            ],
+            [
+              1.9999999997227038,
+              4.999999999602588
+            ],
+            [
+              3.9999999996767115,
+              2.999999999678946
+            ],
+            [
+              0.9999999997773751,
+              7.9999999993850395
+            ]
+          ],
+          "p_flows": [
+            [
+              -3.4146341462116916
+            ],
+            [
+              -3.414634146436477
+            ],
+            [
+              0.9756097559743673
+            ],
+            [
+              -5.365853658503443
+            ]
+          ],
+          "p_nd": [
+            [
+              0.0,
+              2.9999999996805733,
+              1.999999999870288
+            ],
+            [
+              1.9999999997227038,
+              0.9999999999312699,
+              3.999999999671318
+            ],
+            [
+              3.9999999996767115,
+              2.999999999678946,
+              0.0
+            ],
+            [
+              0.9999999997773751,
+              2.999999999670117,
+              4.999999999714922
+            ]
+          ],
+          "p_net": [
+            [
+              -3.414634146211723,
+              3.414634146211693
+            ],
+            [
+              -3.4146341464364767,
+              3.4146341464364767
+            ],
+            [
+              0.9756097559743679,
+              -0.9756097559743679
+            ],
+            [
+              -5.365853658503443,
+              5.365853658503443
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 3.1530333899354446e-14,
+          "availability_abs": 0.0,
+          "component_injection_abs": 0.0,
+          "curtailment_abs": 0.0,
+          "curtailment_nonnegative_abs": 0.0,
+          "nondispatchable_preference_probe_only_abs": 0.0,
+          "nondispatchable_real_power_box_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "rating_abs": 0.0
+        },
+        "solve_time": 0.000121414,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 6,
+          "equality_objects": 2,
+          "explicit_inequality_objects": 4,
+          "explicit_scalar_inequalities": 24,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 8,
+          "scalar_variables": 24,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "p_nd": [
+              3,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.007378874928690493,
+          "construction": 0.0014292499981820583,
+          "solve": 0.0005940829869359732
+        }
+      },
+      "objective_absolute_residual": 8.513719507163842e-09,
+      "probe_only_objective_term_absolute_residuals": {
+        "nondispatchable_preference_probe_only": 7.714248795309686e-09
+      },
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 5.77411896074409e-10,
+        "curtailment": 3.270672621624726e-10,
+        "nondispatchable_injection": 6.071925184869542e-10,
+        "p_flows": 1.2712053631958042e-10,
+        "p_nd": 3.270672621624726e-10,
+        "p_net": 1.2711787178432132e-10
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "nondispatchable_real_power": 5.399774218321567e-11
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "nondispatchable_real_power"
+      ],
+      "component_cost_absolute_residuals": {},
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "nondispatchable_real_power",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 4,
+            "maximum_face_residual": 2.373539495457986e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                -3.3836502439235994e-11,
+                1.9999999997217413,
+                -5.399774218321567e-11,
+                0.9999999976264605
+              ],
+              [
+                2.999999999972334,
+                2.373539495457986e-09,
+                2.999999999972334,
+                2.766636656776906e-11
+              ],
+              [
+                2.7825861960995294e-10,
+                4.000000000053998,
+                -3.3836502439235994e-11,
+                5.000000000034967
+              ]
+            ],
+            "variable": "p_nd"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 16,
+          "coefficient_columns": 16,
+          "coefficient_nonzeros": 60,
+          "coefficient_rows": 48,
+          "equality_rows": 4,
+          "nonnegative_rows": 44,
+          "quadratic_nonzeros": 16,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {},
+        "device_ids": [
+          "solar-a",
+          "wind-b",
+          "solar-c"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "bec4480f8e5341c2b378cdad94b0da416fe76e25e2cf73217397b82000b07257",
+        "formulation": "singlenode_dc",
+        "gate": "nondispatchable",
+        "objective": 40.99400000026513,
+        "probe_only_objective_terms": {
+          "nondispatchable_preference_probe_only": 21.094000000219687
+        },
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112934912,
+          "after_construction": 111902720,
+          "after_solve": 113459200
+        },
+        "public_results": {
+          "Pg": [
+            [
+              17.000000000006015
+            ],
+            [
+              15.000000000008198
+            ],
+            [
+              16.000000000023334
+            ],
+            [
+              15.000000000035834
+            ]
+          ],
+          "curtailment": [
+            [
+              -2.471726869616444e-14,
+              2.000000000002871,
+              3.169464690699897e-12
+            ],
+            [
+              6.24389429049188e-13,
+              4.953704113574986e-12,
+              2.6223467841646197e-12
+            ],
+            [
+              2.0000000000051714,
+              1.8193002659927515e-11,
+              -2.7402625351897672e-14
+            ],
+            [
+              7.830514014983692e-12,
+              3.000000000006512,
+              2.149391775674303e-11
+            ]
+          ],
+          "nondispatchable_injection": [
+            [
+              2.471726869616444e-14,
+              4.9999999999939595
+            ],
+            [
+              1.9999999999993756,
+              4.999999999992424
+            ],
+            [
+              3.9999999999948286,
+              2.9999999999818345
+            ],
+            [
+              0.9999999999921695,
+              7.999999999971994
+            ]
+          ],
+          "p_nd": [
+            [
+              2.471726869616444e-14,
+              2.999999999997129,
+              1.9999999999968305
+            ],
+            [
+              1.9999999999993756,
+              0.9999999999950463,
+              3.9999999999973777
+            ],
+            [
+              3.9999999999948286,
+              2.999999999981807,
+              2.7402625351897672e-14
+            ],
+            [
+              0.9999999999921695,
+              2.999999999993488,
+              4.999999999978506
+            ]
+          ],
+          "p_net": [
+            0.0,
+            -3.552713678800501e-15,
+            -3.552713678800501e-15,
+            0.0
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 3.552713678800501e-15,
+          "availability_abs": 2.7402625351897672e-14,
+          "component_injection_abs": 0.0,
+          "curtailment_abs": 0.0,
+          "curtailment_nonnegative_abs": 2.7402625351897672e-14,
+          "nondispatchable_preference_probe_only_abs": 0.0,
+          "nondispatchable_real_power_box_abs": 2.7402625351897672e-14,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "rating_abs": 0.0
+        },
+        "solve_time": 0.000106041,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 6,
+          "equality_objects": 1,
+          "explicit_inequality_objects": 5,
+          "explicit_scalar_inequalities": 44,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 4,
+          "scalar_variables": 16,
+          "variable_objects": 2,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "p_nd": [
+              3,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.004938208032399416,
+          "construction": 0.0012657499173656106,
+          "solve": 0.0005827499553561211
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "bec4480f8e5341c2b378cdad94b0da416fe76e25e2cf73217397b82000b07257",
+      "formulation": "singlenode_dc",
+      "gate": "nondispatchable",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "nondispatchable_real_power",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 4,
+            "maximum_face_residual": 2.3735440869585647e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 6,
+            "values": [
+              [
+                0.0,
+                1.9999999997217406,
+                0.0,
+                0.999999997626456
+              ],
+              [
+                2.9999999999723332,
+                2.3735440869585647e-09,
+                2.9999999999723332,
+                2.766653065476649e-11
+              ],
+              [
+                2.782592566431233e-10,
+                4.0,
+                0.0,
+                5.0
+              ]
+            ],
+            "variable": "p_nd"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 16,
+          "coefficient_columns": 16,
+          "coefficient_nonzeros": 48,
+          "coefficient_rows": 36,
+          "equality_rows": 4,
+          "nonnegative_rows": 32,
+          "quadratic_nonzeros": 16,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {},
+        "device_ids": [
+          "solar-a",
+          "wind-b",
+          "solar-c"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "bec4480f8e5341c2b378cdad94b0da416fe76e25e2cf73217397b82000b07257",
+        "formulation": "singlenode_dc",
+        "gate": "nondispatchable",
+        "objective": 40.99400000202103,
+        "probe_only_objective_terms": {
+          "nondispatchable_preference_probe_only": 21.09400000167124
+        },
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112017408,
+          "after_construction": 111034368,
+          "after_solve": 112541696
+        },
+        "public_results": {
+          "Pg": [
+            [
+              17.00000000012747
+            ],
+            [
+              15.000000000157016
+            ],
+            [
+              16.000000000121293
+            ],
+            [
+              15.000000000152124
+            ]
+          ],
+          "curtailment": [
+            [
+              0.0,
+              2.000000000066174,
+              6.142020225752276e-11
+            ],
+            [
+              6.222733439642525e-11,
+              4.1836978326159624e-11,
+              5.2950532847262366e-11
+            ],
+            [
+              2.0000000000546105,
+              6.680700437300402e-11,
+              0.0
+            ],
+            [
+              3.2682967443520283e-11,
+              3.0000000000682117,
+              5.1231907605142624e-11
+            ]
+          ],
+          "nondispatchable_injection": [
+            [
+              0.0,
+              4.999999999872406
+            ],
+            [
+              1.9999999999377727,
+              4.999999999905213
+            ],
+            [
+              3.9999999999453895,
+              2.999999999933193
+            ],
+            [
+              0.999999999967317,
+              7.999999999880556
+            ]
+          ],
+          "p_nd": [
+            [
+              0.0,
+              2.999999999933826,
+              1.9999999999385798
+            ],
+            [
+              1.9999999999377727,
+              0.999999999958163,
+              3.9999999999470495
+            ],
+            [
+              3.9999999999453895,
+              2.999999999933193,
+              0.0
+            ],
+            [
+              0.999999999967317,
+              2.9999999999317883,
+              4.999999999948768
+            ]
+          ],
+          "p_net": [
+            -1.2079226507921703e-13,
+            0.0,
+            -1.2434497875801753e-13,
+            -3.552713678800501e-15
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 1.2434497875801753e-13,
+          "availability_abs": 0.0,
+          "component_injection_abs": 0.0,
+          "curtailment_abs": 0.0,
+          "curtailment_nonnegative_abs": 0.0,
+          "nondispatchable_preference_probe_only_abs": 0.0,
+          "nondispatchable_real_power_box_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "rating_abs": 0.0
+        },
+        "solve_time": 0.000102834,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 3,
+          "equality_objects": 1,
+          "explicit_inequality_objects": 2,
+          "explicit_scalar_inequalities": 8,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 4,
+          "scalar_variables": 16,
+          "variable_objects": 2,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "p_nd": [
+              3,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.005596457980573177,
+          "construction": 0.0016547500854358077,
+          "solve": 0.0006232919404283166
+        }
+      },
+      "objective_absolute_residual": 1.7559003140377172e-09,
+      "probe_only_objective_term_absolute_residuals": {
+        "nondispatchable_preference_probe_only": 1.4515535440295935e-09
+      },
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 1.4881784693443478e-10,
+        "curtailment": 6.330314050728703e-11,
+        "nondispatchable_injection": 1.2155343398490004e-10,
+        "p_nd": 6.330314050728703e-11,
+        "p_net": 1.2079226507921703e-13
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "load_shed_fraction": 6.254899226519224e-12
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "load_shed_fraction"
+      ],
+      "component_cost_absolute_residuals": {
+        "load_shedding_cost": 7.503331289626658e-12
+      },
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "load_shed_fraction",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 3,
+            "maximum_face_residual": 6.434451924731443e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 3,
+            "values": [
+              [
+                -6.254899226519224e-12,
+                0.4999999999485172,
+                5.1482843523790144e-11,
+                0.4999999999485172
+              ],
+              [
+                0.2499999999356555,
+                6.434451924731443e-11,
+                6.2548992265159655e-12,
+                6.434451924731443e-11
+              ]
+            ],
+            "variable": "load_shed_fraction"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 20,
+          "coefficient_columns": 20,
+          "coefficient_nonzeros": 64,
+          "coefficient_rows": 48,
+          "equality_rows": 8,
+          "nonnegative_rows": 40,
+          "quadratic_nonzeros": 20,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "load_shedding_cost": 390.000000042962
+        },
+        "device_ids": [
+          "industrial",
+          "commercial"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "b89086efe1372ee87c03d110b40f4d49fd17d8d521696e7d91c9ca34220e3aa7",
+        "formulation": "lossy_dc",
+        "gate": "load_shedding",
+        "objective": 399.5828164719121,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112295936,
+          "after_construction": 111214592,
+          "after_solve": 112820224
+        },
+        "public_results": {
+          "Pg": [
+            [
+              6.249999999995496,
+              6.249999999996156
+            ],
+            [
+              7.999999999967445,
+              7.999999999967445
+            ],
+            [
+              8.49999999997652,
+              8.499999999976447
+            ],
+            [
+              7.9999999999632525,
+              7.99999999996358
+            ]
+          ],
+          "energy_not_served": 3.5000000001936695,
+          "energy_not_served_by_load": [
+            2.9999999998987317,
+            0.5000000002949379
+          ],
+          "load_injection": [
+            [
+              -7.999999999999945,
+              -4.499999999991703
+            ],
+            [
+              -9.000000000072173,
+              -6.999999999862714
+            ],
+            [
+              -10.999999999952891,
+              -6.000000000000075
+            ],
+            [
+              -8.000000000076257,
+              -7.999999999850571
+            ]
+          ],
+          "load_shed_fraction": [
+            [
+              6.830358912666955e-15,
+              0.10000000000165955
+            ],
+            [
+              0.09999999999278257,
+              1.9612242914788386e-11
+            ],
+            [
+              0.08333333333725909,
+              -1.2363603287904836e-14
+            ],
+            [
+              0.11111111110263804,
+              1.8678561580413834e-11
+            ]
+          ],
+          "p_flows": [
+            [
+              -1.7500000000044522
+            ],
+            [
+              -1.0000000001047311
+            ],
+            [
+              -2.4999999999763736
+            ],
+            [
+              -1.1300607060719838e-10
+            ]
+          ],
+          "p_load": [
+            [
+              8.0,
+              5.0
+            ],
+            [
+              10.0,
+              7.0
+            ],
+            [
+              12.0,
+              6.0
+            ],
+            [
+              9.0,
+              8.0
+            ]
+          ],
+          "p_load_served": [
+            [
+              7.999999999999945,
+              4.499999999991703
+            ],
+            [
+              9.000000000072173,
+              6.999999999862714
+            ],
+            [
+              10.999999999952891,
+              6.000000000000075
+            ],
+            [
+              8.000000000076257,
+              7.999999999850571
+            ]
+          ],
+          "p_load_shed": [
+            [
+              5.464287130133564e-14,
+              0.5000000000082978
+            ],
+            [
+              0.9999999999278257,
+              1.372857004035187e-10
+            ],
+            [
+              1.000000000047109,
+              -7.418161972742902e-14
+            ],
+            [
+              0.9999999999237423,
+              1.4942849264331067e-10
+            ]
+          ],
+          "p_load_shed_total": [
+            0.5000000000083524,
+            1.0000000000651115,
+            1.0000000000470348,
+            1.0000000000731708
+          ],
+          "p_net": [
+            [
+              -1.7500000000044489,
+              1.7500000000044533
+            ],
+            [
+              -1.0000000001047287,
+              1.0000000001047304
+            ],
+            [
+              -2.499999999976371,
+              2.4999999999763727
+            ],
+            [
+              -1.1300471669528633e-10,
+              1.1300915758738483e-10
+            ]
+          ],
+          "q_load": [
+            [
+              2.4,
+              1.0
+            ],
+            [
+              3.0,
+              1.4
+            ],
+            [
+              3.6,
+              1.2
+            ],
+            [
+              2.7,
+              1.6
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 3.3306690738754696e-15,
+          "component_injection_abs": 0.0,
+          "eligibility_abs": 6.830358912666955e-15,
+          "energy_not_served_abs": 0.0,
+          "energy_not_served_by_load_abs": 0.0,
+          "ineligible_fraction_abs": 1.2363603287904836e-14,
+          "load_shed_fraction_box_abs": 1.2363603287904836e-14,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "q_load_reconstruction_abs": 0.0,
+          "served_reconstruction_abs": 0.0,
+          "shed_reconstruction_abs": 0.0,
+          "shed_total_reconstruction_abs": 0.0,
+          "shedding_cost_abs": 0.0
+        },
+        "solve_time": 0.000211959,
+        "solver": "CLARABEL",
+        "solver_iterations": 11,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 8,
+          "equality_objects": 2,
+          "explicit_inequality_objects": 6,
+          "explicit_scalar_inequalities": 40,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 8,
+          "scalar_variables": 20,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "load_shed_fraction": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.007278374978341162,
+          "construction": 0.001766999950632453,
+          "solve": 0.000786959077231586
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "b89086efe1372ee87c03d110b40f4d49fd17d8d521696e7d91c9ca34220e3aa7",
+      "formulation": "lossy_dc",
+      "gate": "load_shedding",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "load_shed_fraction",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 3,
+            "maximum_face_residual": 6.434458521553665e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 3,
+            "values": [
+              [
+                0.0,
+                0.49999999994851707,
+                5.148289058692402e-11,
+                0.49999999994851707
+              ],
+              [
+                0.24999999993565541,
+                6.434456706754206e-11,
+                0.0,
+                6.434456706754206e-11
+              ]
+            ],
+            "variable": "load_shed_fraction"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 20,
+          "coefficient_columns": 20,
+          "coefficient_nonzeros": 64,
+          "coefficient_rows": 48,
+          "equality_rows": 8,
+          "nonnegative_rows": 40,
+          "quadratic_nonzeros": 20,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "load_shedding_cost": 390.0000000429695
+        },
+        "device_ids": [
+          "industrial",
+          "commercial"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "b89086efe1372ee87c03d110b40f4d49fd17d8d521696e7d91c9ca34220e3aa7",
+        "formulation": "lossy_dc",
+        "gate": "load_shedding",
+        "objective": 399.5828164719196,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112328704,
+          "after_construction": 111214592,
+          "after_solve": 112885760
+        },
+        "public_results": {
+          "Pg": [
+            [
+              6.249999999995495,
+              6.249999999996155
+            ],
+            [
+              7.999999999967444,
+              7.999999999967444
+            ],
+            [
+              8.499999999976517,
+              8.499999999976446
+            ],
+            [
+              7.999999999963251,
+              7.9999999999635785
+            ]
+          ],
+          "energy_not_served": 3.5000000001936873,
+          "energy_not_served_by_load": [
+            2.9999999998986784,
+            0.500000000295009
+          ],
+          "load_injection": [
+            [
+              -8.0,
+              -4.499999999991705
+            ],
+            [
+              -9.000000000072175,
+              -6.999999999862714
+            ],
+            [
+              -10.999999999952887,
+              -6.0
+            ],
+            [
+              -8.000000000076259,
+              -7.999999999850571
+            ]
+          ],
+          "load_shed_fraction": [
+            [
+              0.0,
+              0.10000000000165896
+            ],
+            [
+              0.09999999999278243,
+              1.9612246765512493e-11
+            ],
+            [
+              0.08333333333725937,
+              0.0
+            ],
+            [
+              0.11111111110263797,
+              1.867856524413325e-11
+            ]
+          ],
+          "p_flows": [
+            [
+              -1.75000000000445
+            ],
+            [
+              -1.0000000001047311
+            ],
+            [
+              -2.499999999976372
+            ],
+            [
+              -1.1300719111793213e-10
+            ]
+          ],
+          "p_load": [
+            [
+              8.0,
+              5.0
+            ],
+            [
+              10.0,
+              7.0
+            ],
+            [
+              12.0,
+              6.0
+            ],
+            [
+              9.0,
+              8.0
+            ]
+          ],
+          "p_load_served": [
+            [
+              8.0,
+              4.499999999991705
+            ],
+            [
+              9.000000000072175,
+              6.999999999862714
+            ],
+            [
+              10.999999999952887,
+              6.0
+            ],
+            [
+              8.000000000076259,
+              7.999999999850571
+            ]
+          ],
+          "p_load_shed": [
+            [
+              0.0,
+              0.5000000000082948
+            ],
+            [
+              0.9999999999278243,
+              1.3728572735858744e-10
+            ],
+            [
+              1.0000000000471125,
+              0.0
+            ],
+            [
+              0.9999999999237417,
+              1.49428521953066e-10
+            ]
+          ],
+          "p_load_shed_total": [
+            0.5000000000082948,
+            1.00000000006511,
+            1.0000000000471125,
+            1.0000000000731701
+          ],
+          "p_net": [
+            [
+              -1.7500000000045048,
+              1.7500000000044498
+            ],
+            [
+              -1.0000000001047313,
+              1.0000000001047296
+            ],
+            [
+              -2.499999999976371,
+              2.4999999999764455
+            ],
+            [
+              -1.1300826940896513e-10,
+              1.1300738123054543e-10
+            ]
+          ],
+          "q_load": [
+            [
+              2.4,
+              1.0
+            ],
+            [
+              3.0,
+              1.4
+            ],
+            [
+              3.6,
+              1.2
+            ],
+            [
+              2.7,
+              1.6
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 7.37188088351104e-14,
+          "component_injection_abs": 0.0,
+          "eligibility_abs": 0.0,
+          "energy_not_served_abs": 0.0,
+          "energy_not_served_by_load_abs": 0.0,
+          "ineligible_fraction_abs": 0.0,
+          "load_shed_fraction_box_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "q_load_reconstruction_abs": 0.0,
+          "served_reconstruction_abs": 0.0,
+          "shed_reconstruction_abs": 0.0,
+          "shed_total_reconstruction_abs": 0.0,
+          "shedding_cost_abs": 0.0
+        },
+        "solve_time": 0.000134375,
+        "solver": "CLARABEL",
+        "solver_iterations": 11,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 6,
+          "equality_objects": 2,
+          "explicit_inequality_objects": 4,
+          "explicit_scalar_inequalities": 24,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 8,
+          "scalar_variables": 20,
+          "variable_objects": 3,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "load_shed_fraction": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.007251625065691769,
+          "construction": 0.0016542919911444187,
+          "solve": 0.0006534589920192957
+        }
+      },
+      "objective_absolute_residual": 7.503331289626658e-12,
+      "probe_only_objective_term_absolute_residuals": {},
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 3.552713678800501e-15,
+        "energy_not_served": 1.7763568394002505e-14,
+        "energy_not_served_by_load": 7.116529587847253e-14,
+        "load_injection": 7.460698725481052e-14,
+        "load_shed_fraction": 1.2363603287904836e-14,
+        "p_flows": 2.220446049250313e-15,
+        "p_load": 0.0,
+        "p_load_served": 7.460698725481052e-14,
+        "p_load_shed": 7.418161972742902e-14,
+        "p_load_shed_total": 7.771561172376096e-14,
+        "p_net": 7.283063041541027e-14,
+        "q_load": 0.0
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "load_shed_fraction": 6.254899226519224e-12
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "load_shed_fraction"
+      ],
+      "component_cost_absolute_residuals": {
+        "load_shedding_cost": 4.240519047016278e-11
+      },
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "load_shed_fraction",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 3,
+            "maximum_face_residual": 6.434451924731443e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 3,
+            "values": [
+              [
+                -6.254899226519224e-12,
+                0.4999999999485172,
+                5.1482843523790144e-11,
+                0.4999999999485172
+              ],
+              [
+                0.2499999999356555,
+                6.434451924731443e-11,
+                6.2548992265159655e-12,
+                6.434451924731443e-11
+              ]
+            ],
+            "variable": "load_shed_fraction"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 12,
+          "coefficient_columns": 12,
+          "coefficient_nonzeros": 36,
+          "coefficient_rows": 28,
+          "equality_rows": 4,
+          "nonnegative_rows": 24,
+          "quadratic_nonzeros": 12,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "load_shedding_cost": 390.00000000501655
+        },
+        "device_ids": [
+          "industrial",
+          "commercial"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "a40c87810d98045ea05191b341d43bbacc07f3695cc99e1d1d7af072acb9cb74",
+        "formulation": "singlenode_dc",
+        "gate": "load_shedding",
+        "objective": 409.1450039340127,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 111804416,
+          "after_construction": 110788608,
+          "after_solve": 112328704
+        },
+        "public_results": {
+          "Pg": [
+            [
+              12.499999999998886
+            ],
+            [
+              15.999999999991159
+            ],
+            [
+              16.999999999992706
+            ],
+            [
+              15.999999999992237
+            ]
+          ],
+          "energy_not_served": 3.500000000025018,
+          "energy_not_served_by_load": [
+            2.9999999999935842,
+            0.500000000031434
+          ],
+          "load_injection": [
+            [
+              -7.999999999999578,
+              -4.499999999999306
+            ],
+            [
+              -9.00000000000639,
+              -6.999999999984768
+            ],
+            [
+              -10.999999999992703,
+              -6.0
+            ],
+            [
+              -8.000000000007747,
+              -7.999999999984492
+            ]
+          ],
+          "load_shed_fraction": [
+            [
+              5.2773174955774137e-14,
+              0.10000000000013873
+            ],
+            [
+              0.09999999999936103,
+              2.17597637432524e-12
+            ],
+            [
+              0.08333333333394147,
+              7.265985122614426e-17
+            ],
+            [
+              0.11111111111025043,
+              1.938504298374829e-12
+            ]
+          ],
+          "p_load": [
+            [
+              8.0,
+              5.0
+            ],
+            [
+              10.0,
+              7.0
+            ],
+            [
+              12.0,
+              6.0
+            ],
+            [
+              9.0,
+              8.0
+            ]
+          ],
+          "p_load_served": [
+            [
+              7.999999999999578,
+              4.499999999999306
+            ],
+            [
+              9.00000000000639,
+              6.999999999984768
+            ],
+            [
+              10.999999999992703,
+              6.0
+            ],
+            [
+              8.000000000007747,
+              7.999999999984492
+            ]
+          ],
+          "p_load_shed": [
+            [
+              4.221853996461931e-13,
+              0.5000000000006937
+            ],
+            [
+              0.9999999999936103,
+              1.523183462027668e-11
+            ],
+            [
+              1.0000000000072977,
+              4.359591073568656e-16
+            ],
+            [
+              0.9999999999922539,
+              1.5508034386998633e-11
+            ]
+          ],
+          "p_load_shed_total": [
+            0.5000000000011159,
+            1.0000000000088423,
+            1.0000000000072982,
+            1.0000000000077618
+          ],
+          "p_net": [
+            1.7763568394002505e-15,
+            1.7763568394002505e-15,
+            3.552713678800501e-15,
+            -1.7763568394002505e-15
+          ],
+          "q_load": [
+            [
+              2.4,
+              1.0
+            ],
+            [
+              3.0,
+              1.4
+            ],
+            [
+              3.6,
+              1.2
+            ],
+            [
+              2.7,
+              1.6
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 3.552713678800501e-15,
+          "component_injection_abs": 0.0,
+          "eligibility_abs": 5.2773174955774137e-14,
+          "energy_not_served_abs": 4.440892098500626e-16,
+          "energy_not_served_by_load_abs": 0.0,
+          "ineligible_fraction_abs": 5.2773174955774137e-14,
+          "load_shed_fraction_box_abs": 5.2773174955774137e-14,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "q_load_reconstruction_abs": 0.0,
+          "served_reconstruction_abs": 0.0,
+          "shed_reconstruction_abs": 0.0,
+          "shed_total_reconstruction_abs": 0.0,
+          "shedding_cost_abs": 0.0
+        },
+        "solve_time": 8.4042e-05,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 5,
+          "equality_objects": 1,
+          "explicit_inequality_objects": 4,
+          "explicit_scalar_inequalities": 24,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 4,
+          "scalar_variables": 12,
+          "variable_objects": 2,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "load_shed_fraction": [
+              2,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.005594833055511117,
+          "construction": 0.001319041009992361,
+          "solve": 0.0005341250216588378
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "a40c87810d98045ea05191b341d43bbacc07f3695cc99e1d1d7af072acb9cb74",
+      "formulation": "singlenode_dc",
+      "gate": "load_shedding",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "load_shed_fraction",
+            "fixed_coordinates": 2,
+            "lower_face_coordinates": 3,
+            "maximum_face_residual": 6.434458521553665e-11,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 3,
+            "values": [
+              [
+                0.0,
+                0.49999999994851707,
+                5.148289058692402e-11,
+                0.49999999994851707
+              ],
+              [
+                0.24999999993565541,
+                6.434456706754206e-11,
+                0.0,
+                6.434456706754206e-11
+              ]
+            ],
+            "variable": "load_shed_fraction"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 12,
+          "coefficient_columns": 12,
+          "coefficient_nonzeros": 36,
+          "coefficient_rows": 28,
+          "equality_rows": 4,
+          "nonnegative_rows": 24,
+          "quadratic_nonzeros": 12,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "load_shedding_cost": 390.00000000497414
+        },
+        "device_ids": [
+          "industrial",
+          "commercial"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "a40c87810d98045ea05191b341d43bbacc07f3695cc99e1d1d7af072acb9cb74",
+        "formulation": "singlenode_dc",
+        "gate": "load_shedding",
+        "objective": 409.1450039339703,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 111837184,
+          "after_construction": 110821376,
+          "after_solve": 112410624
+        },
+        "public_results": {
+          "Pg": [
+            [
+              12.499999999998886
+            ],
+            [
+              15.999999999991159
+            ],
+            [
+              16.999999999992706
+            ],
+            [
+              15.999999999992239
+            ]
+          ],
+          "energy_not_served": 3.5000000000245945,
+          "energy_not_served_by_load": [
+            2.9999999999931606,
+            0.5000000000314337
+          ],
+          "load_injection": [
+            [
+              -8.0,
+              -4.499999999999306
+            ],
+            [
+              -9.00000000000639,
+              -6.999999999984768
+            ],
+            [
+              -10.999999999992705,
+              -6.0
+            ],
+            [
+              -8.000000000007747,
+              -7.9999999999844915
+            ]
+          ],
+          "load_shed_fraction": [
+            [
+              0.0,
+              0.10000000000013873
+            ],
+            [
+              0.09999999999936107,
+              2.17598727536939e-12
+            ],
+            [
+              0.08333333333394134,
+              0.0
+            ],
+            [
+              0.1111111111102504,
+              1.9385135530143673e-12
+            ]
+          ],
+          "p_load": [
+            [
+              8.0,
+              5.0
+            ],
+            [
+              10.0,
+              7.0
+            ],
+            [
+              12.0,
+              6.0
+            ],
+            [
+              9.0,
+              8.0
+            ]
+          ],
+          "p_load_served": [
+            [
+              8.0,
+              4.499999999999306
+            ],
+            [
+              9.00000000000639,
+              6.999999999984768
+            ],
+            [
+              10.999999999992705,
+              6.0
+            ],
+            [
+              8.000000000007747,
+              7.9999999999844915
+            ]
+          ],
+          "p_load_shed": [
+            [
+              0.0,
+              0.5000000000006937
+            ],
+            [
+              0.9999999999936107,
+              1.5231910927585727e-11
+            ],
+            [
+              1.0000000000072962,
+              0.0
+            ],
+            [
+              0.9999999999922536,
+              1.550810842411494e-11
+            ]
+          ],
+          "p_load_shed_total": [
+            0.5000000000006937,
+            1.0000000000088425,
+            1.0000000000072962,
+            1.0000000000077618
+          ],
+          "p_net": [
+            -4.2099657093785936e-13,
+            1.7763568394002505e-15,
+            3.552713678800501e-15,
+            1.7763568394002505e-15
+          ],
+          "q_load": [
+            [
+              2.4,
+              1.0
+            ],
+            [
+              3.0,
+              1.4
+            ],
+            [
+              3.6,
+              1.2
+            ],
+            [
+              2.7,
+              1.6
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 4.2099657093785936e-13,
+          "component_injection_abs": 0.0,
+          "eligibility_abs": 0.0,
+          "energy_not_served_abs": 8.881784197001252e-16,
+          "energy_not_served_by_load_abs": 0.0,
+          "ineligible_fraction_abs": 0.0,
+          "load_shed_fraction_box_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0,
+          "q_load_reconstruction_abs": 0.0,
+          "served_reconstruction_abs": 0.0,
+          "shed_reconstruction_abs": 0.0,
+          "shed_total_reconstruction_abs": 0.0,
+          "shedding_cost_abs": 0.0
+        },
+        "solve_time": 8.5957e-05,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 3,
+          "equality_objects": 1,
+          "explicit_inequality_objects": 2,
+          "explicit_scalar_inequalities": 8,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 4,
+          "scalar_variables": 12,
+          "variable_objects": 2,
+          "variable_shapes": {
+            "Pg": [
+              1,
+              4
+            ],
+            "load_shed_fraction": [
+              2,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.005867250030860305,
+          "construction": 0.00167720892932266,
+          "solve": 0.000597959035076201
+        }
+      },
+      "objective_absolute_residual": 4.240519047016278e-11,
+      "probe_only_objective_term_absolute_residuals": {},
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 1.7763568394002505e-15,
+        "energy_not_served": 4.2366110619695974e-13,
+        "energy_not_served_by_load": 4.2366110619695974e-13,
+        "load_injection": 4.218847493575595e-13,
+        "load_shed_fraction": 5.2773174955774137e-14,
+        "p_load": 0.0,
+        "p_load_served": 4.218847493575595e-13,
+        "p_load_shed": 4.221853996461931e-13,
+        "p_load_shed_total": 4.2221781626494703e-13,
+        "p_net": 4.227729277772596e-13,
+        "q_load": 0.0
+      },
+      "result_schemas_match": true
+    },
+    {
+      "binding_probe_absolute_residuals": {
+        "hvdc_input_power": 3.5291769506784476e-11
+      },
+      "binding_probes_passed": true,
+      "both_accepted": true,
+      "box_families": [
+        "hvdc_input_power"
+      ],
+      "component_cost_absolute_residuals": {
+        "hvdc_cost": 0.0
+      },
+      "cost_schemas_match": true,
+      "equivalent": true,
+      "explicit": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "hvdc_input_power",
+            "fixed_coordinates": 4,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 3.461453346176313e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 8,
+            "values": [
+              [
+                1.0000000000935332,
+                4.4999999999726255,
+                1.5000000000935336,
+                4.9999999999726255
+              ],
+              [
+                -0.999999999985501,
+                -3.9999999999064677,
+                -0.5000000000273745,
+                -2.9999999997775766
+              ],
+              [
+                -3.000000000027257,
+                3.000000000027257,
+                -3.000000000027257,
+                3.000000000027257
+              ],
+              [
+                2.0000000000352918,
+                1.9999999999647085,
+                2.0000000000352918,
+                1.9999999999647085
+              ],
+              [
+                5.178670155489144e-10,
+                2.9999999994821334,
+                2.0000000005178675,
+                1.9999999965385467
+              ]
+            ],
+            "variable": "p_hvdc_in"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 92,
+          "coefficient_columns": 92,
+          "coefficient_nonzeros": 280,
+          "coefficient_rows": 152,
+          "equality_rows": 48,
+          "nonnegative_rows": 104,
+          "quadratic_nonzeros": 52,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "hvdc_cost": 2.3377940632035137
+        },
+        "device_ids": [
+          "positive",
+          "negative",
+          "straddling",
+          "degenerate",
+          "varying"
+        ],
+        "encoding": "explicit",
+        "exception": null,
+        "fixture_sha256": "837220c52c5a205072aeb2f3947f7bdc97f49e0a27707ed56847691cae1e696a",
+        "formulation": "lossy_dc",
+        "gate": "hvdc",
+        "objective": 30.437381261168053,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112754688,
+          "after_construction": 111329280,
+          "after_solve": 113262592
+        },
+        "public_results": {
+          "Pg": [
+            [
+              12.644562524684206,
+              12.528885380871342
+            ],
+            [
+              13.151414257228591,
+              13.528237006130245
+            ],
+            [
+              13.107144597384247,
+              13.114474767690798
+            ],
+            [
+              13.610621251463456,
+              13.985164243773273
+            ]
+          ],
+          "hvdc_injection": [
+            [
+              -0.9581054009350055,
+              0.7846574953794532
+            ],
+            [
+              8.385040720780248,
+              -9.064691984139085
+            ],
+            [
+              2.0394588087461196,
+              -2.2610781738211685
+            ],
+            [
+              8.880238594707608,
+              -9.476024089944339
+            ]
+          ],
+          "hvdc_loss": [
+            [
+              0.05263157895731174,
+              0.0800000000078972,
+              -0.0,
+              0.040816326530612734,
+              5.973068639482319e-11
+            ],
+            [
+              0.23284123478325824,
+              0.3149220812439246,
+              -4.440892098500626e-16,
+              0.04081632653061229,
+              0.09107162080104203
+            ],
+            [
+              0.07894736842703787,
+              0.04000000001095,
+              -0.0,
+              0.04081632653061229,
+              0.061855670106448546
+            ],
+            [
+              0.2588737839806008,
+              0.23565264134477193,
+              -0.0,
+              0.040816326530611846,
+              0.060442743380745956
+            ]
+          ],
+          "p_flows": [
+            [
+              -2.3135428762507972
+            ],
+            [
+              7.536454978008841
+            ],
+            [
+              0.14660340613036754
+            ],
+            [
+              7.4908598461710625
+            ]
+          ],
+          "p_hvdc_in": [
+            [
+              1.0000000001889218,
+              -1.0000000000987141,
+              -2.9581054029565013,
+              2.0000000000000018,
+              1.9312863875646356e-09
+            ],
+            [
+              4.423983460881908,
+              -3.9365260155490684,
+              2.9529342028803613,
+              2.000000000000002,
+              2.9446490725670444
+            ],
+            [
+              1.5000000001137261,
+              -0.5000000001368746,
+              -2.960541191339242,
+              2.0000000000000018,
+              2.0000000001085083
+            ],
+            [
+              4.9186018956314115,
+              -2.9456580168096527,
+              2.9529793465750553,
+              2.0000000000000027,
+              1.9543153693107906
+            ]
+          ],
+          "p_hvdc_out": [
+            [
+              -1.0526315791462335,
+              0.920000000090817,
+              2.9581054029565013,
+              -2.0408163265306145,
+              -1.991017073959459e-09
+            ],
+            [
+              -4.656824695665167,
+              3.621603934305144,
+              -2.952934202880361,
+              -2.0408163265306145,
+              -3.0357206933680865
+            ],
+            [
+              -1.578947368540764,
+              0.4600000001259246,
+              2.960541191339242,
+              -2.040816326530614,
+              -2.061855670214957
+            ],
+            [
+              -5.177475679612012,
+              2.7100053754648807,
+              -2.9529793465750553,
+              -2.0408163265306145,
+              -2.0147581126915366
+            ]
+          ],
+          "p_net": [
+            [
+              -2.3135428762508,
+              2.3135428762507964
+            ],
+            [
+              7.536454978008841,
+              -7.536454978008839
+            ],
+            [
+              0.14660340613036738,
+              -0.14660340613037093
+            ],
+            [
+              7.4908598461710625,
+              -7.490859846171066
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 3.552713678800501e-15,
+          "component_injection_abs": 0.0,
+          "hvdc_cost_abs": 1.1102230246251565e-16,
+          "hvdc_coupling_abs": 8.881784197001252e-16,
+          "hvdc_input_power_box_abs": 2.6645352591003757e-15,
+          "hvdc_loss_abs": 0.0,
+          "hvdc_loss_nonnegative_abs": 4.440892098500626e-16,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0
+        },
+        "solve_time": 0.00030996,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 13,
+          "equality_objects": 7,
+          "explicit_inequality_objects": 6,
+          "explicit_scalar_inequalities": 64,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 28,
+          "scalar_variables": 52,
+          "variable_objects": 4,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "p_hvdc_in": [
+              5,
+              4
+            ],
+            "p_hvdc_out": [
+              5,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.009179375017993152,
+          "construction": 0.0018984590424224734,
+          "solve": 0.0008330829441547394
+        }
+      },
+      "fixture_fingerprints_match": true,
+      "fixture_sha256": "837220c52c5a205072aeb2f3947f7bdc97f49e0a27707ed56847691cae1e696a",
+      "formulation": "lossy_dc",
+      "gate": "hvdc",
+      "leaf": {
+        "accepted": true,
+        "binding_probes": [
+          {
+            "accepted": true,
+            "canonicalization_backend": "SCIPY",
+            "exception": null,
+            "family": "hvdc_input_power",
+            "fixed_coordinates": 4,
+            "lower_face_coordinates": 8,
+            "maximum_face_residual": 3.4614635602281396e-09,
+            "solver": "CLARABEL",
+            "status": "optimal",
+            "upper_face_coordinates": 8,
+            "values": [
+              [
+                1.000000000093534,
+                4.499999999972625,
+                1.5000000000935343,
+                4.999999999972625
+              ],
+              [
+                -1.0,
+                -3.9999999999064664,
+                -0.5000000000273751,
+                -2.9999999997775753
+              ],
+              [
+                -3.0,
+                3.0,
+                -3.0,
+                3.0
+              ],
+              [
+                2.0,
+                2.0,
+                2.0,
+                2.0
+              ],
+              [
+                5.178689950194441e-10,
+                2.9999999994821307,
+                2.000000000517869,
+                1.9999999965385364
+              ]
+            ],
+            "variable": "p_hvdc_in"
+          }
+        ],
+        "canonical_structure": {
+          "backend": "SCIPY",
+          "canonical_variables": 92,
+          "coefficient_columns": 92,
+          "coefficient_nonzeros": 280,
+          "coefficient_rows": 152,
+          "equality_rows": 48,
+          "nonnegative_rows": 104,
+          "quadratic_nonzeros": 52,
+          "reductions": [
+            "Dcp2Cone",
+            "CvxAttr2Constr",
+            "EliminateZeroSized",
+            "ConeMatrixStuffing",
+            "CLARABEL"
+          ],
+          "soc_dimensions": []
+        },
+        "classification": "accepted",
+        "component_costs": {
+          "hvdc_cost": 2.3377940632035137
+        },
+        "device_ids": [
+          "positive",
+          "negative",
+          "straddling",
+          "degenerate",
+          "varying"
+        ],
+        "encoding": "leaf",
+        "exception": null,
+        "fixture_sha256": "837220c52c5a205072aeb2f3947f7bdc97f49e0a27707ed56847691cae1e696a",
+        "formulation": "lossy_dc",
+        "gate": "hvdc",
+        "objective": 30.437381261168053,
+        "probe_only_objective_terms": {},
+        "process_peak_rss_bytes": {
+          "after_canonicalization": 112623616,
+          "after_construction": 111214592,
+          "after_solve": 113164288
+        },
+        "public_results": {
+          "Pg": [
+            [
+              12.64456252468421,
+              12.52888538087134
+            ],
+            [
+              13.151414257228595,
+              13.528237006130247
+            ],
+            [
+              13.107144597384247,
+              13.114474767690798
+            ],
+            [
+              13.610621251463453,
+              13.98516424377327
+            ]
+          ],
+          "hvdc_injection": [
+            [
+              -0.958105400935062,
+              0.7846574953795096
+            ],
+            [
+              8.385040720780248,
+              -9.064691984139088
+            ],
+            [
+              2.039458808746111,
+              -2.261078173821161
+            ],
+            [
+              8.880238594707611,
+              -9.476024089944342
+            ]
+          ],
+          "hvdc_loss": [
+            [
+              0.05263157895731174,
+              0.08000000000789698,
+              8.881784197001252e-16,
+              0.04081632653061362,
+              5.972916941178192e-11
+            ],
+            [
+              0.23284123478325913,
+              0.3149220812439255,
+              -0.0,
+              0.04081632653061451,
+              0.09107162080104159
+            ],
+            [
+              0.07894736842703809,
+              0.04000000001094972,
+              -0.0,
+              0.04081632653061362,
+              0.061855670106448546
+            ],
+            [
+              0.2588737839805999,
+              0.23565264134477237,
+              -0.0,
+              0.04081632653061451,
+              0.0604427433807464
+            ]
+          ],
+          "p_flows": [
+            [
+              -2.313542876250851
+            ],
+            [
+              7.536454978008843
+            ],
+            [
+              0.1466034061303621
+            ],
+            [
+              7.490859846171068
+            ]
+          ],
+          "p_hvdc_in": [
+            [
+              1.0000000001889169,
+              -1.0000000000987115,
+              -2.958105402956505,
+              2.0,
+              1.9312373384537184e-09
+            ],
+            [
+              4.423983460881908,
+              -3.9365260155490707,
+              2.952934202880364,
+              2.0,
+              2.9446490725670458
+            ],
+            [
+              1.5000000001137228,
+              -0.5000000001368711,
+              -2.960541191339246,
+              2.0,
+              2.000000000108505
+            ],
+            [
+              4.918601895631413,
+              -2.9456580168096544,
+              2.952979346575059,
+              2.0,
+              1.9543153693107924
+            ]
+          ],
+          "p_hvdc_out": [
+            [
+              -1.0526315791462286,
+              0.9200000000908145,
+              2.958105402956504,
+              -2.0408163265306136,
+              -1.9909665078655003e-09
+            ],
+            [
+              -4.6568246956651675,
+              3.621603934305145,
+              -2.952934202880364,
+              -2.0408163265306145,
+              -3.0357206933680874
+            ],
+            [
+              -1.578947368540761,
+              0.46000000012592135,
+              2.960541191339246,
+              -2.0408163265306136,
+              -2.0618556702149538
+            ],
+            [
+              -5.177475679612013,
+              2.710005375464882,
+              -2.952979346575059,
+              -2.0408163265306145,
+              -2.014758112691539
+            ]
+          ],
+          "p_net": [
+            [
+              -2.313542876250853,
+              2.3135428762508496
+            ],
+            [
+              7.536454978008841,
+              -7.536454978008841
+            ],
+            [
+              0.1466034061303585,
+              -0.14660340613036382
+            ],
+            [
+              7.4908598461710625,
+              -7.490859846171073
+            ]
+          ]
+        },
+        "residuals": {
+          "active_balance_abs": 5.329070518200751e-15,
+          "component_injection_abs": 0.0,
+          "hvdc_cost_abs": 1.1102230246251565e-16,
+          "hvdc_coupling_abs": 2.220446049250313e-15,
+          "hvdc_input_power_box_abs": 0.0,
+          "hvdc_loss_abs": 0.0,
+          "hvdc_loss_nonnegative_abs": 0.0,
+          "objective_reconstruction_abs": 0.0,
+          "p_net_reconstruction_abs": 0.0
+        },
+        "solve_time": 0.000338918,
+        "solver": "CLARABEL",
+        "solver_iterations": 9,
+        "source_structure": {
+          "all_constraints_dcp": true,
+          "constraint_objects": 11,
+          "equality_objects": 7,
+          "explicit_inequality_objects": 4,
+          "explicit_scalar_inequalities": 24,
+          "objective_is_dcp": true,
+          "problem_is_dcp": true,
+          "scalar_equalities": 28,
+          "scalar_variables": 52,
+          "variable_objects": 4,
+          "variable_shapes": {
+            "Pg": [
+              2,
+              4
+            ],
+            "p_flows": [
+              1,
+              4
+            ],
+            "p_hvdc_in": [
+              5,
+              4
+            ],
+            "p_hvdc_out": [
+              5,
+              4
+            ]
+          }
+        },
+        "status": "optimal",
+        "timing_seconds": {
+          "canonicalization": 0.009751333040185273,
+          "construction": 0.001726625021547079,
+          "solve": 0.0009165839292109013
+        }
+      },
+      "objective_absolute_residual": 0.0,
+      "probe_only_objective_term_absolute_residuals": {},
+      "probe_only_objective_term_schemas_match": true,
+      "public_result_absolute_residuals": {
+        "Pg": 3.552713678800501e-15,
+        "hvdc_injection": 5.651035195342047e-14,
+        "hvdc_loss": 2.6645352591003757e-15,
+        "p_flows": 5.3734794391857577e-14,
+        "p_hvdc_in": 4.9049110917245606e-14,
+        "p_hvdc_out": 5.0566093958508304e-14,
+        "p_net": 5.3290705182007514e-14
+      },
+      "result_schemas_match": true
+    }
+  ],
+  "schema_version": 1,
+  "solver": "CLARABEL",
+  "solver_options": {
+    "max_iter": 500,
+    "tol_feas": 1e-09,
+    "tol_gap_abs": 1e-09,
+    "tol_gap_rel": 1e-09
+  },
+  "stage": "M14b_component_box_qualification"
+}

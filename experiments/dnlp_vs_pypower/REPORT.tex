@@ -124,9 +124,10 @@ To compare the two approaches on genuinely the same problem, we neutralize a few
 incidental modelling differences so that only the solution method differs:
 
 \begin{itemize}
-  \item \textbf{Branch flow limits are removed} on both sides (set to a very
-    large value). cvxopf does not yet enforce branch limits, so we relax
-    Pypower's as well.
+  \item \textbf{Branch flow limits are removed} on both sides. cvxopf selects
+    \texttt{enforce\_branch\_limits=False} explicitly, while Pypower's limits
+    are set to a very large value. This isolates the solution method from the
+    branch-limit representation.
   \item \textbf{DC-line reactive power is pinned to zero} on both sides (the DC
     links are modelled at unity power factor), and their terminal buses are
     treated identically.

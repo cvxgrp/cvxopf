@@ -45,8 +45,11 @@ Callers should inspect ``status`` before consuming numerical values.
 
 from __future__ import annotations
 
+from typing import Any, Literal
+
 import numpy as np
 
+from cvxopf._temporal_assembly import ResultProjectionSpec
 from cvxopf.hvdc import _loss_values
 from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
@@ -55,22 +58,77 @@ from cvxopf.storage import _terminal_deviation_values
 
 def _solved_expression_value(build: OPFBuild, name: str) -> float:
     """Return a scalar value from the exact expression used by the model."""
-    value = build.expressions[name].value
-    return float(value) if value is not None else float("nan")
+    if name not in build.expressions:
+        if build.temporal_assembly == "vectorized":
+            raise ValueError(f"missing required vectorized result expression {name!r}")
+        raise KeyError(name)
+    value = _solved_expression_values(build, name)
+    if value is None:
+        return float("nan")
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(
+            f"modeled scalar expression {name!r} produced shape {array.shape}"
+        )
+    return float(array)
 
 
-def _solved_expression_values(build: OPFBuild, name: str):
+def _vectorized_projection(
+    build: OPFBuild,
+    source_kind: Literal["variable", "expression"],
+    name: str,
+) -> ResultProjectionSpec:
+    """Return the trusted projection for one vectorized solved source."""
+    if "T" not in build.data:
+        raise ValueError("vectorized result extraction requires horizon metadata T")
+    return build.result_projections.projection_for(source_kind, name)
+
+
+def _project_vectorized_value(
+    build: OPFBuild,
+    source_kind: Literal["variable", "expression"],
+    name: str,
+    source_shape: tuple[int, ...],
+    value: Any,
+) -> np.ndarray | None:
+    """Project one available time-last value under its frozen schema."""
+    projection = _vectorized_projection(build, source_kind, name)
+    horizon_steps = int(build.data["T"])
+    expected = projection.internal_shape(horizon_steps)
+    if source_shape != expected:
+        raise ValueError(
+            f"vectorized result {source_kind} {name!r} declares source shape "
+            f"{source_shape}, but its projection requires {expected}"
+        )
+    return (
+        None if value is None else projection.project(np.asarray(value), horizon_steps)
+    )
+
+
+def _solved_expression_values(
+    build: OPFBuild, name: str
+) -> np.ndarray | np.generic | float | None:
     """Evaluate a named single- or multi-step modeled expression."""
     expression = build.expressions.get(name)
     if expression is None:
+        if build.temporal_assembly == "vectorized":
+            raise ValueError(f"missing required vectorized result expression {name!r}")
         return None
     if isinstance(expression, list):
         values = [item.value for item in expression]
         return None if any(value is None for value in values) else np.array(values)
+    if build.temporal_assembly == "vectorized":
+        return _project_vectorized_value(
+            build,
+            "expression",
+            name,
+            tuple(int(dimension) for dimension in expression.shape),
+            expression.value,
+        )
     return expression.value
 
 
-def _scaled_values(value, scale: float):
+def _scaled_values(value: Any, scale: float) -> Any:
     """Scale an available scalar or array while preserving ``None``."""
     return None if value is None else value * scale
 
@@ -83,14 +141,22 @@ def _objective_value(build: OPFBuild) -> float:
     return float(value)
 
 
-def _initialize_results(build: OPFBuild) -> dict:
+def _initialize_results(build: OPFBuild) -> dict[str, Any]:
     """Initialize the public schema from the built model, before values."""
     core_fields = {
         "ac": (
-            "Pg", "Qg", "Vm", "Va_deg", "p_net", "q_net",
-            "branch_p_from", "branch_q_from",
-            "branch_p_to", "branch_q_to",
-            "branch_s_from", "branch_s_to",
+            "Pg",
+            "Qg",
+            "Vm",
+            "Va_deg",
+            "p_net",
+            "q_net",
+            "branch_p_from",
+            "branch_q_from",
+            "branch_p_to",
+            "branch_q_to",
+            "branch_s_from",
+            "branch_s_to",
         ),
         "lossy_dc": ("Pg", "p_flows", "p_net"),
         "singlenode_dc": ("Pg", "p_net"),
@@ -149,35 +215,46 @@ def _initialize_results(build: OPFBuild) -> dict:
     return results
 
 
-def _variable_values(variable):
+def _variable_values(build: OPFBuild, name: str) -> Any:
     """Return one variable value or stack a multistep variable list."""
+    if name not in build.variables:
+        if build.temporal_assembly == "vectorized":
+            raise ValueError(f"missing required vectorized result variable {name!r}")
+        raise KeyError(name)
+    variable = build.variables[name]
     if isinstance(variable, list):
         values = [item.value for item in variable]
         if any(value is None for value in values):
             return None
         return np.array(values)
+    if build.temporal_assembly == "vectorized":
+        return _project_vectorized_value(
+            build,
+            "variable",
+            name,
+            tuple(int(dimension) for dimension in variable.shape),
+            variable.value,
+        )
     return variable.value
 
 
-def _add_storage_results(results: dict, build: OPFBuild) -> None:
+def _add_storage_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add storage-owned variables and modeled cost to a result dictionary."""
     if "ns" not in build.data:
         return
-    results["b"] = _variable_values(build.variables["b"])
+    results["b"] = _variable_values(build, "b")
     if "b_q" in build.variables:
-        results["b_q"] = _variable_values(build.variables["b_q"])
-    results["soc"] = _variable_values(build.variables["soc"])
+        results["b_q"] = _variable_values(build, "b_q")
+    results["soc"] = _variable_values(build, "soc")
     results["storage_cost"] = _solved_expression_value(build, "storage_cost")
     targets = build.data["storage_terminal_soc"]
     if np.any(np.isfinite(targets)):
         if results["soc"] is None:
             results["storage_terminal_deviation"] = None
         else:
-            terminal_soc = (
-                results["soc"][-1] if "T" in build.data else results["soc"]
-            )
-            results["storage_terminal_deviation"] = (
-                _terminal_deviation_values(targets, terminal_soc)
+            terminal_soc = results["soc"][-1] if "T" in build.data else results["soc"]
+            results["storage_terminal_deviation"] = _terminal_deviation_values(
+                targets, terminal_soc
             )
     if "storage_terminal_cost" in build.expressions:
         results["storage_terminal_cost"] = _solved_expression_value(
@@ -185,90 +262,67 @@ def _add_storage_results(results: dict, build: OPFBuild) -> None:
         )
 
 
-def _add_nd_results(results: dict, build: OPFBuild) -> None:
+def _add_nd_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add ND variables and device-owned curtailment values."""
     if "nnd" not in build.data:
         return
-    results["p_nd"] = _variable_values(build.variables["p_nd"])
+    results["p_nd"] = _variable_values(build, "p_nd")
     if "q_nd" in build.variables:
-        results["q_nd"] = _variable_values(build.variables["q_nd"])
-    availability_key = (
-        "nd_available" if "T" in build.data else "nd_p_available"
-    )
+        results["q_nd"] = _variable_values(build, "q_nd")
+    availability_key = "nd_available" if "T" in build.data else "nd_p_available"
     results["curtailment"] = (
         None
         if results["p_nd"] is None
-        else _curtailment_values(
-            build.data[availability_key], results["p_nd"]
-        )
+        else _curtailment_values(build.data[availability_key], results["p_nd"])
     )
 
 
-def _add_hvdc_results(results: dict, build: OPFBuild) -> None:
+def _add_hvdc_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add HVDC terminal injections and device-owned loss values."""
     if "n_hvdc" not in build.data:
         return
-    results["p_hvdc_in"] = _variable_values(build.variables["p_hvdc_in"])
-    results["p_hvdc_out"] = _variable_values(build.variables["p_hvdc_out"])
+    results["p_hvdc_in"] = _variable_values(build, "p_hvdc_in")
+    results["p_hvdc_out"] = _variable_values(build, "p_hvdc_out")
     results["hvdc_loss"] = (
         None
-        if (
-            results["p_hvdc_in"] is None
-            or results["p_hvdc_out"] is None
-        )
-        else _loss_values(
+        if (results["p_hvdc_in"] is None or results["p_hvdc_out"] is None)
+        else _loss_values(  # type: ignore[no-untyped-call]
             results["p_hvdc_in"], results["p_hvdc_out"]
         )
     )
 
 
-def _add_load_results(results: dict, build: OPFBuild) -> None:
+def _add_load_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add exogenous inputs and conditional served/shedding results."""
     if "nload" not in build.data:
         return
     results["p_load"] = _solved_expression_values(build, "p_load")
     results["q_load"] = _solved_expression_values(build, "q_load")
     if int(build.data["nsheddable"]) == 0:
-        results["p_load_served"] = _solved_expression_values(
-            build, "p_load_served"
-        )
+        results["p_load_served"] = _solved_expression_values(build, "p_load_served")
         if build.formulation == "ac":
-            results["q_load_served"] = _solved_expression_values(
-                build, "q_load_served"
-            )
+            results["q_load_served"] = _solved_expression_values(build, "q_load_served")
         return
 
-    results["p_load_served"] = _solved_expression_values(
-        build, "p_load_served"
-    )
-    results["p_load_shed"] = _solved_expression_values(
-        build, "p_load_shed"
-    )
+    results["p_load_served"] = _solved_expression_values(build, "p_load_served")
+    results["p_load_shed"] = _solved_expression_values(build, "p_load_shed")
     results["load_shed_fraction"] = _solved_expression_values(
         build, "load_shed_fraction"
     )
-    results["p_load_shed_total"] = _solved_expression_values(
-        build, "p_load_shed_total"
-    )
+    results["p_load_shed_total"] = _solved_expression_values(build, "p_load_shed_total")
     if build.formulation == "ac":
-        results["q_load_served"] = _solved_expression_values(
-            build, "q_load_served"
-        )
-        results["q_load_shed"] = _solved_expression_values(
-            build, "q_load_shed"
-        )
+        results["q_load_served"] = _solved_expression_values(build, "q_load_served")
+        results["q_load_shed"] = _solved_expression_values(build, "q_load_shed")
     results["energy_not_served_by_load"] = _solved_expression_values(
         build, "energy_not_served_by_load"
     )
-    results["energy_not_served"] = _solved_expression_values(
-        build, "energy_not_served"
-    )
+    results["energy_not_served"] = _solved_expression_values(build, "energy_not_served")
     results["load_shedding_cost"] = _solved_expression_value(
         build, "load_shedding_cost"
     )
 
 
-def _add_device_results(results: dict, build: OPFBuild) -> None:
+def _add_device_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add every optional device's reported values."""
     _add_storage_results(results, build)
     _add_nd_results(results, build)
@@ -276,7 +330,7 @@ def _add_device_results(results: dict, build: OPFBuild) -> None:
     _add_load_results(results, build)
 
 
-def _add_ac_branch_results(results: dict, build: OPFBuild) -> None:
+def _add_ac_branch_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add signed AC branch-terminal powers and derived magnitudes."""
     base_mva = float(build.data["baseMVA"])
     signed = {
@@ -305,9 +359,7 @@ def _add_ac_branch_results(results: dict, build: OPFBuild) -> None:
     results["branch_s_from"] = np.hypot(
         signed["branch_p_from"], signed["branch_q_from"]
     )
-    results["branch_s_to"] = np.hypot(
-        signed["branch_p_to"], signed["branch_q_to"]
-    )
+    results["branch_s_to"] = np.hypot(signed["branch_p_to"], signed["branch_q_to"])
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +367,7 @@ def _add_ac_branch_results(results: dict, build: OPFBuild) -> None:
 # ---------------------------------------------------------------------------
 
 
-def extract_results(build: OPFBuild) -> dict:
+def extract_results(build: OPFBuild) -> dict[str, Any]:
     """
     Extract and scale solver results from a solved OPFBuild.
 
@@ -411,7 +463,9 @@ def extract_results(build: OPFBuild) -> dict:
         )
 
 
-def compare_to_reference(results: dict, reference: dict) -> dict:
+def compare_to_reference(
+    results: dict[str, Any], reference: dict[str, Any]
+) -> dict[str, Any]:
     """
     Compute structured differences between cvxopf results and a reference
     fixture dict (typically from Pypower).
@@ -445,18 +499,18 @@ def compare_to_reference(results: dict, reference: dict) -> dict:
         if f not in results or f not in reference:
             continue
 
-        cv  = np.asarray(results[f],   dtype=float)
+        cv = np.asarray(results[f], dtype=float)
         ref = np.asarray(reference[f], dtype=float)
 
         abs_diff = np.abs(cv - ref)
-        denom    = np.where(np.abs(ref) > 1e-8, np.abs(ref), 1.0)
+        denom = np.where(np.abs(ref) > 1e-8, np.abs(ref), 1.0)
         rel_diff = abs_diff / denom
 
         comparison[f] = dict(
-            cvxopf    = cv,
-            reference = ref,
-            abs_diff  = abs_diff,
-            rel_diff  = rel_diff,
+            cvxopf=cv,
+            reference=ref,
+            abs_diff=abs_diff,
+            rel_diff=rel_diff,
         )
 
     return comparison
@@ -467,12 +521,12 @@ def compare_to_reference(results: dict, reference: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _extract_ac_results(build: OPFBuild) -> dict:
+def _extract_ac_results(build: OPFBuild) -> dict[str, Any]:
     """Extract results for AC formulation (single-step or multi-step)."""
-    var     = build.variables
-    data    = build.data
+    var = build.variables
+    data = build.data
     baseMVA = float(data["baseMVA"])
-    prob    = build.prob
+    prob = build.prob
     results = _initialize_results(build)
 
     multistep = "T" in data
@@ -481,117 +535,107 @@ def _extract_ac_results(build: OPFBuild) -> dict:
         voltage = var["v"].value
         angle = var["theta"].value
         results.update(
-            status    = prob.status,
-            objective = _objective_value(build),
-            Pg        = _scaled_values(var["Pg"].value, baseMVA),
-            Qg        = _scaled_values(var["Qg"].value, baseMVA),
-            Vm        = None if voltage is None else voltage.flatten(),
-            Va_deg    = (
-                None
-                if angle is None
-                else np.rad2deg(angle.flatten())
-            ),
-            p_net     = _scaled_values(
-                _solved_expression_values(build, "p_net"), baseMVA
-            ),
-            q_net     = _scaled_values(
-                _solved_expression_values(build, "q_net"), baseMVA
-            ),
+            status=prob.status,
+            objective=_objective_value(build),
+            Pg=_scaled_values(var["Pg"].value, baseMVA),
+            Qg=_scaled_values(var["Qg"].value, baseMVA),
+            Vm=None if voltage is None else voltage.flatten(),
+            Va_deg=(None if angle is None else np.rad2deg(angle.flatten())),
+            p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
+            q_net=_scaled_values(_solved_expression_values(build, "q_net"), baseMVA),
         )
-        
-        if voltage is not None and angle is not None:
+
+        if build.temporal_assembly == "vectorized" or (
+            voltage is not None and angle is not None
+        ):
             _add_ac_branch_results(results, build)
         _add_device_results(results, build)
         return results
 
-    Pg_values = _variable_values(var["Pg"])
-    Qg_values = _variable_values(var["Qg"])
-    voltage = _variable_values(var["v"])
-    angle = _variable_values(var["theta"])
-    results.update(
-        status    = prob.status,
-        objective = _objective_value(build),
-        Pg        = _scaled_values(Pg_values, baseMVA),
-        Qg        = _scaled_values(Qg_values, baseMVA),
-        Vm        = (
-            None if voltage is None else np.squeeze(voltage, axis=-1)
-        ),
-        Va_deg    = (
-            None
-            if angle is None
-            else np.rad2deg(np.squeeze(angle, axis=-1))
-        ),
-        p_net     = _scaled_values(
-            _solved_expression_values(build, "p_net"), baseMVA
-        ),
-        q_net     = _scaled_values(
-            _solved_expression_values(build, "q_net"), baseMVA
-        ),
+    Pg_values = _variable_values(build, "Pg")
+    Qg_values = _variable_values(build, "Qg")
+    voltage = _variable_values(build, "v")
+    angle = _variable_values(build, "theta")
+    public_voltage = (
+        voltage
+        if build.temporal_assembly == "vectorized" or voltage is None
+        else np.squeeze(voltage, axis=-1)
     )
-    
-    if voltage is not None and angle is not None:
+    public_angle = (
+        angle
+        if build.temporal_assembly == "vectorized" or angle is None
+        else np.squeeze(angle, axis=-1)
+    )
+    results.update(
+        status=prob.status,
+        objective=_objective_value(build),
+        Pg=_scaled_values(Pg_values, baseMVA),
+        Qg=_scaled_values(Qg_values, baseMVA),
+        Vm=public_voltage,
+        Va_deg=(None if public_angle is None else np.rad2deg(public_angle)),
+        p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
+        q_net=_scaled_values(_solved_expression_values(build, "q_net"), baseMVA),
+    )
+
+    if build.temporal_assembly == "vectorized" or (
+        voltage is not None and angle is not None
+    ):
         _add_ac_branch_results(results, build)
     _add_device_results(results, build)
     return results
 
 
-def _extract_dc_results(build: OPFBuild) -> dict:
+def _extract_dc_results(build: OPFBuild) -> dict[str, Any]:
     """
     Extract results for lossy DC formulation (single-step or multi-step).
 
     Pg is stored directly as a per-generator (ng,) variable. Nodal net
     injection is evaluated from the exact expression used in power balance.
     """
-    var     = build.variables
-    data    = build.data
+    var = build.variables
+    data = build.data
     baseMVA = float(data["baseMVA"])
-    prob    = build.prob
+    prob = build.prob
     multistep = "T" in data
     results = _initialize_results(build)
 
     if not multistep:
-        Pg_val      = var["Pg"].value
+        Pg_val = var["Pg"].value
         p_flows_val = var["p_flows"].value
         results.update(
-            status    = prob.status,
-            objective = _objective_value(build),
-            Pg        = _scaled_values(Pg_val, baseMVA),
-            p_flows   = _scaled_values(p_flows_val, baseMVA),
-            p_net     = _scaled_values(
-                _solved_expression_values(build, "p_net"), baseMVA
-            ),
+            status=prob.status,
+            objective=_objective_value(build),
+            Pg=_scaled_values(Pg_val, baseMVA),
+            p_flows=_scaled_values(p_flows_val, baseMVA),
+            p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
         )
-        
+
         _add_device_results(results, build)
         return results
 
     results.update(
-        status    = prob.status,
-        objective = _objective_value(build),
-        Pg        = _scaled_values(_variable_values(var["Pg"]), baseMVA),
-        p_flows   = _scaled_values(
-            _variable_values(var["p_flows"]), baseMVA
-        ),
-        p_net     = _scaled_values(
-            _solved_expression_values(build, "p_net"), baseMVA
-        ),
+        status=prob.status,
+        objective=_objective_value(build),
+        Pg=_scaled_values(_variable_values(build, "Pg"), baseMVA),
+        p_flows=_scaled_values(_variable_values(build, "p_flows"), baseMVA),
+        p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
     )
-    
+
     _add_device_results(results, build)
     return results
 
 
-def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
+def _extract_singlenode_dc_results(build: OPFBuild) -> dict[str, Any]:
     """
     Extract results for single-node DC formulation (single-step or multi-step).
 
     For single-node DC, Pg is (ng,) in single-step or (T, ng) in multi-step.
     p_net is a scalar float in single-step or (T,) array in multi-step.
     """
-    var     = build.variables
-    data    = build.data
+    var = build.variables
+    data = build.data
     baseMVA = float(data["baseMVA"])
-    prob    = build.prob
+    prob = build.prob
     results = _initialize_results(build)
 
     multistep = "T" in data
@@ -602,24 +646,20 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict:
 
         p_net = _solved_expression_values(build, "p_net")
         results.update(
-            status    = prob.status,
-            objective = _objective_value(build),
-            Pg        = _scaled_values(Pg_val, baseMVA),
-            p_net     = (
-                None if p_net is None else float(p_net * baseMVA)
-            ),
+            status=prob.status,
+            objective=_objective_value(build),
+            Pg=_scaled_values(Pg_val, baseMVA),
+            p_net=(None if p_net is None else float(p_net * baseMVA)),
         )
 
         _add_device_results(results, build)
         return results
 
     results.update(
-        status    = prob.status,
-        objective = _objective_value(build),
-        Pg        = _scaled_values(_variable_values(var["Pg"]), baseMVA),
-        p_net     = _scaled_values(
-            _solved_expression_values(build, "p_net"), baseMVA
-        ),
+        status=prob.status,
+        objective=_objective_value(build),
+        Pg=_scaled_values(_variable_values(build, "Pg"), baseMVA),
+        p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
     )
 
     _add_device_results(results, build)

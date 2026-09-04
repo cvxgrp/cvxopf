@@ -1,0 +1,595 @@
+{
+  "execution_source_sha256": "e1d23a2d87fdd317ce090ceb5b95d63365aab429e952e4de22f933a4f7224c1b",
+  "interval": {
+    "endpoint_start": 3757,
+    "endpoint_stop": 3763,
+    "start": 3744,
+    "stop": 3768
+  },
+  "resource_policy_sha256": "6417efb97ddf7a249a40300e9d8abeaf23b3b815fbf9d6b6d4c7e4039910f19b",
+  "schema_version": 1,
+  "source_artifact": {
+    "bytes": 402529,
+    "sha256": "c5f1021f3302b248e88bf911eebd74ab392fbfdf989ce325ca5485cf7da8e7a1"
+  },
+  "workers": [
+    {
+      "complete_worker_sha256": "90cb40d98999f5bb65cb95ddda90f5318f3b5c02cb4765572dc432a4ea214061",
+      "eligible_for_advancement": true,
+      "end_context_sha256": "e1d23a2d87fdd317ce090ceb5b95d63365aab429e952e4de22f933a4f7224c1b",
+      "network": "pglib_rated",
+      "parent_context_matches": true,
+      "provenance_matches": true,
+      "records": [
+        {
+          "accepted_primal": true,
+          "audit": {
+            "identity_error": null,
+            "missing_or_nonfinite_fields": [],
+            "residuals": {
+              "branch_mw_abs": 0.0,
+              "dc_injection_reporting_mw_abs": 2.2737367544323206e-13,
+              "dc_nodal_balance_pu_abs": 4.547473508864641e-15,
+              "soc_recurrence_mwh_abs": 8.969922718547567e-14,
+              "terminal_soc_mwh_abs": 0.0
+            },
+            "status": "optimal"
+          },
+          "builder_called": true,
+          "classification": "accepted",
+          "complete_record_sha256": "e7f0368f9521e1e26270957c75ef07cb27e5278260142809363e3247976c7c84",
+          "dimensions": {
+            "constraint_objects": 364,
+            "explicit_scalar_inequalities": 7584,
+            "other_scalar_constraints": 0,
+            "scalar_equalities": 2932,
+            "scalar_variables": 6000
+          },
+          "outer_boundary_handoff": null,
+          "reason": null,
+          "record_id": "outer_lossy_dc_24h",
+          "result_schema": {
+            "Pg": [
+              24,
+              54
+            ],
+            "b": [
+              24,
+              4
+            ],
+            "curtailment": [
+              24,
+              2
+            ],
+            "objective": "scalar",
+            "p_flows": [
+              24,
+              186
+            ],
+            "p_load": [
+              24,
+              99
+            ],
+            "p_load_served": [
+              24,
+              99
+            ],
+            "p_nd": [
+              24,
+              2
+            ],
+            "p_net": [
+              24,
+              118
+            ],
+            "q_load": [
+              24,
+              99
+            ],
+            "soc": [
+              24,
+              4
+            ],
+            "status": "scalar",
+            "storage_cost": "scalar",
+            "storage_device_id_is_explicit": [
+              4
+            ],
+            "storage_device_ids": [
+              4
+            ],
+            "storage_terminal_deviation": [
+              4
+            ]
+          },
+          "result_sha256": "bab1474436944d6d2643591fbde018116dfe255165dd357962103d74854941f3",
+          "solver_called": true,
+          "summary": {
+            "maximum_absolute_storage_power_mw": 21.655032469993976,
+            "maximum_branch_flow": 685.99910321263,
+            "maximum_branch_utilization": 0.999999999793697,
+            "maximum_flow_fraction_of_branch_limit_sentinel": 0.0006859991032126299,
+            "renewable_curtailment_mwh": 4.099002524071693e-07,
+            "renewable_output_mwh": 19195.805877426457,
+            "storage_throughput_mwh": 151.74759284970662
+          }
+        },
+        {
+          "accepted_primal": true,
+          "audit": {
+            "identity_error": null,
+            "missing_or_nonfinite_fields": [],
+            "residuals": {
+              "ac_active_balance_pu_abs": 4.547473508864641e-15,
+              "ac_reactive_balance_pu_abs": 3.1974423109204507e-16,
+              "branch_loss_nonnegativity_pu_abs": 0.0,
+              "branch_mva_abs": 0.0,
+              "branch_normalized_squared_residual": 0.0,
+              "curtailment_nonnegativity_pu_abs": 0.0,
+              "soc_recurrence_mwh_abs": 8.526512829121202e-14,
+              "terminal_soc_mwh_abs": 0.0,
+              "voltage_bound_pu_abs": 0.0
+            },
+            "status": "optimal"
+          },
+          "builder_called": true,
+          "classification": "accepted",
+          "complete_record_sha256": "7e52a3c7717e48f89887b5f1a4466d99edd93733c7133d18aa6e4394feeb210c",
+          "dimensions": {
+            "constraint_objects": 8110,
+            "explicit_scalar_inequalities": 3636,
+            "other_scalar_constraints": 0,
+            "scalar_equalities": 13042,
+            "scalar_variables": 13752
+          },
+          "outer_boundary_handoff": {
+            "global_start": 3757,
+            "global_stop": 3763,
+            "initial_local_boundary": 13,
+            "initial_soc_mwh": [
+              28.873378526845446,
+              411.89277306209607,
+              57.87451515809209,
+              86.62012777948047
+            ],
+            "storage_device_ids": [
+              "storage_bus_41",
+              "storage_bus_65",
+              "storage_bus_89",
+              "storage_bus_105"
+            ],
+            "target_local_boundary": 19,
+            "target_soc_mwh": [
+              28.873378370732937,
+              411.8927734305532,
+              57.87451492428747,
+              84.26730722789331
+            ]
+          },
+          "reason": null,
+          "record_id": "endpoint_ac_6h",
+          "result_schema": {
+            "Pg": [
+              6,
+              54
+            ],
+            "Qg": [
+              6,
+              54
+            ],
+            "Va_deg": [
+              6,
+              118
+            ],
+            "Vm": [
+              6,
+              118
+            ],
+            "b": [
+              6,
+              4
+            ],
+            "b_q": [
+              6,
+              4
+            ],
+            "branch_p_from": [
+              6,
+              186
+            ],
+            "branch_p_to": [
+              6,
+              186
+            ],
+            "branch_q_from": [
+              6,
+              186
+            ],
+            "branch_q_to": [
+              6,
+              186
+            ],
+            "branch_s_from": [
+              6,
+              186
+            ],
+            "branch_s_to": [
+              6,
+              186
+            ],
+            "curtailment": [
+              6,
+              2
+            ],
+            "objective": "scalar",
+            "p_load": [
+              6,
+              99
+            ],
+            "p_load_served": [
+              6,
+              99
+            ],
+            "p_nd": [
+              6,
+              2
+            ],
+            "p_net": [
+              6,
+              118
+            ],
+            "q_load": [
+              6,
+              99
+            ],
+            "q_load_served": [
+              6,
+              99
+            ],
+            "q_nd": [
+              6,
+              2
+            ],
+            "q_net": [
+              6,
+              118
+            ],
+            "soc": [
+              6,
+              4
+            ],
+            "status": "scalar",
+            "storage_cost": "scalar",
+            "storage_device_id_is_explicit": [
+              4
+            ],
+            "storage_device_ids": [
+              4
+            ],
+            "storage_terminal_deviation": [
+              4
+            ]
+          },
+          "result_sha256": "e086a2aff92ddb89f2dd11c734e6c8389f2ab96a8ddd8e2ec372e44a422080c4",
+          "solver_called": true,
+          "summary": {
+            "maximum_absolute_storage_power_mw": 205.94636269371077,
+            "maximum_branch_flow": 523.9179719372115,
+            "maximum_branch_utilization": 0.9999999908804559,
+            "maximum_flow_fraction_of_branch_limit_sentinel": 0.0005239179719372115,
+            "renewable_curtailment_mwh": 2.684694112531366e-05,
+            "renewable_output_mwh": 6624.884705332667,
+            "storage_throughput_mwh": 468.21973906014364
+          }
+        },
+        {
+          "accepted_primal": false,
+          "audit": null,
+          "builder_called": false,
+          "classification": "not_authorized_by_s0_resource_gate",
+          "complete_record_sha256": "0ea177337b32caa39efe75e60bd0c850f6e042cddf7cc03d60720a3c101afd5d",
+          "dimensions": null,
+          "outer_boundary_handoff": null,
+          "reason": "S0 limits direct AC to at most six hours",
+          "record_id": "direct_ac_24h",
+          "result_schema": null,
+          "result_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "solver_called": false,
+          "summary": null
+        }
+      ],
+      "start_context_sha256": "e1d23a2d87fdd317ce090ceb5b95d63365aab429e952e4de22f933a4f7224c1b",
+      "supervision_sha256": "5af9f53ee6fc6ef13876f4493d79ebf11034a1ec878f01079bc0e59b057e560a",
+      "worker_classification": "completed"
+    },
+    {
+      "complete_worker_sha256": "7b70ca89805f78f16218f7b58f25765f61012ed58fb8f9ce582c60921f99e87c",
+      "eligible_for_advancement": true,
+      "end_context_sha256": "e1d23a2d87fdd317ce090ceb5b95d63365aab429e952e4de22f933a4f7224c1b",
+      "network": "pglib_effectively_unlimited",
+      "parent_context_matches": true,
+      "provenance_matches": true,
+      "records": [
+        {
+          "accepted_primal": true,
+          "audit": {
+            "identity_error": null,
+            "missing_or_nonfinite_fields": [],
+            "residuals": {
+              "branch_mw_abs": 0.0,
+              "dc_injection_reporting_mw_abs": 2.2737367544323206e-13,
+              "dc_nodal_balance_pu_abs": 4.547473508864641e-15,
+              "soc_recurrence_mwh_abs": 1.106203842702523e-13,
+              "terminal_soc_mwh_abs": 5.684341886080802e-14
+            },
+            "status": "optimal"
+          },
+          "builder_called": true,
+          "classification": "accepted",
+          "complete_record_sha256": "c465c905e417ad763c15e1491c5cc8db959a61d47dcb4ac5bd4d1e85b9a28d79",
+          "dimensions": {
+            "constraint_objects": 364,
+            "explicit_scalar_inequalities": 7584,
+            "other_scalar_constraints": 0,
+            "scalar_equalities": 2932,
+            "scalar_variables": 6000
+          },
+          "outer_boundary_handoff": null,
+          "reason": null,
+          "record_id": "outer_lossy_dc_24h",
+          "result_schema": {
+            "Pg": [
+              24,
+              54
+            ],
+            "b": [
+              24,
+              4
+            ],
+            "curtailment": [
+              24,
+              2
+            ],
+            "objective": "scalar",
+            "p_flows": [
+              24,
+              186
+            ],
+            "p_load": [
+              24,
+              99
+            ],
+            "p_load_served": [
+              24,
+              99
+            ],
+            "p_nd": [
+              24,
+              2
+            ],
+            "p_net": [
+              24,
+              118
+            ],
+            "q_load": [
+              24,
+              99
+            ],
+            "soc": [
+              24,
+              4
+            ],
+            "status": "scalar",
+            "storage_cost": "scalar",
+            "storage_device_id_is_explicit": [
+              4
+            ],
+            "storage_device_ids": [
+              4
+            ],
+            "storage_terminal_deviation": [
+              4
+            ]
+          },
+          "result_sha256": "fb50b59d1bf0811c375e6caa798a4acdc41d5c12135131ef360b2c0bed298d5c",
+          "solver_called": true,
+          "summary": {
+            "maximum_absolute_storage_power_mw": 6.616406448274904e-08,
+            "maximum_branch_flow": 973.837002232368,
+            "maximum_branch_utilization": 0.000973837002232368,
+            "maximum_flow_fraction_of_branch_limit_sentinel": 0.000973837002232368,
+            "renewable_curtailment_mwh": 4.279547738406109e-08,
+            "renewable_output_mwh": 19195.80587779356,
+            "storage_throughput_mwh": 3.804825747934032e-06
+          }
+        },
+        {
+          "accepted_primal": true,
+          "audit": {
+            "identity_error": null,
+            "missing_or_nonfinite_fields": [],
+            "residuals": {
+              "ac_active_balance_pu_abs": 2.2737367544323206e-15,
+              "ac_reactive_balance_pu_abs": 4.3520742565306136e-16,
+              "branch_loss_nonnegativity_pu_abs": 0.0,
+              "branch_mva_abs": 0.0,
+              "branch_normalized_squared_residual": 0.0,
+              "curtailment_nonnegativity_pu_abs": 6.217279635869218e-22,
+              "soc_recurrence_mwh_abs": 6.528818062729453e-14,
+              "terminal_soc_mwh_abs": 6.394884621840902e-14,
+              "voltage_bound_pu_abs": 0.0
+            },
+            "status": "optimal"
+          },
+          "builder_called": true,
+          "classification": "accepted",
+          "complete_record_sha256": "394a3b512674693a91bd13b98873fb32f1c8453398bf72906eb38cbf36a40c19",
+          "dimensions": {
+            "constraint_objects": 5878,
+            "explicit_scalar_inequalities": 1404,
+            "other_scalar_constraints": 0,
+            "scalar_equalities": 13042,
+            "scalar_variables": 13752
+          },
+          "outer_boundary_handoff": {
+            "global_start": 3757,
+            "global_stop": 3763,
+            "initial_local_boundary": 13,
+            "initial_soc_mwh": [
+              28.873376919357256,
+              411.8927717405409,
+              57.87451190540559,
+              43.31006526474957
+            ],
+            "storage_device_ids": [
+              "storage_bus_41",
+              "storage_bus_65",
+              "storage_bus_89",
+              "storage_bus_105"
+            ],
+            "target_local_boundary": 19,
+            "target_soc_mwh": [
+              28.873376937158685,
+              411.8927717554859,
+              57.87451192062305,
+              43.310065280167414
+            ]
+          },
+          "reason": null,
+          "record_id": "endpoint_ac_6h",
+          "result_schema": {
+            "Pg": [
+              6,
+              54
+            ],
+            "Qg": [
+              6,
+              54
+            ],
+            "Va_deg": [
+              6,
+              118
+            ],
+            "Vm": [
+              6,
+              118
+            ],
+            "b": [
+              6,
+              4
+            ],
+            "b_q": [
+              6,
+              4
+            ],
+            "branch_p_from": [
+              6,
+              186
+            ],
+            "branch_p_to": [
+              6,
+              186
+            ],
+            "branch_q_from": [
+              6,
+              186
+            ],
+            "branch_q_to": [
+              6,
+              186
+            ],
+            "branch_s_from": [
+              6,
+              186
+            ],
+            "branch_s_to": [
+              6,
+              186
+            ],
+            "curtailment": [
+              6,
+              2
+            ],
+            "objective": "scalar",
+            "p_load": [
+              6,
+              99
+            ],
+            "p_load_served": [
+              6,
+              99
+            ],
+            "p_nd": [
+              6,
+              2
+            ],
+            "p_net": [
+              6,
+              118
+            ],
+            "q_load": [
+              6,
+              99
+            ],
+            "q_load_served": [
+              6,
+              99
+            ],
+            "q_nd": [
+              6,
+              2
+            ],
+            "q_net": [
+              6,
+              118
+            ],
+            "soc": [
+              6,
+              4
+            ],
+            "status": "scalar",
+            "storage_cost": "scalar",
+            "storage_device_id_is_explicit": [
+              4
+            ],
+            "storage_device_ids": [
+              4
+            ],
+            "storage_terminal_deviation": [
+              4
+            ]
+          },
+          "result_sha256": "09971f58dd629b9fd5dd8ee6158b5e6e2a8497770d8ef38e19d8e61c517053a3",
+          "solver_called": true,
+          "summary": {
+            "maximum_absolute_storage_power_mw": 205.9463857215854,
+            "maximum_branch_flow": 511.9977381079145,
+            "maximum_branch_utilization": null,
+            "maximum_flow_fraction_of_branch_limit_sentinel": 0.0005119977381079145,
+            "renewable_curtailment_mwh": 5.890683496545535e-10,
+            "renewable_output_mwh": 6624.88473217902,
+            "storage_throughput_mwh": 478.28480134823315
+          }
+        },
+        {
+          "accepted_primal": false,
+          "audit": null,
+          "builder_called": false,
+          "classification": "not_authorized_by_s0_resource_gate",
+          "complete_record_sha256": "0ea177337b32caa39efe75e60bd0c850f6e042cddf7cc03d60720a3c101afd5d",
+          "dimensions": null,
+          "outer_boundary_handoff": null,
+          "reason": "S0 limits direct AC to at most six hours",
+          "record_id": "direct_ac_24h",
+          "result_schema": null,
+          "result_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "solver_called": false,
+          "summary": null
+        }
+      ],
+      "start_context_sha256": "e1d23a2d87fdd317ce090ceb5b95d63365aab429e952e4de22f933a4f7224c1b",
+      "supervision_sha256": "4b29f7a8e5347af0fb026b76af8263c6873ec014dace41a178ab7cb8610013d4",
+      "worker_classification": "completed"
+    }
+  ]
+}
