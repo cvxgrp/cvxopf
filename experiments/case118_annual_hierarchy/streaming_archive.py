@@ -172,7 +172,8 @@ def attempt_archive_payload(
         "scale": attempt.scale,
         "seed": attempt.seed,
         "reason": attempt.reason,
-        "solver_executed": attempt.slot_state == "executed",
+        "timeout_budget_seconds": attempt.timeout_budget_seconds,
+        "solver_executed": attempt.slot_state in {"executed", "timeout"},
         "supplied_executed_action": attempt.supplied_executed_action,
         "raw_start": raw,
         "assigned_start": assigned,
@@ -548,6 +549,9 @@ def window_archive_payload(
     policy: HierarchicalPolicy,
     outer: StreamingOuterPlan,
     preceding_controlling_attempt_id: str | None,
+    trajectory_start: int = 0,
+    trajectory_stop: int | None = None,
+    primary_attempt_budget_seconds: float | None = None,
 ) -> dict[str, object]:
     """Create and validate one complete build-free window archive."""
     ids = tuple(str(unit.device_id) for unit in inputs.storage)
@@ -596,11 +600,15 @@ def window_archive_payload(
         expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
         expected_residual_tolerances=_residual_tolerances(policy),
         expected_inner_terminal_policy=policy.inner_terminal_policy,
-        expected_horizon_steps=inputs.horizon_steps,
+        expected_horizon_steps=(
+            inputs.horizon_steps if trajectory_stop is None else trajectory_stop
+        ),
         expected_ac_window_steps=policy.ac_window_steps,
         expected_result_dimensions=_result_dimensions(inputs),
         expected_delta_hours=inputs.delta,
         expected_outer_boundary_soc_mwh=_outer_boundaries(outer),
+        expected_trajectory_start=trajectory_start,
+        expected_primary_timeout_seconds=primary_attempt_budget_seconds,
     )
     return payload
 
@@ -612,6 +620,8 @@ def write_verified_window_archive(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     outer: StreamingOuterPlan,
+    trajectory_start: int = 0,
+    trajectory_stop: int | None = None,
 ) -> WindowIndexEntry:
     """Atomically write, reload, and semantically verify one window."""
     entry = atomic_gzip_json(path, payload)
@@ -624,11 +634,14 @@ def write_verified_window_archive(
         expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
         expected_residual_tolerances=_residual_tolerances(policy),
         expected_inner_terminal_policy=policy.inner_terminal_policy,
-        expected_horizon_steps=inputs.horizon_steps,
+        expected_horizon_steps=(
+            inputs.horizon_steps if trajectory_stop is None else trajectory_stop
+        ),
         expected_ac_window_steps=policy.ac_window_steps,
         expected_result_dimensions=_result_dimensions(inputs),
         expected_delta_hours=inputs.delta,
         expected_outer_boundary_soc_mwh=_outer_boundaries(outer),
+        expected_trajectory_start=trajectory_start,
     )
     return entry
 

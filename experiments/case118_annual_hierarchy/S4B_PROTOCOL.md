@@ -225,6 +225,20 @@ vectorization track and does not block Case118 S4b/S5.
 
 ## Stopping point
 
-This implementation checkpoint publishes the immutable manifest only. Timeout
-implementation, worker/merger implementation, and numerical qualification
-require separate reviewed checkpoints and remain unauthorized.
+The immutable manifest is reviewed and committed. This checkpoint implements
+the typed five-minute primary-attempt transition, independent shard workers,
+archive-first global-coordinate checkpoints, process-tree supervision,
+deterministic merging, and the bounded 24-hour qualification registry and
+independent audit/promotion gates. Runnable shard IDs are restricted to the
+ordinary `[0,24)` arm and the forced-boundary `[0,12)`/`[12,24)` arms; annual
+manifest shard IDs are rejected under qualification authority. The tracked
+manifest is not itself execution authority: the runner requires a separate,
+exact `S4B_EXECUTION_AUTHORITY.json` binding the reviewed execution commit and
+source fingerprint while keeping annual execution false.
+
+No qualification or annual numerical execution is part of this checkpoint.
+The authority file remains absent until this implementation passes independent
+review and the owner separately authorizes a committed qualification run.
+Interrupted or resource-limited shards require an explicit reviewed-resume
+flag, exact checkpoint/source/outer-plan validation, and an immutable
+continuation record; no retry is automatic.

@@ -43,6 +43,12 @@ S4_OUTER_ARCHIVE_SHA256 = (
 )
 S4_SIGNPOST_SHA256 = "afc1bc32d4ea453e9ee0bf32c99003cd4952e84746f72ca1e574721a40e15e5a"
 S4B_PROTOCOL_SHA256 = "e7180a99f44827813f85abcef6b65ce9090ea7e8961e776591493791ac01c733"
+# The manifest retains the exact derivation-time file identity above. Live
+# revalidation separately binds the scientific body so status-only updates do
+# not invalidate the immutable derived artifact.
+S4B_PROTOCOL_BODY_SHA256 = (
+    "b6d53f375c612ea3bfd0d848b7d5587810f79b98eac5ce2f3d3dd7f8f91ef1e6"
+)
 TIMEOUT_POLICY_SHA256 = (
     "1cb5c6c469cda85fe8c8bcb0fd4c872aa6b5ce4454d782b9f63575b537d8eda2"
 )
@@ -109,6 +115,15 @@ def canonical_json(value: object) -> bytes:
 
 def object_sha256(value: object) -> str:
     return sha256(canonical_json(value)).hexdigest()
+
+
+def protocol_body_sha256(path: Path = S4B_PROTOCOL_PATH) -> str:
+    """Hash the normative S4b contract independently of its status preamble."""
+    text = path.read_text()
+    marker = "## Frozen annual boundary rule"
+    if marker not in text:
+        raise ValueError("S4b protocol lacks its frozen scientific body")
+    return sha256(text[text.index(marker) :].encode()).hexdigest()
 
 
 def rule_payload() -> dict[str, object]:
@@ -211,8 +226,8 @@ def load_authoritative_outer(
     """Verify the accepted S4 evidence and load its exact storage trajectory."""
     if sha256_path(S4_RESULTS_PATH) != S4_RESULTS_SHA256:
         raise ValueError("tracked S4 result hash mismatch")
-    if sha256_path(S4B_PROTOCOL_PATH) != S4B_PROTOCOL_SHA256:
-        raise ValueError("S4b protocol hash mismatch")
+    if protocol_body_sha256() != S4B_PROTOCOL_BODY_SHA256:
+        raise ValueError("S4b scientific protocol body hash mismatch")
     if sha256_path(TIMEOUT_POLICY_PATH) != TIMEOUT_POLICY_SHA256:
         raise ValueError("five-minute timeout policy hash mismatch")
     compact = _mapping(json.loads(S4_RESULTS_PATH.read_text()), "S4 result")

@@ -977,12 +977,11 @@ def _validate_preceding_controller(
     policy: HierarchicalPolicy,
     outer: StreamingOuterPlan,
     iteration: int,
+    trajectory_stop: int,
 ) -> None:
     """Require the actual immediately preceding controlling prediction."""
     expected_iteration = iteration - 1
-    expected_stop = min(
-        expected_iteration + policy.ac_window_steps, inputs.horizon_steps
-    )
+    expected_stop = min(expected_iteration + policy.ac_window_steps, trajectory_stop)
     if attempt.iteration != expected_iteration:
         raise ValueError(
             "causal source must come from the immediately preceding iteration"
@@ -1024,6 +1023,8 @@ def _validate_realized_state(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     iteration: int,
+    trajectory_start: int,
+    trajectory_initial_soc_mwh: Mapping[str, float] | None,
     preceding: ACAttemptRecord | CausalControllerSource | None,
 ) -> dict[str, float]:
     """Bind the observed state to the frozen initial or preceding action."""
@@ -1033,9 +1034,14 @@ def _validate_realized_state(
     realized = np.asarray([realized_soc_mwh[device_id] for device_id in ids])
     if not np.all(np.isfinite(realized)):
         raise ValueError("realized SoC values must be finite")
-    if iteration == 0:
-        expected = np.asarray(
-            [unit.initial_soc for unit in inputs.storage], dtype=float
+    if iteration == trajectory_start:
+        expected = (
+            np.asarray([unit.initial_soc for unit in inputs.storage], dtype=float)
+            if trajectory_initial_soc_mwh is None
+            else np.asarray(
+                [trajectory_initial_soc_mwh[device_id] for device_id in ids],
+                dtype=float,
+            )
         )
     else:
         if preceding is None:
@@ -1067,6 +1073,57 @@ def _validate_realized_state(
     ):
         raise ValueError("realized SoC does not match the physical state handoff")
     return dict(zip(ids, realized.tolist(), strict=True))
+
+
+def _timeout_attempt(
+    inputs: HierarchicalInputs,
+    policy: HierarchicalPolicy,
+    outer: StreamingOuterPlan,
+    iteration: int,
+    stop: int,
+    initial: Mapping[str, float],
+    target: Mapping[str, float],
+    slot: _Slot,
+    *,
+    source_kind: Literal["generated_flat", "attempt"],
+    source_attempt_id: str | None,
+    build: OPFBuild,
+    raw_start: Mapping[str, np.ndarray],
+    assigned_start: Mapping[str, np.ndarray],
+    budget_seconds: float,
+) -> ACAttemptRecord:
+    """Retain one externally terminated prepared primary attempt."""
+    if slot.ordinal != 0 or budget_seconds <= 0.0 or not np.isfinite(budget_seconds):
+        raise ValueError("timeout is valid only for a positive-budget primary")
+    return ACAttemptRecord(
+        attempt_id=attempt_id(iteration, slot.ordinal),
+        slot_state="timeout",
+        role=cast(Any, slot.role),
+        transformation=slot.transformation,
+        ordinal=slot.ordinal,
+        iteration=iteration,
+        local_interval_start=0,
+        local_interval_stop=stop - iteration,
+        global_interval_start=iteration,
+        global_interval_stop=stop,
+        outer_plan_id=outer.outer_plan_id,
+        source_kind=source_kind,
+        source_attempt_id=source_attempt_id,
+        inner_terminal_policy=policy.inner_terminal_policy,
+        storage_device_ids=_storage_ids(inputs.storage),
+        initial_soc_mwh=initial,
+        target_soc_mwh=target,
+        terminal_deviation_mwh=None,
+        build=build,
+        raw_start=raw_start,
+        assigned_start=assigned_start,
+        solver_evidence=None,
+        result=None,
+        audit=None,
+        reason=f"primary_attempt_timeout:{budget_seconds:.1f}s",
+        supplied_executed_action=False,
+        timeout_budget_seconds=budget_seconds,
+    )
 
 
 def _execute_attempt(
@@ -1207,6 +1264,11 @@ def execute_streaming_window(
     realized_soc_mwh: Mapping[str, float],
     preceding_controlling_attempt: ACAttemptRecord | CausalControllerSource | None,
     phase_observer: PhaseObserver | None = None,
+    *,
+    trajectory_start: int = 0,
+    trajectory_stop: int | None = None,
+    trajectory_initial_soc_mwh: Mapping[str, float] | None = None,
+    primary_timeout_seconds: float | None = None,
 ) -> StreamingWindowResult:
     """Resolve one frozen nine-slot AC window and advance at most once."""
     validate_streaming_policy(policy)
@@ -1219,11 +1281,19 @@ def execute_streaming_window(
         policy=policy,
         solve_config=solve_config,
     )
-    if not 0 <= iteration < inputs.horizon_steps:
+    stop_boundary = inputs.horizon_steps if trajectory_stop is None else trajectory_stop
+    if not 0 <= trajectory_start < stop_boundary <= inputs.horizon_steps:
+        raise ValueError("streaming trajectory bounds are invalid")
+    if trajectory_initial_soc_mwh is not None and set(
+        trajectory_initial_soc_mwh
+    ) != set(_storage_ids(inputs.storage)):
+        raise ValueError("trajectory initial SoC identities do not match storage fleet")
+    if not trajectory_start <= iteration < stop_boundary:
         raise ValueError("streaming iteration lies outside the horizon")
-    if iteration == 0 and preceding_controlling_attempt is not None:
-        raise ValueError("iteration zero cannot have a preceding controller")
-    if iteration > 0:
+    if iteration == trajectory_start and preceding_controlling_attempt is not None:
+        label = "iteration zero" if trajectory_start == 0 else "trajectory start"
+        raise ValueError(f"{label} cannot have a preceding controller")
+    if iteration > trajectory_start:
         if preceding_controlling_attempt is None:
             raise ValueError("later windows require the preceding controller")
         _validate_preceding_controller(
@@ -1232,15 +1302,18 @@ def execute_streaming_window(
             policy=policy,
             outer=outer,
             iteration=iteration,
+            trajectory_stop=stop_boundary,
         )
     initial = _validate_realized_state(
         realized_soc_mwh,
         inputs=inputs,
         policy=policy,
         iteration=iteration,
+        trajectory_start=trajectory_start,
+        trajectory_initial_soc_mwh=trajectory_initial_soc_mwh,
         preceding=preceding_controlling_attempt,
     )
-    stop = min(iteration + policy.ac_window_steps, inputs.horizon_steps)
+    stop = min(iteration + policy.ac_window_steps, stop_boundary)
     target = outer.target_at(stop)
     ids = _storage_ids(inputs.storage)
     slots = _p0_registry(iteration)
@@ -1252,7 +1325,7 @@ def execute_streaming_window(
     primary_build: OPFBuild | None = None
     causal_source_kind: Literal["generated_flat", "attempt"] = "generated_flat"
     causal_source_id: str | None = None
-    if iteration > 0:
+    if iteration > trajectory_start:
         if preceding_controlling_attempt is None:
             raise RuntimeError("validated preceding controller disappeared")
         preceding_values = (
@@ -1321,24 +1394,59 @@ def execute_streaming_window(
         causal_source_kind = "attempt"
         causal_source_id = preceding_controlling_attempt.attempt_id
 
-    primary = _execute_attempt(
-        inputs,
-        policy,
-        solve_config,
-        outer,
-        iteration,
-        stop,
-        initial,
-        target,
-        slots[0],
-        target_free=False,
-        raw_start=causal_raw,
-        assigned_start=causal_start,
-        source_kind=causal_source_kind,
-        source_attempt_id=causal_source_id,
-        prebuilt=primary_build,
-        phase_observer=phase_observer,
-    )
+    if primary_build is None:
+        if phase_observer is not None:
+            phase_observer("before_ac_build", iteration, slots[0].ordinal)
+        primary_build = build_window(
+            inputs,
+            "ac",
+            iteration,
+            stop,
+            _inner_storage(inputs, initial, target),
+        )
+        if phase_observer is not None:
+            phase_observer("after_ac_build", iteration, slots[0].ordinal)
+        causal_raw = complete_flat_start(primary_build)
+        causal_start = causal_raw
+
+    if primary_timeout_seconds is None:
+        primary = _execute_attempt(
+            inputs,
+            policy,
+            solve_config,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slots[0],
+            target_free=False,
+            raw_start=causal_raw,
+            assigned_start=causal_start,
+            source_kind=causal_source_kind,
+            source_attempt_id=causal_source_id,
+            prebuilt=primary_build,
+            phase_observer=phase_observer,
+        )
+    else:
+        if causal_raw is None or causal_start is None:
+            raise RuntimeError("prepared primary start disappeared")
+        primary = _timeout_attempt(
+            inputs,
+            policy,
+            outer,
+            iteration,
+            stop,
+            initial,
+            target,
+            slots[0],
+            source_kind=causal_source_kind,
+            source_attempt_id=causal_source_id,
+            build=primary_build,
+            raw_start=causal_raw,
+            assigned_start=causal_start,
+            budget_seconds=primary_timeout_seconds,
+        )
     records.append(primary)
     if primary.supplied_executed_action:
         accepted = primary

@@ -29,6 +29,7 @@ ATTEMPT_ROLES = (
 )
 SLOT_STATES = {
     "executed",
+    "timeout",
     "construction_error",
     "source_unavailable",
     "not_needed_after_acceptance",
@@ -502,15 +503,24 @@ def validate_window_archive(
     expected_result_dimensions: Mapping[str, int],
     expected_delta_hours: float,
     expected_outer_boundary_soc_mwh: Mapping[int, Mapping[str, float]],
+    expected_trajectory_start: int = 0,
+    expected_primary_timeout_seconds: float | None = None,
 ) -> Mapping[str, object]:
     """Validate a complete, build-free, single-window archive."""
     archive = _mapping(payload, "window archive")
     if archive.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported window archive schema")
     iteration = _nonnegative_int(archive.get("iteration"), "iteration")
+    trajectory_start = _nonnegative_int(
+        expected_trajectory_start, "expected trajectory start"
+    )
     horizon = _nonnegative_int(expected_horizon_steps, "expected horizon")
     window = _nonnegative_int(expected_ac_window_steps, "expected AC window")
-    if horizon == 0 or iteration >= horizon:
+    if (
+        horizon == 0
+        or trajectory_start >= horizon
+        or not trajectory_start <= iteration < horizon
+    ):
         raise ValueError("archive iteration must lie inside the expected horizon")
     if window != 3:
         raise ValueError("case118 experiment requires three-hour AC windows")
@@ -632,9 +642,9 @@ def validate_window_archive(
             }
         )
     preceding_id = archive.get("preceding_controlling_attempt_id")
-    if iteration == 0:
+    if iteration == trajectory_start:
         if preceding_id is not None:
-            raise ValueError("iteration zero cannot have a preceding controller")
+            raise ValueError("trajectory start cannot have a preceding controller")
     elif not isinstance(preceding_id, str) or not preceding_id:
         raise ValueError("later window requires preceding controlling attempt ID")
 
@@ -692,6 +702,8 @@ def validate_window_archive(
             expected_states = {"not_needed_after_acceptance"}
         elif source_available:
             expected_states = {"executed", "construction_error"}
+            if ordinal == 0:
+                expected_states.add("timeout")
         else:
             expected_states = {"source_unavailable"}
         if state not in expected_states:
@@ -720,6 +732,64 @@ def validate_window_archive(
             if not solver_executed:
                 raise ValueError("executed slot must record solver execution")
             _validate_executed_evidence(attempt, residual_tolerances, result_shapes)
+        elif state == "timeout":
+            if ordinal != 0 or not solver_executed:
+                raise ValueError("only the primary slot may retain a solver timeout")
+            if attempt.get("result") is not None or attempt.get("audit") is not None:
+                raise ValueError("timed-out attempt cannot retain a completed result")
+            if (
+                attempt.get("solver_x0") is not None
+                or attempt.get("solver_evidence") is not None
+            ):
+                raise ValueError(
+                    "timed-out attempt cannot claim completed IPOPT evidence"
+                )
+            if attempt.get("structural_signature") is None:
+                raise ValueError("timed-out attempt must retain its prepared structure")
+            if expected_primary_timeout_seconds is None or attempt.get(
+                "timeout_budget_seconds"
+            ) != expected_primary_timeout_seconds:
+                raise ValueError("timed-out attempt budget differs from frozen policy")
+            raw_start = _mapping(attempt.get("raw_start"), "timed-out raw start")
+            assigned_start = _mapping(
+                attempt.get("assigned_start"), "timed-out assigned start"
+            )
+            if not raw_start or set(raw_start) != set(assigned_start):
+                raise ValueError(
+                    "timed-out attempt must retain its complete named start"
+                )
+            variables = _sequence(
+                _mapping(
+                    attempt.get("structural_signature"), "timed-out structure"
+                ).get("variables"),
+                "timed-out variables",
+            )
+            variable_shapes: dict[str, tuple[int, ...]] = {}
+            for index, variable_value in enumerate(variables):
+                variable = _mapping(variable_value, f"timed-out variable {index}")
+                name = variable.get("name")
+                if not isinstance(name, str) or not name:
+                    raise ValueError("timed-out variable name must be nonempty")
+                variable_shapes[name] = tuple(
+                    _nonnegative_int(item, f"{name} variable shape")
+                    for item in _sequence(
+                        variable.get("shape"), f"{name} variable shape"
+                    )
+                )
+            if set(raw_start) != set(variable_shapes):
+                raise ValueError("timed-out named start does not match model variables")
+            for name, shape in variable_shapes.items():
+                for start_value in (raw_start[name], assigned_start[name]):
+                    array = np.asarray(start_value, dtype=float)
+                    if array.shape != shape or not np.all(np.isfinite(array)):
+                        raise ValueError(
+                            "timed-out named start shape or finiteness mismatch"
+                        )
+            reason = attempt.get("reason")
+            if not isinstance(reason, str) or not reason.startswith(
+                "primary_attempt_timeout:"
+            ):
+                raise ValueError("timed-out attempt lacks its timeout classification")
         else:
             if solver_executed or supplied:
                 raise ValueError("unexecuted slot cannot retain execution claims")
