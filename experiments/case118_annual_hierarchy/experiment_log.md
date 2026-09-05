@@ -393,3 +393,27 @@ The record is descriptive and specific to this scenario, machine, software
 stack, and default configurations. It does not claim a universal solver
 ranking or authorize tuned comparisons. CLARABEL remains the authoritative
 solver for the frozen Case118 hierarchy.
+
+## 2026-09-04 — S4b qualification completed
+
+The bounded S4b sequence completed all seven requested trajectories: ordinary
+uninterrupted `[0,24)`, one-process partitioned `[0,12)` and `[12,24)`, two
+sequential fresh-process shards, and the concurrent two-worker demonstration.
+Independent reconstruction accepted every shard and merge. The sequential
+fresh-process trajectories reproduced the one-process partitioned policy with
+zero retained scientific residual, while the ordinary comparison retained the
+expected descriptive boundary effect.
+
+The concurrent demonstration achieved concurrency two under the frozen
+resource limits. One primary reached its typed 300-second budget and then
+advanced exactly once through the accepted causal recovery path; this is
+retained as operational timeout/recovery evidence rather than required to
+reproduce the one-process attempt tree. The compact `S4B_RESULTS.json` is
+28,506 bytes with SHA-256
+`45dd2e81b8732bd7729ad02edf86c56d021e3d2f6ed5fa934053efc59b09f2ce`
+and records `accepted_for_s5=true`.
+
+The separate `S5_EXECUTION_AUTHORITY.json` therefore authorizes use of the
+immutable annual shard manifest for S5 planning and implementation. It does
+not authorize numerical S5 execution; that remains blocked until the annual
+runner, supervision, merge, and audit path are implemented and reviewed.
