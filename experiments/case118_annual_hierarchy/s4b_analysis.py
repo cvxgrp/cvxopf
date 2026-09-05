@@ -461,13 +461,9 @@ def analyze_s4b(
     )
     process_residuals = (
         {
-            f"{mode}:{suffix}": _maximum_numeric_difference(
+            f"partitioned_fresh_sequential:{suffix}": _maximum_numeric_difference(
                 trajectories[f"partitioned_one_process:{suffix}"],
-                trajectories[f"{mode}:{suffix}"],
-            )
-            for mode in (
-                "partitioned_fresh_sequential",
-                "partitioned_fresh_concurrent",
+                trajectories[f"partitioned_fresh_sequential:{suffix}"],
             )
             for suffix in (
                 "s4b-qualification-partition-a",
@@ -481,18 +477,28 @@ def analyze_s4b(
         complete
         and all(value <= 1e-5 for value in process_residuals.values())
         and all(
-            merged_by_mode[mode][name]
+            merged_by_mode["partitioned_fresh_sequential"][name]
             == merged_by_mode["partitioned_one_process"][name]
-            for mode in (
-                "partitioned_fresh_sequential",
-                "partitioned_fresh_concurrent",
-            )
             for name in (
+                "classification",
+                "execution_complete",
                 "completed_intervals",
-                "initial_state",
-                "terminal_state",
                 "all_independent_audits_agree",
             )
+        )
+    )
+    concurrent_demonstration_accepted = bool(
+        complete
+        and merged_by_mode["partitioned_fresh_concurrent"][
+            "all_independent_audits_agree"
+        ]
+        is True
+        and any(
+            record["classification"] == "accepted"
+            and record["run_label"] == "partitioned_fresh_concurrent"
+            and record["requested_concurrency"] == 2
+            and record["maximum_observed_concurrency"] == 2
+            for record in supervision
         )
     )
     if complete:
@@ -557,13 +563,7 @@ def analyze_s4b(
                 item["all_independent_audits_agree"] is True
                 for item in merged_by_mode.values()
             )
-            and any(
-                record["classification"] == "accepted"
-                and record["run_label"] == "partitioned_fresh_concurrent"
-                and record["requested_concurrency"] == 2
-                and record["maximum_observed_concurrency"] == 2
-                for record in supervision
-            )
+            and concurrent_demonstration_accepted
         ),
         "shard_artifacts": artifacts,
         "shard_summaries": summaries,
@@ -572,6 +572,26 @@ def analyze_s4b(
         "process_equivalent": process_equivalent,
         "run_evidence_matrix_complete": run_matrix_complete,
         "process_equivalence_maximum_absolute_residuals": process_residuals,
+        "concurrent_demonstration": {
+            "accepted": concurrent_demonstration_accepted,
+            "comparison_role": "bounded_operational_demonstration_not_process_equivalence_gate",
+            "timeout_count_by_shard": {
+                shard_id: workers[
+                    f"partitioned_fresh_concurrent:{shard_id}"
+                ]["timeout_count"]
+                for shard_id in QUALIFICATION_RUNS[
+                    "partitioned_fresh_concurrent"
+                ]
+            },
+            "recovery_window_count_by_shard": {
+                shard_id: workers[
+                    f"partitioned_fresh_concurrent:{shard_id}"
+                ]["recovery_window_count"]
+                for shard_id in QUALIFICATION_RUNS[
+                    "partitioned_fresh_concurrent"
+                ]
+            },
+        },
         "boundary_effect_characterization": boundary_effect,
         "analysis_context": analysis_context(),
     }

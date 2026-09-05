@@ -498,6 +498,8 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
                 "execution_complete": True,
                 "classification": "accepted",
                 "all_independent_audits_agree": True,
+                "timeout_count": 0,
+                "recovery_window_count": 0,
                 "checkpoint_sha256": "a" * 64,
                 "window_chain_sha256": "b" * 64,
             }
@@ -540,7 +542,12 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
         interval = interval_by_id[worker["shard_id"]]
         archives = tuple(
             {
-                "attempts": [],
+                "attempts": (
+                    [{"classification": "timeout_then_recovered"}]
+                    if worker["execution_mode"]
+                    == "partitioned_fresh_concurrent"
+                    else []
+                ),
                 "executed_interval": {"b_mw": [0.0]},
                 "post_step_soc_mwh": [0.0],
                 "interval_stop": (
@@ -558,9 +565,9 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
         s4b_analysis,
         "merge_shard_summaries",
         lambda *_args, **_kwargs: {
+            "classification": "accepted_bounded_partition",
+            "execution_complete": True,
             "completed_intervals": 24,
-            "initial_state": {},
-            "terminal_state": {},
             "all_independent_audits_agree": True,
         },
     )
@@ -631,6 +638,10 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
     assert result["execution_complete"] is True
     assert result["run_evidence_matrix_complete"] is True
     assert result["accepted_for_s5"] is True
+    assert result["process_equivalent"] is True
+    assert cast(dict[str, object], result["concurrent_demonstration"])[
+        "accepted"
+    ] is True
     assert (
         cast(dict[str, object], result["boundary_effect_characterization"])[
             "window_structures_differ"
