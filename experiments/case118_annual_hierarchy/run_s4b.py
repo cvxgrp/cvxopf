@@ -26,6 +26,7 @@ from experiments.case118_annual_hierarchy.run_s0 import ROOT, _software_versions
 from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
 from experiments.case118_annual_hierarchy.s4b_execution import (
     AUTHORITY_FILENAME,
+    EXPECTED_QUALIFICATION_REGISTRY_SHA256,
     audit_shard,
     load_qualification_authority,
     merge_shard_summaries,
@@ -81,6 +82,8 @@ QUALIFICATION_RUNS = {
         "s4b-qualification-partition-b",
     ),
 }
+QUALIFICATION_SCOPE = "qualification"
+ANNUAL_SCOPE = "annual"
 
 SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/FIVE_MINUTE_TIMEOUT_POLICY.md",
@@ -242,6 +245,77 @@ def execution_context() -> Mapping[str, object]:
     }
 
 
+def _scope_context(execution_scope: str) -> Mapping[str, object]:
+    if execution_scope == QUALIFICATION_SCOPE:
+        return execution_context()
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_execution import (
+            execution_context as s5_execution_context,
+        )
+
+        return s5_execution_context()
+    raise ValueError("unsupported S4b/S5 execution scope")
+
+
+def _scope_authority(
+    execution_scope: str,
+    authority_path: Path,
+    *,
+    expected_commit: str,
+    expected_source_fingerprint: str,
+) -> Mapping[str, object]:
+    if execution_scope == QUALIFICATION_SCOPE:
+        return load_qualification_authority(
+            authority_path,
+            expected_execution_commit=expected_commit,
+            expected_source_fingerprint=expected_source_fingerprint,
+        )
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_execution import (
+            load_numerical_authority,
+        )
+
+        return load_numerical_authority(
+            authority_path,
+            expected_execution_commit=expected_commit,
+            expected_source_fingerprint=expected_source_fingerprint,
+        )
+    raise ValueError("unsupported S4b/S5 execution scope")
+
+
+def _scope_shard_entry(
+    execution_scope: str, shard_id: str, outer: StreamingOuterPlan
+) -> tuple[Mapping[str, object], Mapping[str, object]]:
+    if execution_scope == QUALIFICATION_SCOPE:
+        return qualification_shard_entry(shard_id, outer)
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_execution import annual_registry
+
+        registry = annual_registry()
+        if shard_id not in cast(Sequence[str], registry["shard_ids"]):
+            raise ValueError("unknown S5 annual shard")
+        return shard_entry(shard_id)
+    raise ValueError("unsupported S4b/S5 execution scope")
+
+
+def _scope_registry_sha256(execution_scope: str) -> str:
+    if execution_scope == QUALIFICATION_SCOPE:
+        return EXPECTED_QUALIFICATION_REGISTRY_SHA256
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_execution import annual_registry
+
+        return str(annual_registry()["registry_sha256"])
+    raise ValueError("unsupported S4b/S5 execution scope")
+
+
+def _scope_execution_modes(execution_scope: str) -> Sequence[str] | None:
+    if execution_scope == QUALIFICATION_SCOPE:
+        return None
+    if execution_scope == ANNUAL_SCOPE:
+        return (ANNUAL_SCOPE,)
+    raise ValueError("unsupported S4b/S5 execution scope")
+
+
 def _mapping(value: object, label: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{label} must be a mapping")
@@ -335,23 +409,28 @@ def execute_one_window_child(
     authority_path: Path,
     expected_commit: str,
     expected_source_fingerprint: str,
+    execution_scope: str = QUALIFICATION_SCOPE,
 ) -> None:
     """Construct and archive one candidate window; never advance the checkpoint."""
-    context = execution_context()
+    context = _scope_context(execution_scope)
     if (
         context["git_clean"] is not True
         or context["git_commit"] != expected_commit
         or context["source_fingerprint"] != expected_source_fingerprint
     ):
         raise ValueError("S4b window child provenance mismatch")
-    load_qualification_authority(
+    _scope_authority(
+        execution_scope,
         authority_path,
-        expected_execution_commit=expected_commit,
+        expected_commit=expected_commit,
         expected_source_fingerprint=expected_source_fingerprint,
     )
-    _, shard = qualification_shard_entry(shard_id, _outer())
+    _, shard = _scope_shard_entry(execution_scope, shard_id, _outer())
     checkpoint = validate_shard_checkpoint(
-        json.loads((directory / "checkpoint.json").read_text()), shard=shard
+        json.loads((directory / "checkpoint.json").read_text()),
+        shard=shard,
+        expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
+        allowed_execution_modes=_scope_execution_modes(execution_scope),
     )
     if checkpoint["next_global_iteration"] != iteration:
         raise ValueError("window child iteration differs from checkpoint")
@@ -547,18 +626,20 @@ def _run_shard_worker_body(
     authority_path: Path,
     reviewed_resume: bool = False,
     execution_mode: str = "ordinary",
+    execution_scope: str = QUALIFICATION_SCOPE,
 ) -> Mapping[str, object]:
     """Run one authorized shard through isolated window processes."""
-    context = execution_context()
+    context = _scope_context(execution_scope)
     child_usage_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     if context["git_clean"] is not True:
         raise ValueError("S4b execution requires a clean committed worktree")
-    load_qualification_authority(
+    _scope_authority(
+        execution_scope,
         authority_path,
-        expected_execution_commit=str(context["git_commit"]),
+        expected_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
-    _, shard = qualification_shard_entry(shard_id, _outer())
+    _, shard = _scope_shard_entry(execution_scope, shard_id, _outer())
     outer = _outer()
     interval = _mapping(shard["interval"], "shard interval")
     storage = _mapping(shard["storage"], "shard storage")
@@ -568,7 +649,13 @@ def _run_shard_worker_body(
     if directory.exists():
         if not reviewed_resume:
             raise FileExistsError("S4b partial shard requires explicit reviewed resume")
-        checkpoint, _ = verify_shard_artifacts(directory, shard=shard, outer=outer)
+        checkpoint, _ = verify_shard_artifacts(
+            directory,
+            shard=shard,
+            outer=outer,
+            expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
+        )
         if (
             checkpoint["execution_source_fingerprint"] != context["source_fingerprint"]
             or checkpoint["outer_plan_sha256"] != sha256_path(S4_OUTER_ARCHIVE_PATH)
@@ -602,6 +689,8 @@ def _run_shard_worker_body(
             realized_soc_mwh=initial,
             preceding_controlling_attempt_id=None,
             windows=(),
+            execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
         )
         write_shard_checkpoint(directory / "checkpoint.json", checkpoint)
         windows = []
@@ -626,6 +715,8 @@ def _run_shard_worker_body(
             str(context["git_commit"]),
             "--expected-source-fingerprint",
             str(context["source_fingerprint"]),
+            "--execution-scope",
+            execution_scope,
         ]
         record = supervise_window_process(
             base_command, directory=directory, iteration=iteration
@@ -682,9 +773,17 @@ def _run_shard_worker_body(
             realized_soc_mwh=cast(Sequence[float], archive["post_step_soc_mwh"]),
             preceding_controlling_attempt_id=str(executed["controlling_attempt_id"]),
             windows=windows,
+            execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
         )
         write_shard_checkpoint(directory / "checkpoint.json", checkpoint)
-        verify_shard_artifacts(directory, shard=shard, outer=outer)
+        verify_shard_artifacts(
+            directory,
+            shard=shard,
+            outer=outer,
+            expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
+        )
         timing.append(record)
     child_usage_stop = resource.getrusage(resource.RUSAGE_CHILDREN)
     prior_child_cpu = sum(
@@ -699,7 +798,13 @@ def _run_shard_worker_body(
         for path in directory.glob("termination-*.json")
     )
     result = {
-        **audit_shard(directory, shard=shard, outer=outer),
+        **audit_shard(
+            directory,
+            shard=shard,
+            outer=outer,
+            expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
+        ),
         "execution_context": context,
         "execution_mode": execution_mode,
         "worker_pid": os.getpid(),
@@ -727,6 +832,7 @@ def run_shard_worker(
     authority_path: Path = DEFAULT_AUTHORITY_PATH,
     reviewed_resume: bool = False,
     execution_mode: str = "ordinary",
+    execution_scope: str = QUALIFICATION_SCOPE,
 ) -> Mapping[str, object]:
     """Run a shard and retain any post-preflight abnormal termination."""
     previous_handler = signal.getsignal(signal.SIGTERM)
@@ -743,6 +849,7 @@ def run_shard_worker(
             authority_path=authority_path,
             reviewed_resume=reviewed_resume,
             execution_mode=execution_mode,
+            execution_scope=execution_scope,
         )
     except BaseException as exc:
         if directory.is_dir():
@@ -1145,6 +1252,11 @@ def main() -> None:
     parser.add_argument("--primary-timeout", type=float)
     parser.add_argument("--reviewed-resume", action="store_true")
     parser.add_argument("--execution-mode", default="ordinary")
+    parser.add_argument(
+        "--execution-scope",
+        choices=(QUALIFICATION_SCOPE, ANNUAL_SCOPE),
+        default=QUALIFICATION_SCOPE,
+    )
     parser.add_argument("--run-label", default="ordinary")
     parser.add_argument("--summaries", type=Path, nargs="*")
     parser.add_argument("--shard-ids", nargs="*")
@@ -1179,6 +1291,7 @@ def main() -> None:
             authority_path=args.authority,
             expected_commit=args.expected_commit,
             expected_source_fingerprint=args.expected_source_fingerprint,
+            execution_scope=args.execution_scope,
         )
     elif args.worker:
         if args.directory is None or args.shard_id is None:
@@ -1191,6 +1304,7 @@ def main() -> None:
                     authority_path=args.authority,
                     reviewed_resume=args.reviewed_resume,
                     execution_mode=args.execution_mode,
+                    execution_scope=args.execution_scope,
                 )
             )
         )

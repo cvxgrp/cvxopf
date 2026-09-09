@@ -224,6 +224,8 @@ def shard_checkpoint_payload(
     realized_soc_mwh: Sequence[float],
     preceding_controlling_attempt_id: str | None,
     windows: Sequence[WindowIndexEntry],
+    execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_modes: Sequence[str] | None = None,
 ) -> dict[str, object]:
     """Create the one atomic global-coordinate shard checkpoint."""
     interval = _mapping(shard.get("interval"), "shard interval")
@@ -234,7 +236,7 @@ def shard_checkpoint_payload(
     payload = {
         "schema_version": SCHEMA_VERSION,
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
-        "qualification_registry_sha256": EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+        "execution_registry_sha256": execution_registry_sha256,
         "shard_id": shard["shard_id"],
         "ordinal": shard["ordinal"],
         "interval": dict(interval),
@@ -255,7 +257,16 @@ def shard_checkpoint_payload(
         "windows": [entry.__dict__ for entry in windows],
         "complete": start + completed == stop,
     }
-    validate_shard_checkpoint(payload, shard=shard)
+    if execution_registry_sha256 == EXPECTED_QUALIFICATION_REGISTRY_SHA256:
+        payload["qualification_registry_sha256"] = (
+            EXPECTED_QUALIFICATION_REGISTRY_SHA256
+        )
+    validate_shard_checkpoint(
+        payload,
+        shard=shard,
+        expected_execution_registry_sha256=execution_registry_sha256,
+        allowed_execution_modes=allowed_execution_modes,
+    )
     return payload
 
 
@@ -263,6 +274,8 @@ def validate_shard_checkpoint(
     value: object,
     *,
     shard: Mapping[str, object],
+    expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_modes: Sequence[str] | None = None,
 ) -> Mapping[str, object]:
     """Validate checkpoint identity and its global contiguous window registry."""
     checkpoint = _mapping(value, "S4b shard checkpoint")
@@ -274,8 +287,11 @@ def validate_shard_checkpoint(
     if (
         checkpoint.get("schema_version") != SCHEMA_VERSION
         or checkpoint.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
-        or checkpoint.get("qualification_registry_sha256")
-        != EXPECTED_QUALIFICATION_REGISTRY_SHA256
+        or checkpoint.get(
+            "execution_registry_sha256",
+            checkpoint.get("qualification_registry_sha256"),
+        )
+        != expected_execution_registry_sha256
         or checkpoint.get("shard_id") != shard.get("shard_id")
         or checkpoint.get("ordinal") != shard.get("ordinal")
         or checkpoint.get("interval") != interval
@@ -285,7 +301,13 @@ def validate_shard_checkpoint(
         or not isinstance(checkpoint.get("outer_plan_sha256"), str)
         or len(cast(str, checkpoint["outer_plan_sha256"])) != 64
         or checkpoint.get("execution_mode")
-        not in _mapping(shard.get("run_locations"), "qualification run locations")
+        not in (
+            tuple(allowed_execution_modes)
+            if allowed_execution_modes is not None
+            else tuple(
+                _mapping(shard.get("run_locations"), "qualification run locations")
+            )
+        )
         or isinstance(completed, bool)
         or not isinstance(completed, int)
         or completed != len(windows)
@@ -363,11 +385,16 @@ def verify_shard_artifacts(
     *,
     shard: Mapping[str, object],
     outer: StreamingOuterPlan,
+    expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_modes: Sequence[str] | None = None,
 ) -> tuple[Mapping[str, object], tuple[Mapping[str, object], ...]]:
     """Independently verify a shard checkpoint and every immutable window."""
     checkpoint_path = directory / "checkpoint.json"
     checkpoint = validate_shard_checkpoint(
-        json.loads(checkpoint_path.read_text()), shard=shard
+        json.loads(checkpoint_path.read_text()),
+        shard=shard,
+        expected_execution_registry_sha256=expected_execution_registry_sha256,
+        allowed_execution_modes=allowed_execution_modes,
     )
     fixture = load_s4_fixture()
     policy = frozen_p0_policy()
@@ -448,9 +475,17 @@ def audit_shard(
     *,
     shard: Mapping[str, object],
     outer: StreamingOuterPlan,
+    expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_modes: Sequence[str] | None = None,
 ) -> Mapping[str, object]:
     """Reconstruct scientific metrics from retained results, never worker labels."""
-    checkpoint, archives = verify_shard_artifacts(directory, shard=shard, outer=outer)
+    checkpoint, archives = verify_shard_artifacts(
+        directory,
+        shard=shard,
+        outer=outer,
+        expected_execution_registry_sha256=expected_execution_registry_sha256,
+        allowed_execution_modes=allowed_execution_modes,
+    )
     fixture = load_s4_fixture()
     metrics = [_interval_metrics(archive, fixture.inputs) for archive in archives]
     timeouts = sum(
@@ -676,7 +711,7 @@ def audit_shard(
     summary = {
         "schema_version": SCHEMA_VERSION,
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
-        "qualification_registry_sha256": EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+        "execution_registry_sha256": expected_execution_registry_sha256,
         "shard_id": shard["shard_id"],
         "interval": shard["interval"],
         "classification": "accepted" if scientifically_accepted else "rejected",
@@ -745,6 +780,10 @@ def audit_shard(
         ),
         "all_independent_audits_agree": audits_agree,
     }
+    if expected_execution_registry_sha256 == EXPECTED_QUALIFICATION_REGISTRY_SHA256:
+        summary["qualification_registry_sha256"] = (
+            EXPECTED_QUALIFICATION_REGISTRY_SHA256
+        )
     return {**summary, "summary_sha256": object_sha256(summary)}
 
 
@@ -753,6 +792,7 @@ def merge_shard_summaries(
     *,
     manifest_path: Path = S4B_MANIFEST_PATH,
     registry_shards: Sequence[Mapping[str, object]] | None = None,
+    expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
 ) -> Mapping[str, object]:
     """Merge complete shard summaries deterministically in global interval order."""
     envelope = load_verified_manifest(manifest_path)
@@ -780,8 +820,11 @@ def merge_shard_summaries(
         if (
             summary.get("summary_sha256") != object_sha256(base)
             or summary.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
-            or summary.get("qualification_registry_sha256")
-            != EXPECTED_QUALIFICATION_REGISTRY_SHA256
+            or summary.get(
+                "execution_registry_sha256",
+                summary.get("qualification_registry_sha256"),
+            )
+            != expected_execution_registry_sha256
             or summary.get("interval") != registered[shard_id]["interval"]
             or summary.get("classification") != "accepted"
             or summary.get("execution_complete") is not True
@@ -860,7 +903,7 @@ def merge_shard_summaries(
     payload = {
         "schema_version": SCHEMA_VERSION,
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
-        "qualification_registry_sha256": EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+        "execution_registry_sha256": expected_execution_registry_sha256,
         "classification": (
             "accepted_annual_partition"
             if expected_horizon == 8_760
@@ -941,6 +984,10 @@ def merge_shard_summaries(
         or payload["completed_intervals"] != expected_horizon
     ):
         raise ValueError("S4b merged trajectory is not a complete selected partition")
+    if expected_execution_registry_sha256 == EXPECTED_QUALIFICATION_REGISTRY_SHA256:
+        payload["qualification_registry_sha256"] = (
+            EXPECTED_QUALIFICATION_REGISTRY_SHA256
+        )
     return {**payload, "merged_sha256": sha256(canonical_json(payload)).hexdigest()}
 
 
