@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/power-grid-lib/pglib-opf",
+  "source_revision": "dc6be4b2f85ca0e776952ec22cbd4c22396ea5a3",
+  "source_case": "pglib_opf_case118_ieee",
+  "data_license": "CC-BY-4.0",
+  "artifacts": {
+    "case": {
+      "file": "pglib_opf_case118_ieee.m",
+      "sha256": "b1af0833849040c04babc3700631cff0d9afa66b79c5d3e13ae79bdf516cec78"
+    },
+    "license": {
+      "file": "PGLIB_LICENSE",
+      "sha256": "95b1cd9fee1676221d74f7c0cbba622d98ac098e9b317b3848113ef4356ab4fd"
+    }
+  },
+  "arrays": {
+    "bus": {
+      "shape": [118, 13],
+      "sha256": "d0c3a888fd2b8425e25947eab8c79aa6d445dee884e050eec5592407cefec54a"
+    },
+    "gen": {
+      "shape": [54, 10],
+      "sha256": "6b871277b082bbfa9659f6e3cb3e2886786ed31df06e89c85ef6330332563e9b"
+    },
+    "gencost": {
+      "shape": [54, 7],
+      "sha256": "c81501da0ad95d25e5f464a79595609e7770b5a67fbe42cea5454d55c49568ae"
+    },
+    "branch": {
+      "shape": [186, 13],
+      "sha256": "051804a800d9c61503d86c479e40c86df66420a9b34c91367d37d1a165aab304"
+    }
+  },
+  "converted_arrays": {
+    "bus": {
+      "shape": [118, 13],
+      "sha256": "d0c3a888fd2b8425e25947eab8c79aa6d445dee884e050eec5592407cefec54a"
+    },
+    "gen": {
+      "shape": [54, 21],
+      "sha256": "fdc812dab057cf519bacbec3a8c2f6fd0bc11f09d72b86aa358896838944feca"
+    },
+    "gencost": {
+      "shape": [54, 7],
+      "sha256": "c81501da0ad95d25e5f464a79595609e7770b5a67fbe42cea5454d55c49568ae"
+    },
+    "branch": {
+      "shape": [186, 13],
+      "sha256": "051804a800d9c61503d86c479e40c86df66420a9b34c91367d37d1a165aab304"
+    }
+  },
+  "conversion": {
+    "generator_columns_10_through_20": "filled with zero because PGLib supplies the ten required MATPOWER generator columns and cvxopf requires the 21-column extended layout"
+  },
+  "unsupported_fields": {
+    "branch_angle_difference_limits": "retained in columns 11 and 12 but not modeled by cvxopf"
+  }
+}

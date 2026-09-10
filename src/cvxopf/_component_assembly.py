@@ -27,8 +27,16 @@ from cvxopf._component_adapter import (
     PreparedComponent,
     StepContext,
     StepContribution,
+    VectorizedComponentContribution,
+    VectorizedContext,
+    VectorizedModelContribution,
     _validate_positive_real,
     bind_injection_scale,
+)
+from cvxopf._temporal_assembly import (
+    HorizonVariableSpec,
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
 )
 
 
@@ -101,9 +109,7 @@ def prepare_components(
         if binding.capability is FormulationCapability.NULL:
             prepared_data = {}
         else:
-            prepared_data = adapter.prepare(
-                request.units, request.inputs, context
-            )
+            prepared_data = adapter.prepare(request.units, request.inputs, context)
             overlap = set(flat_data).intersection(prepared_data)
             if overlap:
                 raise ValueError(
@@ -146,9 +152,8 @@ def _validate_step_variable_schemas(
     first = step_contributions[0]
     component_names = tuple(first)
     component_name_set = set(component_names)
-    if (
-        expected_components is not None
-        and component_name_set != set(expected_components)
+    if expected_components is not None and component_name_set != set(
+        expected_components
     ):
         raise ValueError(
             "step 0 component keys do not match the prepared registry: "
@@ -172,8 +177,9 @@ def _validate_step_variable_schemas(
         for component_name in component_names:
             actual_schema = {
                 variable_name: variable.shape
-                for variable_name, variable
-                in contributions[component_name].variables.items()
+                for variable_name, variable in contributions[
+                    component_name
+                ].variables.items()
             }
             if actual_schema != variable_schemas[component_name]:
                 raise ValueError(
@@ -188,7 +194,7 @@ def _validate_injection_contribution(
     contribution: InjectionContribution,
     *,
     formulation: Formulation,
-    nb: int,
+    expected_shape: tuple[int, ...],
 ) -> None:
     """Enforce exact nodal-channel shapes and formulation channel support."""
     if formulation != "ac" and contribution.q_pu is not None:
@@ -196,7 +202,6 @@ def _validate_injection_contribution(
             f"component {component_name!r} returned a reactive injection "
             f"for formulation {formulation!r}; q_pu must be None"
         )
-    expected_shape = (nb,)
     for channel_name, expression in (
         ("p_pu", contribution.p_pu),
         ("q_pu", contribution.q_pu),
@@ -220,8 +225,7 @@ def _validate_injection_contribution(
         return
     if not isinstance(parameter, cp.Parameter):
         raise ValueError(
-            f"component {component_name!r} inv_base_mva must be "
-            "a scalar cp.Parameter"
+            f"component {component_name!r} inv_base_mva must be a scalar cp.Parameter"
         )
     if parameter.shape != ():
         raise ValueError(
@@ -256,13 +260,9 @@ def assemble_component_step(
             "step formulation does not match prepared component formulation"
         )
     if context.base_mva != prepared.context.base_mva:
-        raise ValueError(
-            "step base_mva does not match component preparation"
-        )
+        raise ValueError("step base_mva does not match component preparation")
     if context.ext_to_int != prepared.context.ext_to_int:
-        raise ValueError(
-            "step ext_to_int does not match component preparation"
-        )
+        raise ValueError("step ext_to_int does not match component preparation")
     if context.step >= prepared.context.horizon_steps:
         raise ValueError(
             f"step index {context.step} is outside prepared horizon "
@@ -286,21 +286,14 @@ def assemble_component_step(
         assert binding.injections is not None
         assert binding.operating_constraints is not None
         assert binding.horizon is not None
-        specs = binding.variable_specs(
-            component.units, component.data, context
-        )
+        specs = binding.variable_specs(component.units, component.data, context)
         variable_names = [spec.name for spec in specs]
         duplicate_names = sorted(
-            {
-                name
-                for name in variable_names
-                if variable_names.count(name) > 1
-            }
+            {name for name in variable_names if variable_names.count(name) > 1}
         )
         if duplicate_names:
             raise ValueError(
-                f"component {name!r} requested duplicate variables: "
-                f"{duplicate_names}"
+                f"component {name!r} requested duplicate variables: {duplicate_names}"
             )
         variables = {
             spec.name: cp.Variable(
@@ -317,7 +310,7 @@ def assemble_component_step(
             name,
             injection,
             formulation=context.formulation,
-            nb=prepared.context.nb,
+            expected_shape=(prepared.context.nb,),
         )
         bind_injection_scale(injection, context.base_mva)
         operating_constraints = binding.operating_constraints(
@@ -333,9 +326,7 @@ def assemble_component_step(
         cost = (
             None
             if binding.step_cost is None
-            else binding.step_cost(
-                component.units, component.data, variables, context
-            )
+            else binding.step_cost(component.units, component.data, variables, context)
         )
         expressions = (
             {}
@@ -358,6 +349,164 @@ def assemble_component_step(
     return MappingProxyType(contributions)
 
 
+def _validate_vectorized_model_contribution(
+    component_name: str,
+    model: VectorizedModelContribution,
+    *,
+    context: VectorizedContext,
+    nb: int,
+) -> None:
+    """Enforce time-last shapes and the device-layer DCP boundary."""
+    _validate_injection_contribution(
+        component_name,
+        model.injection,
+        formulation=context.formulation,
+        expected_shape=(nb, context.horizon_steps),
+    )
+    for channel_name, expression in (
+        ("p_pu", model.injection.p_pu),
+        ("q_pu", model.injection.q_pu),
+    ):
+        if expression is not None and not expression.is_affine():
+            raise ValueError(
+                f"component {component_name!r} vectorized injection "
+                f"{channel_name} must be affine"
+            )
+    if model.stage_cost_rate is not None:
+        if model.stage_cost_rate.shape != (context.horizon_steps,):
+            raise ValueError(
+                f"component {component_name!r} stage cost rate must have "
+                f"shape ({context.horizon_steps},), got "
+                f"{model.stage_cost_rate.shape}"
+            )
+        if not model.stage_cost_rate.is_convex():
+            raise ValueError(
+                f"component {component_name!r} stage cost rate must be convex"
+            )
+    constraints = (
+        *model.operating_constraints,
+        *model.network_constraints,
+        *model.horizon.constraints,
+    )
+    if any(not constraint.is_dcp() for constraint in constraints):
+        raise ValueError(
+            f"component {component_name!r} vectorized constraints must be DCP"
+        )
+    if model.horizon.terminal_cost is not None and (
+        not model.horizon.terminal_cost.is_scalar()
+        or not model.horizon.terminal_cost.is_convex()
+    ):
+        raise ValueError(
+            f"component {component_name!r} terminal cost must be scalar convex"
+        )
+    _validate_expression_names(component_name, model.expressions, horizon=False)
+    for expression_name, expression in model.expressions.items():
+        if not isinstance(expression, cp.Expression):
+            raise ValueError(
+                f"component {component_name!r} expression "
+                f"{expression_name!r} must be a cp.Expression"
+            )
+        if expression.ndim == 0 or expression.shape[-1] != context.horizon_steps:
+            raise ValueError(
+                f"component {component_name!r} expression "
+                f"{expression_name!r} must have final axis "
+                f"{context.horizon_steps}, got {expression.shape}"
+            )
+    _validate_expression_names(component_name, model.horizon.expressions, horizon=True)
+    for expression_name, expression in model.horizon.expressions.items():
+        if not isinstance(expression, cp.Expression):
+            raise ValueError(
+                f"component {component_name!r} horizon expression "
+                f"{expression_name!r} must be a cp.Expression"
+            )
+
+
+def assemble_component_vectorized(
+    prepared: PreparedComponents,
+    context: VectorizedContext,
+) -> Mapping[str, VectorizedComponentContribution]:
+    """Assemble each component exactly once over a time-last horizon."""
+    if context.formulation != prepared.formulation:
+        raise ValueError("vectorized formulation does not match component preparation")
+    if context.horizon_steps != prepared.context.horizon_steps:
+        raise ValueError(
+            "vectorized horizon_steps does not match component preparation"
+        )
+    if context.delta != prepared.context.delta:
+        raise ValueError("vectorized delta does not match preparation")
+    if context.base_mva != prepared.context.base_mva:
+        raise ValueError("vectorized base_mva does not match preparation")
+    if context.ext_to_int != prepared.context.ext_to_int:
+        raise ValueError("vectorized ext_to_int does not match preparation")
+
+    contributions: dict[str, VectorizedComponentContribution] = {}
+    for name, component in prepared.components.items():
+        binding = component.adapter.formulations[context.formulation]
+        if binding.capability is FormulationCapability.NULL:
+            contributions[name] = VectorizedComponentContribution(
+                variables={},
+                model=VectorizedModelContribution(
+                    injection=InjectionContribution(None, None)
+                ),
+                variable_specs={},
+            )
+            continue
+        if binding.capability is not FormulationCapability.ACTIVE:
+            raise ValueError(
+                f"component {name!r} is not active for "
+                f"formulation {context.formulation!r}"
+            )
+        if (
+            binding.vectorized_variable_specs is None
+            or binding.vectorized_assembly is None
+        ):
+            raise ValueError(
+                f"component {name!r} has no vectorized horizon binding for "
+                f"formulation {context.formulation!r}"
+            )
+        specs = binding.vectorized_variable_specs(
+            component.units, component.data, context
+        )
+        names = [spec.name for spec in specs]
+        duplicates = sorted(
+            {variable_name for variable_name in names if names.count(variable_name) > 1}
+        )
+        if duplicates:
+            raise ValueError(
+                f"component {name!r} requested duplicate vectorized "
+                f"variables: {duplicates}"
+            )
+        variables = {
+            spec.name: cp.Variable(
+                spec.shape(context.horizon_steps),
+                name=spec.name,
+                **spec.attributes,
+            )
+            for spec in specs
+        }
+        model = binding.vectorized_assembly(
+            component.units, component.data, variables, context
+        )
+        _validate_vectorized_model_contribution(
+            name,
+            model,
+            context=context,
+            nb=prepared.context.nb,
+        )
+        bind_injection_scale(model.injection, context.base_mva)
+        contributions[name] = VectorizedComponentContribution(
+            variables=variables,
+            model=model,
+            cost_expression_name=(
+                None
+                if model.stage_cost_rate is None
+                else component.adapter.cost_expression_name
+            ),
+            variable_specs={spec.name: spec for spec in specs},
+        )
+    return MappingProxyType(contributions)
+
+
 def assemble_component_horizon(
     prepared: PreparedComponents,
     step_contributions: Sequence[Mapping[str, StepContribution]],
@@ -369,15 +518,11 @@ def assemble_component_horizon(
             "horizon formulation does not match prepared component formulation"
         )
     if context.horizon_steps != prepared.context.horizon_steps:
-        raise ValueError(
-            "horizon_steps does not match component preparation"
-        )
+        raise ValueError("horizon_steps does not match component preparation")
     if context.delta != prepared.context.delta:
         raise ValueError("horizon delta does not match component preparation")
     if len(step_contributions) != context.horizon_steps:
-        raise ValueError(
-            "step contribution count must equal horizon_steps"
-        )
+        raise ValueError("step contribution count must equal horizon_steps")
     _validate_step_variable_schemas(
         step_contributions,
         expected_components=tuple(prepared.components),
@@ -392,8 +537,7 @@ def assemble_component_horizon(
         variable_names = step_contributions[0][name].variables
         variable_history = {
             variable_name: [
-                step[name].variables[variable_name]
-                for step in step_contributions
+                step[name].variables[variable_name] for step in step_contributions
             ]
             for variable_name in variable_names
         }
@@ -418,9 +562,7 @@ def aggregate_step_contributions(
     costs: list[cp.Expression] = []
     expressions: dict[str, cp.Expression] = {}
     for name, contribution in contributions.items():
-        duplicate_variables = set(variables).intersection(
-            contribution.variables
-        )
+        duplicate_variables = set(variables).intersection(contribution.variables)
         if duplicate_variables:
             raise ValueError(
                 f"component {name!r} published duplicate variables: "
@@ -439,16 +581,11 @@ def aggregate_step_contributions(
                 or not contribution.cost.is_scalar()
             ):
                 raise ValueError(
-                    f"component {name!r} step cost must be a scalar "
-                    "cp.Expression"
+                    f"component {name!r} step cost must be a scalar cp.Expression"
                 )
             costs.append(contribution.cost)
-        _validate_expression_names(
-            name, contribution.expressions, horizon=False
-        )
-        duplicate_expressions = set(expressions).intersection(
-            contribution.expressions
-        )
+        _validate_expression_names(name, contribution.expressions, horizon=False)
+        duplicate_expressions = set(expressions).intersection(contribution.expressions)
         if duplicate_expressions:
             raise ValueError(
                 f"component {name!r} published duplicate expressions: "
@@ -470,6 +607,141 @@ def aggregate_step_contributions(
         operating_constraints=tuple(operating_constraints),
         network_constraints=tuple(network_constraints),
         cost=ordered_sum(costs),
+        expressions=expressions,
+    )
+
+
+def _ordered_expression_sum(
+    values: Sequence[cp.Expression],
+) -> cp.Expression | None:
+    """Return a deterministic expression sum without a scalar-zero seed."""
+    if not values:
+        return None
+    return cast(cp.Expression, sum(values[1:], start=values[0]))
+
+
+def aggregate_vectorized_contributions(
+    contributions: Mapping[str, VectorizedComponentContribution],
+) -> VectorizedComponentContribution:
+    """Compose complete component horizons without iterating over time."""
+    variables: dict[str, cp.Variable] = {}
+    operating_constraints: list[cp.Constraint] = []
+    network_constraints: list[cp.Constraint] = []
+    p_injections: list[cp.Expression] = []
+    q_injections: list[cp.Expression] = []
+    stage_cost_rates: list[cp.Expression] = []
+    expressions: dict[str, cp.Expression] = {}
+    variable_specs: dict[str, HorizonVariableSpec] = {}
+    horizon_contributions: dict[str, HorizonContribution] = {}
+
+    for component_name, contribution in contributions.items():
+        duplicate_variables = set(variables).intersection(contribution.variables)
+        if duplicate_variables:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"variables: {sorted(duplicate_variables)}"
+            )
+        variables.update(contribution.variables)
+        duplicate_specs = set(variable_specs).intersection(contribution.variable_specs)
+        if duplicate_specs:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"variable specifications: {sorted(duplicate_specs)}"
+            )
+        variable_specs.update(contribution.variable_specs)
+        model = contribution.model
+        if model.injection.p_pu is not None:
+            p_injections.append(model.injection.p_pu)
+        if model.injection.q_pu is not None:
+            q_injections.append(model.injection.q_pu)
+        operating_constraints.extend(model.operating_constraints)
+        network_constraints.extend(model.network_constraints)
+        if model.stage_cost_rate is not None:
+            stage_cost_rates.append(model.stage_cost_rate)
+        duplicate_expressions = set(expressions).intersection(model.expressions)
+        if duplicate_expressions:
+            raise ValueError(
+                f"component {component_name!r} published duplicate vectorized "
+                f"expressions: {sorted(duplicate_expressions)}"
+            )
+        expressions.update(model.expressions)
+        horizon_contributions[component_name] = model.horizon
+
+    horizon = aggregate_horizon_contributions(horizon_contributions)
+    return VectorizedComponentContribution(
+        variables=variables,
+        model=VectorizedModelContribution(
+            injection=InjectionContribution(
+                _ordered_expression_sum(p_injections),
+                _ordered_expression_sum(q_injections),
+            ),
+            operating_constraints=tuple(operating_constraints),
+            network_constraints=tuple(network_constraints),
+            stage_cost_rate=_ordered_expression_sum(stage_cost_rates),
+            expressions=expressions,
+            horizon=horizon,
+        ),
+        variable_specs=variable_specs,
+    )
+
+
+def vectorized_component_result_projections(
+    contribution: VectorizedComponentContribution,
+    integrated_component_costs: Mapping[str, cp.Expression] | None = None,
+) -> ResultProjectionRegistry:
+    """Return typed public projections for one aggregated component horizon.
+
+    Variable temporal class and public shape come from the retained variable
+    specifications.  Expression temporal class comes from the contribution
+    channel itself: model expressions are interval-valued and horizon
+    expressions are published once.  No solved value or name convention is
+    inspected.
+    """
+    if set(contribution.variables) != set(contribution.variable_specs):
+        raise ValueError(
+            "vectorized component variables require retained result schemas"
+        )
+    variables = {
+        name: spec.result_projection()
+        for name, spec in contribution.variable_specs.items()
+    }
+    expressions = {
+        name: ResultProjectionSpec(
+            name,
+            tuple(int(dimension) for dimension in expression.shape[:-1]),
+            tuple(int(dimension) for dimension in expression.shape[:-1]),
+            "interval",
+        )
+        for name, expression in contribution.model.expressions.items()
+    }
+    horizon_expressions = dict(contribution.model.horizon.expressions)
+    for name, expression in (
+        {} if integrated_component_costs is None else integrated_component_costs
+    ).items():
+        if not isinstance(expression, cp.Expression) or not expression.is_scalar():
+            raise ValueError(
+                f"integrated component cost {name!r} must be a scalar cp.Expression"
+            )
+        if name in horizon_expressions:
+            raise ValueError(
+                f"integrated component cost {name!r} collides with a horizon "
+                "expression projection"
+            )
+        horizon_expressions[name] = expression
+    for name, expression in horizon_expressions.items():
+        if name in expressions:
+            raise ValueError(
+                f"duplicate component result expression projection {name!r}"
+            )
+        native_shape = tuple(int(dimension) for dimension in expression.shape)
+        expressions[name] = ResultProjectionSpec(
+            name,
+            native_shape,
+            native_shape,
+            "horizon",
+        )
+    return ResultProjectionRegistry(
+        variables=variables,
         expressions=expressions,
     )
 
@@ -505,16 +777,11 @@ def aggregate_horizon_contributions(
                 or not contribution.terminal_cost.is_scalar()
             ):
                 raise ValueError(
-                    f"component {name!r} terminal cost must be a scalar "
-                    "cp.Expression"
+                    f"component {name!r} terminal cost must be a scalar cp.Expression"
                 )
             terminal_costs.append(contribution.terminal_cost)
-        _validate_expression_names(
-            name, contribution.expressions, horizon=True
-        )
-        duplicate_expressions = set(expressions).intersection(
-            contribution.expressions
-        )
+        _validate_expression_names(name, contribution.expressions, horizon=True)
+        duplicate_expressions = set(expressions).intersection(contribution.expressions)
         if duplicate_expressions:
             raise ValueError(
                 f"component {name!r} published duplicate horizon expressions: "
@@ -547,8 +814,7 @@ def integrate_stage_cost_rates(
     for index, rate in enumerate(stage_cost_rates):
         if not isinstance(rate, cp.Expression) or not rate.is_scalar():
             raise ValueError(
-                f"stage cost rate at index {index} must be a scalar "
-                "cp.Expression"
+                f"stage cost rate at index {index} must be a scalar cp.Expression"
             )
     summed_rate = cast(
         cp.Expression,
@@ -565,9 +831,7 @@ def integrate_component_stage_costs(
     _validate_step_variable_schemas(step_contributions)
     costs: dict[str, cp.Expression] = {}
     for component_name in step_contributions[0]:
-        rates = [
-            step[component_name].cost for step in step_contributions
-        ]
+        rates = [step[component_name].cost for step in step_contributions]
         if all(rate is None for rate in rates):
             continue
         if any(rate is None for rate in rates):
@@ -576,8 +840,7 @@ def integrate_component_stage_costs(
                 "availability across the horizon"
             )
         names = {
-            step[component_name].cost_expression_name
-            for step in step_contributions
+            step[component_name].cost_expression_name for step in step_contributions
         }
         if len(names) != 1:
             raise ValueError(
@@ -597,6 +860,49 @@ def integrate_component_stage_costs(
     return MappingProxyType(costs)
 
 
+def integrate_vectorized_stage_cost_rate(
+    stage_cost_rate: cp.Expression,
+    delta: float,
+) -> cp.Expression:
+    """Integrate one convex time-last rate vector without a Python time loop."""
+    _validate_positive_real("delta", delta)
+    if not isinstance(stage_cost_rate, cp.Expression):
+        raise ValueError("vectorized stage cost rate must be a cp.Expression")
+    if stage_cost_rate.ndim != 1 or stage_cost_rate.shape[0] <= 0:
+        raise ValueError(
+            "vectorized stage cost rate must be a nonempty one-dimensional "
+            f"expression, got {stage_cost_rate.shape}"
+        )
+    if not stage_cost_rate.is_convex():
+        raise ValueError("vectorized stage cost rate must be convex")
+    return cp.multiply(delta, cp.sum(stage_cost_rate))
+
+
+def integrate_vectorized_component_stage_costs(
+    contributions: Mapping[str, VectorizedComponentContribution],
+    delta: float,
+) -> Mapping[str, cp.Expression]:
+    """Integrate and name every component rate once over the horizon."""
+    costs: dict[str, cp.Expression] = {}
+    for component_name, contribution in contributions.items():
+        rate = contribution.model.stage_cost_rate
+        if rate is None:
+            if contribution.cost_expression_name is not None:
+                raise ValueError(
+                    f"component {component_name!r} names a cost without "
+                    "providing a stage cost rate"
+                )
+            continue
+        expression_name = contribution.cost_expression_name or f"{component_name}_cost"
+        if expression_name in costs:
+            raise ValueError(
+                f"component {component_name!r} requested duplicate integrated "
+                f"cost expression {expression_name!r}"
+            )
+        costs[expression_name] = integrate_vectorized_stage_cost_rate(rate, delta)
+    return MappingProxyType(costs)
+
+
 def _validate_publication_step_count(
     step_count: int,
     *,
@@ -604,9 +910,7 @@ def _validate_publication_step_count(
 ) -> None:
     """Enforce the shared single- versus multistep publication cardinality."""
     if step_count == 0:
-        raise ValueError(
-            "publication requires at least one step contribution"
-        )
+        raise ValueError("publication requires at least one step contribution")
     if not multistep and step_count != 1:
         raise ValueError(
             "single-step publication requires exactly one step "
@@ -615,9 +919,7 @@ def _validate_publication_step_count(
 
 
 def _validate_formulation_variable_schema(
-    formulation_variables: Mapping[
-        str, cp.Variable | list[cp.Variable]
-    ],
+    formulation_variables: Mapping[str, cp.Variable | list[cp.Variable]],
     *,
     step_count: int,
     multistep: bool,
@@ -627,8 +929,7 @@ def _validate_formulation_variable_schema(
         if not multistep:
             if not isinstance(value, cp.Variable):
                 raise ValueError(
-                    f"single-step formulation variable {name!r} must be "
-                    "a cp.Variable"
+                    f"single-step formulation variable {name!r} must be a cp.Variable"
                 )
             continue
         if not isinstance(value, list):
@@ -650,16 +951,12 @@ def _validate_formulation_variable_schema(
 
 def publish_component_variables(
     step_contributions: Sequence[Mapping[str, StepContribution]],
-    formulation_variables: Mapping[
-        str, cp.Variable | list[cp.Variable]
-    ] | None = None,
+    formulation_variables: Mapping[str, cp.Variable | list[cp.Variable]] | None = None,
     *,
     multistep: bool,
 ) -> dict[str, cp.Variable | list[cp.Variable]]:
     """Merge component variables into the formulation-owned build schema."""
-    _validate_publication_step_count(
-        len(step_contributions), multistep=multistep
-    )
+    _validate_publication_step_count(len(step_contributions), multistep=multistep)
     formulation_variables = (
         {} if formulation_variables is None else formulation_variables
     )
@@ -678,11 +975,28 @@ def publish_component_variables(
                     "collides with an already published variable"
                 )
             published[variable_name] = (
-                [step[name].variables[variable_name]
-                 for step in step_contributions]
+                [step[name].variables[variable_name] for step in step_contributions]
                 if multistep
                 else variable
             )
+    return published
+
+
+def publish_vectorized_component_variables(
+    contribution: VectorizedComponentContribution,
+    formulation_variables: Mapping[str, cp.Variable] | None = None,
+) -> dict[str, cp.Variable]:
+    """Publish full-horizon variables without recreating per-step objects."""
+    published = {} if formulation_variables is None else dict(formulation_variables)
+    if any(not isinstance(variable, cp.Variable) for variable in published.values()):
+        raise ValueError("vectorized formulation variables must be cp.Variable objects")
+    for variable_name, variable in contribution.variables.items():
+        if variable_name in published:
+            raise ValueError(
+                f"component variable {variable_name!r} collides with an "
+                "already published vectorized variable"
+            )
+        published[variable_name] = variable
     return published
 
 
@@ -691,16 +1005,12 @@ def publish_component_metadata(
     formulation_metadata: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Merge active component metadata into the formulation-owned data."""
-    published = (
-        {} if formulation_metadata is None else dict(formulation_metadata)
-    )
+    published = {} if formulation_metadata is None else dict(formulation_metadata)
     for name, component in prepared.components.items():
         binding = component.adapter.formulations[prepared.formulation]
         if binding.capability is FormulationCapability.NULL:
             continue
-        metadata = component.adapter.metadata(
-            component.data, prepared.formulation
-        )
+        metadata = component.adapter.metadata(component.data, prepared.formulation)
         overlap = set(published).intersection(metadata)
         if overlap:
             raise ValueError(
@@ -714,9 +1024,7 @@ def publish_component_metadata(
 def publish_component_expressions(
     step_aggregates: Sequence[StepContribution],
     horizon_contribution: HorizonContribution,
-    compatibility_expressions: Mapping[
-        str, cp.Expression | list[cp.Expression]
-    ],
+    compatibility_expressions: Mapping[str, cp.Expression | list[cp.Expression]],
     *,
     multistep: bool,
 ) -> dict[str, cp.Expression | list[cp.Expression]]:
@@ -727,12 +1035,8 @@ def publish_component_expressions(
     may collide with another contribution or with a formulation-owned
     compatibility expression.
     """
-    _validate_publication_step_count(
-        len(step_aggregates), multistep=multistep
-    )
-    step_expressions = [
-        aggregate.expressions for aggregate in step_aggregates
-    ]
+    _validate_publication_step_count(len(step_aggregates), multistep=multistep)
+    step_expressions = [aggregate.expressions for aggregate in step_aggregates]
     expression_names = tuple(step_expressions[0])
     expected_names = set(expression_names)
     for step, expressions in enumerate(step_expressions[1:], start=1):
@@ -757,13 +1061,42 @@ def publish_component_expressions(
             else step_expressions[0][name]
         )
 
-    horizon_collisions = set(published).intersection(
-        horizon_contribution.expressions
-    )
+    horizon_collisions = set(published).intersection(horizon_contribution.expressions)
     if horizon_collisions:
         raise ValueError(
             "horizon expressions collide with published expressions: "
             f"{sorted(horizon_collisions)}"
         )
     published.update(horizon_contribution.expressions)
+    return published
+
+
+def publish_vectorized_component_expressions(
+    contribution: VectorizedComponentContribution,
+    compatibility_expressions: Mapping[str, cp.Expression],
+) -> dict[str, cp.Expression]:
+    """Publish time-last and horizon expressions without per-step lists."""
+    published = dict(compatibility_expressions)
+    if any(
+        not isinstance(expression, cp.Expression) for expression in published.values()
+    ):
+        raise ValueError(
+            "vectorized compatibility expressions must be cp.Expression objects"
+        )
+    step_collisions = set(published).intersection(contribution.model.expressions)
+    if step_collisions:
+        raise ValueError(
+            "vectorized component expressions collide with formulation "
+            f"compatibility expressions: {sorted(step_collisions)}"
+        )
+    published.update(contribution.model.expressions)
+    horizon_collisions = set(published).intersection(
+        contribution.model.horizon.expressions
+    )
+    if horizon_collisions:
+        raise ValueError(
+            "vectorized horizon expressions collide with published "
+            f"expressions: {sorted(horizon_collisions)}"
+        )
+    published.update(contribution.model.horizon.expressions)
     return published

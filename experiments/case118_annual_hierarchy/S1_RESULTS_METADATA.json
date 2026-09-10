@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "stage": "S1",
+  "status": "complete",
+  "artifact": {
+    "path": "results/s1_summary.json.gz",
+    "bytes": 402529,
+    "sha256": "c5f1021f3302b248e88bf911eebd74ab392fbfdf989ce325ca5485cf7da8e7a1",
+    "hash_role": "integrity identifier for this execution, not a byte-identical rerun guarantee"
+  },
+  "created_utc": "2026-08-21T17:55:30.151741+00:00",
+  "execution_source": {
+    "git_commit": "ab0cf9d62d5e65f3a2d5bac7bf8aa5fecd7ef3f8",
+    "git_clean": true,
+    "runner_sha256": "b2986574ac990c130e07ba80b4102000bda279bf7000a0d6827702449d75a432",
+    "source_fingerprint": "3d27711a651564d9e041670ad0d38c6a064ce842aacfc06be8460212b537c002"
+  },
+  "software_versions": {
+    "python": "3.11.15",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "clarabel": "0.11.1",
+    "cyipopt": "1.7.0",
+    "ipopt": [3, 14, 19]
+  },
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "interval": {
+    "outer_start": 3744,
+    "outer_stop": 3768,
+    "endpoint_start": 3757,
+    "endpoint_stop": 3763
+  },
+  "total_wall_seconds": 2426.374883209006,
+  "workers": [
+    {
+      "network": "pglib_rated",
+      "classification": "completed",
+      "eligible_for_advancement": true,
+      "parent_context_matches": true,
+      "maximum_sampled_rss_mib": 10346.515625,
+      "wall_seconds": 1265.2009872499912,
+      "outer": {
+        "classification": "accepted",
+        "status": "optimal",
+        "objective": 1592353.5567108036,
+        "construction_seconds": 0.05430741698364727,
+        "solve_seconds": 0.34009624997270294,
+        "scalar_variables": 6000,
+        "scalar_equalities": 2932,
+        "explicit_scalar_inequalities": 7584,
+        "storage_throughput_mwh": 151.74759284970662,
+        "selected_window_storage_throughput_mwh": 2.3528261745045516,
+        "maximum_branch_utilization": 0.999999999793697
+      },
+      "endpoint": {
+        "classification": "accepted",
+        "status": "optimal",
+        "objective": 441204.3416016779,
+        "construction_seconds": 1.57118695799727,
+        "solve_seconds": 1260.2302827500098,
+        "scalar_variables": 13752,
+        "scalar_equalities": 13042,
+        "explicit_scalar_inequalities": 3636,
+        "storage_throughput_mwh": 468.21973906014364,
+        "maximum_branch_utilization": 0.9999999908804559
+      },
+      "direct_ac_24h": "not_authorized_by_s0_resource_gate"
+    },
+    {
+      "network": "pglib_effectively_unlimited",
+      "classification": "completed",
+      "eligible_for_advancement": true,
+      "parent_context_matches": true,
+      "maximum_sampled_rss_mib": 10987.390625,
+      "wall_seconds": 1160.9583237089973,
+      "outer": {
+        "classification": "accepted",
+        "status": "optimal",
+        "objective": 1591118.9075194532,
+        "construction_seconds": 0.05557975001283921,
+        "solve_seconds": 0.3000645419815555,
+        "scalar_variables": 6000,
+        "scalar_equalities": 2932,
+        "explicit_scalar_inequalities": 7584,
+        "storage_throughput_mwh": 0.000003804825747934032,
+        "selected_window_storage_throughput_mwh": 0.0000010228843286750513,
+        "maximum_flow_fraction_of_branch_limit_sentinel": 0.000973837002232368
+      },
+      "endpoint": {
+        "classification": "accepted",
+        "status": "optimal",
+        "objective": 425541.1224093556,
+        "construction_seconds": 1.3848460839944892,
+        "solve_seconds": 1156.0641889589897,
+        "scalar_variables": 13752,
+        "scalar_equalities": 13042,
+        "explicit_scalar_inequalities": 1404,
+        "storage_throughput_mwh": 478.28480134823315,
+        "maximum_flow_fraction_of_branch_limit_sentinel": 0.0005119977381079145
+      },
+      "direct_ac_24h": "not_authorized_by_s0_resource_gate"
+    }
+  ]
+}

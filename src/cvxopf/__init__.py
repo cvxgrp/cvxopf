@@ -50,7 +50,13 @@ except ImportError as e:
 __version__ = "0.1.0"
 
 # Re-export public API
-from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
+from cvxopf.problem import (
+    build_opf,
+    build_opf_multistep,
+    OPFOptions,
+    OPFBuild,
+    TemporalAssembly,
+)
 from cvxopf.results import extract_results, compare_to_reference
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
@@ -93,6 +99,7 @@ __all__ = [
     "build_opf_multistep",
     "OPFOptions",
     "OPFBuild",
+    "TemporalAssembly",
     "extract_results",
     "compare_to_reference",
     "StorageUnitIdeal",

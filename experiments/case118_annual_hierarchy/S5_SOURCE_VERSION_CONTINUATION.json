@@ -1,0 +1,213 @@
+{
+  "classification": "proposed_s5_source_version_continuation_for_independent_review",
+  "commit_diff_sha256": "6f4a6f95b051bee0e3b6a9f9c1a29b82d75d8da079359d4caffb15bb866ea8d4",
+  "continuation_execution": {
+    "commit_must_match_exactly": true,
+    "context": {
+      "annual_registry_sha256": "b3ce8562022faa4b8b05562004b4c13c381c718eb9f5a79f9591546203bb3350",
+      "architecture": "arm64",
+      "git_clean": true,
+      "git_commit": "8a49e92aee8aec2ed38e844f6d7aa1c9c526465b",
+      "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
+      "s4b_results_sha256": "45dd2e81b8732bd7729ad02edf86c56d021e3d2f6ed5fa934053efc59b09f2ce",
+      "scenario_sha256": "94cbf310b7e5c911d66ff44a71f7f0a94bcc8271c65849cc3e6cd1c4050e3f07",
+      "software_versions": {
+        "clarabel": "0.11.1",
+        "cvxopf": "0.1.0",
+        "cvxpy": "1.9.2",
+        "cyipopt": "1.7.0",
+        "ipopt": [
+          3,
+          14,
+          19
+        ],
+        "numpy": "2.4.6",
+        "pandas": "3.0.3",
+        "python": "3.11.15"
+      },
+      "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
+      "source_fingerprint": "80b8f5bc139df200b6c948000c643e77f53d95f9fbe7b0fa67c2dab0c0604867"
+    },
+    "descendant_commits_implicitly_allowed": false,
+    "required_clean_execution_commit": "8a49e92aee8aec2ed38e844f6d7aa1c9c526465b",
+    "required_execution_source_fingerprint": "80b8f5bc139df200b6c948000c643e77f53d95f9fbe7b0fa67c2dab0c0604867"
+  },
+  "continuation_requirements": [
+    "Independently verify every retained artifact and complete window/state/controller chain before launching.",
+    "Preserve the original numerical authority, execution context, supervision, resource samples, and immutable accepted windows.",
+    "Retain immutable copies of the exact stopping checkpoints before advancing their live pointers.",
+    "Record old and new execution identities on distinct provenance segments; do not relabel the first 505 intervals.",
+    "Bind a reviewed transition record before launching any worker; root, worker, and analyzer must enforce the same exact transition.",
+    "Accumulate resource and elapsed-time evidence from both invocations; record the intentional pause separately.",
+    "Do not rerun accepted intervals, reset physical state, change scientific configuration, or automatically accept any further source change."
+  ],
+  "execution_scope": "remaining_intervals_of_existing_s5_annual_trajectory",
+  "execution_source_changes": [
+    {
+      "new_sha256": "64ba1a907d5e3b00f75732d746ed2ae4d587c48fa0b6d8719d848d79cae0360f",
+      "old_sha256": "b09bd0a00c0b1fdcad3e9758e10ba3de06ec270d4f99a353658659e028dced74",
+      "path": "experiments/case118_annual_hierarchy/s4b_execution.py"
+    },
+    {
+      "new_sha256": "c869d683c4fc053daefb41f16bf6d0dfe6e7faa3efd54140ab7936314a13d3ac",
+      "old_sha256": "9eedf27fd3f6bcca0c91585dbcb751d1bd3d2695571b8ac3f4862815ddecf603",
+      "path": "experiments/case118_annual_hierarchy/streaming_archive.py"
+    }
+  ],
+  "implementation_boundary": "The bound fix commit still supports same-source reviewed resume only. This review contract is not accepted by the current launcher. Source-version orchestration support requires separate review; any changed execution commit must receive an explicit revised binding before launch.",
+  "launch_authorized": false,
+  "owner_approved_change": "Reuse one integrity-checked outer signpost mapping per validation pass; preserve all existing scientific and artifact checks.",
+  "prior_execution": {
+    "context": {
+      "annual_registry_sha256": "b3ce8562022faa4b8b05562004b4c13c381c718eb9f5a79f9591546203bb3350",
+      "architecture": "arm64",
+      "git_clean": true,
+      "git_commit": "41abf63a2b6c76e0dbd02255237bf3c7ec2097d7",
+      "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "policy_sha256": "2186334bd2e7be3760636f0b20575c81deaff5f293fb9a725270157379957520",
+      "s4b_results_sha256": "45dd2e81b8732bd7729ad02edf86c56d021e3d2f6ed5fa934053efc59b09f2ce",
+      "scenario_sha256": "94cbf310b7e5c911d66ff44a71f7f0a94bcc8271c65849cc3e6cd1c4050e3f07",
+      "software_versions": {
+        "clarabel": "0.11.1",
+        "cvxopf": "0.1.0",
+        "cvxpy": "1.9.2",
+        "cyipopt": "1.7.0",
+        "ipopt": [
+          3,
+          14,
+          19
+        ],
+        "numpy": "2.4.6",
+        "pandas": "3.0.3",
+        "python": "3.11.15"
+      },
+      "solve_config_sha256": "bfb818de03ddbfd983bb02def3aa3c51d0e6c1b075486ec66bca3035d82e2977",
+      "source_fingerprint": "d467706698ea006352d5f2683f1d84aadb5e60837f88111ad688058bd3191383"
+    },
+    "numerical_authority": {
+      "bytes": 867,
+      "path": "outputs/s5_authority/S5_NUMERICAL_EXECUTION_AUTHORITY.json",
+      "payload": {
+        "aggregate_current_rss_mib": 24576,
+        "annual_execution_authorized": true,
+        "annual_registry_sha256": "b3ce8562022faa4b8b05562004b4c13c381c718eb9f5a79f9591546203bb3350",
+        "classification": "reviewed_s5_numerical_execution_authorized",
+        "execution_commit": "41abf63a2b6c76e0dbd02255237bf3c7ec2097d7",
+        "execution_scope": "annual_8760h_hierarchical_ac",
+        "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+        "manifest_use_authority_sha256": "64c3a511886c91d80c2a1c50b06fcdcce4108421e3bdb0eb855a78868d961338",
+        "maximum_concurrency": 2,
+        "per_worker_current_rss_mib": 16384,
+        "s4b_analysis_sha256": "9c8d1608ffcf5fb084ffbb3cfa95dcd88d35b73374d765be7e0e8e56a80ac0d3",
+        "s4b_results_sha256": "45dd2e81b8732bd7729ad02edf86c56d021e3d2f6ed5fa934053efc59b09f2ce",
+        "schema_version": 1,
+        "source_fingerprint": "d467706698ea006352d5f2683f1d84aadb5e60837f88111ad688058bd3191383"
+      },
+      "sha256": "96050adae727d40ebc46dd03c3817ae8f3bd39d178751bea62074f94167d7d98"
+    }
+  },
+  "remaining_schedule": {
+    "aggregate_current_rss_mib": 24576,
+    "later_waves": "unchanged annual registry",
+    "maximum_concurrency": 2,
+    "per_worker_current_rss_mib": 16384,
+    "primary_attempt_budget_seconds": 300,
+    "resume_shards": [
+      "s4b-shard-000",
+      "s4b-shard-001"
+    ],
+    "resume_wave": 0
+  },
+  "review_status": "pending_independent_review",
+  "schema_version": 1,
+  "trusted_stopping_point": {
+    "classification": "supervisor_interrupted",
+    "completed_intervals": 505,
+    "root_evidence": [
+      {
+        "bytes": 912,
+        "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/run-context.json",
+        "sha256": "37e564c8aeb05215b4136e097cb9952653ea41102a250da1d03e369de96de6bc"
+      },
+      {
+        "bytes": 2404,
+        "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/progress.json",
+        "sha256": "fae23cddb235069c44fa016e926deb542a3a6eb3542535d5a8a3203d9c6d11b2"
+      },
+      {
+        "bytes": 2240,
+        "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/root-outcome-000.json",
+        "sha256": "8f144c28100b7b4b8fd3bfd7184b51cbed4dfe7df16fdbe1325cb8c1c537b545"
+      },
+      {
+        "bytes": 35011994,
+        "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/supervision-wave-000-000.json",
+        "sha256": "b66e46096db290ecc914a86d6686460a30d3bcce9916d68c1cb6448a7c968dca"
+      }
+    ],
+    "shards": [
+      {
+        "accepted_global_interval": {
+          "half_open": true,
+          "start": 0,
+          "stop": 254
+        },
+        "checkpoint": {
+          "bytes": 43083,
+          "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-000/checkpoint.json",
+          "sha256": "9979ae7009193068341cecbfbf6f97c05da905ddf725fc247799dd24bde83181"
+        },
+        "completed_intervals": 254,
+        "outer_plan_sha256": "6e7d88e8eed39de4a0141b0fe3c8a146fd2ae298a3d3ddc2768ae57247e87031",
+        "preceding_controlling_attempt_id": "ac-253-00-primary_controlling",
+        "realized_soc_mwh": [
+          0.08309764717548232,
+          300.185076502171,
+          0.005296585822812802,
+          0.004866940855850703
+        ],
+        "resume_global_iteration": 254,
+        "shard_id": "s4b-shard-000",
+        "storage_device_ids": [
+          "storage_bus_41",
+          "storage_bus_65",
+          "storage_bus_89",
+          "storage_bus_105"
+        ]
+      },
+      {
+        "accepted_global_interval": {
+          "half_open": true,
+          "start": 682,
+          "stop": 933
+        },
+        "checkpoint": {
+          "bytes": 42703,
+          "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-001/checkpoint.json",
+          "sha256": "25b7ed23cb5512c0a99e34c3432c33e125cc7c5c86e9be2ba406635100b28450"
+        },
+        "completed_intervals": 251,
+        "outer_plan_sha256": "6e7d88e8eed39de4a0141b0fe3c8a146fd2ae298a3d3ddc2768ae57247e87031",
+        "preceding_controlling_attempt_id": "ac-932-00-primary_controlling",
+        "realized_soc_mwh": [
+          14.440094395260184,
+          672.1536221418917,
+          84.69130118892524,
+          17.9451866314006
+        ],
+        "resume_global_iteration": 933,
+        "shard_id": "s4b-shard-001",
+        "storage_device_ids": [
+          "storage_bus_41",
+          "storage_bus_65",
+          "storage_bus_89",
+          "storage_bus_105"
+        ]
+      }
+    ],
+    "wave_index": 0
+  }
+}

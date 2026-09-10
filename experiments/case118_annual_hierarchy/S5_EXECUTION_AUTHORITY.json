@@ -1,0 +1,15 @@
+{
+  "annual_manifest_use_authorized": true,
+  "authorization_parent_commit": "ff321d1bd49e2de556f27967a27f78fbb4ac0c60",
+  "classification": "reviewed_s5_annual_manifest_use_authorized",
+  "execution_scope": "annual_manifest_s5_planning_and_implementation",
+  "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+  "qualification_execution_commit": "cc539d880bea04a75a287e7d534507d588852b05",
+  "qualification_registry_sha256": "e9e695346df50af4d663454f9f750ec7b2c81d4ee1b6bbcb0e4c65f2884d7a3a",
+  "qualification_result_commit": "ff321d1bd49e2de556f27967a27f78fbb4ac0c60",
+  "s4b_analysis_sha256": "9c8d1608ffcf5fb084ffbb3cfa95dcd88d35b73374d765be7e0e8e56a80ac0d3",
+  "s4b_execution_source_fingerprint": "050648b7ff027fb49c8ae692f1dc9797788017d977345700a3fee138ee70d91d",
+  "s4b_results_sha256": "45dd2e81b8732bd7729ad02edf86c56d021e3d2f6ed5fa934053efc59b09f2ce",
+  "s5_numerical_execution_authorized": false,
+  "schema_version": 1
+}

@@ -1,0 +1,4 @@
+# Preserve the pinned upstream source byte-for-byte; its comments contain
+# upstream trailing whitespace covered by the recorded SHA-256 hash.
+experiments/case118_annual_hierarchy/source/*.m -whitespace
+experiments/case118_annual_hierarchy/source/PGLIB_LICENSE -whitespace

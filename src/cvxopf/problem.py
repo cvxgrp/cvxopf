@@ -22,6 +22,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from numbers import Real
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -40,13 +41,23 @@ from cvxopf.hvdc import (
 )
 from cvxopf.generator import DispatchableGenerator, _case_with_generators
 from cvxopf.load import Load
-from cvxopf._component_adapters import LoadInputs
+from cvxopf._component_adapters import (
+    HVDCInputs,
+    LoadInputs,
+    NondispatchableInputs,
+)
+from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
+
+
+TemporalAssembly = Literal["stepwise", "vectorized"]
+CanonicalizationBackend = Literal["CPP", "SCIPY", "DNLP_IPOPT"]
 
 
 # ---------------------------------------------------------------------------
 # Options dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class OPFOptions:
@@ -101,18 +112,20 @@ class OPFOptions:
     OPFOptions is accepted for API consistency but all fields are ignored
     when formulation='singlenode_dc'.
     """
-    enforce_vset:           bool  = False
-    sparsity_tol:           float = 0.0
-    init_flat:              bool  = True
-    enforce_branch_limits:  bool  = True
-    loss_weight:            float = 1.0
-    branch_limit_sentinel:  float = 1e6
-    sparse_pq:              bool  = True
+
+    enforce_vset: bool = False
+    sparsity_tol: float = 0.0
+    init_flat: bool = True
+    enforce_branch_limits: bool = True
+    loss_weight: float = 1.0
+    branch_limit_sentinel: float = 1e6
+    sparse_pq: bool = True
 
 
 # ---------------------------------------------------------------------------
 # Return type
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class OPFBuild:
@@ -135,17 +148,21 @@ class OPFBuild:
         AC branch-terminal flow variables are retained in ``expressions``
         rather than this mapping.
 
-        AC multi-step: each value is a list of length T.
+        AC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step: each value is one cp.Variable whose final axis
+        is time. ``temporal_assembly`` distinguishes the two representations.
 
         DC single-step keys:
             p_flows, Pg
 
-        DC multi-step: each value is a list of length T.
+        DC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step uses one time-last cp.Variable.
 
         Singlenode DC single-step keys:
             Pg
 
-        Singlenode DC multi-step: each value is a list of length T.
+        Singlenode DC stepwise multi-step: each value is a list of length T.
+        Vectorized multi-step uses one time-last cp.Variable.
 
         When storage is present:
             b (real power, MW), b_q (reactive power, MVAr, AC only),
@@ -197,7 +214,8 @@ class OPFBuild:
     expressions : dict
         Named modeled CVXPY expressions used for solved-value reporting.
         Per-step reporting expressions are stored as one expression for a
-        single-step build and lists of length T for a multistep build.
+        single-step build, lists of length T for stepwise multistep, and one
+        time-last expression for vectorized multistep.
         AC branch-terminal real and reactive powers are retained in per unit
         as ``branch_p_from_pu``, ``branch_q_from_pu``,
         ``branch_p_to_pu``, and ``branch_q_to_pu``. Each value has shape
@@ -218,15 +236,37 @@ class OPFBuild:
         ``load_shed_fraction``, and ``p_load_shed_total``. The integrated
         stage cost is ``load_shedding_cost``; horizon expressions are
         ``energy_not_served_by_load`` and ``energy_not_served``.
+    temporal_assembly : {"stepwise", "vectorized"}
+        Temporal graph representation retained as build provenance. Existing
+        single- and multistep builders use ``"stepwise"`` until the M14
+        horizon-vectorized implementation is selected explicitly.
+    result_projections : ResultProjectionRegistry
+        Immutable variable/expression schemas used only by vectorized result
+        extraction to move time from the final internal axis to the first
+        public axis. Stepwise extraction retains its existing list contract.
     """
-    prob:        cp.Problem
-    variables:   dict
-    data:        dict
-    formulation: str
-    is_convex:   bool
-    expressions: dict = field(default_factory=dict)
 
-    def solve(self, **kwargs) -> None:
+    prob: cp.Problem
+    variables: dict[str, Any]
+    data: dict[str, Any]
+    formulation: str
+    is_convex: bool
+    expressions: dict[str, Any] = field(default_factory=dict)
+    temporal_assembly: TemporalAssembly = "stepwise"
+    result_projections: ResultProjectionRegistry = field(
+        default_factory=ResultProjectionRegistry
+    )
+
+    @property
+    def canonicalization_backend(self) -> CanonicalizationBackend:
+        """Return the backend required by this formulation/assembly pair."""
+        if not self.is_convex:
+            return "DNLP_IPOPT"
+        if self.temporal_assembly == "vectorized":
+            return "SCIPY"
+        return "CPP"
+
+    def solve(self, **kwargs: Any) -> None:
         """
         Solve the OPF problem with appropriate solver defaults.
 
@@ -252,6 +292,12 @@ class OPFBuild:
         if self.is_convex:
             kwargs.setdefault("solver", cp.CLARABEL)
             kwargs.setdefault("nlp", False)
+            if self.canonicalization_backend == "SCIPY":
+                backend = kwargs.setdefault("canon_backend", cp.SCIPY_CANON_BACKEND)
+                if backend != cp.SCIPY_CANON_BACKEND:
+                    raise ValueError(
+                        "vectorized convex builds require SCIPY canonicalization"
+                    )
         else:
             kwargs.setdefault("solver", cp.IPOPT)
             kwargs.setdefault("nlp", True)
@@ -269,30 +315,47 @@ class OPFBuild:
         self.prob.solve(**kwargs)
 
 
+def _finalize_temporal_assembly(
+    build: OPFBuild, temporal_assembly: TemporalAssembly
+) -> OPFBuild:
+    """Bind the selected temporal representation to build provenance."""
+    build.temporal_assembly = temporal_assembly
+    return build
+
+
 # ---------------------------------------------------------------------------
 # Dispatch tables (populated after imports to avoid circular imports)
 # ---------------------------------------------------------------------------
 
-def _get_single_builders():
+
+def _get_single_builders() -> dict[str, Callable[..., OPFBuild]]:
     from cvxopf.ac_problem import _build_ac_single
     from cvxopf.dc_problem import _build_lossy_dc_single
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_single
+
     return {
-        "ac":       _build_ac_single,
+        "ac": _build_ac_single,
         "lossy_dc": _build_lossy_dc_single,
         "singlenode_dc": _build_singlenode_dc_single,
     }
 
 
-def _get_multistep_builders():
+def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
     from cvxopf.ac_problem import _build_ac_multistep
     from cvxopf.dc_problem import _build_lossy_dc_multistep
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_multistep
+
     return {
-        "ac":       _build_ac_multistep,
+        "ac": _build_ac_multistep,
         "lossy_dc": _build_lossy_dc_multistep,
         "singlenode_dc": _build_singlenode_dc_multistep,
     }
+
+
+def _get_vectorized_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.dc_problem import _build_lossy_dc_vectorized
+
+    return {"lossy_dc": _build_lossy_dc_vectorized}
 
 
 def _validate_temporal_delta(delta: float) -> None:
@@ -309,7 +372,7 @@ def _validate_temporal_delta(delta: float) -> None:
 
 
 def _normalize_multistep_load_inputs(
-    case: dict,
+    case: dict[str, Any],
     df_P: pd.DataFrame | None,
     df_Q: pd.DataFrame | None,
     loads: list[Load] | None,
@@ -317,6 +380,7 @@ def _normalize_multistep_load_inputs(
     df_load_q: pd.DataFrame | None,
     T: int,
     formulation: str,
+    temporal_assembly: TemporalAssembly,
 ) -> tuple[LoadInputs, bool]:
     """Select and normalize exactly one public multistep load-input mode."""
     explicit = loads is not None
@@ -339,7 +403,11 @@ def _normalize_multistep_load_inputs(
                 f"T={T} but df_P has {p_pu.shape[0]} rows; they must match."
             )
         base_mva = float(case["baseMVA"])
-        return LoadInputs(p_pu * base_mva, q_pu * base_mva), False
+        return LoadInputs(
+            p_pu * base_mva,
+            q_pu * base_mva,
+            vectorized_assembly=temporal_assembly == "vectorized",
+        ), False
 
     if df_P is not None or df_Q is not None:
         raise ValueError(
@@ -348,37 +416,52 @@ def _normalize_multistep_load_inputs(
         )
     assert loads is not None
     if df_load_p is None:
-        p_mw = np.tile([unit.p_load_mw for unit in loads], (T, 1))
+        p_static = np.asarray([unit.p_load_mw for unit in loads], dtype=float)
+        if temporal_assembly == "vectorized":
+            p_mw = p_static
+            p_temporal_class = "static"
+        else:
+            p_mw = np.tile(p_static, (T, 1))
+            p_temporal_class = "interval"
     else:
-        p_mw = align_device_dataframe(
-            df_load_p, loads, T, "df_load_p"
-        )
+        p_mw = align_device_dataframe(df_load_p, loads, T, "df_load_p")
+        p_temporal_class = "interval"
     if df_load_q is None:
-        q_mvar = np.tile(
-            [
-                0.0 if unit.q_load_mvar is None else unit.q_load_mvar
-                for unit in loads
-            ],
-            (T, 1),
+        q_static = np.asarray(
+            [0.0 if unit.q_load_mvar is None else unit.q_load_mvar for unit in loads],
+            dtype=float,
         )
+        if temporal_assembly == "vectorized":
+            q_mvar = q_static
+            q_temporal_class = "static"
+        else:
+            q_mvar = np.tile(q_static, (T, 1))
+            q_temporal_class = "interval"
     else:
-        q_mvar = align_device_dataframe(
-            df_load_q, loads, T, "df_load_q"
-        )
+        q_mvar = align_device_dataframe(df_load_q, loads, T, "df_load_q")
+        q_temporal_class = "interval"
     has_reactive = np.asarray(
         [unit.q_load_mvar is not None for unit in loads], dtype=bool
     )
     if df_load_q is not None:
         has_reactive[:] = True
-    return LoadInputs(p_mw, q_mvar, has_reactive), True
+    return LoadInputs(
+        p_mw,
+        q_mvar,
+        has_reactive,
+        p_temporal_class=p_temporal_class,
+        q_temporal_class=q_temporal_class,
+        vectorized_assembly=temporal_assembly == "vectorized",
+    ), True
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def build_opf(
-    case: dict,
+    case: dict[str, Any],
     *,
     formulation: str = "ac",
     options: OPFOptions | None = None,
@@ -454,21 +537,28 @@ def build_opf(
     builders = _get_single_builders()
     if formulation not in builders:
         raise ValueError(
-            f"Unknown formulation '{formulation}'. "
-            f"Supported: {sorted(builders.keys())}"
+            f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
         )
     normalized_case = (
-        _case_with_generators(case, generators)
-        if generators is not None else case
+        _case_with_generators(case, generators) if generators is not None else case
     )
-    return builders[formulation](
-        normalized_case, options, storage, delta, nondispatchable,
-        hvdc=hvdc, generators=generators, loads=loads,
+    return _finalize_temporal_assembly(
+        builders[formulation](
+            normalized_case,
+            options,
+            storage,
+            delta,
+            nondispatchable,
+            hvdc=hvdc,
+            generators=generators,
+            loads=loads,
+        ),
+        "stepwise",
     )
 
 
 def build_opf_multistep(
-    case: dict,
+    case: dict[str, Any],
     df_P: pd.DataFrame | None = None,
     df_Q: pd.DataFrame | None = None,
     *,
@@ -487,6 +577,7 @@ def build_opf_multistep(
     loads: list[Load] | None = None,
     df_load_p: pd.DataFrame | None = None,
     df_load_q: pd.DataFrame | None = None,
+    temporal_assembly: TemporalAssembly = "stepwise",
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -512,16 +603,21 @@ def build_opf_multistep(
     df_load_p : pd.DataFrame | None, optional
         Explicit-load active trajectories in MW. Columns must exactly match
         unique ``Load.device_id`` values and are aligned to device order. If
-        omitted, each load's static ``p_load_mw`` is tiled across the horizon.
+        omitted, each load's static ``p_load_mw`` is broadcast across the horizon.
     df_load_q : pd.DataFrame | None, optional
         Explicit-load reactive trajectories in MVAr with the same identity
         contract. May define a trajectory when static ``q_load_mvar`` is
         ``None``. DC formulations retain this input for reporting, warn, and
         do not use it in optimization. If omitted, static reactive values
-        (with ``None`` represented numerically as zero) are tiled.
+        (with ``None`` represented numerically as zero) are broadcast.
     T : int
         Number of time steps. Must equal the row count of every supplied load
-        trajectory; static explicit-load fallback is tiled to this length.
+        trajectory; static explicit-load fallback is broadcast to this length.
+    temporal_assembly : {"stepwise", "vectorized"}, optional
+        Temporal graph representation. ``"stepwise"`` preserves the existing
+        per-interval builder and remains the compatibility default.
+        ``"vectorized"`` explicitly selects the M14 time-last lossy-DC path;
+        other formulations reject that pairing until separately qualified.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).
@@ -549,8 +645,9 @@ def build_opf_multistep(
         Shape (T, nnd) where nnd = len(nondispatchable).
         Columns must exactly match the units' unique, nonempty ``device_id``
         values; arbitrary input order is aligned to device-list order.
-        If None and nondispatchable is not None, the p_available field
-        from each NondispatchableUnit is tiled across all T steps.
+        If None and nondispatchable is not None, each unit's ``p_available``
+        is used across all T steps. The vectorized path preserves it as static
+        broadcast data; the stepwise path retains its historical tile.
     generators : list[DispatchableGenerator] | None, optional
         Dispatchable generators. If None, convert the case dict's
         ``gen``/``gencost`` tables at build time.
@@ -562,6 +659,8 @@ def build_opf_multistep(
     """
     if options is None:
         options = OPFOptions()
+    if temporal_assembly not in {"stepwise", "vectorized"}:
+        raise ValueError("temporal_assembly must be 'stepwise' or 'vectorized'")
     if coupling_constraints is None:
         coupling_constraints = []
     if generators is not None and len(generators) == 0:
@@ -575,12 +674,24 @@ def build_opf_multistep(
     builders = _get_multistep_builders()
     if formulation not in builders:
         raise ValueError(
-            f"Unknown formulation '{formulation}'. "
-            f"Supported: {sorted(builders.keys())}"
+            f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
+        )
+    if temporal_assembly == "vectorized" and formulation != "lossy_dc":
+        raise NotImplementedError(
+            "temporal_assembly='vectorized' is currently supported only for "
+            "formulation='lossy_dc'"
         )
 
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(
-        case, df_P, df_Q, loads, df_load_p, df_load_q, T, formulation
+        case,
+        df_P,
+        df_Q,
+        loads,
+        df_load_p,
+        df_load_q,
+        T,
+        formulation,
+        temporal_assembly,
     )
     if formulation in {"lossy_dc", "singlenode_dc"} and (
         (not explicit_load_mode and df_Q is not None)
@@ -595,21 +706,43 @@ def build_opf_multistep(
             stacklevel=2,
         )
 
+    nd_inputs: NondispatchableInputs | None = None
     # Normalize ND availability once at the public API boundary.
     if nondispatchable:
         if df_nd is None:
+            fallback_action = (
+                "using static p_available from each NondispatchableUnit "
+                "across all T steps."
+                if temporal_assembly == "vectorized"
+                else "tiling p_available from each NondispatchableUnit "
+                "across all T steps."
+            )
             warnings.warn(
-                "df_nd not provided; tiling p_available from each "
-                "NondispatchableUnit across all T steps.",
+                f"df_nd not provided; {fallback_action}",
                 UserWarning,
                 stacklevel=2,
             )
-            nd_available = np.tile(
-                [unit.p_available for unit in nondispatchable], (T, 1)
+            nd_available = np.asarray(
+                [unit.p_available for unit in nondispatchable], dtype=float
             )
+            nd_temporal_class = "static"
         else:
             nd_available = _parse_nd_timeseries(df_nd, T, nondispatchable)
-        df_nd = pd.DataFrame(nd_available)
+            nd_temporal_class = "interval"
+        if temporal_assembly == "vectorized":
+            nd_inputs = NondispatchableInputs(
+                nd_available,
+                temporal_class=nd_temporal_class,
+                vectorized_assembly=True,
+            )
+            df_nd = None
+        else:
+            if nd_temporal_class == "static":
+                nd_available = np.broadcast_to(
+                    nd_available[np.newaxis, :],
+                    (T, len(nondispatchable)),
+                )
+            df_nd = pd.DataFrame(nd_available)
     elif df_nd is not None:
         warnings.warn(
             "df_nd is ignored because no nondispatchable units were provided.",
@@ -618,29 +751,40 @@ def build_opf_multistep(
         )
         df_nd = None
 
-    # HVDC frame handling: tile static box or validate provided frames.
+    hvdc_inputs: HVDCInputs | None = None
+    # HVDC frame handling: preserve static boxes or validate provided frames.
     if hvdc and formulation != "singlenode_dc":
         if df_hvdc_min is None and df_hvdc_max is None:
+            fallback_action = (
+                "using the static box from HVDCLink bounds across all T steps."
+                if temporal_assembly == "vectorized"
+                else "tiling static box from HVDCLink bounds across all T steps."
+            )
             warnings.warn(
-                "df_hvdc_min/df_hvdc_max not provided; tiling static box from "
-                "HVDCLink bounds across all T steps.",
+                f"df_hvdc_min/df_hvdc_max not provided; {fallback_action}",
                 UserWarning,
                 stacklevel=2,
             )
             p_min_static, p_max_static = _hvdc_static_box(hvdc)
-            df_hvdc_min = pd.DataFrame(np.tile(p_min_static, (T, 1)))
-            df_hvdc_max = pd.DataFrame(np.tile(p_max_static, (T, 1)))
+            if temporal_assembly == "vectorized":
+                hvdc_inputs = HVDCInputs(
+                    p_min_static,
+                    p_max_static,
+                    temporal_class="static",
+                    vectorized_assembly=True,
+                )
+            else:
+                df_hvdc_min = pd.DataFrame(
+                    np.broadcast_to(p_min_static[np.newaxis, :], (T, len(hvdc)))
+                )
+                df_hvdc_max = pd.DataFrame(
+                    np.broadcast_to(p_max_static[np.newaxis, :], (T, len(hvdc)))
+                )
         elif df_hvdc_min is None or df_hvdc_max is None:
-            raise ValueError(
-                "df_hvdc_min and df_hvdc_max must be provided together."
-            )
+            raise ValueError("df_hvdc_min and df_hvdc_max must be provided together.")
         else:
-            mins = _parse_hvdc_timeseries(
-                df_hvdc_min, hvdc, T, "df_hvdc_min"
-            )
-            maxs = _parse_hvdc_timeseries(
-                df_hvdc_max, hvdc, T, "df_hvdc_max"
-            )
+            mins = _parse_hvdc_timeseries(df_hvdc_min, hvdc, T, "df_hvdc_min")
+            maxs = _parse_hvdc_timeseries(df_hvdc_max, hvdc, T, "df_hvdc_max")
             if np.any(mins > maxs):
                 bad = np.argwhere(mins > maxs)
                 t_bad, k_bad = bad[0]
@@ -650,12 +794,21 @@ def build_opf_multistep(
                     f"box invariant p_min <= p_max violated."
                 )
             aligned_ids = [link.device_id for link in hvdc]
-            df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
-            df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
+            if temporal_assembly == "vectorized":
+                hvdc_inputs = HVDCInputs(
+                    mins,
+                    maxs,
+                    temporal_class="interval",
+                    vectorized_assembly=True,
+                )
+                df_hvdc_min = None
+                df_hvdc_max = None
+            else:
+                df_hvdc_min = pd.DataFrame(mins, columns=aligned_ids)
+                df_hvdc_max = pd.DataFrame(maxs, columns=aligned_ids)
     elif not hvdc and (df_hvdc_min is not None or df_hvdc_max is not None):
         warnings.warn(
-            "df_hvdc_min/df_hvdc_max are ignored because no HVDC links "
-            "were provided.",
+            "df_hvdc_min/df_hvdc_max are ignored because no HVDC links were provided.",
             UserWarning,
             stacklevel=2,
         )
@@ -663,15 +816,40 @@ def build_opf_multistep(
         df_hvdc_max = None
 
     normalized_case = (
-        _case_with_generators(case, generators)
-        if generators is not None else case
+        _case_with_generators(case, generators) if generators is not None else case
     )
-    return builders[formulation](
-        normalized_case, df_P, df_Q, T, options, coupling_constraints,
-        storage, delta, nondispatchable, df_nd,
-        hvdc=hvdc, df_hvdc_min=df_hvdc_min, df_hvdc_max=df_hvdc_max,
-        generators=generators, loads=loads, load_inputs=load_inputs,
-        load_participates_when_empty=explicit_load_mode,
+    selected_builders = (
+        _get_vectorized_multistep_builders()
+        if temporal_assembly == "vectorized"
+        else builders
+    )
+    vectorized_inputs = (
+        {"nd_inputs": nd_inputs, "hvdc_inputs": hvdc_inputs}
+        if temporal_assembly == "vectorized"
+        else {}
+    )
+    return _finalize_temporal_assembly(
+        selected_builders[formulation](
+            normalized_case,
+            df_P,
+            df_Q,
+            T,
+            options,
+            coupling_constraints,
+            storage,
+            delta,
+            nondispatchable,
+            df_nd,
+            hvdc=hvdc,
+            df_hvdc_min=df_hvdc_min,
+            df_hvdc_max=df_hvdc_max,
+            generators=generators,
+            loads=loads,
+            load_inputs=load_inputs,
+            load_participates_when_empty=explicit_load_mode,
+            **vectorized_inputs,
+        ),
+        temporal_assembly,
     )
 
 
@@ -679,8 +857,9 @@ def build_opf_multistep(
 # Deprecated aliases
 # ---------------------------------------------------------------------------
 
+
 def build_acopf(
-    case: dict,
+    case: dict[str, Any],
     *,
     options: OPFOptions | None = None,
 ) -> OPFBuild:
@@ -701,7 +880,7 @@ def build_acopf(
 
 
 def build_acopf_multistep(
-    case: dict,
+    case: dict[str, Any],
     df_P: pd.DataFrame,
     df_Q: pd.DataFrame,
     *,
@@ -724,6 +903,11 @@ def build_acopf_multistep(
         stacklevel=2,
     )
     return build_opf_multistep(
-        case, df_P, df_Q, T=T, formulation="ac",
-        options=options, coupling_constraints=coupling_constraints,
+        case,
+        df_P,
+        df_Q,
+        T=T,
+        formulation="ac",
+        options=options,
+        coupling_constraints=coupling_constraints,
     )
