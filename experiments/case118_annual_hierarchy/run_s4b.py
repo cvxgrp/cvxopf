@@ -419,12 +419,18 @@ def execute_one_window_child(
         or context["source_fingerprint"] != expected_source_fingerprint
     ):
         raise ValueError("S4b window child provenance mismatch")
-    _scope_authority(
+    authority = _scope_authority(
         execution_scope,
         authority_path,
         expected_commit=expected_commit,
         expected_source_fingerprint=expected_source_fingerprint,
     )
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            require_current_transition,
+        )
+
+        require_current_transition(directory.parent, context, authority)
     _, shard = _scope_shard_entry(execution_scope, shard_id, _outer())
     checkpoint = validate_shard_checkpoint(
         json.loads((directory / "checkpoint.json").read_text()),
@@ -434,6 +440,12 @@ def execute_one_window_child(
     )
     if checkpoint["next_global_iteration"] != iteration:
         raise ValueError("window child iteration differs from checkpoint")
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            verify_checkpoint_segment,
+        )
+
+        verify_checkpoint_segment(directory, checkpoint, context=context)
     interval = _mapping(shard["interval"], "shard interval")
     storage = _mapping(shard["storage"], "shard storage")
     ids = tuple(cast(Sequence[str], storage["device_ids"]))
@@ -633,12 +645,19 @@ def _run_shard_worker_body(
     child_usage_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     if context["git_clean"] is not True:
         raise ValueError("S4b execution requires a clean committed worktree")
-    _scope_authority(
+    authority = _scope_authority(
         execution_scope,
         authority_path,
         expected_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    transition = None
+    if execution_scope == ANNUAL_SCOPE:
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            require_current_transition,
+        )
+
+        transition = require_current_transition(directory.parent, context, authority)
     _, shard = _scope_shard_entry(execution_scope, shard_id, _outer())
     outer = _outer()
     interval = _mapping(shard["interval"], "shard interval")
@@ -656,8 +675,19 @@ def _run_shard_worker_body(
             expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
             allowed_execution_modes=_scope_execution_modes(execution_scope),
         )
+        source_matches = (
+            checkpoint["execution_source_fingerprint"] == context["source_fingerprint"]
+        )
+        if transition is not None:
+            from experiments.case118_annual_hierarchy.s5_source_transition import (
+                verify_checkpoint_segment,
+            )
+
+            source_matches = verify_checkpoint_segment(
+                directory, checkpoint, context=context
+            )
         if (
-            checkpoint["execution_source_fingerprint"] != context["source_fingerprint"]
+            not source_matches
             or checkpoint["outer_plan_sha256"] != sha256_path(S4_OUTER_ARCHIVE_PATH)
             or checkpoint["execution_mode"] != execution_mode
             or checkpoint["complete"] is True

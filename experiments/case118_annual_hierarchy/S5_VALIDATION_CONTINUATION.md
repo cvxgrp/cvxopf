@@ -83,11 +83,38 @@ execution contexts and source fingerprints. This correction must not bypass
 that check, rewrite the old checkpoints to impersonate new execution, or replace
 the original authority. This document is not a machine execution authority.
 
-The new JSON is a review contract, not an input currently supported by the
-launcher. The bound fix commit still has same-source-only resume checks. Any
-subsequent source-version orchestration implementation must be reviewed and
-explicitly bound to its own exact execution identity before launch; committing
-these documents alone does not make the existing resume command valid.
+The tracked JSON is a frozen nonexecuting proposal. The bound fix commit still
+has same-source-only resume checks. The subsequent support implementation adds
+`--source-transition` to the annual root runner and requires a separately
+reviewed copy of that contract bound to the exact clean support commit and
+source fingerprint. No commit identity is invented before that implementation
+is committed. The historical `execution_source_changes` and
+`commit_diff_sha256` fields describe the validation fix, not the later support
+implementation, which is identified by the successor context/fingerprint.
+
+Prepare a new numerical-authority file (do not overwrite the old file) using the
+successor commit/fingerprint and the unchanged frozen authority fields, plus
+`source_version_contract_sha256=object_sha256(reviewed_contract)`. Review both
+files before passing them to `run_s5 --authority NEW_AUTHORITY
+--reviewed-continue --source-transition REVIEWED_CONTRACT`. The pending tracked
+proposal deliberately fails this launch gate. The support record, literal old
+checkpoint snapshots, and both identities are retained in the execution tree
+before a resumed worker can start. See `S5_PROTOCOL.md` for retry and analysis
+semantics. No source-version record or new authority has yet been published in
+the actual study directory, and the study remains paused at 505 intervals.
+
+Support verification: 18 focused source-transition tests pass, including
+pre-publication rejection, publication retry, old-prefix preservation, child
+entry rejection, pending/partial analysis, and synthetic six-wave completion
+with cumulative old/new supervision time. Subsequent restart after successor
+shard completion requires its actual successor supervision; missing supervision
+is rejected. Both partial and completed copied studies reconstruct with the
+original output directory unavailable. The affected S4b/S5/streaming suite
+passes 155 tests; the pre-execution-only assertion that the S5 output directory
+is absent is explicitly deselected. Ruff lint/format, strict mypy for the six
+changed production modules, and whitespace checks pass. Both actual stopped
+shards were fully revalidated read-only, with unchanged original hashes.
+Independent review and exact post-commit authority binding remain launch gates.
 Root, shard-worker, and final-analysis provenance must all preserve both
 execution segments. Resume only the incomplete wave at global
 intervals 254 and 933; do not discard or rerun accepted intervals. Record the

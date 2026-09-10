@@ -67,6 +67,50 @@ boundaries, concurrency, timeout policy, or recovery behavior. Continuation
 requires an explicit reviewed flag, exact authority/source/checkpoint
 validation, and an immutable continuation record. A completed shard is never
 rerun; only incomplete members of the stopped wave may resume.
+
+### Single reviewed validation-only source transition
+
+The intentional pause after 505 accepted intervals is the sole supported
+cross-version exception. `S5_SOURCE_VERSION_CONTINUATION.json` remains a frozen,
+nonexecuting proposal binding the original `41abf63` authority, literal stopping
+checkpoints, and the `8a49e92` validation-cost correction. It is not changed into
+an execution authority in place. See `S5_VALIDATION_CONTINUATION.md`.
+
+After the resume-support implementation is committed and independently reviewed,
+prepare a separate reviewed contract with the exact clean support commit and S5
+source fingerprint, unchanged scientific/environment context, and explicit
+`review_status="reviewed"`, `launch_authorized=true`, and
+`classification="reviewed_s5_source_version_continuation"`. Its successor
+numerical authority must retain all frozen limits and include
+`source_version_contract_sha256`, the canonical object digest of that contract.
+Neither a descendant commit nor another source change is implicitly allowed.
+
+The root requires `--reviewed-continue --source-transition PATH` for initial
+publication. Before any worker launch it verifies the frozen stopping artifacts
+and full accepted window chains, then atomically publishes one immutable
+`source-version-transition.json`. That record holds the reviewed contract,
+both authorities, a publication timestamp, and literal JSON snapshots of the
+old progress and checkpoints. A failed publication leaves the old pointers
+unchanged; an identical retry may reuse the record. Later same-successor retries
+may discover this retained record automatically but still require reviewed
+continuation. Different contracts or successor contexts are rejected.
+
+Workers must preserve the exact old window-registry prefix and its physical
+state chain. Before the first newly accepted interval, the original checkpoint
+must match exactly; after advancement, its source field describes the successor
+worker, while the immutable transition retains the old prefix attribution.
+The original run context, authority, windows, logs, and supervision are not
+rewritten. Final analysis verifies incomplete as well as completed segments,
+retains both contexts and the transition identity, and sums supervision time
+and resource evidence across both invocations. The deliberate stopped period
+is not counted as active supervisor runtime; the old supervision timestamp and
+transition publication timestamp remain available separately.
+
+This does not permit changing the numerical model, solver, acceptance gates,
+timeout policy, storage state, manifest, concurrency, or resource ceilings.
+
+### Continuation evidence and abnormal outcomes
+
 Before recording continuation or launching a worker, the runner reconstructs
 every completed shard before the retained wave coordinate and any completed
 peer in that wave. Missing, rejected, or provenance-mismatched prefix evidence
@@ -81,6 +125,12 @@ result and window archives remain intact. Recovery requires restoration of
 matching retained supervision evidence or a separately reviewed audit-only
 reconciliation; this implementation does not manufacture process evidence or
 automatically rerun the completed shard.
+
+On subsequent source-version restarts, exactly bound predecessor supervision
+remains valid history, but only matching successor supervision can attest to
+a completed successor worker. Historical evidence is resolved within the
+supplied results directory, including when that directory is copied or restored;
+the original repository output location is not required for reconstruction.
 
 Catchable `SIGTERM` and `KeyboardInterrupt` terminate and join live worker
 process groups before the root partial record is published and the

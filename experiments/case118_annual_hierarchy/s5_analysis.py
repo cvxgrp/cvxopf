@@ -43,6 +43,11 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_immutable_json,
     sha256_path,
 )
+from experiments.case118_annual_hierarchy.s5_source_transition import (
+    RECORD_NAME,
+    historical_provenance_matches,
+    load_transition,
+)
 
 
 ANALYSIS_SOURCE_FILES = tuple(ROOT / item for item in SOURCE_FILES) + (
@@ -290,6 +295,7 @@ def _validate_continuations(
     authority: Mapping[str, object],
 ) -> list[Mapping[str, object]]:
     retained: list[Mapping[str, object]] = []
+    transition = load_transition(output_root)
     registry = cast(Sequence[Mapping[str, object]], progress["reviewed_continuations"])
     actual_paths = sorted(output_root.glob("reviewed-continuation-*.json"))
     if [path.name for path in actual_paths] != [str(raw["path"]) for raw in registry]:
@@ -309,8 +315,9 @@ def _validate_continuations(
         source = _mapping(value.get("reviewed_source"), "S5 reviewed source")
         if (
             object_sha256(source) != value["reviewed_source_sha256"]
-            or source.get("execution_context") != context
-            or source.get("authority") != authority
+            or not historical_provenance_matches(
+                source, transition, context, authority, output_root=output_root
+            )
             or source.get("next_wave") != value.get("next_wave")
             or source.get("reviewed_continuations") != list(registry[:index])
         ):
@@ -337,6 +344,7 @@ def _validate_root_outcomes(
     if [path.name for path in actual_paths] != [str(raw["path"]) for raw in registry]:
         raise ValueError("S5 root-outcome registry is incomplete")
     retained: list[Mapping[str, object]] = []
+    transition = load_transition(output_root)
     prior_registry: list[Mapping[str, object]] = []
     for raw, path in zip(registry, actual_paths, strict=True):
         if path.parent != output_root or sha256_path(path) != raw.get("sha256"):
@@ -345,8 +353,9 @@ def _validate_root_outcomes(
         if (
             value.get("schema_version") != SCHEMA_VERSION
             or value.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
-            or value.get("execution_context") != context
-            or value.get("authority") != authority
+            or not historical_provenance_matches(
+                value, transition, context, authority, output_root=output_root
+            )
             or value.get("classification")
             not in {"partial", "supervisor_interrupted", "driver_failure"}
             or not isinstance(value.get("next_wave"), int)
@@ -386,16 +395,34 @@ def analyze_s5(
     # Bind authority to the historical run, not the current analyzer checkout.
     context_path = output_root / "run-context.json"
     progress_path = output_root / "progress.json"
-    context = _mapping(json.loads(context_path.read_text()), "S5 run context")
+    initial_context = _mapping(json.loads(context_path.read_text()), "S5 run context")
+    transition = load_transition(output_root)
+    context = (
+        _mapping(
+            transition["contract"]["continuation_execution"]["context"],
+            "successor context",
+        )
+        if transition is not None
+        else initial_context
+    )
     progress = _mapping(json.loads(progress_path.read_text()), "S5 progress")
     authority = load_numerical_authority(
         authority_path,
         expected_execution_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    if transition is not None:
+        if (
+            authority != transition["new_authority"]
+            or initial_context != transition["contract"]["prior_execution"]["context"]
+        ):
+            raise ValueError("S5 analysis transition authority/context mismatch")
+    elif authority.get("source_version_contract_sha256") is not None:
+        raise ValueError("S5 analysis lacks its source-version transition")
     if (
-        progress.get("execution_context") != context
-        or progress.get("authority") != authority
+        not historical_provenance_matches(
+            progress, transition, context, authority, output_root=output_root
+        )
         or context.get("annual_registry_sha256") != annual_registry()["registry_sha256"]
         or context.get("git_clean") is not True
     ):
@@ -406,7 +433,9 @@ def analyze_s5(
         validate_supervision(json.loads(path.read_text())) for path in supervision_paths
     ]
     for record in supervision:
-        if record["authority"] != authority or record["execution_context"] != context:
+        if not historical_provenance_matches(
+            record, transition, context, authority, output_root=output_root
+        ):
             raise ValueError("S5 wave authority or execution context differs from root")
         for raw in _mapping(record["worker_logs"], "S5 worker logs").values():
             log = _mapping(raw, "S5 worker log")
@@ -473,6 +502,21 @@ def analyze_s5(
             )
     # Reaudit each available shard against the frozen outer plan and archive chain.
     outer = _outer()
+    # Audit even incomplete segments before reporting a cross-version partial run.
+    # The prefix registry check binds old windows; full validation preserves the
+    # acceptance, identity, and physical-state checks on every appended archive.
+    if transition is not None:
+        for checkpoint_path in sorted(output_root.glob("shard-*/checkpoint.json")):
+            checkpoint = _mapping(
+                json.loads(checkpoint_path.read_text()), "S5 checkpoint"
+            )
+            verify_shard_artifacts(
+                checkpoint_path.parent,
+                shard=shard_entry(str(checkpoint["shard_id"]))[1],
+                outer=outer,
+                expected_execution_registry_sha256=_annual_registry_sha256(),
+                allowed_execution_modes=("annual",),
+            )
     summaries: list[Mapping[str, object]] = []
     artifacts: dict[str, object] = {}
     for shard_id in ANNUAL_SHARD_IDS:
@@ -655,6 +699,20 @@ def analyze_s5(
         ),
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
         "execution_context": context,
+        "initial_execution_context": initial_context,
+        "source_version_transition": (
+            {
+                "path": RECORD_NAME,
+                "sha256": sha256_path(output_root / RECORD_NAME),
+                "contract": transition["contract"],
+                "published_utc": transition["published_utc"],
+                "preserved_intervals": transition["contract"]["trusted_stopping_point"][
+                    "completed_intervals"
+                ],
+            }
+            if transition is not None
+            else None
+        ),
         "authority": authority,
         "shard_artifacts": artifacts,
         "supervision_artifacts": [

@@ -48,6 +48,12 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_json,
     sha256_path,
 )
+from experiments.case118_annual_hierarchy.s5_source_transition import (
+    historical_provenance_matches,
+    load_transition,
+    publish_transition,
+    require_current_transition,
+)
 
 
 DEFAULT_OUTPUT_ROOT = (
@@ -163,6 +169,7 @@ def _require_completed_worker_binding(
 ) -> None:
     """Require durable process and artifact evidence before skipping a shard."""
     wave_index = wave_index_for_request((shard_id,))
+    transition = load_transition(output_root)
     for path in _supervision_paths(output_root, wave_index):
         record = _mapping(json.loads(path.read_text()), "retained S5 supervision")
         if (
@@ -170,8 +177,9 @@ def _require_completed_worker_binding(
             or record.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
             or record.get("wave_index") != wave_index
             or record.get("frozen_wave") != list(ANNUAL_WAVES[wave_index])
-            or record.get("execution_context") != context
-            or record.get("authority") != authority
+            or not historical_provenance_matches(
+                record, transition, context, authority, output_root=output_root
+            )
             or record.get("classification")
             not in {
                 "accepted",
@@ -190,6 +198,13 @@ def _require_completed_worker_binding(
             or wave_index_for_request(requested) != wave_index
         ):
             raise ValueError("S5 retained supervision has an invalid shard request")
+        # Frozen predecessor outcomes remain valid history, but cannot attest
+        # to a worker completed under the successor execution context.
+        if (
+            record.get("execution_context") != context
+            or record.get("authority") != authority
+        ):
+            continue
         results = _mapping(record.get("worker_results"), "retained S5 workers")
         codes = _mapping(record.get("returncodes"), "retained S5 return codes")
         code = codes.get(shard_id)
@@ -253,6 +268,7 @@ def supervise_wave(
         expected_execution_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    require_current_transition(output_root, context, authority)
     _outer()
     directories = [_shard_directory(item, output_root) for item in shard_ids]
     if any(path.exists() for path in directories) and not reviewed_resume:
@@ -608,6 +624,7 @@ def run_annual(
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
+    source_transition_path: Path | None = None,
     supervisor: Callable[..., Mapping[str, object]] = supervise_wave,
 ) -> Mapping[str, object]:
     """Execute the six frozen waves, stopping on the first abnormal outcome."""
@@ -619,6 +636,25 @@ def run_annual(
         expected_execution_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    transition: dict[str, Any] | None
+    if source_transition_path is not None:
+        if not reviewed_continue or not output_root.is_dir():
+            raise ValueError(
+                "S5 source transition requires explicit reviewed continuation"
+            )
+        transition = publish_transition(
+            output_root, source_transition_path, context, authority
+        )
+    else:
+        transition = load_transition(output_root)
+    if transition is not None:
+        if (
+            transition["new_authority"] != authority
+            or transition["contract"]["continuation_execution"]["context"] != context
+        ):
+            raise ValueError("S5 root does not match the reviewed source transition")
+    elif authority.get("source_version_contract_sha256") is not None:
+        raise ValueError("S5 source-version authority lacks its transition record")
     _outer()
     progress_path = output_root / "progress.json"
     if not output_root.exists():
@@ -671,17 +707,14 @@ def run_annual(
                 ),
             )
         progress = _mapping(json.loads(progress_path.read_text()), "S5 progress")
-        if (
-            progress.get("execution_context") != context
-            or progress.get("authority") != authority
-            or progress.get("classification")
-            not in {
-                "partial",
-                "supervisor_interrupted",
-                "driver_failure",
-                "running",
-            }
-        ):
+        if not historical_provenance_matches(
+            progress, transition, context, authority, output_root=output_root
+        ) or progress.get("classification") not in {
+            "partial",
+            "supervisor_interrupted",
+            "driver_failure",
+            "running",
+        }:
             raise ValueError("S5 reviewed continuation provenance or state mismatch")
         _validate_completed_prefix(
             output_root, progress["next_wave"], context, authority
@@ -699,8 +732,8 @@ def run_annual(
         _reconcile_supervision_records(output_root, supervision_records)
         _reconcile_root_outcomes(output_root, root_outcomes)
         reviewed_source = _progress_payload(
-            context=context,
-            authority=authority,
+            context=_mapping(progress["execution_context"], "prior context"),
+            authority=_mapping(progress["authority"], "prior authority"),
             classification=str(progress["classification"]),
             next_wave=next_wave,
             completed_shards=_completed_shards(output_root),
@@ -880,6 +913,7 @@ def run_annual_supervised(
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
+    source_transition_path: Path | None = None,
 ) -> Mapping[str, object]:
     """Install a catchable SIGTERM boundary around the annual root driver."""
     previous_handler = signal.getsignal(signal.SIGTERM)
@@ -893,6 +927,7 @@ def run_annual_supervised(
             authority_path=authority_path,
             output_root=output_root,
             reviewed_continue=reviewed_continue,
+            source_transition_path=source_transition_path,
         )
     finally:
         signal.signal(signal.SIGTERM, previous_handler)
@@ -905,6 +940,7 @@ def main() -> None:
     )
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--reviewed-continue", action="store_true")
+    parser.add_argument("--source-transition", type=Path)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -912,6 +948,7 @@ def main() -> None:
                 authority_path=args.authority,
                 output_root=args.output_root.resolve(),
                 reviewed_continue=args.reviewed_continue,
+                source_transition_path=args.source_transition,
             ),
             sort_keys=True,
         )

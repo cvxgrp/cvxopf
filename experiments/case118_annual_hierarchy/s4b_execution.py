@@ -396,6 +396,12 @@ def verify_shard_artifacts(
         expected_execution_registry_sha256=expected_execution_registry_sha256,
         allowed_execution_modes=allowed_execution_modes,
     )
+    if checkpoint["execution_mode"] == "annual":
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            verify_checkpoint_segment,
+        )
+
+        verify_checkpoint_segment(directory, checkpoint)
     fixture = load_s4_fixture()
     policy = frozen_p0_policy()
     stop = int(cast(int, _mapping(shard["interval"], "shard interval")["stop"]))

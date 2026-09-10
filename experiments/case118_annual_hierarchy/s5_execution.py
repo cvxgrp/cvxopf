@@ -60,6 +60,7 @@ SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/s4b_execution.py",
     "experiments/case118_annual_hierarchy/s4b_manifest.py",
     "experiments/case118_annual_hierarchy/s5_execution.py",
+    "experiments/case118_annual_hierarchy/s5_source_transition.py",
     "experiments/case118_annual_hierarchy/streaming_archive.py",
     "experiments/case118_annual_hierarchy/streaming_runner.py",
     "experiments/case118_annual_hierarchy/streaming_schema.py",
@@ -197,6 +198,15 @@ def load_numerical_authority(
         "execution_commit": expected_execution_commit,
         "source_fingerprint": expected_source_fingerprint,
     }
+    transition_hash = value.get("source_version_contract_sha256")
+    if transition_hash is not None:
+        if (
+            not isinstance(transition_hash, str)
+            or len(transition_hash) != 64
+            or any(c not in "0123456789abcdef" for c in transition_hash)
+        ):
+            raise ValueError("S5 source-version authority needs a contract hash")
+        expected["source_version_contract_sha256"] = transition_hash
     if value != expected:
         raise ValueError("S5 numerical authority does not match the frozen run")
     return value
