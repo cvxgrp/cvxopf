@@ -275,10 +275,16 @@ def _residual_tolerances(policy: HierarchicalPolicy) -> dict[str, float]:
 
 
 def _outer_boundaries(outer: StreamingOuterPlan) -> dict[int, dict[str, float]]:
+    # Verify the complete array once, then detach every identity-aligned row.
+    # target_at() checks the same whole-array hash on each scalar lookup.
     outer.verify_signpost_integrity()
+    if outer.boundary_soc_mwh is None:
+        raise ValueError("outer plan has no accepted SoC trajectory")
     return {
-        int(boundary): outer.target_at(int(boundary))
-        for boundary in outer.global_boundary_indices
+        int(boundary): dict(zip(outer.storage_device_ids, row.tolist(), strict=True))
+        for boundary, row in zip(
+            outer.global_boundary_indices, outer.boundary_soc_mwh, strict=True
+        )
     }
 
 

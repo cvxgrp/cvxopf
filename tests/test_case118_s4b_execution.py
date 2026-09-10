@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import gzip
+from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 import pytest
 
 from experiments.case118_annual_hierarchy.p0_fixture import load_p0_fixture
@@ -23,9 +26,102 @@ from experiments.case118_annual_hierarchy.streaming_runner import (
     solve_frozen_outer,
 )
 from experiments.case118_annual_hierarchy.streaming_archive import (
+    outer_boundaries,
     window_archive_payload,
 )
 from experiments.case118_annual_hierarchy.streaming_schema import WindowIndexEntry
+
+
+def test_annual_signposts_verify_once_and_preserve_every_row(monkeypatch):
+    outer = run_s4b._outer()
+    calls = []
+    original = type(outer).verify_signpost_integrity
+
+    def verify(self):
+        calls.append(self)
+        original(self)
+
+    monkeypatch.setattr(type(outer), "verify_signpost_integrity", verify)
+    mapping = outer_boundaries(outer)
+    assert calls == [outer]
+    assert list(mapping) == list(range(8761))
+    assert all(tuple(row) == outer.storage_device_ids for row in mapping.values())
+    assert np.array_equal(
+        np.array([list(row.values()) for row in mapping.values()]),
+        outer.boundary_soc_mwh,
+    )
+    for index in (0, 682, 8760):
+        assert mapping[index] == outer.target_at(index)
+    mapping[0][outer.storage_device_ids[0]] += 1
+    assert mapping[0] != outer.target_at(0)  # Detached, not a mutable plan view.
+
+
+def test_signpost_materialization_still_rejects_drift():
+    outer = run_s4b._outer()
+    changed = outer.boundary_soc_mwh.copy()
+    changed[1, 0] += 1
+    object.__setattr__(outer, "boundary_soc_mwh", changed)
+    with pytest.raises(ValueError, match="signpost integrity"):
+        outer_boundaries(outer)
+
+
+def test_shard_verification_reuses_one_mapping_per_pass(tmp_path, monkeypatch):
+    # Isolate traversal/caching from the separately tested window schema.
+    outer = run_s4b._outer()
+    shard = _first_shard()
+    initial = shard["storage"]["initial_state"]["soc_mwh"]
+    entries = []
+    for index in range(2):
+        payload = {
+            "iteration": index,
+            "preceding_controlling_attempt_id": None if index == 0 else "c0",
+            "initial_soc_mwh": initial,
+            "post_step_soc_mwh": initial,
+            "executed_interval": {"controlling_attempt_id": f"c{index}"},
+        }
+        data = gzip.compress(json.dumps(payload).encode())
+        name = f"window-{index}.json.gz"
+        (tmp_path / name).write_bytes(data)
+        entries.append(
+            WindowIndexEntry(index, name, len(data), sha256(data).hexdigest())
+        )
+    checkpoint = s4b_execution.shard_checkpoint_payload(
+        shard=shard,
+        execution_source_fingerprint="b" * 64,
+        outer_plan_sha256="c" * 64,
+        execution_mode="ordinary",
+        realized_soc_mwh=initial,
+        preceding_controlling_attempt_id="c1",
+        windows=entries,
+    )
+    (tmp_path / "checkpoint.json").write_text(json.dumps(checkpoint))
+    constructed = []
+    observed = []
+
+    def materialize(plan):
+        result = outer_boundaries(plan)
+        constructed.append(result)
+        return result
+
+    def validate(value, **kwargs):
+        observed.append(kwargs["expected_outer_boundary_soc_mwh"])
+        return value
+
+    monkeypatch.setattr(s4b_execution, "outer_boundaries", materialize)
+    monkeypatch.setattr(s4b_execution, "validate_window_archive", validate)
+    for _ in range(2):
+        actual, archives = s4b_execution.verify_shard_artifacts(
+            tmp_path, shard=shard, outer=outer
+        )
+        assert actual == checkpoint
+        assert len(archives) == 2
+    assert len(constructed) == 2  # Fresh integrity check on each validation pass.
+    assert observed[0] is observed[1] is constructed[0]
+    assert observed[2] is observed[3] is constructed[1]
+    assert constructed[0] is not constructed[1]
+    (tmp_path / entries[0].relative_path).write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="artifact integrity"):
+        s4b_execution.verify_shard_artifacts(tmp_path, shard=shard, outer=outer)
 
 
 def _first_shard() -> dict[str, object]:
@@ -544,8 +640,7 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
             {
                 "attempts": (
                     [{"classification": "timeout_then_recovered"}]
-                    if worker["execution_mode"]
-                    == "partitioned_fresh_concurrent"
+                    if worker["execution_mode"] == "partitioned_fresh_concurrent"
                     else []
                 ),
                 "executed_interval": {"b_mw": [0.0]},
@@ -639,9 +734,9 @@ def test_complete_analysis_reconstructs_bounded_run_matrix(
     assert result["run_evidence_matrix_complete"] is True
     assert result["accepted_for_s5"] is True
     assert result["process_equivalent"] is True
-    assert cast(dict[str, object], result["concurrent_demonstration"])[
-        "accepted"
-    ] is True
+    assert (
+        cast(dict[str, object], result["concurrent_demonstration"])["accepted"] is True
+    )
     assert (
         cast(dict[str, object], result["boundary_effect_characterization"])[
             "window_structures_differ"

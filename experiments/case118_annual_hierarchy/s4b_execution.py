@@ -403,6 +403,8 @@ def verify_shard_artifacts(
     expected_state = _finite_vector(checkpoint["initial_soc_mwh"], "initial SoC")
     preceding_id: str | None = None
     archives: list[Mapping[str, object]] = []
+    # One verified snapshot per pass; retain full validation of every archive.
+    expected_boundaries = outer_boundaries(outer)
     for raw_entry in _sequence(checkpoint["windows"], "checkpoint windows"):
         entry = _mapping(raw_entry, "window entry")
         path = (directory / str(entry["relative_path"])).resolve()
@@ -424,7 +426,7 @@ def verify_shard_artifacts(
                 expected_ac_window_steps=policy.ac_window_steps,
                 expected_result_dimensions=result_dimensions(fixture.inputs),
                 expected_delta_hours=fixture.inputs.delta,
-                expected_outer_boundary_soc_mwh=outer_boundaries(outer),
+                expected_outer_boundary_soc_mwh=expected_boundaries,
                 expected_trajectory_start=start,
                 expected_primary_timeout_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
             )
