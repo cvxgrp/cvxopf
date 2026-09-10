@@ -1,7 +1,8 @@
 # S5 validation-cost correction and proposed continuation
 
-Status: controlled interruption complete; correction under review; restart not
-authorized by this record. No scientific inputs, solver settings, acceptance
+Status: controlled interruption complete; correction committed; source-version
+continuation contract awaiting independent review. Restart is not enabled by
+this record. No scientific inputs, solver settings, acceptance
 gates, timeout budgets, shard boundaries, or concurrency are changed.
 
 ## Retained execution boundary
@@ -54,18 +55,41 @@ removed to satisfy that obsolete launch-state assertion. Ruff lint/format,
 strict mypy with explicit package bases for both changed production modules,
 documentation artifact-hash checks, and `git diff --check` pass.
 
-## Reviewed source-version continuation still required
+## Exact proposed source-version binding
+
+`S5_SOURCE_VERSION_CONTINUATION.json` binds the original authority and context,
+all retained root evidence, and both stopping checkpoints to the clean fix
+commit `8a49e92aee8aec2ed38e844f6d7aa1c9c526465b`, with execution-source fingerprint
+`80b8f5bc139df200b6c948000c643e77f53d95f9fbe7b0fa67c2dab0c0604867`.
+Cleanliness was observed before preparing these review documents. Both source
+fingerprints were independently reconstructed from Git objects, and the fix
+commit's parent is exactly the original execution commit. Only
+`s4b_execution.py` and `streaming_archive.py` changed within the execution-source
+registry; their before/after hashes are recorded. Tests and this pause note are
+the other changes in the fix commit.
+
+The original numerical-authority file is bound by its complete payload and
+literal file SHA-256
+`96050adae727d40ebc46dd03c3817ae8f3bd39d178751bea62074f94167d7d98`.
+The contract preserves the old `[0,254)` and `[682,933)` accepted segments and
+records identity-aligned realized SoC/controller state at their boundaries.
+All scientific, environment, and software context fields are unchanged.
+Descendant commits are not implicitly authorized by this exact binding.
+
+## Execution support and review still required
 
 The existing `--reviewed-resume` path intentionally permits only matching
 execution contexts and source fingerprints. This correction must not bypass
 that check, rewrite the old checkpoints to impersonate new execution, or replace
 the original authority. This document is not a machine execution authority.
 
-Before restarting, review and commit the correction, then explicitly bind the
-old execution/authority and retained checkpoint hashes above to the exact new
-clean execution commit/source fingerprint in a separately reviewed source-version
-continuation contract. Root, shard-worker, and final-analysis provenance must
-all preserve both execution segments. Resume only the incomplete wave at global
+The new JSON is a review contract, not an input currently supported by the
+launcher. The bound fix commit still has same-source-only resume checks. Any
+subsequent source-version orchestration implementation must be reviewed and
+explicitly bound to its own exact execution identity before launch; committing
+these documents alone does not make the existing resume command valid.
+Root, shard-worker, and final-analysis provenance must all preserve both
+execution segments. Resume only the incomplete wave at global
 intervals 254 and 933; do not discard or rerun accepted intervals. Record the
 validation-only change and its scope while retaining cumulative resource/time
 evidence. Restart and regular monitoring follow only after that gate is ready.
