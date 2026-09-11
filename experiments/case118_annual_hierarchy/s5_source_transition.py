@@ -11,7 +11,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Sequence, cast
 
 from experiments.case118_annual_hierarchy.run_s0 import ROOT
 from experiments.case118_annual_hierarchy.s4b_manifest import object_sha256
@@ -145,13 +145,27 @@ def validate_record(value: object, output_root: Path) -> dict[str, Any]:
     return record
 
 
-def load_transition(output_root: Path) -> dict[str, Any] | None:
+def load_base_transition(output_root: Path) -> dict[str, Any] | None:
+    """Load the original validation-cost source transition."""
     path = output_root / RECORD_NAME
     return (
         validate_record(json.loads(path.read_text()), output_root)
         if path.is_file()
         else None
     )
+
+
+def load_transition(output_root: Path) -> dict[str, Any] | None:
+    """Load the latest reviewed transition, including the one-time intervention."""
+    base = load_base_transition(output_root)
+    if base is None:
+        return None
+    from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+        load_record,
+    )
+
+    intervention = load_record(output_root, predecessor_transition=base)
+    return base if intervention is None else intervention
 
 
 def require_current_transition(
@@ -180,7 +194,7 @@ def publish_transition(
     contract = validate_contract(json.loads(contract_path.read_text()))
     if contract["continuation_execution"]["context"] != context:
         raise ValueError("S5 source transition does not bind this clean execution")
-    existing = load_transition(output_root)
+    existing = load_base_transition(output_root)
     if existing is not None:
         if existing["contract"] != contract or existing["new_authority"] != authority:
             raise ValueError("S5 existing transition differs from reviewed request")
@@ -254,8 +268,19 @@ def verify_checkpoint_segment(
         windows = cast(list[object], checkpoint["windows"])
         if len(windows) < count or windows[:count] != old["windows"]:
             raise ValueError("S5 source transition changed the trusted window prefix")
+        intervention_entry = record.get("intervention_window")
+        has_intervention = (
+            directory.name == "shard-003" and intervention_entry is not None
+        )
+        if has_intervention:
+            if len(windows) > count and windows[count] != intervention_entry:
+                raise ValueError("S5 source transition changed the intervention window")
+            count += 1
         if len(windows) == count:
-            if checkpoint != old:
+            expected = (
+                record.get("post_intervention_checkpoint") if has_intervention else old
+            )
+            if checkpoint != expected:
                 raise ValueError("S5 source transition changed the stopping checkpoint")
             return True
     if checkpoint["execution_source_fingerprint"] != new_context["source_fingerprint"]:
@@ -280,20 +305,108 @@ def historical_provenance_matches(
     if transition is None:
         return False
     contract = transition["contract"]
+    prior_context = contract.get("prior_execution_context")
+    if prior_context is None:
+        prior_context = contract["prior_execution"]["context"]
     if (
-        record.get("execution_context") != contract["prior_execution"]["context"]
-        or record.get("authority") != transition["prior_authority"]
+        record.get("execution_context") == prior_context
+        and record.get("authority") == transition["prior_authority"]
     ):
-        return False
-    old_progress = json.loads(transition["stopping_pointer_json"]["progress.json"])
-    # Root progress is copied verbatim into the reviewed-source continuation.
-    if record == old_progress:
-        return True
-    for ref in contract["trusted_stopping_point"]["root_evidence"]:
-        if Path(ref["path"]).name in {
-            "root-outcome-000.json",
-            "supervision-wave-000-000.json",
-        }:
-            if record == json.loads((output_root / Path(ref["path"]).name).read_text()):
+        old_progress = json.loads(transition["stopping_pointer_json"]["progress.json"])
+        # Root progress is copied verbatim into each reviewed transition.
+        if record == old_progress:
+            return True
+        referenced_names = {
+            str(item["path"])
+            for field in (
+                "supervision_records",
+                "reviewed_continuations",
+                "root_outcomes",
+            )
+            for item in cast(
+                Sequence[Mapping[str, object]], old_progress.get(field, ())
+            )
+            if isinstance(item.get("path"), str)
+        }
+        for name in referenced_names:
+            path = output_root / name
+            if path.is_file() and record == json.loads(path.read_text()):
                 return True
+        if transition.get("classification") == (
+            "applied_s5_interval_2448_operator_intervention"
+        ):
+            from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+                STOPPING_EVIDENCE,
+            )
+
+            root_names = {name for name in STOPPING_EVIDENCE if "/" not in name}
+        else:
+            root_names = {
+                Path(ref["path"]).name
+                for ref in contract["trusted_stopping_point"]["root_evidence"]
+                if Path(ref["path"]).name
+                in {"root-outcome-000.json", "supervision-wave-000-000.json"}
+            }
+        for name in root_names:
+            if record == json.loads((output_root / name).read_text()):
+                return True
+    predecessor = transition.get("predecessor_transition")
+    if isinstance(predecessor, Mapping):
+        return historical_provenance_matches(
+            record,
+            cast(Mapping[str, Any], predecessor),
+            cast(
+                Mapping[str, object],
+                predecessor["contract"]["continuation_execution"]["context"],
+            ),
+            cast(Mapping[str, object], predecessor["new_authority"]),
+            output_root=output_root,
+        )
     return False
+
+
+def transition_context_authority_pairs(
+    transition: Mapping[str, Any] | None,
+) -> tuple[tuple[Mapping[str, object], Mapping[str, object]], ...]:
+    """Return every explicitly bound execution segment, newest first."""
+    pairs: list[tuple[Mapping[str, object], Mapping[str, object]]] = []
+    current = transition
+    while current is not None:
+        contract = current["contract"]
+        pairs.append(
+            (
+                cast(
+                    Mapping[str, object],
+                    contract["continuation_execution"]["context"],
+                ),
+                cast(Mapping[str, object], current["new_authority"]),
+            )
+        )
+        predecessor = current.get("predecessor_transition")
+        if isinstance(predecessor, Mapping):
+            current = cast(Mapping[str, Any], predecessor)
+        else:
+            prior = contract.get("prior_execution")
+            if isinstance(prior, Mapping):
+                pairs.append(
+                    (
+                        cast(Mapping[str, object], prior["context"]),
+                        cast(Mapping[str, object], current["prior_authority"]),
+                    )
+                )
+            current = None
+    return tuple(pairs)
+
+
+__all__ = [
+    "RECORD_NAME",
+    "historical_provenance_matches",
+    "load_base_transition",
+    "load_transition",
+    "publish_transition",
+    "require_current_transition",
+    "transition_context_authority_pairs",
+    "validate_contract",
+    "validate_record",
+    "verify_checkpoint_segment",
+]

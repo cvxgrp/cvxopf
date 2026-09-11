@@ -47,6 +47,7 @@ from experiments.case118_annual_hierarchy.s5_source_transition import (
     RECORD_NAME,
     historical_provenance_matches,
     load_transition,
+    transition_context_authority_pairs,
 )
 
 
@@ -296,6 +297,9 @@ def _validate_continuations(
 ) -> list[Mapping[str, object]]:
     retained: list[Mapping[str, object]] = []
     transition = load_transition(output_root)
+    allowed_pairs = transition_context_authority_pairs(transition) or (
+        (context, authority),
+    )
     registry = cast(Sequence[Mapping[str, object]], progress["reviewed_continuations"])
     actual_paths = sorted(output_root.glob("reviewed-continuation-*.json"))
     if [path.name for path in actual_paths] != [str(raw["path"]) for raw in registry]:
@@ -304,10 +308,16 @@ def _validate_continuations(
         if path.parent != output_root or sha256_path(path) != raw.get("sha256"):
             raise ValueError("S5 reviewed-continuation artifact identity mismatch")
         value = _mapping(json.loads(path.read_text()), "S5 reviewed continuation")
+        value_context = _mapping(
+            value.get("execution_context"), "continuation execution context"
+        )
+        value_authority = _mapping(value.get("authority"), "continuation authority")
         if (
             value.get("classification") != "explicit_reviewed_continuation"
-            or value.get("execution_context") != context
-            or value.get("authority") != authority
+            or not any(
+                value_context == pair_context and value_authority == pair_authority
+                for pair_context, pair_authority in allowed_pairs
+            )
             or not isinstance(value.get("next_wave"), int)
             or not isinstance(value.get("reviewed_source_sha256"), str)
         ):
@@ -397,24 +407,30 @@ def analyze_s5(
     progress_path = output_root / "progress.json"
     initial_context = _mapping(json.loads(context_path.read_text()), "S5 run context")
     transition = load_transition(output_root)
-    context = (
-        _mapping(
-            transition["contract"]["continuation_execution"]["context"],
-            "successor context",
+    if transition is None:
+        context = initial_context
+    else:
+        transition_contract = _mapping(
+            transition.get("contract"), "source transition contract"
         )
-        if transition is not None
-        else initial_context
-    )
+        transition_execution = _mapping(
+            transition_contract.get("continuation_execution"),
+            "source transition execution",
+        )
+        context = _mapping(transition_execution.get("context"), "successor context")
     progress = _mapping(json.loads(progress_path.read_text()), "S5 progress")
     authority = load_numerical_authority(
         authority_path,
         expected_execution_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    execution_pairs = transition_context_authority_pairs(transition) or (
+        (initial_context, authority),
+    )
     if transition is not None:
         if (
             authority != transition["new_authority"]
-            or initial_context != transition["contract"]["prior_execution"]["context"]
+            or initial_context != execution_pairs[-1][0]
         ):
             raise ValueError("S5 analysis transition authority/context mismatch")
     elif authority.get("source_version_contract_sha256") is not None:
@@ -535,9 +551,16 @@ def analyze_s5(
         )
         if any(worker.get(name) != value for name, value in reconstructed.items()):
             raise ValueError("S5 worker result differs from independent audit")
+        worker_context = _mapping(
+            worker.get("execution_context"), "worker execution context"
+        )
         if (
-            worker.get("execution_context") != context
+            not any(
+                worker_context == pair_context for pair_context, _ in execution_pairs
+            )
             or worker.get("execution_mode") != "annual"
+            or worker.get("execution_source_fingerprint")
+            != worker_context.get("source_fingerprint")
         ):
             raise ValueError("S5 worker execution provenance or mode mismatch")
         verify_shard_artifacts(
@@ -586,6 +609,14 @@ def analyze_s5(
             summaries,
             registry_shards=[shard_entry(item)[1] for item in ANNUAL_SHARD_IDS],
             expected_execution_registry_sha256=_annual_registry_sha256(),
+            allowed_execution_source_fingerprints=(
+                tuple(
+                    str(pair_context["source_fingerprint"])
+                    for pair_context, _ in execution_pairs
+                )
+                if transition is not None
+                else None
+            ),
         )
         if complete
         else None
@@ -700,19 +731,7 @@ def analyze_s5(
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
         "execution_context": context,
         "initial_execution_context": initial_context,
-        "source_version_transition": (
-            {
-                "path": RECORD_NAME,
-                "sha256": sha256_path(output_root / RECORD_NAME),
-                "contract": transition["contract"],
-                "published_utc": transition["published_utc"],
-                "preserved_intervals": transition["contract"]["trusted_stopping_point"][
-                    "completed_intervals"
-                ],
-            }
-            if transition is not None
-            else None
-        ),
+        "source_version_transition": _transition_summary(output_root, transition),
         "authority": authority,
         "shard_artifacts": artifacts,
         "supervision_artifacts": [
@@ -745,6 +764,57 @@ def analyze_s5(
         "analysis_context": analysis_context(),
     }
     return {**result, "analysis_sha256": object_sha256(result)}
+
+
+def _transition_summary(
+    output_root: Path, transition: Mapping[str, object] | None
+) -> Mapping[str, object] | None:
+    """Retain the reviewed source chain without flattening its distinct events."""
+    if transition is None:
+        return None
+    if transition.get("classification") == (
+        "applied_s5_interval_2448_operator_intervention"
+    ):
+        from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+            INTERVAL,
+            RECORD_NAME as INTERVENTION_RECORD_NAME,
+        )
+
+        predecessor = _mapping(
+            transition.get("predecessor_transition"), "predecessor transition"
+        )
+        base_contract = _mapping(
+            predecessor.get("contract"), "base transition contract"
+        )
+        stopping = _mapping(
+            base_contract.get("trusted_stopping_point"), "base stopping point"
+        )
+        return {
+            "classification": transition["classification"],
+            "latest_path": INTERVENTION_RECORD_NAME,
+            "latest_sha256": sha256_path(output_root / INTERVENTION_RECORD_NAME),
+            "base_path": RECORD_NAME,
+            "base_sha256": sha256_path(output_root / RECORD_NAME),
+            "contract": transition["contract"],
+            "published_utc": transition["published_utc"],
+            "preserved_intervals_before_base_transition": stopping[
+                "completed_intervals"
+            ],
+            "operator_intervention_interval": INTERVAL,
+            "operator_intervention_window_sha256": _mapping(
+                transition.get("intervention_window"), "intervention window"
+            )["sha256"],
+        }
+    contract = _mapping(transition.get("contract"), "source transition contract")
+    stopping = _mapping(contract.get("trusted_stopping_point"), "stopping point")
+    return {
+        "classification": "applied_s5_source_version_transition",
+        "path": RECORD_NAME,
+        "sha256": sha256_path(output_root / RECORD_NAME),
+        "contract": contract,
+        "published_utc": transition["published_utc"],
+        "preserved_intervals": stopping["completed_intervals"],
+    }
 
 
 def promote_completed(

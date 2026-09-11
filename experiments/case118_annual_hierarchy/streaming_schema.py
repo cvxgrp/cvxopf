@@ -33,6 +33,7 @@ SLOT_STATES = {
     "construction_error",
     "source_unavailable",
     "not_needed_after_acceptance",
+    "operator_bypassed",
 }
 PERTURBATION_SCALES = (1e-4, 1e-3, 1e-2)
 ACCEPTED_SOLVER_STATUSES = frozenset({"optimal", "optimal_inaccurate"})
@@ -505,6 +506,7 @@ def validate_window_archive(
     expected_outer_boundary_soc_mwh: Mapping[int, Mapping[str, float]],
     expected_trajectory_start: int = 0,
     expected_primary_timeout_seconds: float | None = None,
+    expected_operator_intervention: Mapping[str, object] | None = None,
 ) -> Mapping[str, object]:
     """Validate a complete, build-free, single-window archive."""
     archive = _mapping(payload, "window archive")
@@ -648,6 +650,18 @@ def validate_window_archive(
     elif not isinstance(preceding_id, str) or not preceding_id:
         raise ValueError("later window requires preceding controlling attempt ID")
 
+    intervention = archive.get("operator_intervention")
+    operator_intervention = intervention is not None
+    if operator_intervention:
+        if expected_operator_intervention is None:
+            raise ValueError("operator intervention lacks external authority")
+        if intervention != expected_operator_intervention:
+            raise ValueError("operator intervention identity mismatch")
+        if iteration != 2448:
+            raise ValueError("operator intervention is frozen to interval 2448")
+    elif expected_operator_intervention is not None:
+        raise ValueError("authorized operator intervention is absent from archive")
+
     controlling_attempts: list[Mapping[str, object]] = []
     accepted_controlling_ordinals: list[int] = []
     target_free_accepted = False
@@ -698,7 +712,9 @@ def validate_window_archive(
             raise ValueError("attempt seed does not match registry")
         state = attempt["slot_state"]
         source_available = ordinal not in {2, 3, 4, 5} or target_free_accepted
-        if earlier_controller_accepted:
+        if operator_intervention:
+            expected_states = {"executed"} if ordinal == 8 else {"operator_bypassed"}
+        elif earlier_controller_accepted:
             expected_states = {"not_needed_after_acceptance"}
         elif source_available:
             expected_states = {"executed", "construction_error"}
@@ -709,7 +725,11 @@ def validate_window_archive(
         if state not in expected_states:
             raise ValueError("attempt slot state violates frozen lifecycle")
         source_id = attempt.get("source_attempt_id")
-        if state in {"not_needed_after_acceptance", "source_unavailable"}:
+        if state in {
+            "not_needed_after_acceptance",
+            "source_unavailable",
+            "operator_bypassed",
+        }:
             expected_source_kind = None
             expected_source_id = None
         elif ordinal in {0, 1, 6, 7, 8} and iteration == trajectory_start:
@@ -746,9 +766,11 @@ def validate_window_archive(
                 )
             if attempt.get("structural_signature") is None:
                 raise ValueError("timed-out attempt must retain its prepared structure")
-            if expected_primary_timeout_seconds is None or attempt.get(
-                "timeout_budget_seconds"
-            ) != expected_primary_timeout_seconds:
+            if (
+                expected_primary_timeout_seconds is None
+                or attempt.get("timeout_budget_seconds")
+                != expected_primary_timeout_seconds
+            ):
                 raise ValueError("timed-out attempt budget differs from frozen policy")
             raw_start = _mapping(attempt.get("raw_start"), "timed-out raw start")
             assigned_start = _mapping(
@@ -790,6 +812,29 @@ def validate_window_archive(
                 "primary_attempt_timeout:"
             ):
                 raise ValueError("timed-out attempt lacks its timeout classification")
+        elif state == "operator_bypassed":
+            if solver_executed or supplied:
+                raise ValueError("operator-bypassed slot cannot claim execution")
+            if any(
+                attempt.get(name) is not None
+                for name in (
+                    "audit",
+                    "result",
+                    "raw_start",
+                    "assigned_start",
+                    "solver_x0",
+                    "solver_x0_layout",
+                    "solver_evidence",
+                    "structural_signature",
+                    "causal_source",
+                )
+            ):
+                raise ValueError("operator-bypassed slot cannot retain solve evidence")
+            reason = attempt.get("reason")
+            if not isinstance(reason, str) or not reason.startswith(
+                "reviewed_operator_intervention:"
+            ):
+                raise ValueError("operator-bypassed slot lacks reviewed reason")
         else:
             if solver_executed or supplied:
                 raise ValueError("unexecuted slot cannot retain execution claims")

@@ -53,6 +53,7 @@ from experiments.case118_annual_hierarchy.s5_source_transition import (
     load_transition,
     publish_transition,
     require_current_transition,
+    transition_context_authority_pairs,
 )
 
 
@@ -116,12 +117,21 @@ def _audited_completed_worker(
         expected_execution_registry_sha256=_annual_registry_sha256(),
         allowed_execution_modes=(ANNUAL_SCOPE,),
     )
+    transition = load_transition(directory.parent)
+    allowed_contexts = tuple(
+        item[0] for item in transition_context_authority_pairs(transition)
+    ) or (context,)
+    worker_context = _mapping(
+        worker.get("execution_context"), "completed worker context"
+    )
     if (
         summary.get("classification") != "accepted"
         or summary.get("execution_complete") is not True
         or summary.get("all_independent_audits_agree") is not True
         or any(worker.get(name) != value for name, value in summary.items())
-        or worker.get("execution_context") != context
+        or worker_context not in allowed_contexts
+        or worker.get("execution_source_fingerprint")
+        != worker_context.get("source_fingerprint")
         or worker.get("execution_mode") != ANNUAL_SCOPE
     ):
         raise ValueError(
@@ -198,13 +208,6 @@ def _require_completed_worker_binding(
             or wave_index_for_request(requested) != wave_index
         ):
             raise ValueError("S5 retained supervision has an invalid shard request")
-        # Frozen predecessor outcomes remain valid history, but cannot attest
-        # to a worker completed under the successor execution context.
-        if (
-            record.get("execution_context") != context
-            or record.get("authority") != authority
-        ):
-            continue
         results = _mapping(record.get("worker_results"), "retained S5 workers")
         codes = _mapping(record.get("returncodes"), "retained S5 return codes")
         code = codes.get(shard_id)
@@ -625,6 +628,8 @@ def run_annual(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
     source_transition_path: Path | None = None,
+    operator_intervention_path: Path | None = None,
+    diagnostic_root: Path | None = None,
     supervisor: Callable[..., Mapping[str, object]] = supervise_wave,
 ) -> Mapping[str, object]:
     """Execute the six frozen waves, stopping on the first abnormal outcome."""
@@ -637,6 +642,8 @@ def run_annual(
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
     transition: dict[str, Any] | None
+    if source_transition_path is not None and operator_intervention_path is not None:
+        raise ValueError("S5 accepts only one new reviewed transition per invocation")
     if source_transition_path is not None:
         if not reviewed_continue or not output_root.is_dir():
             raise ValueError(
@@ -645,6 +652,30 @@ def run_annual(
         transition = publish_transition(
             output_root, source_transition_path, context, authority
         )
+    elif operator_intervention_path is not None:
+        if not reviewed_continue or not output_root.is_dir() or diagnostic_root is None:
+            raise ValueError(
+                "S5 operator intervention requires reviewed continuation and diagnostic evidence"
+            )
+        from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+            publish_intervention,
+        )
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            load_base_transition,
+        )
+
+        predecessor = load_base_transition(output_root)
+        if predecessor is None:
+            raise ValueError("S5 operator intervention lacks predecessor transition")
+        publish_intervention(
+            output_root,
+            operator_intervention_path,
+            diagnostic_root,
+            context,
+            authority,
+            predecessor_transition=predecessor,
+        )
+        transition = load_transition(output_root)
     else:
         transition = load_transition(output_root)
     if transition is not None:
@@ -886,6 +917,14 @@ def run_annual(
         summaries,
         registry_shards=[shard_entry(item)[1] for item in ANNUAL_SHARD_IDS],
         expected_execution_registry_sha256=_annual_registry_sha256(),
+        allowed_execution_source_fingerprints=(
+            tuple(
+                str(pair_context["source_fingerprint"])
+                for pair_context, _ in transition_context_authority_pairs(transition)
+            )
+            if transition is not None
+            else None
+        ),
     )
     merged_path = output_root / "merged-result.json"
     _publish_or_verify(merged_path, merged)
@@ -914,6 +953,8 @@ def run_annual_supervised(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
     source_transition_path: Path | None = None,
+    operator_intervention_path: Path | None = None,
+    diagnostic_root: Path | None = None,
 ) -> Mapping[str, object]:
     """Install a catchable SIGTERM boundary around the annual root driver."""
     previous_handler = signal.getsignal(signal.SIGTERM)
@@ -928,6 +969,8 @@ def run_annual_supervised(
             output_root=output_root,
             reviewed_continue=reviewed_continue,
             source_transition_path=source_transition_path,
+            operator_intervention_path=operator_intervention_path,
+            diagnostic_root=diagnostic_root,
         )
     finally:
         signal.signal(signal.SIGTERM, previous_handler)
@@ -941,6 +984,8 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--reviewed-continue", action="store_true")
     parser.add_argument("--source-transition", type=Path)
+    parser.add_argument("--operator-intervention", type=Path)
+    parser.add_argument("--diagnostic-root", type=Path)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -949,6 +994,8 @@ def main() -> None:
                 output_root=args.output_root.resolve(),
                 reviewed_continue=args.reviewed_continue,
                 source_transition_path=args.source_transition,
+                operator_intervention_path=args.operator_intervention,
+                diagnostic_root=args.diagnostic_root,
             ),
             sort_keys=True,
         )

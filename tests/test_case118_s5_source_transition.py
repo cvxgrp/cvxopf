@@ -455,3 +455,34 @@ def test_complete_synthetic_transition_merges_and_retains_original_wall_time(
         assert restored_analysis["resource_summary"] == analyzed["resource_summary"]
         assert restored_analysis["wave_lifecycle"] == analyzed["wave_lifecycle"]
         assert restored_analysis["initial_execution_context"] == old
+
+
+def test_nested_transition_exposes_each_explicit_execution_segment():
+    first_context = {"git_commit": "a" * 40, "source_fingerprint": "b" * 64}
+    second_context = {"git_commit": "c" * 40, "source_fingerprint": "d" * 64}
+    third_context = {"git_commit": "e" * 40, "source_fingerprint": "f" * 64}
+    first_authority = {"execution_commit": first_context["git_commit"]}
+    second_authority = {"execution_commit": second_context["git_commit"]}
+    third_authority = {"execution_commit": third_context["git_commit"]}
+    base = {
+        "contract": {
+            "prior_execution": {"context": first_context},
+            "continuation_execution": {"context": second_context},
+        },
+        "prior_authority": first_authority,
+        "new_authority": second_authority,
+    }
+    latest = {
+        "contract": {
+            "prior_execution_context": second_context,
+            "continuation_execution": {"context": third_context},
+        },
+        "prior_authority": second_authority,
+        "new_authority": third_authority,
+        "predecessor_transition": base,
+    }
+    assert transition.transition_context_authority_pairs(latest) == (
+        (third_context, third_authority),
+        (second_context, second_authority),
+        (first_context, first_authority),
+    )

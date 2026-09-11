@@ -109,6 +109,24 @@ transition publication timestamp remain available separately.
 This does not permit changing the numerical model, solver, acceptance gates,
 timeout policy, storage state, manifest, concurrency, or resource ceilings.
 
+### One reviewed interval-2448 operator intervention
+
+After the validation-only continuation, shard 003 stopped at interval 2448
+following a primary timeout and an exceptionally long unsuccessful target-free
+solve. The owner separately reproduced causal perturbations 6–8 against the
+exact stopped state. Slot 8 passed the unchanged hard-target acceptance gate.
+
+The exact accepted diagnostic result may be promoted once through the reviewed
+contract described in `S5_INTERVAL_2448_INTERVENTION.md`. The transaction binds
+the stopped live evidence and complete diagnostic evidence, publishes the
+immutable interval archive first, and advances shard 003's checkpoint exactly
+once. Bypassed slots are labeled as operator-bypassed; they are not rewritten
+as solver outcomes. Final audit retains the live timeout, interrupted recovery,
+diagnostic timings, selected slot, and source-version boundary separately.
+
+This narrow intervention does not alter the ordinary nine-slot lifecycle for
+any other interval and does not authorize another operator-selected result.
+
 ### Continuation evidence and abnormal outcomes
 
 Before recording continuation or launching a worker, the runner reconstructs
@@ -165,10 +183,12 @@ shards, all six waves, the annual merge, provenance, resources, and independent
 scientific audits pass. The promoted result is the S5 scientific record; raw
 window and supervision artifacts remain ignored but hash-bound.
 
-## Stopping point
+## Current stopping point
 
-This checkpoint implements and tests the annual authority gate, worker scope,
-fixed-wave supervisor, reviewed continuation, deterministic merge, independent
-analysis, and complete-only promotion. It does not create numerical authority,
-execute a shard, create the default S5 output directory, promote a result, or
-open S6/S7.
+The annual run is paused at interval 2448 with its verified checkpoint and
+supervisor-interruption evidence intact. The interval-2448 intervention is an
+implementation-only checkpoint: it does not create its successor numerical
+authority, apply the diagnostic action to the live checkpoint, restart a worker,
+promote a result, or open S6/S7. Those actions require a clean implementation
+commit, independent review of the exact transition/authority identities, and a
+separate owner-approved continuation.

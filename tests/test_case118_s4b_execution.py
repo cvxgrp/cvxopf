@@ -305,6 +305,150 @@ def test_merge_is_order_independent_and_rejects_corruption() -> None:
         s4b_execution.merge_shard_summaries(corrupted)
 
 
+def test_merge_requires_explicit_authority_for_cross_version_shards() -> None:
+    payload = cast(dict[str, Any], load_verified_manifest()["manifest"])
+    summaries = [_summary(cast(dict[str, object], item)) for item in payload["shards"]]
+    fingerprints = ("3" * 64, "4" * 64)
+    summaries[-1]["execution_source_fingerprint"] = fingerprints[1]
+    timing = cast(dict[str, float], summaries[-1]["timing"])
+    timing["operator_intervention_interrupted_recovery_open_seconds"] = 12.0
+    timing["operator_intervention_diagnostic_compute_seconds"] = 4.0
+    timing["operator_intervention_diagnostic_elapsed_seconds"] = 5.0
+    timing["operator_intervention_diagnostic_overlap_with_live_recovery_seconds"] = 5.0
+    summaries[-1]["summary_sha256"] = object_sha256(
+        {key: value for key, value in summaries[-1].items() if key != "summary_sha256"}
+    )
+    with pytest.raises(ValueError, match="mixes execution"):
+        s4b_execution.merge_shard_summaries(summaries)
+    merged = s4b_execution.merge_shard_summaries(
+        summaries,
+        allowed_execution_source_fingerprints=fingerprints,
+    )
+    assert merged["execution_source_fingerprints"] == list(fingerprints)
+    assert (
+        merged["timing"]["operator_intervention_interrupted_recovery_open_seconds"]
+        == 12.0
+    )
+    assert merged["timing"]["operator_intervention_diagnostic_compute_seconds"] == 4.0
+    assert merged["timing"]["operator_intervention_diagnostic_elapsed_seconds"] == 5.0
+    assert (
+        merged["timing"][
+            "operator_intervention_diagnostic_overlap_with_live_recovery_seconds"
+        ]
+        == 5.0
+    )
+
+
+def test_operator_intervention_timing_separates_overlapping_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from experiments.case118_annual_hierarchy import s5_operator_intervention
+    from experiments.case118_annual_hierarchy import s5_source_transition
+
+    shard = tmp_path / "shard-003"
+    shard.mkdir()
+    (shard / "window-supervision-002448-timeout.json").write_text(
+        json.dumps(
+            {
+                "classification": "timeout",
+                "primary_budget_seconds": 300.0,
+                "primary_budget_consumed_seconds": 300.0,
+                "returncode": -15,
+                "orchestration_wall_seconds": 309.0,
+            }
+        )
+    )
+    events = [
+        {"attempt_ordinal": 0, "phase": "before_ac_build", "monotonic_seconds": 100.0},
+        {"attempt_ordinal": 0, "phase": "after_ac_build", "monotonic_seconds": 101.0},
+        {"attempt_ordinal": 1, "phase": "before_ac_build", "monotonic_seconds": 102.0},
+        {"attempt_ordinal": 1, "phase": "after_ac_build", "monotonic_seconds": 103.0},
+        {"attempt_ordinal": 1, "phase": "before_ac_solve", "monotonic_seconds": 104.0},
+        {"attempt_ordinal": 1, "phase": "after_ac_solve", "monotonic_seconds": 114.0},
+        {"attempt_ordinal": 6, "phase": "before_ac_build", "monotonic_seconds": 115.0},
+        {"attempt_ordinal": 6, "phase": "after_ac_build", "monotonic_seconds": 116.0},
+        {"attempt_ordinal": 6, "phase": "before_ac_build", "monotonic_seconds": 117.0},
+        {"attempt_ordinal": 6, "phase": "after_ac_build", "monotonic_seconds": 118.0},
+        {"attempt_ordinal": 6, "phase": "before_ac_solve", "monotonic_seconds": 120.0},
+    ]
+    (shard / "window-phase-002448-recovery.json").write_text(
+        json.dumps({"events": events})
+    )
+    evidence = tmp_path / s5_operator_intervention.EVIDENCE_DIRECTORY
+    evidence.mkdir()
+    (evidence / "diagnostic-result.json").write_text(
+        json.dumps(
+            {
+                "outcomes": [
+                    {
+                        "label": "causal6",
+                        "accepted": False,
+                        "trigger": "diagnostic_solve_timeout",
+                        "wall_seconds": 2.0,
+                    },
+                    {
+                        "label": "causal7",
+                        "accepted": False,
+                        "trigger": "diagnostic_solve_timeout",
+                        "wall_seconds": 3.0,
+                    },
+                    {
+                        "label": "causal8",
+                        "accepted": True,
+                        "trigger": None,
+                        "wall_seconds": 4.0,
+                    },
+                ]
+            }
+        )
+    )
+    record = {
+        "contract_sha256": "c" * 64,
+        "contract": {
+            "diagnostic_evidence": {
+                "diagnostic-result.json": "d" * 64,
+                "causal8/result.json": "e" * 64,
+            }
+        },
+    }
+    monkeypatch.setattr(s5_source_transition, "load_base_transition", lambda _root: {})
+    monkeypatch.setattr(
+        s5_operator_intervention, "load_record", lambda *_args, **_kwargs: record
+    )
+    monkeypatch.setattr(
+        s5_operator_intervention,
+        "TIMING_OBSERVATIONS",
+        {
+            "live_interrupted_attempt_id": "ac-2448-06-perturbed_causal",
+            "live_interrupted_attempt_started_monotonic_seconds": 120.0,
+            "live_interrupted_open_wall_seconds": 30.0,
+            "live_interrupted_measurement": "test",
+            "diagnostic_process_compute_seconds": 9.0,
+            "diagnostic_elapsed_seconds": 10.0,
+            "diagnostic_overlapped_live_recovery": True,
+        },
+    )
+    archive = {
+        "iteration": 2448,
+        "operator_intervention": {
+            "classification": "reviewed_operator_selected_diagnostic_attempt",
+            "contract_sha256": "c" * 64,
+            "diagnostic_result_sha256": "d" * 64,
+            "accepted_result_sha256": "e" * 64,
+            "selected_attempt_id": "ac-2448-08-perturbed_causal",
+        },
+    }
+
+    timing = s4b_execution._operator_intervention_timing(shard, archive)
+    assert timing["target_free_solver_seconds"] == 10.0
+    assert timing["interrupted_recovery_open_seconds"] == 30.0
+    assert timing["recovery_wall_seconds"] == 50.0
+    assert timing["model_construction_seconds"] == 4.0
+    assert timing["diagnostic_compute_seconds"] == 9.0
+    assert timing["diagnostic_elapsed_seconds"] == 10.0
+    assert timing["diagnostic_overlapped_live_recovery"] is True
+
+
 def test_bounded_partition_merge_completes_at_24_not_8760() -> None:
     registry = cast(
         dict[str, Any], s4b_execution.qualification_registry(run_s4b._outer())

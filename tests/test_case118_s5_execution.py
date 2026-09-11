@@ -528,6 +528,7 @@ def test_complete_analysis_reconstructs_all_shards_waves_and_merge(
             "execution_complete": True,
             "all_independent_audits_agree": True,
             "execution_context": _context(),
+            "execution_source_fingerprint": _context()["source_fingerprint"],
             "execution_mode": "annual",
             "checkpoint_sha256": "1" * 64,
             "window_chain_sha256": "2" * 64,
@@ -632,8 +633,13 @@ def test_complete_promotion_is_immutable(
         s5_analysis.promote_completed(path, changed)
 
 
-def test_default_output_and_numerical_authority_remain_absent() -> None:
-    assert not run_s5.DEFAULT_OUTPUT_ROOT.exists()
+def test_default_output_is_ignored_and_default_authority_remains_absent() -> None:
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", str(run_s5.DEFAULT_OUTPUT_ROOT)],
+        cwd=run_s5.ROOT,
+        check=False,
+    )
+    assert ignored.returncode == 0
     assert not s5.DEFAULT_NUMERICAL_AUTHORITY_PATH.exists()
 
 

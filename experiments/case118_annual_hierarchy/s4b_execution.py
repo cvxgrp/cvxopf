@@ -31,6 +31,7 @@ from experiments.case118_annual_hierarchy.streaming_archive import (
 from experiments.case118_annual_hierarchy.streaming_runner import StreamingOuterPlan
 from experiments.case118_annual_hierarchy.streaming_schema import (
     WindowIndexEntry,
+    attempt_id,
     atomic_json,
     sha256_path,
     validate_window_archive,
@@ -409,6 +410,21 @@ def verify_shard_artifacts(
     expected_state = _finite_vector(checkpoint["initial_soc_mwh"], "initial SoC")
     preceding_id: str | None = None
     archives: list[Mapping[str, object]] = []
+    intervention_record: Mapping[str, object] | None = None
+    if checkpoint["execution_mode"] == "annual":
+        from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+            intervention_identity,
+            load_record,
+        )
+        from experiments.case118_annual_hierarchy.s5_source_transition import (
+            load_base_transition,
+        )
+
+        predecessor = load_base_transition(directory.parent)
+        if predecessor is not None:
+            intervention_record = load_record(
+                directory.parent, predecessor_transition=predecessor
+            )
     # One verified snapshot per pass; retain full validation of every archive.
     expected_boundaries = outer_boundaries(outer)
     for raw_entry in _sequence(checkpoint["windows"], "checkpoint windows"):
@@ -423,6 +439,14 @@ def verify_shard_artifacts(
         ):
             raise ValueError("S4b window artifact integrity mismatch")
         with gzip.open(path, "rt", encoding="utf-8") as stream:
+            expected_intervention = None
+            if (
+                intervention_record is not None
+                and entry == intervention_record["intervention_window"]
+            ):
+                expected_intervention = intervention_identity(
+                    str(intervention_record["contract_sha256"])
+                )
             archive = validate_window_archive(
                 json.load(stream),
                 expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
@@ -435,6 +459,7 @@ def verify_shard_artifacts(
                 expected_outer_boundary_soc_mwh=expected_boundaries,
                 expected_trajectory_start=start,
                 expected_primary_timeout_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
+                expected_operator_intervention=expected_intervention,
             )
         if archive["iteration"] != entry["iteration"]:
             raise ValueError("S4b checkpoint/window iteration mismatch")
@@ -478,6 +503,149 @@ def verify_shard_artifacts(
     return checkpoint, tuple(archives)
 
 
+def _operator_intervention_timing(
+    directory: Path, archive: Mapping[str, object]
+) -> Mapping[str, object]:
+    """Reconstruct the retained live and diagnostic work for interval 2448."""
+    from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+        EVIDENCE_DIRECTORY,
+        INTERVAL,
+        TIMING_OBSERVATIONS,
+        load_record,
+    )
+    from experiments.case118_annual_hierarchy.s5_source_transition import (
+        load_base_transition,
+    )
+
+    if archive.get("iteration") != INTERVAL:
+        raise ValueError("operator intervention archive has the wrong interval")
+    predecessor = load_base_transition(directory.parent)
+    if predecessor is None:
+        raise ValueError("operator intervention lacks predecessor transition")
+    record = load_record(directory.parent, predecessor_transition=predecessor)
+    if record is None or archive.get("operator_intervention") != {
+        "classification": "reviewed_operator_selected_diagnostic_attempt",
+        "contract_sha256": record["contract_sha256"],
+        "diagnostic_result_sha256": record["contract"]["diagnostic_evidence"][
+            "diagnostic-result.json"
+        ],
+        "accepted_result_sha256": record["contract"]["diagnostic_evidence"][
+            "causal8/result.json"
+        ],
+        "selected_attempt_id": attempt_id(INTERVAL, 8),
+    }:
+        raise ValueError("operator intervention archive is not record-bound")
+    primary_path = directory / f"window-supervision-{INTERVAL:06d}-timeout.json"
+    primary = _mapping(json.loads(primary_path.read_text()), "primary timeout")
+    if (
+        primary.get("classification") != "timeout"
+        or primary.get("primary_budget_seconds") != PRIMARY_ATTEMPT_BUDGET_SECONDS
+        or primary.get("primary_budget_consumed_seconds")
+        != PRIMARY_ATTEMPT_BUDGET_SECONDS
+        or primary.get("returncode") == 0
+    ):
+        raise ValueError("operator intervention primary timeout evidence is invalid")
+    live_phase_path = directory / f"window-phase-{INTERVAL:06d}-recovery.json"
+    live_events = _sequence(
+        _mapping(json.loads(live_phase_path.read_text()), "interrupted recovery")[
+            "events"
+        ],
+        "interrupted recovery events",
+    )
+    target_free_times = {
+        str(_mapping(item, "recovery event")["phase"]): float(
+            cast(float, _mapping(item, "recovery event")["monotonic_seconds"])
+        )
+        for item in live_events
+        if _mapping(item, "recovery event").get("attempt_ordinal") == 1
+    }
+    if set(target_free_times) != {
+        "before_ac_build",
+        "after_ac_build",
+        "before_ac_solve",
+        "after_ac_solve",
+    }:
+        raise ValueError("operator intervention target-free lifecycle is incomplete")
+    causal6_starts = [
+        float(cast(float, event["monotonic_seconds"]))
+        for raw in live_events
+        if (event := _mapping(raw, "recovery event")).get("attempt_ordinal") == 6
+        and event.get("phase") == "before_ac_solve"
+    ]
+    if causal6_starts != [
+        TIMING_OBSERVATIONS["live_interrupted_attempt_started_monotonic_seconds"]
+    ]:
+        raise ValueError("operator intervention live slot-6 timing mismatch")
+    diagnostic_path = directory.parent / EVIDENCE_DIRECTORY / "diagnostic-result.json"
+    diagnostic = _mapping(json.loads(diagnostic_path.read_text()), "diagnostic result")
+    outcomes = cast(Sequence[Mapping[str, object]], diagnostic["outcomes"])
+    if [item.get("label") for item in outcomes] != ["causal6", "causal7", "causal8"]:
+        raise ValueError("operator intervention diagnostic order mismatch")
+    if (
+        any(item.get("accepted") is not False for item in outcomes[:2])
+        or outcomes[2].get("accepted") is not True
+        or any(
+            item.get("trigger") != "diagnostic_solve_timeout" for item in outcomes[:2]
+        )
+    ):
+        raise ValueError("operator intervention diagnostic outcomes mismatch")
+    diagnostic_wall = sum(float(cast(float, item["wall_seconds"])) for item in outcomes)
+    if (
+        abs(
+            diagnostic_wall
+            - float(
+                cast(
+                    float,
+                    TIMING_OBSERVATIONS["diagnostic_process_compute_seconds"],
+                )
+            )
+        )
+        > 1e-9
+        or TIMING_OBSERVATIONS["diagnostic_overlapped_live_recovery"] is not True
+    ):
+        raise ValueError("operator intervention diagnostic timing mismatch")
+    target_free_wall = (
+        target_free_times["after_ac_solve"] - target_free_times["before_ac_solve"]
+    )
+    construction = 0.0
+    build_started: dict[int, float] = {}
+    for raw in live_events:
+        event = _mapping(raw, "recovery event")
+        ordinal = int(cast(int, event["attempt_ordinal"]))
+        event_time = float(cast(float, event["monotonic_seconds"]))
+        if event["phase"] == "before_ac_build":
+            build_started[ordinal] = event_time
+        elif event["phase"] == "after_ac_build" and ordinal in build_started:
+            construction += event_time - build_started.pop(ordinal)
+    live_interrupted_wall = float(
+        cast(float, TIMING_OBSERVATIONS["live_interrupted_open_wall_seconds"])
+    )
+    recovery_wall = (
+        causal6_starts[0]
+        - float(
+            cast(
+                float,
+                _mapping(live_events[0], "first recovery event")["monotonic_seconds"],
+            )
+        )
+        + live_interrupted_wall
+    )
+    return {
+        "primary_orchestration_seconds": float(
+            cast(float, primary["orchestration_wall_seconds"])
+        ),
+        "target_free_solver_seconds": target_free_wall,
+        "interrupted_recovery_open_seconds": live_interrupted_wall,
+        "recovery_wall_seconds": recovery_wall,
+        "model_construction_seconds": construction,
+        "diagnostic_compute_seconds": diagnostic_wall,
+        "diagnostic_elapsed_seconds": float(
+            cast(float, TIMING_OBSERVATIONS["diagnostic_elapsed_seconds"])
+        ),
+        "diagnostic_overlapped_live_recovery": True,
+    }
+
+
 def audit_shard(
     directory: Path,
     *,
@@ -501,7 +669,7 @@ def audit_shard(
         for archive in archives
         for attempt in cast(Sequence[Mapping[str, object]], archive["attempts"])
         if attempt["slot_state"] == "timeout"
-    )
+    ) + sum(archive.get("operator_intervention") is not None for archive in archives)
     recoveries = sum(
         cast(Mapping[str, object], archive["executed_interval"])[
             "controlling_attempt_id"
@@ -515,6 +683,10 @@ def audit_shard(
     primary_solver_seconds = 0.0
     target_free_solver_seconds = 0.0
     copied_solver_seconds = 0.0
+    interrupted_recovery_seconds = 0.0
+    intervention_diagnostic_compute_seconds = 0.0
+    intervention_diagnostic_elapsed_seconds = 0.0
+    intervention_diagnostic_overlap_seconds = 0.0
     construction_seconds = 0.0
     storage_throughput = 0.0
     signpost_deviation = 0.0
@@ -525,14 +697,43 @@ def audit_shard(
         attempts = cast(Sequence[Mapping[str, object]], archive["attempts"])
         primary = attempts[0]
         timed_out = primary["slot_state"] == "timeout"
-        supervision_path = directory / (
-            f"window-supervision-{iteration:06d}-"
-            f"{'timeout' if timed_out else 'primary'}.json"
-        )
-        supervision = _mapping(
-            json.loads(supervision_path.read_text()), "window supervision"
-        )
-        if (
+        if archive.get("operator_intervention") is not None:
+            retained = _operator_intervention_timing(directory, archive)
+            orchestration_seconds += float(
+                cast(float, retained["primary_orchestration_seconds"])
+            )
+            target_free_solver_seconds += float(
+                cast(float, retained["target_free_solver_seconds"])
+            )
+            interrupted_recovery_seconds += float(
+                cast(float, retained["interrupted_recovery_open_seconds"])
+            )
+            recovery_seconds += float(cast(float, retained["recovery_wall_seconds"]))
+            construction_seconds += float(
+                cast(float, retained["model_construction_seconds"])
+            )
+            intervention_diagnostic_compute_seconds += float(
+                cast(float, retained["diagnostic_compute_seconds"])
+            )
+            intervention_diagnostic_elapsed_seconds += float(
+                cast(float, retained["diagnostic_elapsed_seconds"])
+            )
+            if retained["diagnostic_overlapped_live_recovery"] is not True:
+                raise ValueError("operator intervention overlap evidence is invalid")
+            intervention_diagnostic_overlap_seconds += float(
+                cast(float, retained["diagnostic_elapsed_seconds"])
+            )
+            supervision_path = None
+        else:
+            supervision_path = directory / (
+                f"window-supervision-{iteration:06d}-"
+                f"{'timeout' if timed_out else 'primary'}.json"
+            )
+        if supervision_path is not None:
+            supervision = _mapping(
+                json.loads(supervision_path.read_text()), "window supervision"
+            )
+        if supervision_path is not None and (
             supervision.get("iteration") != iteration
             or supervision.get("primary_budget_seconds")
             != PRIMARY_ATTEMPT_BUDGET_SECONDS
@@ -540,14 +741,24 @@ def audit_shard(
             != ("timeout" if timed_out else "completed")
         ):
             raise ValueError("S4b timeout/archive supervision evidence disagrees")
-        phase_path = directory / str(supervision["phase_record"])
-        if not phase_path.is_file() or supervision.get(
-            "phase_record_sha256"
-        ) != sha256_path(phase_path):
+        if supervision_path is not None:
+            phase_path = directory / str(supervision["phase_record"])
+        else:
+            phase_path = None
+        if phase_path is not None and (
+            not phase_path.is_file()
+            or supervision.get("phase_record_sha256") != sha256_path(phase_path)
+        ):
             raise ValueError("S4b primary phase evidence is missing or corrupt")
-        phase_events = _sequence(
-            _mapping(json.loads(phase_path.read_text()), "primary phases")["events"],
-            "primary phase events",
+        phase_events = (
+            ()
+            if phase_path is None
+            else _sequence(
+                _mapping(json.loads(phase_path.read_text()), "primary phases")[
+                    "events"
+                ],
+                "primary phase events",
+            )
         )
         phase_times = {
             (
@@ -571,16 +782,17 @@ def audit_shard(
             and _mapping(item, "primary phase").get("attempt_ordinal") == 0
             for item in phase_events
         )
-        if (
+        if supervision_path is not None and (
             not primary_started
             or (timed_out and primary_completed)
             or (not timed_out and not primary_completed)
         ):
             raise ValueError("S4b primary phase lifecycle contradicts timeout state")
-        orchestration_seconds += float(
-            cast(float, supervision["orchestration_wall_seconds"])
-        )
-        if timed_out:
+        if supervision_path is not None:
+            orchestration_seconds += float(
+                cast(float, supervision["orchestration_wall_seconds"])
+            )
+        if timed_out and supervision_path is not None:
             recovery_path = directory / f"window-recovery-{iteration:06d}.json"
             recovery = _mapping(
                 json.loads(recovery_path.read_text()), "window recovery supervision"
@@ -716,6 +928,40 @@ def audit_shard(
         and audits_agree
         and terminal_deviation <= frozen_p0_policy().tolerances.terminal_soc_mwh_abs
     )
+    timing = {
+        "accepted_solver_wall_seconds": solver_seconds,
+        "primary_solver_wall_seconds": primary_solver_seconds,
+        "target_free_solver_wall_seconds": target_free_solver_seconds,
+        "copied_solver_wall_seconds": copied_solver_seconds,
+        "model_construction_wall_seconds": construction_seconds,
+        "primary_orchestration_wall_seconds": orchestration_seconds,
+        "recovery_wall_seconds": recovery_seconds,
+        "recovery_restart_overhead_seconds": max(
+            0.0,
+            recovery_seconds
+            - target_free_solver_seconds
+            - copied_solver_seconds
+            - interrupted_recovery_seconds,
+        ),
+        "total_window_path_seconds": orchestration_seconds + recovery_seconds,
+    }
+    if intervention_diagnostic_elapsed_seconds:
+        timing.update(
+            {
+                "operator_intervention_interrupted_recovery_open_seconds": (
+                    interrupted_recovery_seconds
+                ),
+                "operator_intervention_diagnostic_compute_seconds": (
+                    intervention_diagnostic_compute_seconds
+                ),
+                "operator_intervention_diagnostic_elapsed_seconds": (
+                    intervention_diagnostic_elapsed_seconds
+                ),
+                "operator_intervention_diagnostic_overlap_with_live_recovery_seconds": (
+                    intervention_diagnostic_overlap_seconds
+                ),
+            }
+        )
     summary = {
         "schema_version": SCHEMA_VERSION,
         "manifest_sha256": EXPECTED_MANIFEST_SHA256,
@@ -748,20 +994,7 @@ def audit_shard(
         "storage_throughput_mwh": storage_throughput,
         "cumulative_absolute_signpost_deviation_mwh": signpost_deviation,
         "terminal_deviation_mwh": terminal_deviation,
-        "timing": {
-            "accepted_solver_wall_seconds": solver_seconds,
-            "primary_solver_wall_seconds": primary_solver_seconds,
-            "target_free_solver_wall_seconds": target_free_solver_seconds,
-            "copied_solver_wall_seconds": copied_solver_seconds,
-            "model_construction_wall_seconds": construction_seconds,
-            "primary_orchestration_wall_seconds": orchestration_seconds,
-            "recovery_wall_seconds": recovery_seconds,
-            "recovery_restart_overhead_seconds": max(
-                0.0,
-                recovery_seconds - target_free_solver_seconds - copied_solver_seconds,
-            ),
-            "total_window_path_seconds": orchestration_seconds + recovery_seconds,
-        },
+        "timing": timing,
         "generation_cost": float(
             sum(cast(float, item["generation_cost"]) for item in metrics)
         ),
@@ -801,6 +1034,7 @@ def merge_shard_summaries(
     manifest_path: Path = S4B_MANIFEST_PATH,
     registry_shards: Sequence[Mapping[str, object]] | None = None,
     expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_source_fingerprints: Sequence[str] | None = None,
 ) -> Mapping[str, object]:
     """Merge complete shard summaries deterministically in global interval order."""
     envelope = load_verified_manifest(manifest_path)
@@ -873,7 +1107,18 @@ def merge_shard_summaries(
         supplied[shard_id] = summary
         execution_fingerprints.add(str(summary.get("execution_source_fingerprint")))
         outer_plan_hashes.add(str(summary.get("outer_plan_sha256")))
-    if len(execution_fingerprints) != 1 or len(outer_plan_hashes) != 1:
+    mixed_execution_allowed = allowed_execution_source_fingerprints is not None
+    if mixed_execution_allowed:
+        allowed_fingerprints = set(
+            cast(Sequence[str], allowed_execution_source_fingerprints)
+        )
+        execution_valid = (
+            bool(execution_fingerprints)
+            and execution_fingerprints <= allowed_fingerprints
+        )
+    else:
+        execution_valid = len(execution_fingerprints) == 1
+    if not execution_valid or len(outer_plan_hashes) != 1:
         raise ValueError("S4b merge mixes execution or outer-plan provenance")
     if set(supplied) != set(registered):
         raise ValueError("S4b merge requires every manifest shard exactly once")
@@ -974,13 +1219,24 @@ def merge_shard_summaries(
         "timing": {
             name: float(
                 sum(
-                    cast(float, _mapping(item["timing"], "shard timing")[name])
+                    cast(
+                        float,
+                        _mapping(item["timing"], "shard timing").get(name, 0.0),
+                    )
                     for item in ordered
                 )
             )
-            for name in _mapping(ordered[0]["timing"], "shard timing")
+            for name in sorted(
+                {
+                    name
+                    for item in ordered
+                    for name in _mapping(item["timing"], "shard timing")
+                }
+            )
         },
     }
+    if mixed_execution_allowed:
+        payload["execution_source_fingerprints"] = sorted(execution_fingerprints)
     payload["shifted_primary_success_fraction"] = (
         1.0
         if payload["shifted_primary_opportunities"] == 0
