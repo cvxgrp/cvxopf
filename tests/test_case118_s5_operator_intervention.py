@@ -345,3 +345,81 @@ def test_intervention_rejects_extension_without_exact_post_prefix(prepared):
 
     with pytest.raises(ValueError, match="validated post-intervention extension"):
         intervention.load_record(output, predecessor_transition=predecessor)
+
+
+def test_intervention_extension_accepts_only_bound_retry_source(prepared, monkeypatch):
+    from experiments.case118_annual_hierarchy import s5_retry_transition as retry
+
+    output, diagnostic, path, _contract, predecessor, context, authority, _old = (
+        prepared
+    )
+    record = intervention.publish_intervention(
+        output,
+        path,
+        diagnostic,
+        context,
+        authority,
+        predecessor_transition=predecessor,
+    )
+    checkpoint_path = output / "shard-003/checkpoint.json"
+    stopped = json.loads(checkpoint_path.read_text())
+    new_context = {**context, "git_commit": "1" * 40, "source_fingerprint": "2" * 64}
+    evidence = {}
+    for name in ("progress.json", "shard-003/checkpoint.json"):
+        raw = (output / name).read_bytes()
+        evidence[name] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    monkeypatch.setattr(retry, "STOPPING_EVIDENCE", evidence)
+    monkeypatch.setattr(
+        retry, "CHECKPOINT_COORDINATES", {"shard-003/checkpoint.json": 2449}
+    )
+    monkeypatch.setattr(retry, "PREDECESSOR_RECORD_SHA256", object_sha256(record))
+    contract = {
+        "schema_version": 1,
+        "classification": retry.CONTRACT_CLASSIFICATION,
+        "review_status": "reviewed",
+        "launch_authorized": True,
+        "predecessor_transition_sha256": object_sha256(record),
+        "trusted_stopping_evidence": evidence,
+        "checkpoint_coordinates": {"shard-003/checkpoint.json": 2449},
+        "change_scope": retry.CHANGE_SCOPE,
+        "prior_execution_context": context,
+        "continuation_execution": {
+            "context": new_context,
+            "required_clean_execution_commit": new_context["git_commit"],
+            "required_execution_source_fingerprint": new_context["source_fingerprint"],
+            "commit_must_match_exactly": True,
+            "descendant_commits_implicitly_allowed": False,
+        },
+    }
+    path.write_text(json.dumps(contract))
+    successor_authority = {
+        **authority,
+        "execution_commit": new_context["git_commit"],
+        "source_fingerprint": new_context["source_fingerprint"],
+        "source_version_contract_sha256": object_sha256(contract),
+    }
+    retry.publish_transition(
+        output,
+        path,
+        new_context,
+        successor_authority,
+        predecessor_transition=record,
+    )
+    extended = {
+        **stopped,
+        "completed_intervals": 3,
+        "next_global_iteration": 2450,
+        "windows": [
+            *stopped["windows"],
+            WindowIndexEntry(2449, "next.json.gz", 1, "3" * 64).__dict__,
+        ],
+        "execution_source_fingerprint": new_context["source_fingerprint"],
+    }
+    checkpoint_path.write_text(json.dumps(extended))
+    assert (
+        intervention.load_record(output, predecessor_transition=predecessor) == record
+    )
+    extended["execution_source_fingerprint"] = "4" * 64
+    checkpoint_path.write_text(json.dumps(extended))
+    with pytest.raises(ValueError, match="validated post-intervention extension"):
+        intervention.load_record(output, predecessor_transition=predecessor)

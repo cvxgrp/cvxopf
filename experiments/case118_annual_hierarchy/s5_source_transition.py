@@ -156,7 +156,7 @@ def load_base_transition(output_root: Path) -> dict[str, Any] | None:
 
 
 def load_transition(output_root: Path) -> dict[str, Any] | None:
-    """Load the latest reviewed transition, including the one-time intervention."""
+    """Load the latest reviewed transition across the retained execution chain."""
     base = load_base_transition(output_root)
     if base is None:
         return None
@@ -165,7 +165,13 @@ def load_transition(output_root: Path) -> dict[str, Any] | None:
     )
 
     intervention = load_record(output_root, predecessor_transition=base)
-    return base if intervention is None else intervention
+    prior = base if intervention is None else intervention
+    from experiments.case118_annual_hierarchy.s5_retry_transition import (
+        load_record as load_retry_record,
+    )
+
+    retry = load_retry_record(output_root, predecessor_transition=prior)
+    return prior if retry is None else retry
 
 
 def require_current_transition(
@@ -191,7 +197,35 @@ def publish_transition(
     authority: Mapping[str, object],
 ) -> dict[str, Any]:
     """Fully validate the old prefix, then publish one immutable transaction."""
-    contract = validate_contract(json.loads(contract_path.read_text()))
+    raw_contract = json.loads(contract_path.read_text())
+    from experiments.case118_annual_hierarchy.s5_retry_transition import (
+        CONTRACT_CLASSIFICATION,
+        publish_transition as publish_retry_transition,
+    )
+
+    if (
+        isinstance(raw_contract, Mapping)
+        and raw_contract.get("classification") == CONTRACT_CLASSIFICATION
+    ):
+        base = load_base_transition(output_root)
+        if base is None:
+            raise ValueError("S5 retry continuation lacks its base transition")
+        from experiments.case118_annual_hierarchy.s5_operator_intervention import (
+            load_record as load_intervention_record,
+        )
+
+        intervention = load_intervention_record(
+            output_root, predecessor_transition=base
+        )
+        predecessor = base if intervention is None else intervention
+        return publish_retry_transition(
+            output_root,
+            contract_path,
+            context,
+            authority,
+            predecessor_transition=predecessor,
+        )
+    contract = validate_contract(raw_contract)
     if contract["continuation_execution"]["context"] != context:
         raise ValueError("S5 source transition does not bind this clean execution")
     existing = load_base_transition(output_root)
@@ -340,6 +374,12 @@ def historical_provenance_matches(
             )
 
             root_names = {name for name in STOPPING_EVIDENCE if "/" not in name}
+        elif isinstance(contract.get("trusted_stopping_evidence"), Mapping):
+            root_names = {
+                name
+                for name in contract["trusted_stopping_evidence"]
+                if "/" not in name and name != "progress.json"
+            }
         else:
             root_names = {
                 Path(ref["path"]).name

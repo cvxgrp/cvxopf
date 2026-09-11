@@ -70,7 +70,7 @@ rerun; only incomplete members of the stopped wave may resume.
 
 ### Single reviewed validation-only source transition
 
-The intentional pause after 505 accepted intervals is the sole supported
+The intentional pause after 505 accepted intervals is the original supported
 cross-version exception. `S5_SOURCE_VERSION_CONTINUATION.json` remains a frozen,
 nonexecuting proposal binding the original `41abf63` authority, literal stopping
 checkpoints, and the `8a49e92` validation-cost correction. It is not changed into
@@ -126,6 +126,19 @@ diagnostic timings, selected slot, and source-version boundary separately.
 
 This narrow intervention does not alter the ordinary nine-slot lifecycle for
 any other interval and does not authorize another operator-selected result.
+
+### Reviewed retry-source continuation
+
+The interrupted restart following the interval-2448 intervention left the next
+coordinates at 1698 and 2449. The operational retry correction preserves the
+existing logs and uses distinct retry suffixes, without changing scientific
+attempt identities. A separate contract binds its exact clean commit and source
+fingerprint to the applied intervention, stopped supervision, and literal
+checkpoint snapshots. `window-retry-source-transition.json` retains that binding
+immutably through the existing `--reviewed-continue --source-transition` entry.
+Subsequent checkpoints preserve the stopped window prefix and use only the
+bound successor source. Analysis retains the complete predecessor chain;
+publishing this binding neither reapplies interval 2448 nor advances a checkpoint.
 
 ### Continuation evidence and abnormal outcomes
 

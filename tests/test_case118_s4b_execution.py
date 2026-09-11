@@ -597,6 +597,253 @@ def test_primary_timeout_supervision_stops_and_joins_process(tmp_path: Path) -> 
     assert process.returncode == -15
 
 
+def test_interrupted_window_retry_uses_new_immutable_lifecycle_paths(
+    tmp_path: Path,
+) -> None:
+    original_log = tmp_path / "window-process-000000-primary.log"
+    original_log.write_text("retained interrupted attempt")
+    retry_phase = tmp_path / "window-phase-000000-primary-retry-001.json"
+    retry_phase.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "events": [
+                    {
+                        "phase": "before_ac_solve",
+                        "iteration": 0,
+                        "attempt_ordinal": 0,
+                        "monotonic_seconds": 10.0,
+                    }
+                ],
+            }
+        )
+    )
+    process = _FakeProcess()
+    clock_values = iter((10.0, 310.0, 310.0, 310.0))
+
+    def terminate(fake: Any, _grace: float) -> None:
+        fake.returncode = -15
+
+    assert run_s4b._next_window_lifecycle_attempt(tmp_path, 0) == 1
+    record = run_s4b.supervise_window_process(
+        ["unused"],
+        directory=tmp_path,
+        iteration=0,
+        lifecycle_attempt=1,
+        clock=lambda: next(clock_values),
+        sleep=lambda _value: None,
+        popen=lambda *args, **kwargs: cast(Any, process),
+        terminate_process=terminate,
+    )
+
+    assert record["classification"] == "timeout"
+    assert record["lifecycle_attempt"] == 1
+    assert original_log.read_text() == "retained interrupted attempt"
+    assert (tmp_path / "window-process-000000-primary-retry-001.log").is_file()
+    assert (tmp_path / "window-supervision-000000-timeout-retry-001.json").is_file()
+
+
+def test_window_lifecycle_retry_ordinals_are_contiguous(tmp_path: Path) -> None:
+    (tmp_path / "window-process-000004-primary.log").write_text("attempt zero")
+    (tmp_path / "window-process-000004-primary-retry-001.log").write_text("attempt one")
+    assert run_s4b._next_window_lifecycle_attempt(tmp_path, 4) == 2
+
+    (tmp_path / "window-process-000005-primary-retry-002.log").write_text("gap")
+    with pytest.raises(ValueError, match="not contiguous"):
+        run_s4b._next_window_lifecycle_attempt(tmp_path, 5)
+
+
+def test_successful_window_lifecycle_selects_retry_evidence(tmp_path: Path) -> None:
+    interrupted = {
+        "schema_version": 1,
+        "iteration": 7,
+        "lifecycle_attempt": 0,
+        "classification": "supervisor_interrupted",
+    }
+    completed = {
+        "schema_version": 1,
+        "iteration": 7,
+        "lifecycle_attempt": 1,
+        "classification": "completed",
+    }
+    (tmp_path / "window-supervision-000007-interrupted.json").write_text(
+        json.dumps(interrupted)
+    )
+    expected = tmp_path / "window-supervision-000007-primary-retry-001.json"
+    expected.write_text(json.dumps(completed))
+
+    supervision, recovery = s4b_execution.successful_window_lifecycle_paths(
+        tmp_path, 7, timed_out=False
+    )
+
+    assert supervision == expected
+    assert recovery is None
+
+    legacy = tmp_path / "window-supervision-000007-primary.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "iteration": 7,
+                "classification": "completed",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="exactly one successful lifecycle"):
+        s4b_execution.successful_window_lifecycle_paths(tmp_path, 7, timed_out=False)
+
+
+def test_successful_timeout_lifecycle_links_same_retry(tmp_path: Path) -> None:
+    supervision = tmp_path / "window-supervision-000009-timeout-retry-002.json"
+    supervision.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "iteration": 9,
+                "lifecycle_attempt": 2,
+                "classification": "timeout",
+            }
+        )
+    )
+    recovery = tmp_path / "window-recovery-000009-retry-002.json"
+    recovery.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "iteration": 9,
+                "lifecycle_attempt": 2,
+                "returncode": 0,
+                "timeout_supervision_sha256": s4b_execution.sha256_path(supervision),
+            }
+        )
+    )
+
+    actual_supervision, actual_recovery = (
+        s4b_execution.successful_window_lifecycle_paths(tmp_path, 9, timed_out=True)
+    )
+
+    assert actual_supervision == supervision
+    assert actual_recovery == recovery
+
+
+def test_completed_publication_is_validated_before_checkpoint_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shard = _first_shard()
+    initial = cast(
+        dict[str, Any], cast(dict[str, Any], shard["storage"])["initial_state"]
+    )["soc_mwh"]
+    checkpoint = {
+        "next_global_iteration": 0,
+        "preceding_controlling_attempt_id": None,
+        "realized_soc_mwh": initial,
+    }
+    archive = {
+        "iteration": 0,
+        "preceding_controlling_attempt_id": None,
+        "initial_soc_mwh": initial,
+        "attempts": [{"slot_state": "executed"}],
+    }
+    data = gzip.compress(b"{}")
+    artifact = tmp_path / "window-000000-pending.json.gz"
+    artifact.write_bytes(data)
+    entry = WindowIndexEntry(0, artifact.name, len(data), sha256(data).hexdigest())
+    monkeypatch.setattr(
+        s4b_execution,
+        "verify_shard_artifacts",
+        lambda *args, **kwargs: (checkpoint, ()),
+    )
+    monkeypatch.setattr(
+        s4b_execution, "validate_window_archive", lambda *args, **kwargs: archive
+    )
+    actual = s4b_execution.validate_pending_window_entry(
+        tmp_path,
+        entry,
+        shard=shard,
+        outer=run_s4b._outer(),
+    )
+
+    assert actual == archive
+
+
+def test_completed_ready_publication_is_selected_without_new_solve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    iteration = 10
+    archive = {"attempts": [{"slot_state": "executed"}]}
+    data = gzip.compress(json.dumps(archive).encode())
+    artifact = tmp_path / "window-000010-complete.json.gz"
+    artifact.write_bytes(data)
+    ready = WindowIndexEntry(
+        iteration, artifact.name, len(data), sha256(data).hexdigest()
+    )
+    (tmp_path / "window-ready-000010.json").write_text(json.dumps(ready.__dict__))
+    (tmp_path / "window-supervision-000010-primary.json").write_text(
+        json.dumps({"iteration": iteration, "classification": "completed"})
+    )
+    monkeypatch.setattr(
+        run_s4b,
+        "validate_pending_window_entry",
+        lambda *args, **kwargs: archive,
+    )
+
+    pending = run_s4b._completed_pending_window(
+        tmp_path,
+        iteration,
+        shard=_first_shard(),
+        outer=run_s4b._outer(),
+        execution_scope=run_s4b.QUALIFICATION_SCOPE,
+    )
+
+    assert pending == (0, ready, archive)
+
+
+@pytest.mark.parametrize("primary_state", ["executed", "timeout"])
+def test_incomplete_ready_publication_permits_new_retry(
+    tmp_path: Path, primary_state: str
+) -> None:
+    iteration = 11
+    payload = {"attempts": [{"slot_state": primary_state}]}
+    data = gzip.compress(json.dumps(payload).encode())
+    artifact = tmp_path / "window-000011-incomplete.json.gz"
+    artifact.write_bytes(data)
+    ready = WindowIndexEntry(
+        iteration, artifact.name, len(data), sha256(data).hexdigest()
+    )
+    (tmp_path / "window-ready-000011.json").write_text(json.dumps(ready.__dict__))
+    (tmp_path / "window-process-000011-primary.log").write_text("retained")
+    if primary_state == "executed":
+        (tmp_path / "window-supervision-000011-interrupted.json").write_text(
+            json.dumps(
+                {
+                    "iteration": iteration,
+                    "classification": "supervisor_interrupted",
+                }
+            )
+        )
+    else:
+        timeout = tmp_path / "window-supervision-000011-timeout.json"
+        timeout.write_text(
+            json.dumps(
+                {
+                    "iteration": iteration,
+                    "classification": "timeout",
+                }
+            )
+        )
+
+    pending = run_s4b._completed_pending_window(
+        tmp_path,
+        iteration,
+        shard=_first_shard(),
+        outer=run_s4b._outer(),
+        execution_scope=run_s4b.QUALIFICATION_SCOPE,
+    )
+
+    assert pending is None
+    assert run_s4b._next_window_lifecycle_attempt(tmp_path, iteration) == 1
+
+
 def test_process_tree_usage_deduplicates_descendants() -> None:
     rows = (
         run_s4b.ProcessObservation(10, 1, "root-a", 100.0, 2.0),

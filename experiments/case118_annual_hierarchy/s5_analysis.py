@@ -772,6 +772,27 @@ def _transition_summary(
     """Retain the reviewed source chain without flattening its distinct events."""
     if transition is None:
         return None
+    if (
+        transition.get("classification")
+        == "applied_s5_window_retry_source_continuation"
+    ):
+        from experiments.case118_annual_hierarchy.s5_retry_transition import (
+            RECORD_NAME as RETRY_RECORD_NAME,
+        )
+
+        return {
+            "classification": transition["classification"],
+            "latest_path": RETRY_RECORD_NAME,
+            "latest_sha256": sha256_path(output_root / RETRY_RECORD_NAME),
+            "contract": transition["contract"],
+            "published_utc": transition["published_utc"],
+            "predecessor": _transition_summary(
+                output_root,
+                _mapping(
+                    transition.get("predecessor_transition"), "predecessor transition"
+                ),
+            ),
+        }
     if transition.get("classification") == (
         "applied_s5_interval_2448_operator_intervention"
     ):

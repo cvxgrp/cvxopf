@@ -530,11 +530,24 @@ def validate_record(
         != old_checkpoint.get("execution_registry_sha256")
     ):
         raise ValueError("S5 intervention checkpoint does not advance exactly once")
+    # An explicitly bound successor may append to this intervention's prefix.
+    # Validate that successor against this already-verified immutable record;
+    # loading the complete transition chain here would recurse back into us.
+    from experiments.case118_annual_hierarchy.s5_retry_transition import (
+        load_record as load_retry_record,
+    )
+
+    successor_record = load_retry_record(output_root, predecessor_transition=record)
+    checkpoint_context = (
+        context
+        if successor_record is None
+        else successor_record["contract"]["continuation_execution"]["context"]
+    )
     _checkpoint_position(
         output_root,
         snapshots=snapshots,
         post_checkpoint=post_checkpoint,
-        context=context,
+        context=checkpoint_context,
     )
     return record
 

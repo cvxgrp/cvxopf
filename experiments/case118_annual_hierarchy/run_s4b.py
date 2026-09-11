@@ -33,8 +33,15 @@ from experiments.case118_annual_hierarchy.s4b_execution import (
     qualification_shard_entry,
     shard_checkpoint_payload,
     shard_entry,
+    validate_pending_window_entry,
     validate_shard_checkpoint,
     verify_shard_artifacts,
+    window_phase_path,
+    window_process_log_path,
+    window_ready_path,
+    window_recovery_path,
+    window_lifecycle_paths_for_attempt,
+    window_supervision_path,
     write_shard_checkpoint,
 )
 from experiments.case118_annual_hierarchy.s4b_manifest import (
@@ -400,6 +407,93 @@ def _write_phase(
     atomic_json(path, {"schema_version": 1, "events": events})
 
 
+def _publish_or_reuse_window_archive(
+    path: Path, payload: Mapping[str, object], iteration: int
+) -> WindowIndexEntry:
+    """Publish once, or reuse byte-valid identical output from an interrupted child."""
+    if not path.exists():
+        return atomic_gzip_json(path, payload)
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        if json.load(stream) != payload:
+            raise FileExistsError(f"existing S4b window archive differs: {path}")
+    return WindowIndexEntry(
+        iteration=iteration,
+        relative_path=path.name,
+        bytes=path.stat().st_size,
+        sha256=sha256_path(path),
+    )
+
+
+def _next_window_lifecycle_attempt(directory: Path, iteration: int) -> int:
+    """Return the first unused immutable operational-attempt ordinal."""
+    attempts = (
+        {0} if window_process_log_path(directory, iteration, 0).is_file() else set()
+    )
+    prefix = f"window-process-{iteration:06d}-primary-retry-"
+    for path in directory.glob(f"{prefix}*.log"):
+        raw = path.name[len(prefix) : -len(".log")]
+        if not raw.isdigit() or int(raw) == 0 or raw != f"{int(raw):03d}":
+            raise ValueError("window lifecycle retry filename is invalid")
+        attempts.add(int(raw))
+    if attempts and attempts != set(range(max(attempts) + 1)):
+        raise ValueError("window lifecycle attempts are not contiguous")
+    return 0 if not attempts else max(attempts) + 1
+
+
+def _retained_ready_attempts(directory: Path, iteration: int) -> tuple[int, ...]:
+    attempts = {0} if window_ready_path(directory, iteration, 0).is_file() else set()
+    prefix = f"window-ready-{iteration:06d}-retry-"
+    for path in directory.glob(f"{prefix}*.json"):
+        raw = path.name[len(prefix) : -len(".json")]
+        if not raw.isdigit() or int(raw) == 0 or raw != f"{int(raw):03d}":
+            raise ValueError("window ready retry filename is invalid")
+        attempts.add(int(raw))
+    return tuple(sorted(attempts))
+
+
+def _completed_pending_window(
+    directory: Path,
+    iteration: int,
+    *,
+    shard: Mapping[str, object],
+    outer: StreamingOuterPlan,
+    execution_scope: str,
+) -> tuple[int, WindowIndexEntry, Mapping[str, object]] | None:
+    """Find one fully published child/supervisor result not yet checkpointed."""
+    matches: list[tuple[int, WindowIndexEntry, Mapping[str, object]]] = []
+    for lifecycle_attempt in _retained_ready_attempts(directory, iteration):
+        ready = _read_ready(window_ready_path(directory, iteration, lifecycle_attempt))
+        artifact_path = directory / ready.relative_path
+        if not artifact_path.is_file():
+            raise ValueError("pending S4b ready record lacks its window artifact")
+        with gzip.open(artifact_path, "rt", encoding="utf-8") as stream:
+            candidate = _mapping(json.load(stream), "pending S4b window archive")
+        attempts = cast(Sequence[Mapping[str, object]], candidate.get("attempts"))
+        if not attempts:
+            raise ValueError("pending S4b window archive lacks its attempts")
+        timed_out = attempts[0].get("slot_state") == "timeout"
+        lifecycle = window_lifecycle_paths_for_attempt(
+            directory,
+            iteration,
+            lifecycle_attempt=lifecycle_attempt,
+            timed_out=timed_out,
+        )
+        if lifecycle is None:
+            continue
+        archive = validate_pending_window_entry(
+            directory,
+            ready,
+            shard=shard,
+            outer=outer,
+            expected_execution_registry_sha256=_scope_registry_sha256(execution_scope),
+            allowed_execution_modes=_scope_execution_modes(execution_scope),
+        )
+        matches.append((lifecycle_attempt, ready, archive))
+    if len(matches) > 1:
+        raise ValueError("pending S4b window has multiple successful lifecycles")
+    return None if not matches else matches[0]
+
+
 def execute_one_window_child(
     directory: Path,
     *,
@@ -409,6 +503,7 @@ def execute_one_window_child(
     authority_path: Path,
     expected_commit: str,
     expected_source_fingerprint: str,
+    lifecycle_attempt: int = 0,
     execution_scope: str = QUALIFICATION_SCOPE,
 ) -> None:
     """Construct and archive one candidate window; never advance the checkpoint."""
@@ -465,7 +560,7 @@ def execute_one_window_child(
     preceding = _last_source(directory, checkpoint)
     events: list[Mapping[str, object]] = []
     phase_kind = "recovery" if primary_timeout_seconds is not None else "primary"
-    phase_path = directory / f"window-phase-{iteration:06d}-{phase_kind}.json"
+    phase_path = window_phase_path(directory, iteration, phase_kind, lifecycle_attempt)
 
     def observer(phase: str, phase_iteration: int, ordinal: int) -> None:
         _write_phase(phase_path, events, phase, phase_iteration, ordinal)
@@ -504,9 +599,11 @@ def execute_one_window_child(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()[:16]
     artifact_name = f"window-{iteration:06d}-{encoded_hash}.json.gz"
-    entry = atomic_gzip_json(directory / artifact_name, payload)
+    entry = _publish_or_reuse_window_archive(
+        directory / artifact_name, payload, iteration
+    )
     atomic_json(
-        directory / f"window-ready-{iteration:06d}.json",
+        window_ready_path(directory, iteration, lifecycle_attempt),
         entry.__dict__,
     )
 
@@ -538,6 +635,7 @@ def supervise_window_process(
     *,
     directory: Path,
     iteration: int,
+    lifecycle_attempt: int = 0,
     budget_seconds: float = PRIMARY_ATTEMPT_BUDGET_SECONDS,
     poll_seconds: float = POLL_SECONDS,
     clock: Callable[[], float] = time.monotonic,
@@ -548,9 +646,9 @@ def supervise_window_process(
     """Apply the primary-only wall budget and retain the complete transition."""
     if budget_seconds != PRIMARY_ATTEMPT_BUDGET_SECONDS:
         raise ValueError("S4b primary budget differs from the frozen manifest")
-    phase_path = directory / f"window-phase-{iteration:06d}-primary.json"
-    ready_path = directory / f"window-ready-{iteration:06d}.json"
-    log_path = directory / f"window-process-{iteration:06d}-primary.log"
+    phase_path = window_phase_path(directory, iteration, "primary", lifecycle_attempt)
+    ready_path = window_ready_path(directory, iteration, lifecycle_attempt)
+    log_path = window_process_log_path(directory, iteration, lifecycle_attempt)
     started = clock()
     log = log_path.open("xb")
     try:
@@ -589,6 +687,7 @@ def supervise_window_process(
     record = {
         "schema_version": SCHEMA_VERSION,
         "iteration": iteration,
+        "lifecycle_attempt": lifecycle_attempt,
         "classification": "timeout"
         if timed_out
         else "supervisor_interrupted"
@@ -619,10 +718,11 @@ def supervise_window_process(
         "worker_log_sha256": sha256_path(log_path),
     }
     atomic_immutable_json(
-        directory
-        / (
-            f"window-supervision-{iteration:06d}-"
-            f"{'timeout' if timed_out else 'interrupted' if interruption else 'primary'}.json"
+        window_supervision_path(
+            directory,
+            iteration,
+            "timeout" if timed_out else "interrupted" if interruption else "primary",
+            lifecycle_attempt,
         ),
         record,
     )
@@ -728,72 +828,104 @@ def _run_shard_worker_body(
     start = int(cast(int, interval["start"]))
     stop = int(cast(int, interval["stop"]))
     for iteration in range(start + len(windows), stop):
-        base_command = [
-            sys.executable,
-            "-m",
-            "experiments.case118_annual_hierarchy.run_s4b",
-            "--window-child",
-            "--directory",
-            str(directory),
-            "--shard-id",
-            shard_id,
-            "--iteration",
-            str(iteration),
-            "--authority",
-            str(authority_path),
-            "--expected-commit",
-            str(context["git_commit"]),
-            "--expected-source-fingerprint",
-            str(context["source_fingerprint"]),
-            "--execution-scope",
-            execution_scope,
-        ]
-        record = supervise_window_process(
-            base_command, directory=directory, iteration=iteration
+        pending = _completed_pending_window(
+            directory,
+            iteration,
+            shard=shard,
+            outer=outer,
+            execution_scope=execution_scope,
         )
-        if record["classification"] == "timeout":
-            recovery_command = [
-                *base_command,
-                "--primary-timeout",
-                str(PRIMARY_ATTEMPT_BUDGET_SECONDS),
-            ]
-            recovery_started = time.monotonic()
-            recovery = subprocess.run(recovery_command, cwd=ROOT, check=False)
+        record: Mapping[str, object]
+        if pending is not None:
+            lifecycle_attempt, ready, archive = pending
             record = {
-                **record,
-                "recovery_returncode": recovery.returncode,
-                "recovery_wall_seconds": time.monotonic() - recovery_started,
-            }
-            recovery_phase = directory / f"window-phase-{iteration:06d}-recovery.json"
-            recovery_record = {
-                "schema_version": SCHEMA_VERSION,
+                "classification": "reconciled_completed_publication",
                 "iteration": iteration,
-                "timeout_supervision_sha256": sha256_path(
-                    directory / f"window-supervision-{iteration:06d}-timeout.json"
-                ),
-                "returncode": recovery.returncode,
-                "wall_seconds": record["recovery_wall_seconds"],
-                "phase_record": recovery_phase.name,
-                "phase_record_sha256": (
-                    sha256_path(recovery_phase) if recovery_phase.is_file() else None
-                ),
+                "ready_record": window_ready_path(
+                    directory, iteration, lifecycle_attempt
+                ).name,
             }
-            atomic_immutable_json(
-                directory / f"window-recovery-{iteration:06d}.json",
-                recovery_record,
+        else:
+            lifecycle_attempt = _next_window_lifecycle_attempt(directory, iteration)
+            ready_path = window_ready_path(directory, iteration, lifecycle_attempt)
+            base_command = [
+                sys.executable,
+                "-m",
+                "experiments.case118_annual_hierarchy.run_s4b",
+                "--window-child",
+                "--directory",
+                str(directory),
+                "--shard-id",
+                shard_id,
+                "--iteration",
+                str(iteration),
+                "--lifecycle-attempt",
+                str(lifecycle_attempt),
+                "--authority",
+                str(authority_path),
+                "--expected-commit",
+                str(context["git_commit"]),
+                "--expected-source-fingerprint",
+                str(context["source_fingerprint"]),
+                "--execution-scope",
+                execution_scope,
+            ]
+            record = supervise_window_process(
+                base_command,
+                directory=directory,
+                iteration=iteration,
+                lifecycle_attempt=lifecycle_attempt,
             )
-            if recovery.returncode != 0:
-                raise RuntimeError("S4b timeout recovery process failed")
-        elif record["classification"] != "completed":
-            raise RuntimeError("S4b window process failed")
-        ready = _read_ready(directory / f"window-ready-{iteration:06d}.json")
-        if ready.iteration != iteration:
-            raise ValueError("S4b ready record has the wrong iteration")
+            if record["classification"] == "timeout":
+                recovery_command = [
+                    *base_command,
+                    "--primary-timeout",
+                    str(PRIMARY_ATTEMPT_BUDGET_SECONDS),
+                ]
+                recovery_started = time.monotonic()
+                recovery = subprocess.run(recovery_command, cwd=ROOT, check=False)
+                record = {
+                    **record,
+                    "recovery_returncode": recovery.returncode,
+                    "recovery_wall_seconds": time.monotonic() - recovery_started,
+                }
+                recovery_phase = window_phase_path(
+                    directory, iteration, "recovery", lifecycle_attempt
+                )
+                recovery_record = {
+                    "schema_version": SCHEMA_VERSION,
+                    "iteration": iteration,
+                    "lifecycle_attempt": lifecycle_attempt,
+                    "timeout_supervision_sha256": sha256_path(
+                        window_supervision_path(
+                            directory, iteration, "timeout", lifecycle_attempt
+                        )
+                    ),
+                    "returncode": recovery.returncode,
+                    "wall_seconds": record["recovery_wall_seconds"],
+                    "phase_record": recovery_phase.name,
+                    "phase_record_sha256": (
+                        sha256_path(recovery_phase)
+                        if recovery_phase.is_file()
+                        else None
+                    ),
+                }
+                atomic_immutable_json(
+                    window_recovery_path(directory, iteration, lifecycle_attempt),
+                    recovery_record,
+                )
+                if recovery.returncode != 0:
+                    raise RuntimeError("S4b timeout recovery process failed")
+            elif record["classification"] != "completed":
+                raise RuntimeError("S4b window process failed")
+            ready = _read_ready(ready_path)
+            if ready.iteration != iteration:
+                raise ValueError("S4b ready record has the wrong iteration")
+            with gzip.open(
+                directory / ready.relative_path, "rt", encoding="utf-8"
+            ) as stream:
+                archive = _mapping(json.load(stream), "S4b window archive")
         windows.append(ready)
-        with gzip.open(
-            directory / ready.relative_path, "rt", encoding="utf-8"
-        ) as stream:
-            archive = _mapping(json.load(stream), "S4b window archive")
         executed = _mapping(archive["executed_interval"], "executed interval")
         checkpoint = shard_checkpoint_payload(
             shard=shard,
@@ -1280,6 +1412,7 @@ def main() -> None:
     parser.add_argument("--shard-id")
     parser.add_argument("--iteration", type=int)
     parser.add_argument("--primary-timeout", type=float)
+    parser.add_argument("--lifecycle-attempt", type=int, default=0)
     parser.add_argument("--reviewed-resume", action="store_true")
     parser.add_argument("--execution-mode", default="ordinary")
     parser.add_argument(
@@ -1321,6 +1454,7 @@ def main() -> None:
             authority_path=args.authority,
             expected_commit=args.expected_commit,
             expected_source_fingerprint=args.expected_source_fingerprint,
+            lifecycle_attempt=args.lifecycle_attempt,
             execution_scope=args.execution_scope,
         )
     elif args.worker:

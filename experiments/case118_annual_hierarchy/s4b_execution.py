@@ -50,6 +50,153 @@ EXPECTED_QUALIFICATION_REGISTRY_SHA256 = (
 )
 
 
+def window_lifecycle_suffix(lifecycle_attempt: int) -> str:
+    """Return the stable filename suffix for one operational retry."""
+    if (
+        isinstance(lifecycle_attempt, bool)
+        or not isinstance(lifecycle_attempt, int)
+        or lifecycle_attempt < 0
+    ):
+        raise ValueError("window lifecycle attempt must be a nonnegative integer")
+    return "" if lifecycle_attempt == 0 else f"-retry-{lifecycle_attempt:03d}"
+
+
+def window_phase_path(
+    directory: Path,
+    iteration: int,
+    phase: str,
+    lifecycle_attempt: int,
+) -> Path:
+    return directory / (
+        f"window-phase-{iteration:06d}-{phase}"
+        f"{window_lifecycle_suffix(lifecycle_attempt)}.json"
+    )
+
+
+def window_process_log_path(
+    directory: Path, iteration: int, lifecycle_attempt: int
+) -> Path:
+    return directory / (
+        f"window-process-{iteration:06d}-primary"
+        f"{window_lifecycle_suffix(lifecycle_attempt)}.log"
+    )
+
+
+def window_ready_path(directory: Path, iteration: int, lifecycle_attempt: int) -> Path:
+    return directory / (
+        f"window-ready-{iteration:06d}{window_lifecycle_suffix(lifecycle_attempt)}.json"
+    )
+
+
+def window_supervision_path(
+    directory: Path,
+    iteration: int,
+    classification: str,
+    lifecycle_attempt: int,
+) -> Path:
+    return directory / (
+        f"window-supervision-{iteration:06d}-{classification}"
+        f"{window_lifecycle_suffix(lifecycle_attempt)}.json"
+    )
+
+
+def window_recovery_path(
+    directory: Path, iteration: int, lifecycle_attempt: int
+) -> Path:
+    return directory / (
+        f"window-recovery-{iteration:06d}"
+        f"{window_lifecycle_suffix(lifecycle_attempt)}.json"
+    )
+
+
+def _retained_lifecycle_attempts(
+    directory: Path, iteration: int, classification: str
+) -> tuple[int, ...]:
+    """Return attempt ordinals with immutable supervision evidence."""
+    base = f"window-supervision-{iteration:06d}-{classification}"
+    attempts: list[int] = []
+    for path in directory.glob(f"{base}*.json"):
+        if path.name == f"{base}.json":
+            attempts.append(0)
+            continue
+        prefix = f"{base}-retry-"
+        if not path.name.startswith(prefix) or not path.name.endswith(".json"):
+            raise ValueError("window supervision retry filename is invalid")
+        raw = path.name[len(prefix) : -len(".json")]
+        if not raw.isdigit() or int(raw) == 0 or raw != f"{int(raw):03d}":
+            raise ValueError("window supervision retry ordinal is invalid")
+        attempts.append(int(raw))
+    if len(attempts) != len(set(attempts)):
+        raise ValueError("window supervision retry ordinal is duplicated")
+    return tuple(sorted(attempts))
+
+
+def successful_window_lifecycle_paths(
+    directory: Path, iteration: int, *, timed_out: bool
+) -> tuple[Path, Path | None]:
+    """Locate the unique accepted operational attempt for one archived window."""
+    classification = "timeout" if timed_out else "primary"
+    matches: list[tuple[Path, Path | None]] = []
+    for lifecycle_attempt in _retained_lifecycle_attempts(
+        directory, iteration, classification
+    ):
+        match = window_lifecycle_paths_for_attempt(
+            directory,
+            iteration,
+            lifecycle_attempt=lifecycle_attempt,
+            timed_out=timed_out,
+        )
+        if match is not None:
+            matches.append(match)
+    if len(matches) != 1:
+        raise ValueError(
+            "archived S4b window requires exactly one successful lifecycle"
+        )
+    return matches[0]
+
+
+def window_lifecycle_paths_for_attempt(
+    directory: Path,
+    iteration: int,
+    *,
+    lifecycle_attempt: int,
+    timed_out: bool,
+) -> tuple[Path, Path | None] | None:
+    """Return accepted evidence for one exact operational attempt, if complete."""
+    classification = "timeout" if timed_out else "primary"
+    supervision_path = window_supervision_path(
+        directory, iteration, classification, lifecycle_attempt
+    )
+    if not supervision_path.is_file():
+        return None
+    supervision = _mapping(
+        json.loads(supervision_path.read_text()), "window supervision"
+    )
+    expected = "timeout" if timed_out else "completed"
+    if (
+        supervision.get("classification") != expected
+        or supervision.get("lifecycle_attempt", 0) != lifecycle_attempt
+    ):
+        return None
+    recovery_path: Path | None = None
+    if timed_out:
+        candidate = window_recovery_path(directory, iteration, lifecycle_attempt)
+        if not candidate.is_file():
+            return None
+        recovery = _mapping(
+            json.loads(candidate.read_text()), "window recovery supervision"
+        )
+        if (
+            recovery.get("returncode") != 0
+            or recovery.get("lifecycle_attempt", 0) != lifecycle_attempt
+            or recovery.get("timeout_supervision_sha256")
+            != sha256_path(supervision_path)
+        ):
+            return None
+        recovery_path = candidate
+    return supervision_path, recovery_path
+
+
 def _mapping(value: object, label: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{label} must be a mapping")
@@ -503,6 +650,68 @@ def verify_shard_artifacts(
     return checkpoint, tuple(archives)
 
 
+def validate_pending_window_entry(
+    directory: Path,
+    entry: WindowIndexEntry,
+    *,
+    shard: Mapping[str, object],
+    outer: StreamingOuterPlan,
+    expected_execution_registry_sha256: str = EXPECTED_QUALIFICATION_REGISTRY_SHA256,
+    allowed_execution_modes: Sequence[str] | None = None,
+) -> Mapping[str, object]:
+    """Verify a completed window published just before checkpoint advancement."""
+    checkpoint, _ = verify_shard_artifacts(
+        directory,
+        shard=shard,
+        outer=outer,
+        expected_execution_registry_sha256=expected_execution_registry_sha256,
+        allowed_execution_modes=allowed_execution_modes,
+    )
+    if entry.iteration != checkpoint["next_global_iteration"]:
+        raise ValueError("pending S4b window does not follow its checkpoint")
+    path = (directory / entry.relative_path).resolve()
+    if (
+        not path.is_relative_to(directory.resolve())
+        or not path.is_file()
+        or path.stat().st_size != entry.bytes
+        or sha256_path(path) != entry.sha256
+    ):
+        raise ValueError("pending S4b window artifact integrity mismatch")
+    fixture = load_s4_fixture()
+    policy = frozen_p0_policy()
+    interval = _mapping(shard["interval"], "shard interval")
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        archive = validate_window_archive(
+            json.load(stream),
+            expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
+            expected_residual_tolerances=residual_tolerances(policy),
+            expected_inner_terminal_policy=policy.inner_terminal_policy,
+            expected_horizon_steps=int(cast(int, interval["stop"])),
+            expected_ac_window_steps=policy.ac_window_steps,
+            expected_result_dimensions=result_dimensions(fixture.inputs),
+            expected_delta_hours=fixture.inputs.delta,
+            expected_outer_boundary_soc_mwh=outer_boundaries(outer),
+            expected_trajectory_start=int(cast(int, interval["start"])),
+            expected_primary_timeout_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
+        )
+    if (
+        archive["iteration"] != entry.iteration
+        or archive["preceding_controlling_attempt_id"]
+        != checkpoint["preceding_controlling_attempt_id"]
+        or np.max(
+            np.abs(
+                _finite_vector(archive["initial_soc_mwh"], "pending initial SoC")
+                - _finite_vector(
+                    checkpoint["realized_soc_mwh"], "checkpoint realized SoC"
+                )
+            )
+        )
+        > policy.tolerances.soc_recurrence_mwh_abs
+    ):
+        raise ValueError("pending S4b window state chain is discontinuous")
+    return archive
+
+
 def _operator_intervention_timing(
     directory: Path, archive: Mapping[str, object]
 ) -> Mapping[str, object]:
@@ -724,10 +933,10 @@ def audit_shard(
                 cast(float, retained["diagnostic_elapsed_seconds"])
             )
             supervision_path = None
+            recovery_path = None
         else:
-            supervision_path = directory / (
-                f"window-supervision-{iteration:06d}-"
-                f"{'timeout' if timed_out else 'primary'}.json"
+            supervision_path, recovery_path = successful_window_lifecycle_paths(
+                directory, iteration, timed_out=timed_out
             )
         if supervision_path is not None:
             supervision = _mapping(
@@ -793,7 +1002,8 @@ def audit_shard(
                 cast(float, supervision["orchestration_wall_seconds"])
             )
         if timed_out and supervision_path is not None:
-            recovery_path = directory / f"window-recovery-{iteration:06d}.json"
+            if recovery_path is None:
+                raise ValueError("S4b timeout recovery evidence is missing")
             recovery = _mapping(
                 json.loads(recovery_path.read_text()), "window recovery supervision"
             )
