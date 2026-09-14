@@ -55,7 +55,8 @@ from tests.test_case118_s5_speculative_attempt import (
 fixture_outer = attempt_tests.fixture_outer
 
 
-def test_transition_report_preserves_recovery_audit_ancestor(tmp_path):
+@pytest.mark.parametrize("successor", [False, True])
+def test_transition_report_preserves_recovery_audit_ancestor(tmp_path, successor):
     from experiments.case118_annual_hierarchy import s5_analysis, s5_source_transition
     from experiments.case118_annual_hierarchy import s5_retry_transition as retry
     from experiments.case118_annual_hierarchy import (
@@ -101,7 +102,23 @@ def test_transition_report_preserves_recovery_audit_ancestor(tmp_path):
         (RECORD_NAME, speculative),
     ]:
         atomic_json(tmp_path / name, value)
+    if successor:
+        speculative = {
+            **speculative,
+            "contract_sha256": "c" * 64,
+            "predecessor_transition": speculative,
+        }
+        atomic_json(
+            tmp_path / "speculative-policy-source-transition-001.json", speculative
+        )
     summary = s5_analysis._transition_summary(tmp_path, speculative)
+    if successor:
+        name = "speculative-policy-source-transition-001.json"
+        assert summary["latest_path"] == name
+        assert summary["latest_sha256"] == artifact_ref(tmp_path / name)["sha256"]
+        assert summary["contract_sha256"] == "c" * 64
+        summary = summary["predecessor"]
+        assert summary["contract_sha256"] == "b" * 64
     for name, classification in [
         (RECORD_NAME, CLASSIFICATION),
         (retry.AUDIT_SPEC.record_name, retry.AUDIT_SPEC.record_classification),
@@ -952,6 +969,114 @@ def test_new_wave_receipt_opens_next_wave_only_after_complete_peer_audits(
         run_s5._validate_completed_prefix(
             tmp_path, 2, record["execution_context"], record["authority"]
         )
+
+
+def test_failed_v2_launch_reconciliation_retry_preserves_checkpoints(tmp_path):
+    """A retained pre-solve failure is reconciled once, with cleanup checked."""
+    from experiments.case118_annual_hierarchy import run_s5
+
+    record = retained_wave(tmp_path)
+    record.update(
+        classification="supervisor_failure", worker_results={}, returncodes={}
+    )
+    record["events"] = [e for e in record["events"] if e["kind"] == "launched"]
+    record["events"].append(
+        {"kind": "supervisor_failure", "invocation": None, "monotonic_seconds": 2.0}
+    )
+    record["exception"] = "PermissionError: Operation not permitted: 'ps'"
+    for ref in record["contender_lifecycles"].values():
+        path = tmp_path / ref["path"]
+        lifecycle = json.loads(path.read_text())
+        lifecycle.update(phases=[], completion=None)
+        atomic_json(path, lifecycle)
+        ref.update(artifact_ref(path))
+    phase = tmp_path / record["phase_progress"]["path"]
+    atomic_json(
+        phase,
+        {
+            "clock_anchor": record["clock_anchor"],
+            "events": record["events"],
+            "memory_samples": record["resource_samples"],
+        },
+    )
+    record["phase_progress"].update(artifact_ref(phase))
+    path = tmp_path / "supervision-wave-000-000.json"
+    atomic_immutable_json(path, record)
+    checkpoint = tmp_path / "shard-000/checkpoint.json"
+    atomic_json(checkpoint, {"completed_intervals": 7, "windows": ["retained"]})
+    before = checkpoint.read_bytes()
+    records = []
+    run_s5._reconcile_supervision_records(tmp_path, records)
+    assert len(records) == 1 and records[0]["classification"] == "supervisor_failure"
+    run_s5._reconcile_supervision_records(tmp_path, records)
+    assert len(records) == 1 and checkpoint.read_bytes() == before
+    # Matching hashes alone must not excuse an unreaped contender on retry.
+    ref = next(iter(record["contender_lifecycles"].values()))
+    child = tmp_path / ref["path"]
+    lifecycle = json.loads(child.read_text())
+    lifecycle["reaped"] = False
+    atomic_json(child, lifecycle)
+    ref.update(artifact_ref(child))
+    atomic_json(path, record)
+    with pytest.raises(ValueError, match="unreaped"):
+        run_s5._reconcile_supervision_records(tmp_path, [])
+    assert checkpoint.read_bytes() == before
+
+
+def test_speculative_source_correction_retains_immutable_predecessor(tmp_path):
+    from experiments.case118_annual_hierarchy.s5_speculative_continuation import (
+        prepare_record,
+    )
+
+    old_context = {"git_commit": "old", "source_fingerprint": "old", "git_clean": True}
+    predecessor = {
+        "contract": {"continuation_execution": {"context": old_context}},
+        "new_authority": {"old": True},
+    }
+    checkpoint = tmp_path / "shard-004/checkpoint.json"
+    atomic_json(
+        checkpoint,
+        {"shard_id": "s4b-shard-004", "complete": False, "next_global_iteration": 3248},
+    )
+    atomic_json(
+        tmp_path / "progress.json",
+        {
+            "classification": "partial",
+            "execution_context": old_context,
+            "authority": predecessor["new_authority"],
+        },
+    )
+    context = {**old_context, "git_commit": "first", "source_fingerprint": "first"}
+    first = prepare_record(tmp_path, predecessor, context, execution_authorized=True)
+    atomic_immutable_json(tmp_path / RECORD_NAME, first)
+    original_bytes = (tmp_path / RECORD_NAME).read_bytes()
+    checkpoint_bytes = checkpoint.read_bytes()
+    atomic_json(
+        tmp_path / "progress.json",
+        {
+            "classification": "partial",
+            "execution_context": context,
+            "authority": first["new_authority"],
+        },
+    )
+    corrected = {
+        **context,
+        "git_commit": "corrected",
+        "source_fingerprint": "corrected",
+    }
+    second = prepare_record(tmp_path, first, corrected, execution_authorized=True)
+    successor = tmp_path / "speculative-policy-source-transition-001.json"
+    atomic_immutable_json(successor, second)
+    assert load_record(tmp_path, predecessor) == second
+    assert (tmp_path / RECORD_NAME).read_bytes() == original_bytes
+    assert checkpoint.read_bytes() == checkpoint_bytes
+    assert (
+        second["contract"]["first_affected_interval"]
+        == first["contract"]["first_affected_interval"]
+    )
+    successor.rename(tmp_path / "speculative-policy-source-transition-002.json")
+    with pytest.raises(ValueError, match="discontinuous"):
+        load_record(tmp_path, predecessor)
 
 
 def test_root_consumes_mixed_wave_schemas_and_finishes_annual_merge(

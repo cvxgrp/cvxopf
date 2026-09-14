@@ -582,9 +582,18 @@ def _reconcile_supervision_records(
             "wave_index": value["wave_index"],
             "classification": value["classification"],
         }
+        if value.get("schema_version") == 2:
+            from experiments.case118_annual_hierarchy.s5_speculative_runtime import (
+                validate_wave,
+            )
+
+            # Helpers are contenders, not shard workers. Validate their actual
+            # launch/cleanup receipts, including a failed pre-solve launch.
+            validate_wave(value, output_root)
+        elif value.get("schema_version") != SCHEMA_VERSION:
+            raise ValueError("retained S5 supervision schema is invalid")
         if (
-            value.get("schema_version") != SCHEMA_VERSION
-            or value.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
+            value.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
             or value.get("execution_context") is None
             or value.get("authority") is None
         ):

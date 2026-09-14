@@ -790,10 +790,24 @@ def _transition_summary(
         )
 
         contract = _mapping(transition["contract"], "speculative contract")
+        candidates = [
+            output_root / SPECULATIVE_RECORD,
+            *sorted(output_root.glob("speculative-policy-source-transition-*.json")),
+        ]
+        matches = [
+            path
+            for path in candidates
+            if path.is_file() and json.loads(path.read_text()) == transition
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                "speculative source summary lacks its exact retained record"
+            )
+        path = matches[0]
         return {
             "classification": transition["classification"],
-            "latest_path": SPECULATIVE_RECORD,
-            "latest_sha256": sha256_path(output_root / SPECULATIVE_RECORD),
+            "latest_path": path.name,
+            "latest_sha256": sha256_path(path),
             "contract_sha256": transition["contract_sha256"],
             "first_affected_interval": contract["first_affected_interval"],
             "policy": contract["policy"],

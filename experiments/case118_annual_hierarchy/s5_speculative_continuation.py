@@ -118,7 +118,20 @@ def prepare_record(
 def load_record(
     output_root: Path, predecessor: Mapping[str, Any]
 ) -> dict[str, Any] | None:
-    path = output_root / RECORD_NAME
+    """Read the policy cutover and any immutable, reviewed source corrections."""
+    record = _load_record(output_root / RECORD_NAME, predecessor)
+    successors = sorted(output_root.glob("speculative-policy-source-transition-*.json"))
+    for index, path in enumerate(successors, start=1):
+        if (
+            record is None
+            or path.name != f"speculative-policy-source-transition-{index:03d}.json"
+        ):
+            raise ValueError("speculative continuation sequence is discontinuous")
+        record = _load_record(path, record)
+    return record
+
+
+def _load_record(path: Path, predecessor: Mapping[str, Any]) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     record = json.loads(path.read_text())
