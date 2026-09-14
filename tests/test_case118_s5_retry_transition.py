@@ -24,8 +24,17 @@ def _write(root: Path, name: str, value: object) -> dict[str, object]:
     }
 
 
-@pytest.fixture
-def reviewed_transition(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+@pytest.fixture(params=("retry", "audit"))
+def reviewed_transition(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request):
+    if request.param == "audit":
+        monkeypatch.setattr(
+            retry, "CONTRACT_CLASSIFICATION", retry.AUDIT_SPEC.contract_classification
+        )
+        monkeypatch.setattr(
+            retry, "RECORD_CLASSIFICATION", retry.AUDIT_SPEC.record_classification
+        )
+        monkeypatch.setattr(retry, "RECORD_NAME", retry.AUDIT_SPEC.record_name)
+        monkeypatch.setattr(retry, "CHANGE_SCOPE", retry.AUDIT_SPEC.change_scope)
     old_context = {
         "git_commit": "a" * 40,
         "source_fingerprint": "b" * 64,
@@ -107,6 +116,56 @@ def reviewed_transition(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return tmp_path, predecessor, contract_path, new_context, authority
 
 
+def test_completed_checkpoint_finalization_retains_original_source(
+    reviewed_transition, monkeypatch
+):
+    root, predecessor, contract_path, context, authority = reviewed_transition
+    checkpoint_path = root / "shard-000/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text())
+    checkpoint.update(complete=True, execution_source_fingerprint="b" * 64)
+    evidence = dict(retry.STOPPING_EVIDENCE)
+    evidence["shard-000/checkpoint.json"] = _write(
+        root, "shard-000/checkpoint.json", checkpoint
+    )
+    monkeypatch.setattr(retry, "STOPPING_EVIDENCE", evidence)
+    contract = json.loads(contract_path.read_text())
+    contract["trusted_stopping_evidence"] = evidence
+    contract_path.write_text(json.dumps(contract))
+    authority = {**authority, "source_version_contract_sha256": object_sha256(contract)}
+    record = retry.publish_transition(
+        root, contract_path, context, authority, predecessor_transition=predecessor
+    )
+    # Exercise this path only under the separately identified audit successor.
+    record["classification"] = retry.AUDIT_SPEC.record_classification
+    binding = chain.completed_shard_finalization_binding(
+        root / "shard-000", checkpoint, context, record
+    )
+    worker = {
+        "execution_source_fingerprint": "b" * 64,
+        "completed_checkpoint_finalization": binding,
+    }
+    assert chain.worker_source_matches(root / "shard-000", worker, context, record)
+    assert binding["new_intervals_executed"] == 0
+    assert not chain.worker_source_matches(
+        root / "shard-000",
+        {**worker, "execution_source_fingerprint": "f" * 64},
+        context,
+        record,
+    )
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.completed_shard_finalization_binding(
+            root / "shard-000", {**checkpoint, "complete": False}, context, record
+        )
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.completed_shard_finalization_binding(
+            root / "shard-000", checkpoint, {**context, "git_commit": "f" * 40}, record
+        )
+    checkpoint["windows"] = [{"iteration": 99}]
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.worker_source_matches(root / "shard-000", worker, context, record)
+
+
 def test_retry_transition_publishes_and_survives_pointer_advancement(
     reviewed_transition,
 ) -> None:
@@ -125,6 +184,36 @@ def test_retry_transition_publishes_and_survives_pointer_advancement(
     (root / "progress.json").write_text('{"state":"running"}')
     (root / "shard-000/checkpoint.json").write_text('{"next":5}')
     assert retry.load_record(root, predecessor_transition=predecessor) == record
+
+
+def test_audit_successor_dispatch_and_idempotent_load(reviewed_transition, monkeypatch):
+    root, predecessor, contract_path, context, authority = reviewed_transition
+    spec = retry.retry_spec()
+    monkeypatch.setattr(retry, "AUDIT_SPEC", spec)
+    monkeypatch.setattr(chain, "load_base_transition", lambda _root: predecessor)
+    from experiments.case118_annual_hierarchy import (
+        s5_operator_intervention as intervention,
+    )
+
+    monkeypatch.setattr(intervention, "load_record", lambda *args, **kwargs: None)
+    original_load = retry.load_record
+
+    def load(root, *, predecessor_transition, spec=None):
+        if spec is None:
+            return predecessor
+        return original_load(
+            root, predecessor_transition=predecessor_transition, spec=spec
+        )
+
+    monkeypatch.setattr(retry, "load_record", load)
+    record = chain.publish_transition(root, contract_path, context, authority)
+    assert chain.load_transition(root) == record
+    assert chain.publish_transition(root, contract_path, context, authority) == record
+
+    # Mutable pointers may advance; their exact stopping bytes remain in the record.
+    (root / "progress.json").write_text('{"state":"running"}')
+    (root / "shard-000/checkpoint.json").write_text('{"next":5}')
+    assert chain.load_transition(root) == record
 
 
 def test_retry_transition_rejects_static_evidence_corruption(

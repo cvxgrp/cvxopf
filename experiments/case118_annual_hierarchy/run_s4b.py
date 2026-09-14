@@ -765,6 +765,7 @@ def _run_shard_worker_body(
     initial = cast(
         Sequence[float], _mapping(storage["initial_state"], "initial state")["soc_mwh"]
     )
+    finalization: Mapping[str, object] | None = None
     if directory.exists():
         if not reviewed_resume:
             raise FileExistsError("S4b partial shard requires explicit reviewed resume")
@@ -790,9 +791,18 @@ def _run_shard_worker_body(
             not source_matches
             or checkpoint["outer_plan_sha256"] != sha256_path(S4_OUTER_ARCHIVE_PATH)
             or checkpoint["execution_mode"] != execution_mode
-            or checkpoint["complete"] is True
         ):
             raise ValueError("S4b reviewed resume provenance or state mismatch")
+        if checkpoint["complete"] is True:
+            from experiments.case118_annual_hierarchy.s5_source_transition import (
+                completed_shard_finalization_binding,
+            )
+
+            finalization = completed_shard_finalization_binding(
+                directory, checkpoint, context, transition
+            )
+            if (directory / "shard-result.json").exists():
+                raise FileExistsError("completed S5 shard result already exists")
         continuation_ordinal = len(list(directory.glob("reviewed-continuation-*.json")))
         atomic_immutable_json(
             directory / f"reviewed-continuation-{continuation_ordinal:03d}.json",
@@ -979,6 +989,8 @@ def _run_shard_worker_body(
             - child_usage_start.ru_stime
         ),
     }
+    if finalization is not None:
+        result["completed_checkpoint_finalization"] = finalization
     atomic_immutable_json(directory / "shard-result.json", result)
     return result
 

@@ -198,10 +198,26 @@ window and supervision artifacts remain ignored but hash-bound.
 
 ## Current stopping point
 
-The annual run is paused at interval 2448 with its verified checkpoint and
-supervisor-interruption evidence intact. The interval-2448 intervention is an
-implementation-only checkpoint: it does not create its successor numerical
-authority, apply the diagnostic action to the live checkpoint, restart a worker,
-promote a result, or open S6/S7. Those actions require a clean implementation
-commit, independent review of the exact transition/authority identities, and a
-separate owner-approved continuation.
+The annual run retains 2,965 completed intervals across shards 000–003. Shard
+003 reached boundary 2965, then its final report failed because the auditor
+incorrectly required copied-target-free recovery for every timeout. Interval
+2450 legitimately used a failed target-free attempt followed by accepted causal
+perturbation 6. The correction at `89211f1` validates the complete archived
+recovery path; all 752 saved shard intervals pass independent reconstruction.
+
+The recovery-audit continuation binds the immutable preceding transition,
+terminal supervision/outcome, and literal four stopping checkpoints through
+`s5_retry_transition.AUDIT_SPEC`. It reuses the existing transition publication
+and validation mechanism. The successor authority must name one exact clean
+commit and source fingerprint; it changes neither the scientific model nor the
+solver policy or primal tolerances. Historical records remain attributed to
+their original executions.
+
+A completed checkpoint lacking its shard result may be finalized only when it
+exactly matches this bound stopping snapshot. That worker executes zero new
+intervals, retains the checkpoint's original source fingerprint, and records its
+new audit context plus `completed_checkpoint_finalization` evidence. Normal
+supervision then accepts the independently reconstructed report and advances to
+the next wave. Publication is immutable; existing results and checkpoints are
+not rewritten. Numerical launch remains a separate action after the exact
+successor binding is prepared.

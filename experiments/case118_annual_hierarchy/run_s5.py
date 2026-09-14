@@ -106,6 +106,10 @@ def _audited_completed_worker(
     context: Mapping[str, object],
 ) -> tuple[Mapping[str, object], Mapping[str, object]]:
     """Keep worker metadata separate from the hash-bound scientific summary."""
+    from experiments.case118_annual_hierarchy.s5_source_transition import (
+        worker_source_matches,
+    )
+
     worker = _mapping(
         json.loads((directory / "shard-result.json").read_text()), "S5 worker"
     )
@@ -130,8 +134,7 @@ def _audited_completed_worker(
         or summary.get("all_independent_audits_agree") is not True
         or any(worker.get(name) != value for name, value in summary.items())
         or worker_context not in allowed_contexts
-        or worker.get("execution_source_fingerprint")
-        != worker_context.get("source_fingerprint")
+        or not worker_source_matches(directory, worker, worker_context, transition)
         or worker.get("execution_mode") != ANNUAL_SCOPE
     ):
         raise ValueError(

@@ -48,6 +48,7 @@ from experiments.case118_annual_hierarchy.s5_source_transition import (
     historical_provenance_matches,
     load_transition,
     transition_context_authority_pairs,
+    worker_source_matches,
 )
 
 
@@ -559,8 +560,7 @@ def analyze_s5(
                 worker_context == pair_context for pair_context, _ in execution_pairs
             )
             or worker.get("execution_mode") != "annual"
-            or worker.get("execution_source_fingerprint")
-            != worker_context.get("source_fingerprint")
+            or not worker_source_matches(directory, worker, worker_context, transition)
         ):
             raise ValueError("S5 worker execution provenance or mode mismatch")
         verify_shard_artifacts(

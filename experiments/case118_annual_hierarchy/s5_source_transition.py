@@ -167,11 +167,17 @@ def load_transition(output_root: Path) -> dict[str, Any] | None:
     intervention = load_record(output_root, predecessor_transition=base)
     prior = base if intervention is None else intervention
     from experiments.case118_annual_hierarchy.s5_retry_transition import (
+        AUDIT_SPEC,
         load_record as load_retry_record,
     )
 
     retry = load_retry_record(output_root, predecessor_transition=prior)
-    return prior if retry is None else retry
+    if retry is None:
+        return prior
+    audit = load_retry_record(
+        output_root, predecessor_transition=retry, spec=AUDIT_SPEC
+    )
+    return retry if audit is None else audit
 
 
 def require_current_transition(
@@ -190,6 +196,58 @@ def require_current_transition(
     return record
 
 
+def completed_shard_finalization_binding(
+    directory: Path,
+    checkpoint: Mapping[str, object],
+    context: Mapping[str, object],
+    transition: Mapping[str, Any] | None,
+) -> Mapping[str, object]:
+    """Authorize reporting an unchanged completed checkpoint under the audit fix."""
+    from experiments.case118_annual_hierarchy.s5_retry_transition import AUDIT_SPEC
+
+    key = f"{directory.name}/checkpoint.json"
+    if (
+        transition is None
+        or transition.get("classification") != AUDIT_SPEC.record_classification
+        or context != transition["contract"]["continuation_execution"]["context"]
+        or checkpoint.get("complete") is not True
+        or key not in transition["stopping_pointer_json"]
+        or checkpoint != json.loads(transition["stopping_pointer_json"][key])
+    ):
+        raise ValueError("S5 completed shard lacks its bound audit-only finalization")
+    return {
+        "classification": "completed_checkpoint_audit_only",
+        "source_version_contract_sha256": transition["contract_sha256"],
+        "checkpoint_sha256": _digest(transition["stopping_pointer_json"][key].encode()),
+        "original_execution_source_fingerprint": checkpoint[
+            "execution_source_fingerprint"
+        ],
+        "new_intervals_executed": 0,
+    }
+
+
+def worker_source_matches(
+    directory: Path,
+    worker: Mapping[str, object],
+    context: Mapping[str, object],
+    transition: Mapping[str, Any] | None,
+) -> bool:
+    """Distinguish original solve provenance from a later audit-only worker."""
+    if worker.get("completed_checkpoint_finalization") is None:
+        return worker.get("execution_source_fingerprint") == context.get(
+            "source_fingerprint"
+        )
+    checkpoint = _object(json.loads((directory / "checkpoint.json").read_text()))
+    expected = completed_shard_finalization_binding(
+        directory, checkpoint, context, transition
+    )
+    return (
+        worker["completed_checkpoint_finalization"] == expected
+        and worker.get("execution_source_fingerprint")
+        == checkpoint["execution_source_fingerprint"]
+    )
+
+
 def publish_transition(
     output_root: Path,
     contract_path: Path,
@@ -199,14 +257,16 @@ def publish_transition(
     """Fully validate the old prefix, then publish one immutable transaction."""
     raw_contract = json.loads(contract_path.read_text())
     from experiments.case118_annual_hierarchy.s5_retry_transition import (
+        AUDIT_SPEC,
         CONTRACT_CLASSIFICATION,
+        load_record as load_retry_record,
         publish_transition as publish_retry_transition,
     )
 
-    if (
-        isinstance(raw_contract, Mapping)
-        and raw_contract.get("classification") == CONTRACT_CLASSIFICATION
-    ):
+    if isinstance(raw_contract, Mapping) and raw_contract.get("classification") in {
+        CONTRACT_CLASSIFICATION,
+        AUDIT_SPEC.contract_classification,
+    }:
         base = load_base_transition(output_root)
         if base is None:
             raise ValueError("S5 retry continuation lacks its base transition")
@@ -218,12 +278,20 @@ def publish_transition(
             output_root, predecessor_transition=base
         )
         predecessor = base if intervention is None else intervention
+        spec = None
+        if raw_contract["classification"] == AUDIT_SPEC.contract_classification:
+            retry = load_retry_record(output_root, predecessor_transition=predecessor)
+            if retry is None:
+                raise ValueError("S5 audit continuation lacks its retry predecessor")
+            predecessor = retry
+            spec = AUDIT_SPEC
         return publish_retry_transition(
             output_root,
             contract_path,
             context,
             authority,
             predecessor_transition=predecessor,
+            spec=spec,
         )
     contract = validate_contract(raw_contract)
     if contract["continuation_execution"]["context"] != context:
