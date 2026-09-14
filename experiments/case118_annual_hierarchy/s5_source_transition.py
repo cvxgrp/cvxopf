@@ -177,7 +177,13 @@ def load_transition(output_root: Path) -> dict[str, Any] | None:
     audit = load_retry_record(
         output_root, predecessor_transition=retry, spec=AUDIT_SPEC
     )
-    return retry if audit is None else audit
+    latest = retry if audit is None else audit
+    from experiments.case118_annual_hierarchy.s5_speculative_continuation import (
+        load_record as load_speculative_record,
+    )
+
+    speculative = load_speculative_record(output_root, latest)
+    return latest if speculative is None else speculative
 
 
 def require_current_transition(
@@ -208,7 +214,11 @@ def completed_shard_finalization_binding(
     key = f"{directory.name}/checkpoint.json"
     if (
         transition is None
-        or transition.get("classification") != AUDIT_SPEC.record_classification
+        or transition.get("classification")
+        not in {
+            AUDIT_SPEC.record_classification,
+            "applied_s5_speculative_policy_continuation",
+        }
         or context != transition["contract"]["continuation_execution"]["context"]
         or checkpoint.get("complete") is not True
         or key not in transition["stopping_pointer_json"]
@@ -238,8 +248,24 @@ def worker_source_matches(
             "source_fingerprint"
         )
     checkpoint = _object(json.loads((directory / "checkpoint.json").read_text()))
+    binding = _object(worker["completed_checkpoint_finalization"])
+    # A later continuation does not re-authorize or rewrite an already finalized
+    # historical worker. Locate the retained transition that actually issued its
+    # binding, then apply the same exact context/checkpoint checks as before.
+    issuer = transition
+    while issuer is not None:
+        if issuer.get("contract_sha256") == binding.get(
+            "source_version_contract_sha256"
+        ):
+            break
+        predecessor = issuer.get("predecessor_transition")
+        issuer = (
+            cast(Mapping[str, Any], predecessor)
+            if isinstance(predecessor, Mapping)
+            else None
+        )
     expected = completed_shard_finalization_binding(
-        directory, checkpoint, context, transition
+        directory, checkpoint, context, issuer
     )
     return (
         worker["completed_checkpoint_finalization"] == expected
@@ -382,6 +408,17 @@ def verify_checkpoint_segment(
             expected = (
                 record.get("post_intervention_checkpoint") if has_intervention else old
             )
+            from experiments.case118_annual_hierarchy.s5_speculative_continuation import (
+                CLASSIFICATION,
+            )
+
+            if record.get("classification") == CLASSIFICATION and not old["complete"]:
+                successor = {
+                    **cast(Mapping[str, Any], expected),
+                    "execution_source_fingerprint": new_context["source_fingerprint"],
+                }
+                if checkpoint == successor:
+                    return True
             if checkpoint != expected:
                 raise ValueError("S5 source transition changed the stopping checkpoint")
             return True
@@ -448,6 +485,11 @@ def historical_provenance_matches(
                 for name in contract["trusted_stopping_evidence"]
                 if "/" not in name and name != "progress.json"
             }
+        elif (
+            transition.get("classification")
+            == "applied_s5_speculative_policy_continuation"
+        ):
+            root_names = set()
         else:
             root_names = {
                 Path(ref["path"]).name

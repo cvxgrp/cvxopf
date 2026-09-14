@@ -574,7 +574,18 @@ def verify_shard_artifacts(
             )
     # One verified snapshot per pass; retain full validation of every archive.
     expected_boundaries = outer_boundaries(outer)
-    for raw_entry in _sequence(checkpoint["windows"], "checkpoint windows"):
+    from experiments.case118_annual_hierarchy.s5_source_transition import (
+        load_transition,
+    )
+    from experiments.case118_annual_hierarchy.s5_speculative_continuation import (
+        CLASSIFICATION,
+        verify_phase_window,
+    )
+
+    transition = load_transition(directory.parent)
+    for window_index, raw_entry in enumerate(
+        _sequence(checkpoint["windows"], "checkpoint windows")
+    ):
         entry = _mapping(raw_entry, "window entry")
         path = (directory / str(entry["relative_path"])).resolve()
         if not path.is_relative_to(directory.resolve()):
@@ -594,20 +605,48 @@ def verify_shard_artifacts(
                 expected_intervention = intervention_identity(
                     str(intervention_record["contract_sha256"])
                 )
-            archive = validate_window_archive(
-                json.load(stream),
-                expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
-                expected_residual_tolerances=residual_tolerances(policy),
-                expected_inner_terminal_policy=policy.inner_terminal_policy,
-                expected_horizon_steps=stop,
-                expected_ac_window_steps=policy.ac_window_steps,
-                expected_result_dimensions=result_dimensions(fixture.inputs),
-                expected_delta_hours=fixture.inputs.delta,
-                expected_outer_boundary_soc_mwh=expected_boundaries,
-                expected_trajectory_start=start,
-                expected_primary_timeout_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
-                expected_operator_intervention=expected_intervention,
-            )
+            raw_archive = json.load(stream)
+            if (
+                transition is not None
+                and transition.get("classification") == CLASSIFICATION
+            ):
+                verify_phase_window(transition, directory, raw_archive, window_index)
+            if raw_archive.get("schema_version") == 2:
+                from experiments.case118_annual_hierarchy.s5_speculative_window import (
+                    validate_window,
+                )
+
+                if (
+                    transition is None
+                    or transition.get("classification") != CLASSIFICATION
+                ):
+                    raise ValueError(
+                        "speculative window lacks reviewed policy continuation"
+                    )
+                validate_window(
+                    raw_archive,
+                    directory,
+                    inputs=fixture.inputs,
+                    policy=policy,
+                    outer=outer,
+                    trajectory_stop=stop,
+                )
+                archive = raw_archive
+            else:
+                archive = validate_window_archive(
+                    raw_archive,
+                    expected_soc_tolerance_mwh=policy.tolerances.soc_recurrence_mwh_abs,
+                    expected_residual_tolerances=residual_tolerances(policy),
+                    expected_inner_terminal_policy=policy.inner_terminal_policy,
+                    expected_horizon_steps=stop,
+                    expected_ac_window_steps=policy.ac_window_steps,
+                    expected_result_dimensions=result_dimensions(fixture.inputs),
+                    expected_delta_hours=fixture.inputs.delta,
+                    expected_outer_boundary_soc_mwh=expected_boundaries,
+                    expected_trajectory_start=start,
+                    expected_primary_timeout_seconds=PRIMARY_ATTEMPT_BUDGET_SECONDS,
+                    expected_operator_intervention=expected_intervention,
+                )
         if archive["iteration"] != entry["iteration"]:
             raise ValueError("S4b checkpoint/window iteration mismatch")
         if archive["preceding_controlling_attempt_id"] != preceding_id:
@@ -920,7 +959,15 @@ def audit_shard(
         if attempt["slot_state"] == "timeout"
     ) + sum(archive.get("operator_intervention") is not None for archive in archives)
     recoveries = sum(
-        cast(Mapping[str, object], archive["executed_interval"])[
+        (
+            not str(
+                cast(Mapping[str, object], archive["executed_interval"])[
+                    "controlling_attempt_id"
+                ]
+            ).endswith("spec-v1-00")
+        )
+        if archive.get("schema_version") == 2
+        else cast(Mapping[str, object], archive["executed_interval"])[
             "controlling_attempt_id"
         ]
         != cast(Sequence[Mapping[str, object]], archive["attempts"])[0]["attempt_id"]
@@ -941,9 +988,68 @@ def audit_shard(
     signpost_deviation = 0.0
     shifted_opportunities = 0
     shifted_successes = 0
+    speculative_effort = 0.0
+    speculative_canceled = 0.0
+    speculative_post_solve = 0.0
+    speculative_windows = 0
+    speculative_sources: dict[str, int] = {}
     for archive in archives:
         iteration = int(cast(int, archive["iteration"]))
         attempts = cast(Sequence[Mapping[str, object]], archive["attempts"])
+        if archive.get("schema_version") == 2:
+            from experiments.case118_annual_hierarchy.s5_speculative_window import (
+                validate_window,
+            )
+
+            retained = validate_window(
+                archive,
+                directory,
+                inputs=fixture.inputs,
+                policy=frozen_p0_policy(),
+                outer=outer,
+                trajectory_stop=int(
+                    cast(int, _mapping(shard["interval"], "interval")["stop"])
+                ),
+            )
+            speculative_windows += 1
+            timeouts += int(retained["timeout_count"])
+            speculative_effort += float(retained["solve_effort_seconds"])
+            speculative_canceled += float(retained["canceled_solve_effort_seconds"])
+            speculative_post_solve += float(retained["post_solve_seconds"])
+            orchestration_seconds += float(retained["latency_seconds"])
+            construction_seconds += float(retained["construction_seconds"])
+            roles = retained["role_solve_effort_seconds"]
+            primary_solver_seconds += float(roles["primary"])
+            target_free_solver_seconds += float(roles["target_free"])
+            copied_solver_seconds += float(roles["copied"])
+            selected = str(retained["selected_invocation"])
+            source = str(retained["selected_source"])
+            speculative_sources[source] = speculative_sources.get(source, 0) + 1
+            controller = next(
+                item for item in attempts if item["attempt_id"] == selected
+            )
+            result = _mapping(controller["result"], "controller result")
+            solver_seconds += float(
+                cast(float, _mapping(controller["audit"], "audit")["wall_time_seconds"])
+            )
+            storage_throughput += float(
+                np.sum(np.abs(np.asarray(result["b"], dtype=float)[0]))
+                * fixture.inputs.delta
+            )
+            signpost_deviation += float(
+                np.sum(
+                    np.abs(
+                        np.asarray(result["soc"], dtype=float)[-1]
+                        - np.asarray(archive["target_soc_mwh"], dtype=float)
+                    )
+                )
+            )
+            if iteration > int(
+                cast(int, _mapping(shard["interval"], "interval")["start"])
+            ):
+                shifted_opportunities += 1
+                shifted_successes += int(selected.endswith("spec-v1-00"))
+            continue
         primary = attempts[0]
         timed_out = primary["slot_state"] == "timeout"
         if archive.get("operator_intervention") is not None:
@@ -1248,6 +1354,15 @@ def audit_shard(
         summary["qualification_registry_sha256"] = (
             EXPECTED_QUALIFICATION_REGISTRY_SHA256
         )
+    if speculative_windows:
+        summary["speculative_policy"] = {
+            "completed_intervals": speculative_windows,
+            "solve_effort_seconds": speculative_effort,
+            "canceled_solve_effort_seconds": speculative_canceled,
+            "post_solve_seconds": speculative_post_solve,
+            "accepted_source_counts": speculative_sources,
+            "timing_note": "Parallel solve effort is not elapsed latency; total_window_path_seconds uses each window's launch-to-reap span.",
+        }
     return {**summary, "summary_sha256": object_sha256(summary)}
 
 

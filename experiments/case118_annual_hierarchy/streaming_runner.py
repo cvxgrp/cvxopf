@@ -471,9 +471,19 @@ def _layout_signature(layout: tuple[Mapping[str, object], ...]) -> str:
 
 
 def solve_ac_with_verified_x0(
-    build: OPFBuild, solve_config: HierarchicalSolveConfig
+    build: OPFBuild,
+    solve_config: HierarchicalSolveConfig,
+    *,
+    start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
+    replay_start: IPOPTStartEvidence | None = None,
 ) -> _X0Run:
-    """Solve through a build-local IPOPT class and retain the exact reduced x0."""
+    """Solve through a build-local IPOPT class and retain the exact reduced x0.
+
+    Optional speculative-worker hooks publish the verified start before native
+    execution and replay a retained full start. Replay may replace auxiliary
+    coordinates, but must match the freshly assigned model coordinates and
+    normalized reduction layout exactly. Neither hook changes the default path.
+    """
     validate_solve_config(solve_config)
     assigned = complete_flat_start(build)
     original_variables = {variable.id: variable for variable in build.prob.variables()}
@@ -530,6 +540,41 @@ def solve_ac_with_verified_x0(
             and originals_match
         ):
             raise RuntimeError("assigned CVXPY values do not match IPOPT x0")
+        if replay_start is not None:
+            if (
+                _layout_signature(captured_layout) != replay_start.layout_signature
+                or replay_start.complete_x0.shape != captured_x0.shape
+            ):
+                raise ValueError("replay start does not match canonical layout")
+            for item, variable in zip(layout, reduced_variables, strict=True):
+                first, last = cast(int, item["start"]), cast(int, item["stop"])
+                values = replay_start.complete_x0[first:last]
+                if bool(item["is_original_variable"]):
+                    if not np.array_equal(captured_x0[first:last], values):
+                        raise ValueError(
+                            "replay start differs from assigned model values"
+                        )
+                else:
+                    variable.value = values.reshape(variable.shape, order="F").copy()
+            captured_x0 = replay_start.complete_x0.copy()
+            data = {**data, "x0": captured_x0.copy()}
+        if start_observer is not None:
+            model_count = sum(
+                cast(int, item["stop"]) - cast(int, item["start"])
+                for item in captured_layout
+                if bool(item["is_original_variable"])
+            )
+            start_observer(
+                IPOPTStartEvidence(
+                    complete_x0=captured_x0,
+                    layout=captured_layout,
+                    layout_signature=_layout_signature(captured_layout),
+                    model_coordinate_count=model_count,
+                    auxiliary_coordinate_count=captured_x0.size - model_count,
+                    object_ids_before=before,
+                    object_ids_after=_object_ids(build),
+                )
+            )
         return IPOPT.solve_via_data(
             self, data, warm_start, verbose, solver_opts, solver_cache
         )
@@ -1144,6 +1189,8 @@ def _execute_attempt(
     source_attempt_id: str | None,
     prebuilt: OPFBuild | None = None,
     phase_observer: PhaseObserver | None = None,
+    start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
+    replay_start: IPOPTStartEvidence | None = None,
 ) -> ACAttemptRecord:
     build = prebuilt
     retained_assigned: Mapping[str, np.ndarray] | None = None
@@ -1160,7 +1207,15 @@ def _execute_attempt(
             retained_assigned = assigned_start
         if phase_observer is not None:
             phase_observer("before_ac_solve", iteration, slot.ordinal)
-        run = solve_ac_with_verified_x0(build, solve_config)
+        if start_observer is None and replay_start is None:
+            run = solve_ac_with_verified_x0(build, solve_config)
+        else:
+            run = solve_ac_with_verified_x0(
+                build,
+                solve_config,
+                start_observer=start_observer,
+                replay_start=replay_start,
+            )
         if phase_observer is not None:
             phase_observer("after_ac_solve", iteration, slot.ordinal)
     except Exception as exc:
@@ -1255,7 +1310,7 @@ def _execute_attempt(
     )
 
 
-def execute_streaming_window(
+def validate_window_request(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     solve_config: HierarchicalSolveConfig,
@@ -1263,14 +1318,12 @@ def execute_streaming_window(
     iteration: int,
     realized_soc_mwh: Mapping[str, float],
     preceding_controlling_attempt: ACAttemptRecord | CausalControllerSource | None,
-    phase_observer: PhaseObserver | None = None,
     *,
     trajectory_start: int = 0,
     trajectory_stop: int | None = None,
     trajectory_initial_soc_mwh: Mapping[str, float] | None = None,
-    primary_timeout_seconds: float | None = None,
-) -> StreamingWindowResult:
-    """Resolve one frozen nine-slot AC window and advance at most once."""
+) -> tuple[int, dict[str, float], dict[str, float]]:
+    """Validate the shared physical request before building any AC attempt."""
     validate_streaming_policy(policy)
     validate_solve_config(solve_config)
     if not outer.accepted_primal:
@@ -1315,6 +1368,37 @@ def execute_streaming_window(
     )
     stop = min(iteration + policy.ac_window_steps, stop_boundary)
     target = outer.target_at(stop)
+    return stop, initial, target
+
+
+def execute_streaming_window(
+    inputs: HierarchicalInputs,
+    policy: HierarchicalPolicy,
+    solve_config: HierarchicalSolveConfig,
+    outer: StreamingOuterPlan,
+    iteration: int,
+    realized_soc_mwh: Mapping[str, float],
+    preceding_controlling_attempt: ACAttemptRecord | CausalControllerSource | None,
+    phase_observer: PhaseObserver | None = None,
+    *,
+    trajectory_start: int = 0,
+    trajectory_stop: int | None = None,
+    trajectory_initial_soc_mwh: Mapping[str, float] | None = None,
+    primary_timeout_seconds: float | None = None,
+) -> StreamingWindowResult:
+    """Resolve one frozen nine-slot AC window and advance at most once."""
+    stop, initial, target = validate_window_request(
+        inputs,
+        policy,
+        solve_config,
+        outer,
+        iteration,
+        realized_soc_mwh,
+        preceding_controlling_attempt,
+        trajectory_start=trajectory_start,
+        trajectory_stop=trajectory_stop,
+        trajectory_initial_soc_mwh=trajectory_initial_soc_mwh,
+    )
     ids = _storage_ids(inputs.storage)
     slots = _p0_registry(iteration, trajectory_start=trajectory_start)
     records: list[ACAttemptRecord] = []

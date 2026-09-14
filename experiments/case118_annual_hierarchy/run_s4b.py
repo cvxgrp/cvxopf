@@ -751,6 +751,10 @@ def _run_shard_worker_body(
         expected_commit=str(context["git_commit"]),
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
+    if authority.get("recovery_policy") is not None:
+        raise ValueError(
+            "speculative policy requires the shared-helper root, not a sequential shard worker"
+        )
     transition = None
     if execution_scope == ANNUAL_SCOPE:
         from experiments.case118_annual_hierarchy.s5_source_transition import (

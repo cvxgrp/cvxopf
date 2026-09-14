@@ -106,6 +106,12 @@ def _annual_registry_sha256() -> str:
 def validate_supervision(value: object) -> Mapping[str, object]:
     """Independently reconstruct one annual wave supervision record."""
     record = _mapping(value, "S5 supervision")
+    if record.get("schema_version") == 2:
+        from experiments.case118_annual_hierarchy.s5_speculative_runtime import (
+            validate_wave,
+        )
+
+        return validate_wave(record)
     requested = record.get("requested_shards")
     if (
         record.get("schema_version") != SCHEMA_VERSION
@@ -450,6 +456,12 @@ def analyze_s5(
         validate_supervision(json.loads(path.read_text())) for path in supervision_paths
     ]
     for record in supervision:
+        if record.get("schema_version") == 2:
+            from experiments.case118_annual_hierarchy.s5_speculative_runtime import (
+                validate_wave,
+            )
+
+            validate_wave(record, output_root)
         if not historical_provenance_matches(
             record, transition, context, authority, output_root=output_root
         ):
@@ -772,18 +784,42 @@ def _transition_summary(
     """Retain the reviewed source chain without flattening its distinct events."""
     if transition is None:
         return None
-    if (
-        transition.get("classification")
-        == "applied_s5_window_retry_source_continuation"
-    ):
+    if transition.get("classification") == "applied_s5_speculative_policy_continuation":
+        from experiments.case118_annual_hierarchy.s5_speculative_continuation import (
+            RECORD_NAME as SPECULATIVE_RECORD,
+        )
+
+        contract = _mapping(transition["contract"], "speculative contract")
+        return {
+            "classification": transition["classification"],
+            "latest_path": SPECULATIVE_RECORD,
+            "latest_sha256": sha256_path(output_root / SPECULATIVE_RECORD),
+            "contract_sha256": transition["contract_sha256"],
+            "first_affected_interval": contract["first_affected_interval"],
+            "policy": contract["policy"],
+            "predecessor": _transition_summary(
+                output_root,
+                _mapping(transition["predecessor_transition"], "predecessor"),
+            ),
+        }
+    if transition.get("classification") in {
+        "applied_s5_window_retry_source_continuation",
+        "applied_s5_recovery_audit_source_continuation",
+    }:
         from experiments.case118_annual_hierarchy.s5_retry_transition import (
+            AUDIT_SPEC,
             RECORD_NAME as RETRY_RECORD_NAME,
         )
 
+        record_name = (
+            AUDIT_SPEC.record_name
+            if transition["classification"] == AUDIT_SPEC.record_classification
+            else RETRY_RECORD_NAME
+        )
         return {
             "classification": transition["classification"],
-            "latest_path": RETRY_RECORD_NAME,
-            "latest_sha256": sha256_path(output_root / RETRY_RECORD_NAME),
+            "latest_path": record_name,
+            "latest_sha256": sha256_path(output_root / record_name),
             "contract": transition["contract"],
             "published_utc": transition["published_utc"],
             "predecessor": _transition_summary(

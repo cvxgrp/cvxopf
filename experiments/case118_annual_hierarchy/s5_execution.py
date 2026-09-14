@@ -64,6 +64,17 @@ SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/s5_operator_intervention.py",
     "experiments/case118_annual_hierarchy/s5_retry_transition.py",
     "experiments/case118_annual_hierarchy/s5_source_transition.py",
+    "experiments/case118_annual_hierarchy/S5_SPECULATIVE_RECOVERY_PLAN.md",
+    "experiments/case118_annual_hierarchy/s5_speculative_archive.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_attempt.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_continuation.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_policy.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_process.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_runtime.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_supervisor.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_transaction.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_window.py",
+    "experiments/case118_annual_hierarchy/s5_speculative_worker.py",
     "experiments/case118_annual_hierarchy/streaming_archive.py",
     "experiments/case118_annual_hierarchy/streaming_runner.py",
     "experiments/case118_annual_hierarchy/streaming_schema.py",
@@ -202,6 +213,15 @@ def load_numerical_authority(
         "source_fingerprint": expected_source_fingerprint,
     }
     transition_hash = value.get("source_version_contract_sha256")
+    if value.get("recovery_policy") is not None:
+        from experiments.case118_annual_hierarchy.s5_speculative_policy import (
+            POLICY_NAME,
+        )
+
+        if value["recovery_policy"] != POLICY_NAME or transition_hash is None:
+            raise ValueError("speculative execution needs reviewed policy continuation")
+        expected["recovery_policy"] = POLICY_NAME
+        expected["maximum_solver_processes"] = 3
     if transition_hash is not None:
         if (
             not isinstance(transition_hash, str)

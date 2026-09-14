@@ -185,6 +185,19 @@ def _require_completed_worker_binding(
     transition = load_transition(output_root)
     for path in _supervision_paths(output_root, wave_index):
         record = _mapping(json.loads(path.read_text()), "retained S5 supervision")
+        if record.get("schema_version") == 2:
+            from experiments.case118_annual_hierarchy.s5_speculative_runtime import (
+                validate_wave,
+            )
+
+            validated = validate_wave(record, output_root)
+            if not historical_provenance_matches(
+                record, transition, context, authority, output_root=output_root
+            ):
+                raise ValueError("speculative completed shard provenance mismatch")
+            if validated["worker_results"].get(shard_id) == worker:
+                return
+            continue
         if (
             record.get("schema_version") != SCHEMA_VERSION
             or record.get("manifest_sha256") != EXPECTED_MANIFEST_SHA256
@@ -275,6 +288,16 @@ def supervise_wave(
         expected_source_fingerprint=str(context["source_fingerprint"]),
     )
     require_current_transition(output_root, context, authority)
+    if authority.get("recovery_policy") is not None:
+        from experiments.case118_annual_hierarchy.s5_speculative_runtime import run_wave
+
+        return run_wave(
+            shard_ids,
+            authority_path=authority_path,
+            output_root=output_root,
+            reviewed_resume=reviewed_resume,
+            poll_seconds=poll_seconds,
+        )
     _outer()
     directories = [_shard_directory(item, output_root) for item in shard_ids]
     if any(path.exists() for path in directories) and not reviewed_resume:

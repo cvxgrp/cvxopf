@@ -146,6 +146,35 @@ def test_completed_checkpoint_finalization_retains_original_source(
     }
     assert chain.worker_source_matches(root / "shard-000", worker, context, record)
     assert binding["new_intervals_executed"] == 0
+    later = {
+        "classification": "applied_s5_speculative_policy_continuation",
+        "contract_sha256": "9" * 64,
+        "contract": {
+            "continuation_execution": {
+                "context": {**context, "source_fingerprint": "9" * 64}
+            }
+        },
+        "predecessor_transition": record,
+    }
+    # The same historical audit-only worker remains valid across successive
+    # continuations, without rewriting its identity under the latest policy.
+    assert chain.worker_source_matches(root / "shard-000", worker, context, later)
+    another = {"contract_sha256": "8" * 64, "predecessor_transition": later}
+    assert chain.worker_source_matches(root / "shard-000", worker, context, another)
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.worker_source_matches(
+            root / "shard-000",
+            worker,
+            {**context, "source_fingerprint": "9" * 64},
+            later,
+        )
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.worker_source_matches(
+            root / "shard-000",
+            worker,
+            context,
+            {**later, "predecessor_transition": None},
+        )
     assert not chain.worker_source_matches(
         root / "shard-000",
         {**worker, "execution_source_fingerprint": "f" * 64},
@@ -164,6 +193,8 @@ def test_completed_checkpoint_finalization_retains_original_source(
     checkpoint_path.write_text(json.dumps(checkpoint))
     with pytest.raises(ValueError, match="audit-only finalization"):
         chain.worker_source_matches(root / "shard-000", worker, context, record)
+    with pytest.raises(ValueError, match="audit-only finalization"):
+        chain.worker_source_matches(root / "shard-000", worker, context, later)
 
 
 def test_retry_transition_publishes_and_survives_pointer_advancement(
