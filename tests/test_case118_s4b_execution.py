@@ -32,6 +32,60 @@ from experiments.case118_annual_hierarchy.streaming_archive import (
 from experiments.case118_annual_hierarchy.streaming_schema import WindowIndexEntry
 
 
+def _recovery_evidence(ordinals):
+    attempts = [
+        {"slot_state": "source_unavailable", "attempt_id": f"attempt-{i}"}
+        for i in range(9)
+    ]
+    for ordinal in ordinals:
+        attempts[ordinal].update(
+            slot_state="executed",
+            audit={"accepted_primal": ordinal == ordinals[-1]},
+        )
+    archive = {
+        "attempts": attempts,
+        "executed_interval": {"controlling_attempt_id": f"attempt-{ordinals[-1]}"},
+    }
+    events = [
+        {"phase": phase, "attempt_ordinal": ordinal}
+        for ordinal in ordinals
+        for phase in ("before_ac_solve", "after_ac_solve")
+    ]
+    return archive, events
+
+
+@pytest.mark.parametrize("ordinals", [(1, 2), (1, 6), (1, 6, 7, 8), (1, 2, 3)])
+def test_recovery_phase_audit_matches_executed_archive_slots(ordinals):
+    archive, events = _recovery_evidence(ordinals)
+    s4b_execution._validate_recovery_solve_phases(archive, events)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "reordered", "extra", "wrong_slot"])
+def test_recovery_phase_audit_rejects_inconsistent_events(mutation):
+    archive, events = _recovery_evidence((1, 6))
+    if mutation == "missing":
+        events.pop()
+    elif mutation == "reordered":
+        events[0], events[1] = events[1], events[0]
+    elif mutation == "extra":
+        events.extend(deepcopy(events[-2:]))
+    else:
+        events[-1]["attempt_ordinal"] = 2
+    with pytest.raises(ValueError, match="phases disagree"):
+        s4b_execution._validate_recovery_solve_phases(archive, events)
+
+
+@pytest.mark.parametrize("mutation", ["target_free", "wrong_id", "rejected"])
+def test_recovery_phase_audit_requires_accepted_final_controller(mutation):
+    archive, events = _recovery_evidence((1,) if mutation == "target_free" else (1, 6))
+    if mutation == "wrong_id":
+        archive["executed_interval"]["controlling_attempt_id"] = "attempt-2"
+    elif mutation == "rejected":
+        archive["attempts"][6]["audit"]["accepted_primal"] = False
+    with pytest.raises(ValueError, match="controller chain"):
+        s4b_execution._validate_recovery_solve_phases(archive, events)
+
+
 def test_annual_signposts_verify_once_and_preserve_every_row(monkeypatch):
     outer = run_s4b._outer()
     calls = []

@@ -855,6 +855,46 @@ def _operator_intervention_timing(
     }
 
 
+def _validate_recovery_solve_phases(
+    archive: Mapping[str, object], recovery_events: Sequence[object]
+) -> None:
+    """Match solve events to the recovery tree already verified in the archive."""
+    attempts = cast(Sequence[Mapping[str, object]], archive["attempts"])
+    # Source-unavailable slots are skipped. A failed target-free solve can
+    # therefore lead directly to a causal perturbation (e.g. slots 1 -> 6).
+    executed = [
+        (ordinal, attempt)
+        for ordinal, attempt in enumerate(attempts)
+        if ordinal > 0 and attempt["slot_state"] == "executed"
+    ]
+    expected = [
+        (phase, ordinal)
+        for ordinal, _ in executed
+        for phase in ("before_ac_solve", "after_ac_solve")
+    ]
+    observed = [
+        (event["phase"], event["attempt_ordinal"])
+        for raw in recovery_events
+        if (event := _mapping(raw, "recovery phase"))["phase"]
+        in {"before_ac_solve", "after_ac_solve"}
+    ]
+    if observed != expected:
+        raise ValueError("S4b recovery solve phases disagree with archived attempts")
+    controlling_id = _mapping(archive["executed_interval"], "executed interval")[
+        "controlling_attempt_id"
+    ]
+    if (
+        not executed
+        or executed[-1][0] == 1
+        or executed[-1][1]["attempt_id"] != controlling_id
+        or _mapping(executed[-1][1]["audit"], "recovery controller audit")[
+            "accepted_primal"
+        ]
+        is not True
+    ):
+        raise ValueError("S4b timeout recovery controller chain is invalid")
+
+
 def audit_shard(
     directory: Path,
     *,
@@ -1046,34 +1086,7 @@ def audit_shard(
                 after = recovery_phase_times.get(("after_ac_build", ordinal))
                 if before is not None and after is not None:
                     construction_seconds += after - before
-            solve_events = [
-                (
-                    _mapping(item, "recovery phase")["phase"],
-                    _mapping(item, "recovery phase")["attempt_ordinal"],
-                )
-                for item in recovery_events
-                if _mapping(item, "recovery phase")["phase"]
-                in {"before_ac_solve", "after_ac_solve"}
-            ]
-            if solve_events[:4] != [
-                ("before_ac_solve", 1),
-                ("after_ac_solve", 1),
-                ("before_ac_solve", 2),
-                ("after_ac_solve", 2),
-            ]:
-                raise ValueError("S4b recovery solve phases violate frozen ordering")
-            executed_id = _mapping(archive["executed_interval"], "executed interval")[
-                "controlling_attempt_id"
-            ]
-            if (
-                attempts[1]["slot_state"] != "executed"
-                or _mapping(attempts[1]["audit"], "target-free audit")[
-                    "accepted_primal"
-                ]
-                is not True
-                or attempts[2]["attempt_id"] != executed_id
-            ):
-                raise ValueError("S4b timeout recovery controller chain is invalid")
+            _validate_recovery_solve_phases(archive, recovery_events)
             recovery_seconds += float(cast(float, recovery["wall_seconds"]))
         if iteration > int(cast(int, _mapping(shard["interval"], "interval")["start"])):
             shifted_opportunities += 1
