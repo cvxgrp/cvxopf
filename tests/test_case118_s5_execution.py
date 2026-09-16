@@ -143,6 +143,36 @@ def test_numerical_authority_is_exact(tmp_path: Path) -> None:
         )
 
 
+def test_numerical_authority_accepts_exact_speculative_policy_revision(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "authority.json"
+    payload = {
+        **_authority(),
+        "source_version_contract_sha256": "c" * 64,
+        "recovery_policy": "causal_first_speculative_v1",
+        "maximum_solver_processes": 3,
+        "recovery_policy_revision": 2,
+    }
+    path.write_text(json.dumps(payload))
+    assert (
+        s5.load_numerical_authority(
+            path,
+            expected_execution_commit="a" * 40,
+            expected_source_fingerprint="b" * 64,
+        )
+        == payload
+    )
+    payload["recovery_policy_revision"] = 3
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="policy revision"):
+        s5.load_numerical_authority(
+            path,
+            expected_execution_commit="a" * 40,
+            expected_source_fingerprint="b" * 64,
+        )
+
+
 def test_annual_registry_freezes_six_adjacent_two_worker_waves() -> None:
     registry = s5.annual_registry()
     assert registry["waves"] == [list(item) for item in s5.ANNUAL_WAVES]

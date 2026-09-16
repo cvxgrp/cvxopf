@@ -223,6 +223,11 @@ def load_numerical_authority(
             raise ValueError("speculative execution needs reviewed policy continuation")
         expected["recovery_policy"] = POLICY_NAME
         expected["maximum_solver_processes"] = 3
+        revision = value.get("recovery_policy_revision")
+        if revision is not None:
+            if revision != 2:
+                raise ValueError("speculative execution policy revision mismatch")
+            expected["recovery_policy_revision"] = 2
     if transition_hash is not None:
         if (
             not isinstance(transition_hash, str)
