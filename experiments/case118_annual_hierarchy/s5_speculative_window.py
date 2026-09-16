@@ -18,6 +18,7 @@ from experiments.case118_annual_hierarchy.s5_speculative_archive import (
 from experiments.case118_annual_hierarchy.s5_speculative_policy import (
     AttemptSpec,
     Completion,
+    FINAL_SOURCE_SLOTS,
     POLICY_NAME,
     select_uncapped_replay,
 )
@@ -46,6 +47,75 @@ def _attempt_directory(directory: Path, relative: str) -> Path:
     if not path.is_relative_to(directory.parent.resolve()):
         raise ValueError("attempt is outside the retained run")
     return path
+
+
+def _validate_final_recovery(
+    specs: Sequence[AttemptSpec],
+    completions: Mapping[str, Mapping[str, Any]],
+    lifecycles: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Reconstruct final-start provenance and the lane freed before each launch."""
+    finals = sorted(
+        (spec for spec in specs if 11 <= spec.order <= 18), key=lambda item: item.order
+    )
+    if not finals:
+        return
+    primary = next((spec for spec in specs if spec.order == 0), None)
+    secondary = next((spec for spec in specs if spec.order == 9), None)
+    if primary is None:
+        raise ValueError("final recovery lacks its primary contender")
+    if len({spec.order for spec in finals}) != len(finals) or any(
+        spec.source_slot != FINAL_SOURCE_SLOTS[spec.order - 11] for spec in finals
+    ):
+        raise ValueError("final recovery source sequence differs from policy")
+    for spec in finals:
+        launch = lifecycles[spec.attempt_id]["launched_monotonic"]
+
+        def freed(contender: AttemptSpec | None) -> bool:
+            if contender is None:
+                return True
+            completion = completions.get(contender.attempt_id)
+            return bool(
+                completion is not None
+                and completion["outcome"] != "accepted"
+                and lifecycles[contender.attempt_id]["reaped_monotonic"] <= launch
+            )
+
+        if not (freed(primary) or freed(secondary)):
+            raise ValueError("final recovery began without a freed uncapped lane")
+        predecessors = [
+            item
+            for item in completions.values()
+            if invocation(item["attempt"]).order < spec.order
+            and invocation(item["attempt"]).source_slot == spec.source_slot
+            and item["complete_x0_retained"] is True
+            and item["outcome"] != "accepted"
+        ]
+        expected_replay = (
+            invocation(
+                max(
+                    predecessors,
+                    key=lambda item: invocation(item["attempt"]).order,
+                )["attempt"]
+            ).attempt_id
+            if predecessors
+            else None
+        )
+        if spec.replay_of != expected_replay:
+            raise ValueError("final recovery retained-start replay differs")
+        if spec.source_slot in (2, 3, 4, 5):
+            accepted_sources = [
+                item
+                for item in completions.values()
+                if invocation(item["attempt"]).source_slot == 1
+                and item["outcome"] == "accepted"
+                and lifecycles[invocation(item["attempt"]).attempt_id][
+                    "reaped_monotonic"
+                ]
+                <= launch
+            ]
+            if not accepted_sources:
+                raise ValueError("final dependent start lacks accepted target-free")
 
 
 def publish_window(
@@ -225,6 +295,7 @@ def validate_window(
     }
     winners = []
     specs = []
+    lifecycles: dict[str, Mapping[str, Any]] = {}
     for key, relative in window["candidate_directories"].items():
         attempt_dir = _attempt_directory(directory, relative)
         life_path = attempt_dir / "lifecycle.json"
@@ -237,6 +308,7 @@ def validate_window(
         life = json.loads(life_path.read_text())
         spec = invocation(life["invocation"])
         specs.append(spec)
+        lifecycles[key] = life
         if (
             spec.attempt_id != key
             or spec.window.iteration != iteration
@@ -335,6 +407,18 @@ def validate_window(
         ]
         if len(replays) != 1 or select_uncapped_replay(prior) != replays[0]:
             raise ValueError("uncapped replay does not match the frozen ranking rule")
+    extended = [spec for spec in specs if spec.order == 10]
+    if extended:
+        first_free = next((spec for spec in specs if spec.order == 4), None)
+        if (
+            len(extended) != 1
+            or first_free is None
+            or extended[0].source_slot != 1
+            or extended[0].replay_of != first_free.attempt_id
+            or completions[first_free.attempt_id]["outcome"] != "timeout"
+        ):
+            raise ValueError("extended target-free retry differs from frozen policy")
+    _validate_final_recovery(specs, completions, lifecycles)
     if projected != window["attempts"]:
         # Candidate directories use launch order; decision batches can differ.
         if {item["attempt_id"]: item for item in projected} != {

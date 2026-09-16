@@ -448,6 +448,87 @@ def test_operator_intervention_requires_external_identity_and_exact_slot8_eviden
         _validate_operator(changed, identity)
 
 
+def test_operator_intervention_can_retain_target_free_source_for_copied_controller():
+    iteration = 6122
+    preceding = "s4b-shard-008/ac-006121/spec-v1-02"
+    attempts = []
+    for ordinal in range(9):
+        state = "executed" if ordinal in {1, 2} else "operator_bypassed"
+        attempt = _attempt(
+            iteration,
+            ordinal,
+            accepted=ordinal in {1, 2},
+            controlling=ordinal == 2,
+            state=state,
+            preceding_id=preceding,
+            steps=3,
+        )
+        if ordinal == 2:
+            attempt["source_attempt_id"] = attempt_id(iteration, 1)
+        if state == "operator_bypassed":
+            attempt.update(
+                source_kind=None,
+                source_attempt_id=None,
+                reason="reviewed_operator_intervention:test fixture",
+                solver_executed=False,
+                supplied_executed_action=False,
+                assigned_start=None,
+                solver_x0=None,
+                solver_x0_layout=None,
+                solver_evidence=None,
+                result=None,
+                audit=None,
+                structural_signature=None,
+                causal_source=None,
+            )
+        attempts.append(attempt)
+    identity = {
+        "classification": "reviewed_operator_selected_speculative_recovery",
+        "contract_sha256": "a" * 64,
+        "target_free_result_sha256": "b" * 64,
+        "accepted_result_sha256": "c" * 64,
+        "selected_attempt_id": attempt_id(iteration, 2),
+    }
+    archive = {
+        "schema_version": 1,
+        "iteration": iteration,
+        "interval_start": iteration,
+        "interval_stop": iteration + 3,
+        "formulation": "ac",
+        "result_dimensions": RESULT_DIMENSIONS,
+        "storage_device_ids": ["battery"],
+        "initial_soc_mwh": [5.0],
+        "target_soc_mwh": [5.0],
+        "delta_hours": 1.0,
+        "soc_tolerance_mwh": SOC_TOLERANCE_MWH,
+        "preceding_controlling_attempt_id": preceding,
+        "attempts": attempts,
+        "executed_interval": {
+            "controlling_attempt_id": attempt_id(iteration, 2),
+            "b_mw": [0.0],
+        },
+        "post_step_soc_mwh": [5.0],
+        "operator_intervention": identity,
+    }
+    assert (
+        validate_window_archive(
+            archive,
+            expected_soc_tolerance_mwh=SOC_TOLERANCE_MWH,
+            expected_residual_tolerances=RESIDUAL_TOLERANCES,
+            expected_inner_terminal_policy="hard_equality",
+            expected_horizon_steps=6726,
+            expected_ac_window_steps=3,
+            expected_result_dimensions=RESULT_DIMENSIONS,
+            expected_delta_hours=1.0,
+            expected_outer_boundary_soc_mwh={6125: {"battery": 5.0}},
+            expected_trajectory_start=5956,
+            expected_primary_timeout_seconds=300.0,
+            expected_operator_intervention=identity,
+        )
+        == archive
+    )
+
+
 def _checkpoint(entries, *, initial=5.0, realized=4.0):
     return checkpoint_payload(
         source_fingerprint="source",

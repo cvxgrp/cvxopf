@@ -159,12 +159,25 @@ class WaveAdapter:
                         if item["attempt_id"] == selected
                     )
                 )
-        free_id = AttemptSpec(spec.window, 4, 1).attempt_id
-        free_directory = (
-            self.directories.get(free_id)
-            if spec.source_slot in (2, 3, 4, 5) and spec.order != 9
-            else None
-        )
+        free_directory = None
+        if spec.source_slot in (2, 3, 4, 5) and spec.replay_of is None:
+            candidates = []
+            for path in self.directories.values():
+                result_path = path / "result.json"
+                if not result_path.is_file():
+                    continue
+                payload = json.loads(result_path.read_text())
+                candidate = invocation(payload["invocation"])
+                audit = cast(Mapping[str, Any], payload["attempt"]).get("audit")
+                if (
+                    candidate.window == spec.window
+                    and candidate.source_slot == 1
+                    and isinstance(audit, Mapping)
+                    and audit.get("accepted_primal") is True
+                ):
+                    candidates.append((candidate.order, path))
+            if candidates:
+                free_directory = max(candidates)[1]
         replay_directory = self.directories.get(spec.replay_of or "")
         serialized = source_payload(source)
         request = {
@@ -264,6 +277,8 @@ def _validate_helper_lifecycle(
     primaries: dict[WindowKey, AttemptSpec] = {}
     returned: set[str] = set()
     waiting: dict[WindowKey, float] = {}
+    shared_helpers: set[str] = set()
+    replacement_helpers: set[str] = set()
     peak = 0
     for event in events:
         raw = event["invocation"]
@@ -278,9 +293,7 @@ def _validate_helper_lifecycle(
         if kind == "helper_eligible":
             if spec.order != 0 or window not in primaries or window in waiting:
                 raise ValueError("helper eligibility lacks a unique primary request")
-            if any(
-                item.order > 0 and item.window == window for item in active.values()
-            ):
+            if any(active[item].window == window for item in shared_helpers):
                 raise ValueError("active helper cannot request another lease")
             if lifecycles is not None:
                 life = lifecycles[key]
@@ -302,17 +315,31 @@ def _validate_helper_lifecycle(
                 ):
                     raise ValueError("helper eligibility precedes primary solve budget")
             waiting[window] = stamp
-        elif kind == "launched":
+        elif kind in {"launched", "replacement_launched"}:
             if key in seen:
                 raise ValueError("duplicate contender launch")
             if spec.order == 0:
+                if kind != "launched":
+                    raise ValueError("a primary cannot use a replacement lane")
                 if window in primaries or any(
                     item.window.shard_id == window.shard_id for item in active.values()
                 ):
                     raise ValueError("overlapping primary windows on one shard")
                 primaries[window] = spec
+            elif kind == "replacement_launched":
+                primary = primaries.get(window)
+                if (
+                    spec.order < 11
+                    or primary is None
+                    or primary.attempt_id not in returned
+                    or any(
+                        active[item].window == window for item in replacement_helpers
+                    )
+                ):
+                    raise ValueError("replacement launch lacks a freed primary lane")
+                replacement_helpers.add(key)
             else:
-                if any(item.order > 0 for item in active.values()):
+                if shared_helpers:
                     raise ValueError(
                         "multiple shared helpers are simultaneously active"
                     )
@@ -321,6 +348,7 @@ def _validate_helper_lifecycle(
                 if window != min(waiting, key=lambda item: (waiting[item], item)):
                     raise ValueError("helper launch violates waiting order")
                 waiting.pop(window)
+                shared_helpers.add(key)
             seen.add(key)
             active[key] = spec
             peak = max(peak, len(active))
@@ -330,11 +358,19 @@ def _validate_helper_lifecycle(
             if key not in active:
                 raise ValueError("contender completion lacks an active launch")
             active.pop(key)
+            shared_helpers.discard(key)
+            replacement_helpers.discard(key)
             if kind == "audited_return":
                 returned.add(key)
         elif kind in {"checkpoint_advanced", "helpers_exhausted"}:
             waiting.pop(window, None)
     return peak, set(active)
+
+
+def _wave_record_concurrency(events: Sequence[Mapping[str, Any]]) -> int:
+    """Return the validated process peak published in a wave record."""
+    peak, _ = _validate_helper_lifecycle(events)
+    return peak
 
 
 def validate_wave(
@@ -410,7 +446,7 @@ def validate_wave(
         all_launched = {
             invocation(item["invocation"]).attempt_id
             for item in record["events"]
-            if item["kind"] == "launched"
+            if item["kind"] in {"launched", "replacement_launched"}
         }
         if not all_launched <= set(record["contender_lifecycles"]):
             raise ValueError("wave omits a launched contender's cleanup")
@@ -639,22 +675,10 @@ def run_wave(
             if isinstance(exc, (KeyboardInterrupt, WaveInterrupted)):
                 break
     signal.signal(signal.SIGTERM, prior_handler)
-    peak, active = 0, set()
-    for event in backend.events:
-        raw = event["invocation"]
-        if raw is None:
-            continue
-        attempt_key = invocation(cast(Mapping[str, Any], raw)).attempt_id
-        if event["kind"] == "launched":
-            active.add(attempt_key)
-            peak = max(peak, len(active))
-        elif event["kind"] in {
-            "audited_return",
-            "solve_budget",
-            "lost_race",
-            "memory_pressure",
-        }:
-            active.discard(attempt_key)
+    # Derive the published peak with the same lifecycle reconstruction used by
+    # validation. In particular, local replacement lanes are real processes
+    # and must count alongside primaries and the shared helper.
+    peak = _wave_record_concurrency(backend.events)
     record = {
         "schema_version": 2,
         "policy": POLICY_NAME,

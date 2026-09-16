@@ -206,15 +206,20 @@ def prepare_attempt(
         }
     )
     slot = invocation.source_slot
-    if invocation.order == 9:
+    replay_order = invocation.order in {9, 10} or invocation.order >= 11
+    if replay_order and replay is not None:
         if replay is None or (
             replay.invocation.attempt_id != invocation.replay_of
             or replay.invocation.source_slot != slot
             or replay.invocation.window != invocation.window
-            or not 1 <= replay.invocation.order <= 8
+            or replay.invocation.order == 0
             or replay.request_sha256 != request_sha256
         ):
-            raise ValueError("uncapped replay requires the exact bounded start/request")
+            raise ValueError(
+                "recovery replay requires the exact bounded/retained start/request"
+            )
+    elif replay_order and invocation.replay_of is not None:
+        raise ValueError("recovery replay is missing its retained start")
     elif replay is not None:
         raise ValueError("bounded/primary invocation cannot receive a replay start")
     if slot >= 6 and preceding is None:

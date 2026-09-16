@@ -302,19 +302,71 @@ def test_hard_resource_stop_reaps_all_without_advancement(tmp_path, rss):
     assert read_checkpoint(tmp_path / A.shard_id)["next_global_iteration"] == 0
 
 
-def test_uncapped_replay_follows_finite_queue_and_never_times_out(tmp_path):
+def test_extended_target_free_and_final_recovery_preserve_primary(tmp_path):
     backend, supervisor = setup(tmp_path, two=False)
     tick(backend, supervisor, 300)
     for now in (600, 900, 1200):
         tick(backend, supervisor, now)
     tf = AttemptSpec(A, 4, 1)
-    backend.ready[tf.attempt_id] = Completion(tf, "rejected", True)
+    backend.ready[tf.attempt_id] = Completion(tf, "timeout", True)
     tick(backend, supervisor, 1201)
-    replay = next(spec for spec in backend.running.values() if spec.order == 9)
-    assert replay.replay_of == AttemptSpec(A, 1, 6).attempt_id
-    tick(backend, supervisor, 20_000)
-    assert replay.attempt_id in backend.running
+    retry = next(spec for spec in backend.running.values() if spec.order == 10)
+    assert retry.replay_of == tf.attempt_id and retry.budget_seconds == 1800
+    tick(backend, supervisor, 2000)
+    assert retry.attempt_id in backend.running
     assert supervisor.races[A].primary.attempt_id in backend.running
+
+
+def test_failed_primary_lane_runs_final_while_secondary_keeps_helper_lease(tmp_path):
+    backend, supervisor = setup(tmp_path, two=False)
+    tick(backend, supervisor, 300)
+    now = 301
+    for slot in (6, 7, 8, 1, 2, 3, 4, 5):
+        helper = next(spec for spec in backend.running.values() if spec.order > 0)
+        assert helper.source_slot == slot
+        backend.ready[helper.attempt_id] = (
+            accepted(helper) if slot == 1 else Completion(helper, "rejected", True, 1.0)
+        )
+        tick(backend, supervisor, now)
+        now += 1
+    secondary = next(spec for spec in backend.running.values() if spec.order == 9)
+    assert supervisor.queue.active == A
+    primary = supervisor.races[A].primary
+    backend.ready[primary.attempt_id] = Completion(primary, "rejected")
+    tick(backend, supervisor, now)
+    final = next(spec for spec in backend.running.values() if spec.order >= 11)
+    assert final.order == 12
+    assert secondary.attempt_id in backend.running
+    assert supervisor.queue.active == A
+    assert secondary.attempt_id in supervisor.leased_helpers
+    assert final.attempt_id not in supervisor.leased_helpers
+    supervisor.add_window(B, has_preceding=True, now=now)
+    tick(backend, supervisor, now + 300)
+    assert B in supervisor.queue._waiting
+    backend.ready[secondary.attempt_id] = Completion(secondary, "rejected")
+    tick(backend, supervisor, now + 301)
+    assert supervisor.queue.active == B
+    assert any(
+        spec.window == B and spec.order == 1 for spec in backend.running.values()
+    )
+    assert final.attempt_id in supervisor.replacement_helpers
+    peer_helper = next(
+        spec
+        for spec in backend.running.values()
+        if spec.window == B and spec.order == 1
+    )
+    backend.ready[peer_helper.attempt_id] = accepted(peer_helper)
+    tick(backend, supervisor, now + 302)
+    finals = [
+        spec
+        for spec in backend.running.values()
+        if spec.window == A and spec.order >= 11
+    ]
+    assert {spec.order for spec in finals} == {12, 13}
+    assert sum(spec.attempt_id in supervisor.leased_helpers for spec in finals) == 1
+    assert (
+        sum(spec.attempt_id in supervisor.replacement_helpers for spec in finals) == 1
+    )
 
 
 def test_exhausted_window_stops_peer_without_inventing_action(tmp_path):
@@ -326,8 +378,11 @@ def test_exhausted_window_stops_peer_without_inventing_action(tmp_path):
     tick(backend, supervisor, 1)
     tf = AttemptSpec(A, 4, 1)
     backend.ready[tf.attempt_id] = Completion(tf, "rejected")
+    tick(backend, supervisor, 2)
+    final_tf = AttemptSpec(A, 14, 1)
+    backend.ready[final_tf.attempt_id] = Completion(final_tf, "rejected")
     with pytest.raises(UnresolvedWindow):
-        tick(backend, supervisor, 2)
+        tick(backend, supervisor, 3)
     assert not backend.running
     assert read_checkpoint(tmp_path / A.shard_id)["completed_intervals"] == 0
 

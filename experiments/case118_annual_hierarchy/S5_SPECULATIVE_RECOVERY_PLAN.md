@@ -2,10 +2,11 @@
 
 Date: 2026-09-14
 
-Status: policy frozen; implementation authorized and started; **not activated**.
-Prepared from `de78353e42b5c3e23f9789a69788ccc93823c44b` in an isolated
-worktree. This document does not authorize a live stop, restart, numerical
-trial, source merge, commit, or execution-authority change.
+Status: v1 activated and retained through the stopped interval-6122 boundary;
+the persistence amendment below is implemented but pending independent review.
+The original implementation was prepared from
+`de78353e42b5c3e23f9789a69788ccc93823c44b` in an isolated worktree. This
+document does not itself authorize a restart or execution-authority change.
 
 ## Decision and purpose
 
@@ -31,6 +32,39 @@ The current [five-minute policy](FIVE_MINUTE_TIMEOUT_POLICY.md) and
 [S5 protocol](S5_PROTOCOL.md), together with their retained continuation
 records, continue to govern live execution until cutover. Do not edit their
 historical meaning or relabel existing attempts as speculative attempts.
+
+## Proposed interval-6122 recovery amendment (review pending)
+
+The stopped interval-6122 evidence showed that the original five-minute
+target-free attempt timed out, while the identical retained start returned an
+accepted target-free solution in 86.31 seconds when retried after the stop. Its
+copied hard-target solve then passed the unchanged acceptance gate in 128.71
+seconds. This motivates two narrow persistence changes without stopping or
+shortening the primary:
+
+1. If bounded target-free order 4 times out, replay that exact start once with
+   a 1,800-second solve budget while the primary continues. Acceptance unlocks
+   the ordinary bounded copied/perturbed target-free starts.
+2. Preserve the existing uncapped secondary replay chosen from the bounded
+   hard-target evidence; it continues racing the primary. Once either uncapped
+   contender returns unsuccessfully, use that freed worker for the ordered final
+   source sequence `6, 7, 8, 1, 2, 3, 4, 5` without solve-time caps while the
+   other contender continues. If both lanes become free, use both for distinct
+   final attempts, with at most two final attempts active for the window. The
+   shared helper lane still releases after each attempt and requeues behind older
+   eligible requests from the peer shard; the vacated primary lane remains local
+   to its window. Skip the secondary's exact source/start rather than solving it
+   twice. If no secondary can be constructed, begin the final sweep immediately
+   in the free helper lane. An accepted target-free retry remains a source only
+   and unlocks later hard-target starts; do not allocate its dependent starts
+   until that target-free attempt returns. The first accepted hard-target result
+   wins. Resource and operator stops remain effective.
+
+Every retry retains a distinct invocation identity, its original or newly
+derived complete start, actual timing, result, and audit. The physical model,
+hard terminal target, M17 acceptance gate, two-primary/one-helper concurrency,
+and memory limits are unchanged. This amendment requires an independently
+reviewed source/authority continuation before execution resumes.
 
 ## Frozen scheduling rules
 

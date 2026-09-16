@@ -14,6 +14,7 @@ from typing import Protocol, Sequence
 from experiments.case118_annual_hierarchy.s5_speculative_policy import (
     AttemptSpec,
     Completion,
+    FINAL_SOURCE_SLOTS,
     HelperQueue,
     WindowKey,
     WindowRace,
@@ -101,6 +102,8 @@ class SpeculativeSupervisor:
         self.queue = HelperQueue()
         self.races: dict[WindowKey, WindowRace] = {}
         self.active: dict[str, AttemptSpec] = {}
+        self.leased_helpers: set[str] = set()
+        self.replacement_helpers: set[str] = set()
         self.finished: set[WindowKey] = set()
         self.no_more_helpers: set[WindowKey] = set()
         self.last_time: float | None = None
@@ -130,17 +133,23 @@ class SpeculativeSupervisor:
             raise ValueError("supervisor clock must be finite and monotonic")
         self.last_time = now
 
-    def _launch(self, attempt: AttemptSpec, now: float) -> None:
+    def _launch(
+        self, attempt: AttemptSpec, now: float, *, replacement_lane: bool = False
+    ) -> None:
         if len(self.active) >= 3:
             raise RuntimeError("three-solver concurrency ceiling exceeded")
         # Register first so cleanup also handles a partially failed launch.
         self.active[attempt.attempt_id] = attempt
         self.backend.launch(attempt)
-        self.backend.event("launched", attempt, now)
+        self.backend.event(
+            "replacement_launched" if replacement_lane else "launched", attempt, now
+        )
 
     def _reaped(self, attempt: AttemptSpec) -> None:
         self.active.pop(attempt.attempt_id)
-        if attempt.order > 0:
+        self.replacement_helpers.discard(attempt.attempt_id)
+        if attempt.attempt_id in self.leased_helpers:
+            self.leased_helpers.remove(attempt.attempt_id)
             self.queue.release_after_reap(attempt.window)
 
     def _cancel(self, attempt: AttemptSpec, reason: str, now: float) -> None:
@@ -266,28 +275,63 @@ class SpeculativeSupervisor:
                 if self.queue.request(key, eligible_at=eligible_at):
                     self.backend.event("helper_eligible", race.primary, eligible_at)
 
+        # A returned primary contributes one replacement lane to its own window.
+        # That lane can advance the final sweep while the shared helper remains
+        # queued fairly across both shard windows.
+        admitted = self.memory_policy.admits_helper(self.backend.memory())
+        replacement_launched = False
+        if admitted:
+            for key, race in self.races.items():
+                if key in self.finished or len(self.active) >= 3:
+                    continue
+                replacement_active = any(
+                    attempt_id in self.replacement_helpers
+                    for attempt_id in self.active
+                    if self.active[attempt_id].window == key
+                )
+                if race.primary.attempt_id not in race.completed or replacement_active:
+                    continue
+                final = race.next_final()
+                if final is not None:
+                    self.replacement_helpers.add(final.attempt_id)
+                    self._launch(final, now, replacement_lane=True)
+                    replacement_launched = True
+
         # Use a fresh RSS sample after result processing/cancellation. Launch at
         # most one helper per tick, even when unavailable sources are skipped.
-        admitted = self.memory_policy.admits_helper(self.backend.memory())
+        admitted = not replacement_launched and self.memory_policy.admits_helper(
+            self.backend.memory()
+        )
         helper_window = self.queue.acquire(memory_admitted=admitted)
         if helper_window is not None:
             race = self.races[helper_window]
             prior_unavailable = set(race.unavailable)
             helper = race.next_helper()
             for order in sorted(set(race.unavailable) - prior_unavailable):
+                source_slot = (
+                    HELPER_SOURCE_SLOTS[order - 1]
+                    if 1 <= order <= 8
+                    else FINAL_SOURCE_SLOTS[order - 11]
+                )
                 self.backend.event(
                     race.unavailable[order],
-                    AttemptSpec(helper_window, order, HELPER_SOURCE_SLOTS[order - 1]),
+                    AttemptSpec(helper_window, order, source_slot),
                     now,
                 )
             if helper is None:
-                self.no_more_helpers.add(helper_window)
                 self.queue.release_after_reap(helper_window)  # no process was launched
-                self.backend.event("helpers_exhausted", race.primary, now)
+                if race.waiting_for_primary or race.waiting_for_final_source:
+                    self.backend.event(
+                        "final_recovery_waiting_for_source", race.primary, now
+                    )
+                else:
+                    self.no_more_helpers.add(helper_window)
+                    self.backend.event("helpers_exhausted", race.primary, now)
                 if self.races[helper_window].exhausted:
                     raise UnresolvedWindow(
                         f"no accepted controller for {helper_window}"
                     )
             else:
+                self.leased_helpers.add(helper.attempt_id)
                 self._launch(helper, now)
         return tuple(finished)

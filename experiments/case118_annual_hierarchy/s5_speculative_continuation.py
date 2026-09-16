@@ -40,6 +40,26 @@ def policy_identity() -> dict[str, object]:
     }
 
 
+def policy_extension_identity() -> dict[str, object]:
+    """Typed revision layered onto the already-retained v1 policy identity."""
+    return {
+        "revision": 2,
+        "target_free_retry_seconds": 1800.0,
+        "target_free_retry_runs_while_primary_continues": True,
+        "legacy_uncapped_secondary_preserved": True,
+        "final_recovery_budget_seconds": None,
+        "final_recovery_starts_when_uncapped_lane_frees": True,
+        "final_recovery_can_overlap_primary": True,
+        "final_recovery_can_overlap_secondary": True,
+        "final_recovery_max_workers": 2,
+        "final_recovery_shared_lane_requeues_fairly": True,
+        "final_recovery_source_slots": [6, 7, 8, 1, 2, 3, 4, 5],
+        "final_recovery_skips_secondary_start": True,
+        "final_recovery_stops_at_first_accepted_hard_target": True,
+        "acceptance_gate": "unchanged_m17",
+    }
+
+
 def prepare_record(
     output_root: Path,
     predecessor: Mapping[str, Any],
@@ -80,6 +100,7 @@ def prepare_record(
             )
     contract = {
         "policy": policy_identity(),
+        "policy_extension": policy_extension_identity(),
         "predecessor_transition_sha256": object_sha256(predecessor),
         "prior_execution_context": prior_context,
         "continuation_execution": {"context": dict(context)},
@@ -98,6 +119,7 @@ def prepare_record(
         "source_version_contract_sha256": digest,
         "recovery_policy": POLICY_NAME,
         "maximum_solver_processes": 3,
+        "recovery_policy_revision": 2,
     }
     if snapshots != {
         str(path.relative_to(output_root)): path.read_text() for path in paths
@@ -150,6 +172,9 @@ def _load_record(path: Path, predecessor: Mapping[str, Any]) -> dict[str, Any] |
         raise ValueError("speculative continuation identity/approval mismatch")
     context = contract["continuation_execution"]["context"]
     authority = record["new_authority"]
+    extension = contract.get("policy_extension")
+    if extension is not None and extension != policy_extension_identity():
+        raise ValueError("speculative continuation policy extension mismatch")
     if (
         context.get("git_clean") is not True
         or authority.get("execution_commit") != context.get("git_commit")
@@ -157,6 +182,7 @@ def _load_record(path: Path, predecessor: Mapping[str, Any]) -> dict[str, Any] |
         or authority.get("source_version_contract_sha256") != record["contract_sha256"]
         or authority.get("recovery_policy") != POLICY_NAME
         or authority.get("maximum_solver_processes") != 3
+        or (extension is not None and authority.get("recovery_policy_revision") != 2)
         or record.get("prior_authority") != predecessor["new_authority"]
     ):
         raise ValueError("speculative continuation source/authority mismatch")

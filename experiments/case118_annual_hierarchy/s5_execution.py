@@ -62,6 +62,7 @@ SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/s4b_manifest.py",
     "experiments/case118_annual_hierarchy/s5_execution.py",
     "experiments/case118_annual_hierarchy/s5_operator_intervention.py",
+    "experiments/case118_annual_hierarchy/s5_repaired_window.py",
     "experiments/case118_annual_hierarchy/s5_retry_transition.py",
     "experiments/case118_annual_hierarchy/s5_source_transition.py",
     "experiments/case118_annual_hierarchy/S5_SPECULATIVE_RECOVERY_PLAN.md",

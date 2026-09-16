@@ -558,6 +558,7 @@ def verify_shard_artifacts(
     preceding_id: str | None = None
     archives: list[Mapping[str, object]] = []
     intervention_record: Mapping[str, object] | None = None
+    repaired_record: Mapping[str, object] | None = None
     if checkpoint["execution_mode"] == "annual":
         from experiments.case118_annual_hierarchy.s5_operator_intervention import (
             intervention_identity,
@@ -572,6 +573,11 @@ def verify_shard_artifacts(
             intervention_record = load_record(
                 directory.parent, predecessor_transition=predecessor
             )
+        from experiments.case118_annual_hierarchy.s5_repaired_window import (
+            load_record as load_repaired_record,
+        )
+
+        repaired_record = load_repaired_record(directory.parent)
     # One verified snapshot per pass; retain full validation of every archive.
     expected_boundaries = outer_boundaries(outer)
     from experiments.case118_annual_hierarchy.s5_source_transition import (
@@ -605,10 +611,24 @@ def verify_shard_artifacts(
                 expected_intervention = intervention_identity(
                     str(intervention_record["contract_sha256"])
                 )
+            if (
+                repaired_record is not None
+                and entry == repaired_record["intervention_window"]
+            ):
+                from experiments.case118_annual_hierarchy.s5_repaired_window import (
+                    intervention_identity as repaired_identity,
+                )
+
+                if expected_intervention is not None:
+                    raise ValueError("window matches multiple operator interventions")
+                expected_intervention = repaired_identity(
+                    str(repaired_record["contract_sha256"])
+                )
             raw_archive = json.load(stream)
             if (
                 transition is not None
                 and transition.get("classification") == CLASSIFICATION
+                and expected_intervention is None
             ):
                 verify_phase_window(transition, directory, raw_archive, window_index)
             if raw_archive.get("schema_version") == 2:
@@ -755,6 +775,13 @@ def _operator_intervention_timing(
     directory: Path, archive: Mapping[str, object]
 ) -> Mapping[str, object]:
     """Reconstruct the retained live and diagnostic work for interval 2448."""
+    from experiments.case118_annual_hierarchy.s5_repaired_window import (
+        INTERVAL as REPAIRED_INTERVAL,
+        timing as repaired_timing,
+    )
+
+    if archive.get("iteration") == REPAIRED_INTERVAL:
+        return repaired_timing(directory, archive)
     from experiments.case118_annual_hierarchy.s5_operator_intervention import (
         EVIDENCE_DIRECTORY,
         INTERVAL,
@@ -1073,11 +1100,13 @@ def audit_shard(
             intervention_diagnostic_elapsed_seconds += float(
                 cast(float, retained["diagnostic_elapsed_seconds"])
             )
-            if retained["diagnostic_overlapped_live_recovery"] is not True:
-                raise ValueError("operator intervention overlap evidence is invalid")
-            intervention_diagnostic_overlap_seconds += float(
-                cast(float, retained["diagnostic_elapsed_seconds"])
-            )
+            overlap = retained["diagnostic_overlapped_live_recovery"]
+            if not isinstance(overlap, bool):
+                raise ValueError("operator intervention overlap flag is invalid")
+            if overlap:
+                intervention_diagnostic_overlap_seconds += float(
+                    cast(float, retained["diagnostic_elapsed_seconds"])
+                )
             supervision_path = None
             recovery_path = None
         else:

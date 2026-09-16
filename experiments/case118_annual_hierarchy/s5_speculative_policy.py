@@ -19,7 +19,9 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 
 POLICY_NAME = "causal_first_speculative_v1"
 SOLVE_BUDGET_SECONDS = 300.0
+TARGET_FREE_RETRY_BUDGET_SECONDS = 1_800.0
 HELPER_SOURCE_SLOTS = (6, 7, 8, 1, 2, 3, 4, 5)
+FINAL_SOURCE_SLOTS = HELPER_SOURCE_SLOTS
 Outcome = Literal["accepted", "rejected", "timeout", "canceled", "construction_error"]
 
 
@@ -49,7 +51,7 @@ class AttemptSpec:
     """Invocation order is deliberately separate from the legacy source slot."""
 
     window: WindowKey
-    order: int  # primary=0, bounded helpers=1..8, uncapped replay=9
+    order: int  # primary=0, bounded=1..8, legacy replay=9, TF retry=10, final=11..18
     source_slot: int
     replay_of: str | None = None
 
@@ -67,6 +69,10 @@ class AttemptSpec:
             )
         elif self.order == 9:
             valid = self.source_slot in (2, 3, 4, 5, 6, 7, 8) and bool(self.replay_of)
+        elif self.order == 10:
+            valid = self.source_slot == 1 and bool(self.replay_of)
+        elif 11 <= self.order <= 18:
+            valid = self.source_slot == FINAL_SOURCE_SLOTS[self.order - 11]
         else:
             valid = False
         if not valid:
@@ -85,7 +91,11 @@ class AttemptSpec:
 
     @property
     def budget_seconds(self) -> float | None:
-        return SOLVE_BUDGET_SECONDS if 1 <= self.order <= 8 else None
+        if 1 <= self.order <= 8:
+            return SOLVE_BUDGET_SECONDS
+        if self.order == 10:
+            return TARGET_FREE_RETRY_BUDGET_SECONDS
+        return None
 
     @property
     def scale(self) -> float | None:
@@ -225,7 +235,10 @@ class WindowRace:
         self.unavailable: dict[int, str] = {}
         self.winner: AttemptSpec | None = None
         self._next_order = 1
+        self._target_free_retry_considered = False
         self._replay_considered = False
+        self._final_next_index = 0
+        self._final_started = False
 
     def needs_help(self, primary_solve_elapsed: float) -> bool:
         _nonnegative(primary_solve_elapsed, "primary solve elapsed")
@@ -244,12 +257,26 @@ class WindowRace:
         """Call only after eligibility, memory admission, and helper lease grant."""
         if self.winner is not None:
             return None
-        if any(spec.order > 0 for spec in self.active_attempts):
+        active_helpers = [spec for spec in self.active_attempts if spec.order > 0]
+        if active_helpers and not (
+            self._replay_considered
+            and self._next_order > 8
+            and all(spec.order >= 11 for spec in active_helpers)
+        ):
             raise ValueError("a helper invocation is still active")
         target_free_accepted = any(
             item.attempt.source_slot == 1 and item.outcome == "accepted"
             for item in self.completed.values()
         )
+        if self._next_order == 5 and not self._target_free_retry_considered:
+            self._target_free_retry_considered = True
+            first = self.completed.get(AttemptSpec(self.window, 4, 1).attempt_id)
+            if first is not None and first.outcome == "timeout":
+                retry = AttemptSpec(
+                    self.window, 10, 1, replay_of=first.attempt.attempt_id
+                )
+                self.launched[retry.attempt_id] = retry
+                return retry
         while self._next_order <= 8:
             order = self._next_order
             self._next_order += 1
@@ -262,13 +289,98 @@ class WindowRace:
                 continue
             self.launched[spec.attempt_id] = spec
             return spec
+        # Preserve the original v1 secondary: after bounded recovery, replay
+        # the best retained hard-target start without a cap while the primary
+        # continues.  The persistence amendment adds a later final sweep; it
+        # does not replace this reviewed secondary path.
         if not self._replay_considered:
             self._replay_considered = True
             replay = select_uncapped_replay(tuple(self.completed.values()))
             if replay is not None:
                 self.launched[replay.attempt_id] = replay
                 return replay
+        return self.next_final()
+
+    def next_final(self) -> AttemptSpec | None:
+        """Allocate the next distinct final attempt to an available worker lane."""
+        if self.winner is not None:
+            return None
+        if self._next_order <= 8 or not self._replay_considered:
+            return None
+        secondary = next(
+            (spec for spec in self.launched.values() if spec.order == 9), None
+        )
+        primary_done = self.primary.attempt_id in self.completed
+        secondary_done = secondary is None or secondary.attempt_id in self.completed
+        if not (primary_done or secondary_done):
+            return None
+        self._final_started = True
+        while self._final_next_index < len(FINAL_SOURCE_SLOTS):
+            index = self._final_next_index
+            source_slot = FINAL_SOURCE_SLOTS[index]
+            target_free_active = any(
+                spec.source_slot == 1 and 11 <= spec.order <= 18
+                for spec in self.active_attempts
+            )
+            target_free_accepted = any(
+                item.attempt.source_slot == 1 and item.outcome == "accepted"
+                for item in self.completed.values()
+            )
+            if source_slot in (2, 3, 4, 5) and target_free_active:
+                return None
+            self._final_next_index += 1
+            if secondary is not None and source_slot == secondary.source_slot:
+                self.unavailable[11 + index] = "already_exercised_by_secondary"
+                continue
+            if source_slot >= 6 and not self.has_preceding:
+                self.unavailable[11 + index] = "preceding_controller_unavailable"
+                continue
+            if source_slot in (2, 3, 4, 5) and not target_free_accepted:
+                self.unavailable[11 + index] = "accepted_target_free_unavailable"
+                continue
+            predecessors = [
+                item
+                for item in self.completed.values()
+                if item.attempt.source_slot == source_slot
+                and item.complete_x0_retained
+                and item.outcome != "accepted"
+            ]
+            replay_of = (
+                max(
+                    predecessors, key=lambda item: item.attempt.order
+                ).attempt.attempt_id
+                if predecessors
+                else None
+            )
+            final = AttemptSpec(
+                self.window, 11 + index, source_slot, replay_of=replay_of
+            )
+            self.launched[final.attempt_id] = final
+            return final
         return None
+
+    @property
+    def waiting_for_final_source(self) -> bool:
+        """A target-free final is active and later starts depend on its result."""
+        if self._final_next_index >= len(FINAL_SOURCE_SLOTS):
+            return False
+        source_slot = FINAL_SOURCE_SLOTS[self._final_next_index]
+        return source_slot in (2, 3, 4, 5) and any(
+            spec.source_slot == 1 and 11 <= spec.order <= 18
+            for spec in self.active_attempts
+        )
+
+    @property
+    def waiting_for_primary(self) -> bool:
+        return (
+            self.winner is None
+            and not self.active_attempts
+            and self._next_order > 8
+            and self._replay_considered
+            and self.primary.attempt_id not in self.completed
+            and self._final_started
+            and self._final_next_index >= len(FINAL_SOURCE_SLOTS)
+        )
 
     def complete_batch(self, completions: Sequence[Completion]) -> AttemptSpec | None:
         """First audited batch wins; primary precedes helper in a simultaneous batch."""
@@ -303,6 +415,9 @@ class WindowRace:
             and not self.active_attempts
             and self._next_order > 8
             and self._replay_considered
+            and self.primary.attempt_id in self.completed
+            and self._final_started
+            and self._final_next_index >= len(FINAL_SOURCE_SLOTS)
         )
 
 

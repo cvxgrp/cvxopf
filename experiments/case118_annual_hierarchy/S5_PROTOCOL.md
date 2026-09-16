@@ -127,6 +127,24 @@ diagnostic timings, selected slot, and source-version boundary separately.
 This narrow intervention does not alter the ordinary nine-slot lifecycle for
 any other interval and does not authorize another operator-selected result.
 
+### Once-only interval-6122 repaired recovery
+
+During the later speculative phase, shard 008 stopped at interval 6122 after
+the primary and ordinary helper sequence returned no accepted controller. A
+post-stop retry of the exact timed-out target-free start passed the unchanged
+target-free audit; its copied hard-target start then passed the complete frozen
+AC acceptance gate. `s5_repaired_window.py` binds the exact stopped checkpoint,
+preceding archive, requests, complete starts, results, phases, execution source,
+and diagnostic summary. It publishes one externally identified schema-v1
+window and advances only shard 008 from 6122 to 6123, archive first and
+checkpoint last. The operation is once-only and idempotent; it is not evidence
+that the original timeout was a solver infeasibility result.
+
+The repaired record does not by itself authorize a restart. The accompanying
+30-minute target-free retry and freed-lane uncapped-final recovery amendment
+must pass independent review and receive a separately bound clean execution
+authority before further numerical work.
+
 ### Reviewed retry-source continuation
 
 The interrupted restart following the interval-2448 intervention left the next

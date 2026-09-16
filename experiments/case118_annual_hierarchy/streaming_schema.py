@@ -657,8 +657,9 @@ def validate_window_archive(
             raise ValueError("operator intervention lacks external authority")
         if intervention != expected_operator_intervention:
             raise ValueError("operator intervention identity mismatch")
-        if iteration != 2448:
-            raise ValueError("operator intervention is frozen to interval 2448")
+        # The externally supplied identity is interval-specific and is validated
+        # by its experiment-owned record.  This generic archive gate must not
+        # hard-code the first intervention's historical interval.
     elif expected_operator_intervention is not None:
         raise ValueError("authorized operator intervention is absent from archive")
 
@@ -667,6 +668,11 @@ def validate_window_archive(
     target_free_accepted = False
     earlier_controller_accepted = False
     window_terminal_policy: object = None
+    intervention_selected_id = (
+        expected_operator_intervention.get("selected_attempt_id")
+        if expected_operator_intervention is not None
+        else None
+    )
     for ordinal, item in enumerate(attempts):
         attempt = _mapping(item, f"attempt {ordinal}")
         if attempt.get("ordinal") != ordinal:
@@ -713,7 +719,15 @@ def validate_window_archive(
         state = attempt["slot_state"]
         source_available = ordinal not in {2, 3, 4, 5} or target_free_accepted
         if operator_intervention:
-            expected_states = {"executed"} if ordinal == 8 else {"operator_bypassed"}
+            if attempt.get("attempt_id") == intervention_selected_id:
+                expected_states = {"executed"}
+            elif ordinal == 1:
+                # Some reviewed recoveries retain the accepted target-free solve
+                # that causally generated the selected hard-target start.  The
+                # earlier interval-2448 intervention did not have such evidence.
+                expected_states = {"executed", "operator_bypassed"}
+            else:
+                expected_states = {"operator_bypassed"}
         elif earlier_controller_accepted:
             expected_states = {"not_needed_after_acceptance"}
         elif source_available:
@@ -943,8 +957,14 @@ def validate_window_archive(
         ):
             raise ValueError("first accepted controller must supply the action")
         for later in attempts[first_accepted + 1 :]:
-            if _mapping(later, "later attempt").get("slot_state") != (
-                "not_needed_after_acceptance"
+            expected_later_state = (
+                "operator_bypassed"
+                if operator_intervention
+                else "not_needed_after_acceptance"
+            )
+            if (
+                _mapping(later, "later attempt").get("slot_state")
+                != expected_later_state
             ):
                 raise ValueError("later slots must stop after accepted controller")
     elif any(

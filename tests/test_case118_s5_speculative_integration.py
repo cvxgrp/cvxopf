@@ -32,6 +32,7 @@ from experiments.case118_annual_hierarchy.s5_speculative_process import (
     artifact_ref,
 )
 from experiments.case118_annual_hierarchy.s5_speculative_window import (
+    _validate_final_recovery,
     publish_window,
     finalize_window,
 )
@@ -53,6 +54,91 @@ from tests.test_case118_s5_speculative_attempt import (
 )  # noqa: F401
 
 fixture_outer = attempt_tests.fixture_outer
+
+
+def test_target_free_source_selection_is_confined_to_current_window(tmp_path):
+    adapter = object.__new__(runtime.WaveAdapter)
+    adapter.output_root = tmp_path
+    adapter.authority_path = tmp_path / "authority.json"
+    adapter.context = {"source_fingerprint": "test"}
+    adapter.contract_sha256 = "contract"
+    adapter.fixture, adapter.outer = object(), object()
+    current = WindowKey("s4b-shard-000", 5)
+    other = WindowKey("s4b-shard-001", 5)
+    shard = adapter.shard_directory(current)
+    atomic_json(
+        shard / "checkpoint.json",
+        {
+            "next_global_iteration": 5,
+            "windows": [],
+            "preceding_controlling_attempt_id": None,
+        },
+    )
+    current_free = AttemptSpec(current, 4, 1)
+    other_free = AttemptSpec(
+        other, 10, 1, replay_of=AttemptSpec(other, 4, 1).attempt_id
+    )
+    adapter.directories = {}
+    for spec in (current_free, other_free):
+        directory = tmp_path / spec.window.shard_id / f"candidate-{spec.order}"
+        atomic_json(
+            directory / "result.json",
+            {
+                "invocation": asdict(spec),
+                "attempt": {"audit": {"accepted_primal": True}},
+            },
+        )
+        adapter.directories[spec.attempt_id] = directory
+    request_directory = tmp_path / "request"
+    copied = AttemptSpec(current, 5, 2)
+    adapter.command(copied, request_directory)
+    request = json.loads((request_directory / "request.json").read_text())
+    assert request["target_free_directory"] == str(
+        adapter.directories[current_free.attempt_id].resolve()
+    )
+
+
+def test_final_winner_can_precede_primary_return_and_fresh_starts_are_valid():
+    window = WindowKey("s4b-shard-000", 5)
+    primary = AttemptSpec(window, 0, 0)
+    secondary = AttemptSpec(
+        window, 9, 6, replay_of=AttemptSpec(window, 1, 6).attempt_id
+    )
+    final = AttemptSpec(window, 12, 7)
+    completions = {
+        secondary.attempt_id: asdict(Completion(secondary, "rejected", True)),
+        final.attempt_id: asdict(Completion(final, "accepted", True)),
+    }
+    lifecycles = {
+        primary.attempt_id: {"launched_monotonic": 0.0, "reaped_monotonic": 20.0},
+        secondary.attempt_id: {
+            "launched_monotonic": 5.0,
+            "reaped_monotonic": 10.0,
+        },
+        final.attempt_id: {"launched_monotonic": 11.0, "reaped_monotonic": 15.0},
+    }
+    _validate_final_recovery([primary, secondary, final], completions, lifecycles)
+
+    bounded_free = AttemptSpec(window, 4, 1)
+    final_free = AttemptSpec(window, 14, 1)
+    fresh = {
+        bounded_free.attempt_id: asdict(Completion(bounded_free, "accepted", True)),
+        final_free.attempt_id: asdict(Completion(final_free, "rejected")),
+    }
+    fresh_lifecycles = {
+        primary.attempt_id: lifecycles[primary.attempt_id],
+        bounded_free.attempt_id: {
+            "launched_monotonic": 2.0,
+            "reaped_monotonic": 4.0,
+        },
+        final_free.attempt_id: {
+            "launched_monotonic": 6.0,
+            "reaped_monotonic": 8.0,
+        },
+    }
+    _validate_final_recovery(
+        [primary, bounded_free, final_free], fresh, fresh_lifecycles
+    )
 
 
 @pytest.mark.parametrize("successor", [False, True])
@@ -762,6 +848,83 @@ def test_helper_lease_and_eligibility_are_reconstructed(early_failure):
         life["phases"][0]["monotonic_seconds"] = 2.0
         with pytest.raises(ValueError, match="precedes primary"):
             runtime._validate_helper_lifecycle(events, lives)
+
+
+def test_wave_lifecycle_distinguishes_replacement_from_shared_helper():
+    a, b = [WindowKey(key, 0) for key in runtime.ANNUAL_WAVES[0]]
+    primary, peer = AttemptSpec(a, 0, 0), AttemptSpec(b, 0, 0)
+    replacement = AttemptSpec(a, 11, 6)
+    shared = AttemptSpec(b, 1, 6)
+
+    def event(kind, spec, stamp):
+        return {"kind": kind, "invocation": asdict(spec), "monotonic_seconds": stamp}
+
+    events = [
+        event("launched", primary, 0.0),
+        event("launched", peer, 0.0),
+        event("audited_return", primary, 2.0),
+        event("replacement_launched", replacement, 3.0),
+        event("helper_eligible", peer, 301.0),
+        event("launched", shared, 301.0),
+    ]
+    peak = runtime._wave_record_concurrency(events)
+    _, active = runtime._validate_helper_lifecycle(events)
+    assert peak == 3
+    assert active == {replacement.attempt_id, shared.attempt_id, peer.attempt_id}
+    with pytest.raises(ValueError, match="replacement launch"):
+        runtime._validate_helper_lifecycle(
+            events + [event("replacement_launched", AttemptSpec(a, 12, 7), 302.0)]
+        )
+
+
+def test_wave_record_peak_counts_replacement_and_shared_helper():
+    """The writer and validator reconstruct the same three-process peak."""
+    a, b = [WindowKey(key, 0) for key in runtime.ANNUAL_WAVES[0]]
+    primary, peer = AttemptSpec(a, 0, 0), AttemptSpec(b, 0, 0)
+    replacement = AttemptSpec(a, 11, 6)
+    shared = AttemptSpec(b, 1, 6)
+
+    def event(kind, spec, stamp):
+        return {"kind": kind, "invocation": asdict(spec), "monotonic_seconds": stamp}
+
+    events = [
+        event("launched", primary, 0.0),
+        event("launched", peer, 0.0),
+        event("audited_return", primary, 2.0),
+        event("replacement_launched", replacement, 3.0),
+        event("helper_eligible", peer, 301.0),
+        event("launched", shared, 301.0),
+        event("audited_return", replacement, 302.0),
+        event("audited_return", shared, 303.0),
+        event("audited_return", peer, 304.0),
+    ]
+    peak = runtime._wave_record_concurrency(events)
+    _, active = runtime._validate_helper_lifecycle(events)
+    record = {
+        "schema_version": 2,
+        "policy": POLICY_NAME,
+        "manifest_sha256": runtime.EXPECTED_MANIFEST_SHA256,
+        "wave_index": 0,
+        "frozen_wave": list(runtime.ANNUAL_WAVES[0]),
+        "requested_shards": list(runtime.ANNUAL_WAVES[0]),
+        "requested_concurrency": 2,
+        "maximum_observed_concurrency": peak,
+        "classification": "supervisor_failure",
+        "worker_results": {},
+        "returncodes": {},
+        "events": events,
+        "clock_anchor": {
+            "monotonic_seconds": 0.0,
+            "utc": "2026-01-01T00:00:00+00:00",
+        },
+        "resource_triggers": [],
+        "resource_samples": [],
+        "peak_worker_rss_mib": {"solver_tree": 0.0},
+        "peak_aggregate_rss_mib": 0.0,
+    }
+    assert peak == 3
+    assert not active
+    assert runtime.validate_wave(record)["maximum_observed_concurrency"] == 3
 
 
 @pytest.mark.parametrize("complete", [False, True])

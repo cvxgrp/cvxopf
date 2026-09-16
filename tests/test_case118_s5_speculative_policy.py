@@ -109,17 +109,124 @@ def test_target_free_failure_skips_dependents_and_replays_causal() -> None:
         helper = window.next_helper()
         assert helper is not None
         window.complete_batch([Completion(helper, "rejected")])
+    secondary = window.next_helper()
+    assert secondary is not None and secondary.order == 9
+    assert secondary.replay_of == causal.attempt_id
+    window.complete_batch([Completion(secondary, "rejected")])
     replay = window.next_helper()
     assert replay is not None
-    assert replay.order == 9 and replay.replay_of == causal.attempt_id
-    assert replay.seed == causal.seed and replay.scale == causal.scale
+    assert replay.order == 12 and replay.replay_of is None
+    assert replay.seed is not None and replay.scale is not None
     assert replay.budget_seconds is None
-    assert set(window.unavailable) == {5, 6, 7, 8}
+    assert window.unavailable[11] == "already_exercised_by_secondary"
     window.complete_batch([Completion(replay, "rejected")])
+    for _ in range(1):
+        helper = window.next_helper()
+        assert helper is not None and helper.budget_seconds is None
+        window.complete_batch([Completion(helper, "rejected")])
+    target_free = window.next_helper()
+    assert target_free is not None and target_free.source_slot == 1
+    window.complete_batch([Completion(target_free, "rejected")])
     assert window.next_helper() is None
-    assert not window.exhausted  # primary still has its chance
     window.complete_batch([Completion(window.primary, "rejected")])
     assert window.exhausted
+
+
+def test_target_free_timeout_gets_thirty_minute_retry_before_dependents() -> None:
+    window = race()
+    for _ in range(3):
+        helper = window.next_helper()
+        assert helper is not None
+        window.complete_batch([Completion(helper, "rejected", True, 1.0)])
+    first = window.next_helper()
+    assert first is not None and (first.order, first.source_slot) == (4, 1)
+    window.complete_batch([Completion(first, "timeout", True)])
+    retry = window.next_helper()
+    assert retry is not None
+    assert (retry.order, retry.source_slot, retry.replay_of) == (
+        10,
+        1,
+        first.attempt_id,
+    )
+    assert retry.budget_seconds == 1800
+    window.complete_batch([accept(retry)])
+    copied = window.next_helper()
+    assert copied is not None and copied.source_slot == 2
+
+
+def test_final_target_free_acceptance_unlocks_uncapped_dependents() -> None:
+    window = race()
+    for _ in range(3):
+        helper = window.next_helper()
+        assert helper is not None
+        window.complete_batch([Completion(helper, "rejected", True, 1.0)])
+    first = window.next_helper()
+    assert first is not None
+    window.complete_batch([Completion(first, "timeout", True)])
+    retry = window.next_helper()
+    assert retry is not None
+    window.complete_batch([Completion(retry, "timeout", True)])
+    secondary = window.next_helper()
+    assert secondary is not None and secondary.order == 9
+    window.complete_batch([Completion(secondary, "rejected")])
+    for _ in range(2):
+        helper = window.next_helper()
+        assert helper is not None
+        window.complete_batch([Completion(helper, "rejected")])
+    final_free = window.next_helper()
+    assert final_free is not None
+    assert (final_free.order, final_free.source_slot, final_free.budget_seconds) == (
+        14,
+        1,
+        None,
+    )
+    window.complete_batch([accept(final_free)])
+    copied = window.next_helper()
+    assert copied is not None
+    assert (copied.order, copied.source_slot, copied.budget_seconds) == (15, 2, None)
+
+
+def test_final_sweep_uses_failed_primary_lane_while_secondary_continues() -> None:
+    window = race()
+    for slot in (6, 7, 8, 1, 2, 3, 4, 5):
+        helper = window.next_helper()
+        assert helper is not None and helper.source_slot == slot
+        outcome = (
+            accept(helper) if slot == 1 else Completion(helper, "rejected", True, 1.0)
+        )
+        window.complete_batch([outcome])
+    secondary = window.next_helper()
+    assert secondary is not None and secondary.order == 9
+    window.complete_batch([Completion(window.primary, "rejected")])
+    final = window.next_final()
+    assert final is not None and final.order == 12
+    assert final.source_slot != secondary.source_slot
+    assert {item.order for item in window.active_attempts} == {9, 12}
+
+
+def test_two_final_lanes_allocate_distinct_sources_and_wait_for_target_free() -> None:
+    window = race()
+    for slot in (6, 7, 8):
+        helper = window.next_helper()
+        assert helper is not None and helper.source_slot == slot
+        window.complete_batch([Completion(helper, "rejected")])
+    target_free = window.next_helper()
+    assert target_free is not None and target_free.source_slot == 1
+    window.complete_batch([Completion(target_free, "rejected")])
+    window.complete_batch([Completion(window.primary, "rejected")])
+    first = window.next_helper()
+    second = window.next_final()
+    assert first is not None and second is not None
+    assert (first.order, second.order) == (11, 12)
+    window.complete_batch([Completion(first, "rejected")])
+    third = window.next_final()
+    assert third is not None and third.order == 13
+    window.complete_batch([Completion(second, "rejected")])
+    window.complete_batch([Completion(third, "rejected")])
+    final_target_free = window.next_final()
+    assert final_target_free is not None and final_target_free.order == 14
+    assert window.next_final() is None
+    assert window.waiting_for_final_source
 
 
 def test_full_helper_sequence_finite_and_unaccepted_target_free_not_replayed() -> None:
@@ -129,8 +236,15 @@ def test_full_helper_sequence_finite_and_unaccepted_target_free_not_replayed() -
         assert helper is not None and helper.source_slot == slot
         outcome = accept(helper) if slot == 1 else Completion(helper, "rejected")
         window.complete_batch([outcome])
+    for slot in (6, 7, 8, 1, 2, 3, 4, 5):
+        helper = window.next_helper()
+        assert helper is not None and helper.source_slot == slot
+        outcome = accept(helper) if slot == 1 else Completion(helper, "rejected")
+        window.complete_batch([outcome])
     assert window.next_helper() is None
     assert window.next_helper() is None
+    window.complete_batch([Completion(window.primary, "rejected")])
+    assert window.exhausted
 
 
 @pytest.mark.parametrize("primary_first", [True, False])
