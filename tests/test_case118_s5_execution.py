@@ -532,7 +532,9 @@ def test_reviewed_continuation_accepts_stale_running_boundary(
     assert len(result["reviewed_continuations"]) == 1
 
 
-def test_partial_analysis_cannot_be_promoted(tmp_path: Path) -> None:
+def test_partial_analysis_cannot_be_promoted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     base = {
         "schema_version": 1,
         "classification": "partial",
@@ -540,8 +542,9 @@ def test_partial_analysis_cannot_be_promoted(tmp_path: Path) -> None:
         "accepted_for_s6": False,
     }
     value = {**base, "analysis_sha256": object_sha256(base)}
+    monkeypatch.setattr(s5_analysis, "analyze_s5", lambda *_a, **_k: value)
     with pytest.raises(ValueError, match="cannot be promoted"):
-        s5_analysis.promote_completed(tmp_path / "S5_RESULTS.json", value)
+        s5_analysis.promote_completed(tmp_path / "S5_RESULTS.json")
     assert not (tmp_path / "S5_RESULTS.json").exists()
 
 
@@ -655,12 +658,65 @@ def test_complete_promotion_is_immutable(
     result = {**base, "analysis_sha256": object_sha256(base)}
     monkeypatch.setattr(s5_analysis, "analyze_s5", lambda *_a, **_k: result)
     path = tmp_path / "S5_RESULTS.json"
-    s5_analysis.promote_completed(path, result)
+    assert s5_analysis.promote_completed(path) == result
     assert json.loads(path.read_text()) == result
-    changed_base = {**base, "extra": True}
-    changed = {**changed_base, "analysis_sha256": object_sha256(changed_base)}
+
+    def unexpected_analysis(*_a, **_k):
+        pytest.fail("an existing destination must be rejected before analysis")
+
+    monkeypatch.setattr(s5_analysis, "analyze_s5", unexpected_analysis)
     with pytest.raises(FileExistsError):
-        s5_analysis.promote_completed(path, changed)
+        s5_analysis.promote_completed(path)
+
+
+@pytest.mark.parametrize("promote", [False, True])
+def test_analysis_cli_reconstructs_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    promote: bool,
+) -> None:
+    base = {
+        "classification": "accepted",
+        "execution_complete": True,
+        "accepted_for_s6": True,
+    }
+    result = {**base, "analysis_sha256": object_sha256(base)}
+    output = tmp_path / "archives"
+    authority = tmp_path / "authority.json"
+    destination = tmp_path / "S5_RESULTS.json"
+    calls = []
+
+    def analyze(output_root, *, authority_path, workers):
+        calls.append((output_root, authority_path, workers))
+        assert len(calls) == 1, "CLI must not repeat the full reconstruction"
+        return result
+
+    argv = ["s5_analysis", "--output-root", str(output), "--authority", str(authority), "--workers", "2"]
+    if promote:
+        argv.extend(["--promote", str(destination)])
+    monkeypatch.setattr(s5_analysis, "analyze_s5", analyze)
+    monkeypatch.setattr(s5_analysis.sys, "argv", argv)
+    s5_analysis.main()
+    assert calls == [(output.resolve(), authority, 2)]
+    assert json.loads(capsys.readouterr().out) == result
+    if promote:
+        assert destination.read_bytes() == s5_analysis.canonical_json(result)
+    else:
+        assert not destination.exists()
+
+
+def test_promotion_preserves_analysis_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def failed_analysis(*_a, **_k):
+        raise ValueError("archive audit failed")
+
+    monkeypatch.setattr(s5_analysis, "analyze_s5", failed_analysis)
+    path = tmp_path / "S5_RESULTS.json"
+    with pytest.raises(ValueError, match="archive audit failed"):
+        s5_analysis.promote_completed(path)
+    assert not path.exists()
 
 
 def test_default_output_is_ignored_and_default_authority_remains_absent() -> None:
@@ -911,9 +967,7 @@ def test_mixed_wave_retains_successful_peer_then_completes_and_merges(
     result = s5_analysis.analyze_s5(output)
     assert result["execution_complete"] is True
     assert result["accepted_for_s6"] is True
-    s5_analysis.promote_completed(
-        tmp_path / "S5_RESULTS.json", result, output_root=output
-    )
+    s5_analysis.promote_completed(tmp_path / "S5_RESULTS.json", output_root=output)
 
     # Internally consistent but mixed wave authority must fail against the root.
     first["authority"]["per_worker_current_rss_mib"] = 32_768.0

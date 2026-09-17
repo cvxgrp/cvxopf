@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
 import json
+import multiprocessing
 from pathlib import Path
 import platform
 import subprocess
@@ -43,6 +45,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_immutable_json,
     sha256_path,
 )
+from experiments.case118_annual_hierarchy.streaming_runner import StreamingOuterPlan
 from experiments.case118_annual_hierarchy.s5_source_transition import (
     RECORD_NAME,
     historical_provenance_matches,
@@ -55,6 +58,61 @@ from experiments.case118_annual_hierarchy.s5_source_transition import (
 ANALYSIS_SOURCE_FILES = tuple(ROOT / item for item in SOURCE_FILES) + (
     Path(__file__).resolve(),
 )
+
+# Each spawned audit process loads the frozen outer plan once. Archives stay
+# inside that process; only compact audit summaries return to the parent.
+_SHARD_AUDIT_OUTER: StreamingOuterPlan | None = None
+
+
+def _initialize_shard_auditor() -> None:
+    global _SHARD_AUDIT_OUTER
+    _SHARD_AUDIT_OUTER = _outer()
+
+
+def _audit_one_shard(
+    job: tuple[Path, Mapping[str, object]], outer: StreamingOuterPlan
+) -> Mapping[str, object]:
+    directory, shard = job
+    return audit_shard(
+        directory,
+        shard=shard,
+        outer=outer,
+        expected_execution_registry_sha256=_annual_registry_sha256(),
+        allowed_execution_modes=("annual",),
+    )
+
+
+def _audit_shard_job(job: tuple[Path, Mapping[str, object]]) -> Mapping[str, object]:
+    if _SHARD_AUDIT_OUTER is None:
+        raise RuntimeError("shard auditor was not initialized")
+    return _audit_one_shard(job, _SHARD_AUDIT_OUTER)
+
+
+def _audit_shards(
+    jobs: Sequence[tuple[Path, Mapping[str, object]]],
+    *,
+    outer: StreamingOuterPlan,
+    workers: int,
+) -> list[Mapping[str, object]]:
+    """Audit independently, then return summaries in the supplied shard order."""
+    if workers == 1 or len(jobs) < 2:
+        return [_audit_one_shard(job, outer) for job in jobs]
+    results: dict[int, Mapping[str, object]] = {}
+    # Spawn avoids inheriting numerical-library runtime state from the parent.
+    with ProcessPoolExecutor(
+        max_workers=min(workers, len(jobs)),
+        mp_context=multiprocessing.get_context("spawn"),
+        initializer=_initialize_shard_auditor,
+    ) as pool:
+        futures = {pool.submit(_audit_shard_job, job): i for i, job in enumerate(jobs)}
+        try:
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            raise
+    return [results[i] for i in range(len(jobs))]
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
@@ -390,6 +448,7 @@ def analyze_s5(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     *,
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
+    workers: int = 1,
 ) -> Mapping[str, object]:
     """Independently reconstruct an S5 execution without modifying its artifacts.
 
@@ -407,8 +466,12 @@ def analyze_s5(
 
     Current analyzer provenance is recorded separately from execution provenance.
     This function neither resumes execution nor promotes results; publication is
-    handled by ``promote_completed`` after repeating this reconstruction.
+    handled by ``promote_completed``, which calls this reconstruction once.
+    ``workers`` selects shard-audit processes; one retains serial operation.
+    Shard chronology, annual merge order, and scientific checks are unchanged.
     """
+    if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
+        raise ValueError("analysis workers must be a positive integer")
     # Bind authority to the historical run, not the current analyzer checkout.
     context_path = output_root / "run-context.json"
     progress_path = output_root / "progress.json"
@@ -531,11 +594,21 @@ def analyze_s5(
             )
     # Reaudit each available shard against the frozen outer plan and archive chain.
     outer = _outer()
+    jobs = [
+        (output_root / f"shard-{int(shard_id[-3:]):03d}", shard_entry(shard_id)[1])
+        for shard_id in ANNUAL_SHARD_IDS
+        if (output_root / f"shard-{int(shard_id[-3:]):03d}" / "shard-result.json").is_file()
+    ]
+    completed_directories = {directory for directory, _ in jobs}
     # Audit even incomplete segments before reporting a cross-version partial run.
     # The prefix registry check binds old windows; full validation preserves the
     # acceptance, identity, and physical-state checks on every appended archive.
     if transition is not None:
         for checkpoint_path in sorted(output_root.glob("shard-*/checkpoint.json")):
+            # audit_shard already verifies every checkpoint/window in a completed
+            # shard. Keep this path for segments that have no final result yet.
+            if checkpoint_path.parent in completed_directories:
+                continue
             checkpoint = _mapping(
                 json.loads(checkpoint_path.read_text()), "S5 checkpoint"
             )
@@ -548,20 +621,11 @@ def analyze_s5(
             )
     summaries: list[Mapping[str, object]] = []
     artifacts: dict[str, object] = {}
-    for shard_id in ANNUAL_SHARD_IDS:
-        directory = output_root / f"shard-{int(shard_id[-3:]):03d}"
+    reconstructed_shards = _audit_shards(jobs, outer=outer, workers=workers)
+    for (directory, shard), reconstructed in zip(jobs, reconstructed_shards, strict=True):
+        shard_id = str(shard["shard_id"])
         worker_path = directory / "shard-result.json"
-        if not worker_path.is_file():
-            continue
         worker = _mapping(json.loads(worker_path.read_text()), "S5 worker result")
-        _, shard = shard_entry(shard_id)
-        reconstructed = audit_shard(
-            directory,
-            shard=shard,
-            outer=outer,
-            expected_execution_registry_sha256=_annual_registry_sha256(),
-            allowed_execution_modes=("annual",),
-        )
         if any(worker.get(name) != value for name, value in reconstructed.items()):
             raise ValueError("S5 worker result differs from independent audit")
         worker_context = _mapping(
@@ -575,13 +639,6 @@ def analyze_s5(
             or not worker_source_matches(directory, worker, worker_context, transition)
         ):
             raise ValueError("S5 worker execution provenance or mode mismatch")
-        verify_shard_artifacts(
-            directory,
-            shard=shard,
-            outer=outer,
-            expected_execution_registry_sha256=_annual_registry_sha256(),
-            allowed_execution_modes=("annual",),
-        )
         for record in supervision:
             embedded = _mapping(record.get("worker_results"), "embedded workers").get(
                 shard_id
@@ -890,13 +947,15 @@ def _transition_summary(
 
 def promote_completed(
     path: Path,
-    result: Mapping[str, object],
     *,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
-) -> None:
+    workers: int = 1,
+) -> Mapping[str, object]:
+    """Reconstruct once and immutably publish that exact accepted result."""
     if path.exists():
         raise FileExistsError(f"immutable S5 result already exists: {path}")
+    result = analyze_s5(output_root, authority_path=authority_path, workers=workers)
     base = {key: value for key, value in result.items() if key != "analysis_sha256"}
     if (
         result.get("analysis_sha256") != object_sha256(base)
@@ -905,12 +964,10 @@ def promote_completed(
         or result.get("accepted_for_s6") is not True
     ):
         raise ValueError("partial or unaccepted S5 analysis cannot be promoted")
-    reconstructed = analyze_s5(output_root, authority_path=authority_path)
-    if result != reconstructed:
-        raise ValueError("S5 promotion payload differs from independent reconstruction")
     atomic_immutable_json(path, result)
     if path.read_bytes() != canonical_json(result):
         raise RuntimeError("promoted S5 result is not canonical")
+    return result
 
 
 def main() -> None:
@@ -920,14 +977,21 @@ def main() -> None:
         "--authority", type=Path, default=DEFAULT_NUMERICAL_AUTHORITY_PATH
     )
     parser.add_argument("--promote", type=Path)
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help="shard audit processes (default: serial)",
+    )
     args = parser.parse_args()
-    result = analyze_s5(args.output_root.resolve(), authority_path=args.authority)
     if args.promote is not None:
-        promote_completed(
+        result = promote_completed(
             args.promote,
-            result,
             output_root=args.output_root.resolve(),
             authority_path=args.authority,
+            workers=args.workers,
+        )
+    else:
+        result = analyze_s5(
+            args.output_root.resolve(), authority_path=args.authority, workers=args.workers
         )
     print(json.dumps(result, sort_keys=True))
 

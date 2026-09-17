@@ -2,6 +2,14 @@
 
 ## Status and authority
 
+**2026-09-17 status:** All 8,760 intervals and the authorized full reconstruction
+are complete (`accepted_for_s6=true`). The owner approved `S5_REPORT.md`, and
+the complete accepted payload is saved in `S5_RESULTS.json`. Formal closeout
+awaits owner commit approval; independent result review is CLEAN. The implementation
+checkpoint and stopping-point narratives below describe historical states,
+not the current execution status. Applied authorities and continuations remain
+in the retained execution tree.
+
 **Pre-execution implementation checkpoint. Numerical execution is not
 authorized.** S4b accepted the immutable annual shard manifest for S5 use, but
 `S5_EXECUTION_AUTHORITY.json` deliberately authorizes planning and
@@ -213,6 +221,26 @@ Partial analysis is printable but cannot occupy the tracked destination.
 shards, all six waves, the annual merge, provenance, resources, and independent
 scientific audits pass. The promoted result is the S5 scientific record; raw
 window and supervision artifacts remain ignored but hash-bound.
+
+Promotion owns a single call to `analyze_s5` and writes that exact accepted
+result. The CLI's `--promote` path returns and prints the same object without
+another reconstruction. Existing destinations are rejected before analysis;
+promotion accepts no caller-supplied payload or validation-bypass flag.
+
+Analysis defaults to serial execution. `--workers N` optionally audits completed
+shards in independent spawned processes. Each process loads the frozen outer
+plan once and returns compact summaries; windows within each shard are still
+validated chronologically. The parent collects summaries in the fixed shard
+order and retains all cross-shard, provenance, supervision, and publication
+checks. Worker errors prevent promotion. Pending jobs are canceled on failure;
+already-running read-only jobs are joined before the error returns.
+
+For a completed shard, `audit_shard` owns its full artifact verification; the
+analyzer does not repeat that traversal before or afterward. Incomplete
+cross-version segments without a final shard result retain explicit artifact
+verification. Parallelism changes scheduling, not scientific acceptance or
+the annual reduction order. The requested process count and measured resources
+belong in the launch log; scientific summaries do not depend on worker count.
 
 ## Current stopping point
 

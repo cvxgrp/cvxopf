@@ -1,0 +1,1939 @@
+{
+  "generators": [
+    {
+      "bus": 1,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 15.0,
+      "q_min_mvar": -5.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 4,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 6,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 50.0,
+      "q_min_mvar": -13.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 8,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 10,
+      "cost_coeffs": [
+        0.0,
+        24.98342,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 505.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 200.0,
+      "q_min_mvar": -147.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 12,
+      "cost_coeffs": [
+        0.0,
+        124.581564,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 85.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 43.0,
+      "q_min_mvar": -35.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 15,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 30.0,
+      "q_min_mvar": -10.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 18,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 50.0,
+      "q_min_mvar": -16.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 19,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 24.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 24,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 25,
+      "cost_coeffs": [
+        0.0,
+        28.948321,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 221.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 111.0,
+      "q_min_mvar": -47.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 26,
+      "cost_coeffs": [
+        0.0,
+        22.22098,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 485.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 243.0,
+      "q_min_mvar": -243.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 27,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 31,
+      "cost_coeffs": [
+        0.0,
+        25.993982,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 17.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 9.0,
+      "q_min_mvar": -9.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 32,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 42.0,
+      "q_min_mvar": -14.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 34,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 24.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 36,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 24.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 40,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 42,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 46,
+      "cost_coeffs": [
+        0.0,
+        24.202306,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 20.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 10.0,
+      "q_min_mvar": -10.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 49,
+      "cost_coeffs": [
+        0.0,
+        16.673942,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 223.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 112.0,
+      "q_min_mvar": -85.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 54,
+      "cost_coeffs": [
+        0.0,
+        27.277343,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 53.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 27.0,
+      "q_min_mvar": -27.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 55,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 56,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 15.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 59,
+      "cost_coeffs": [
+        0.0,
+        24.861868,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 308.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 154.0,
+      "q_min_mvar": -60.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 61,
+      "cost_coeffs": [
+        0.0,
+        16.056042,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 195.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 98.0,
+      "q_min_mvar": -98.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 62,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 20.0,
+      "q_min_mvar": -20.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 65,
+      "cost_coeffs": [
+        0.0,
+        34.781778,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 441.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 200.0,
+      "q_min_mvar": -67.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 66,
+      "cost_coeffs": [
+        0.0,
+        32.668781,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 784.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 200.0,
+      "q_min_mvar": -67.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 69,
+      "cost_coeffs": [
+        0.0,
+        25.758442,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 1182.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 70,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 32.0,
+      "q_min_mvar": -10.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 72,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 100.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 73,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 100.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 74,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 9.0,
+      "q_min_mvar": -6.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 76,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 77,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 70.0,
+      "q_min_mvar": -20.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 80,
+      "cost_coeffs": [
+        0.0,
+        24.600772,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 509.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 255.0,
+      "q_min_mvar": -165.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 85,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 87,
+      "cost_coeffs": [
+        0.0,
+        34.072633,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 10.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 5.0,
+      "q_min_mvar": -5.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 89,
+      "cost_coeffs": [
+        0.0,
+        24.605102,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 637.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -210.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 90,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 91,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 100.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 92,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 9.0,
+      "q_min_mvar": -3.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 99,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 100.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 100,
+      "cost_coeffs": [
+        0.0,
+        12.61217,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 653.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 155.0,
+      "q_min_mvar": -50.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 103,
+      "cost_coeffs": [
+        0.0,
+        28.649471,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 108.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 40.0,
+      "q_min_mvar": -15.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 104,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 105,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 107,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 200.0,
+      "q_min_mvar": -200.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 110,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 23.0,
+      "q_min_mvar": -8.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 111,
+      "cost_coeffs": [
+        0.0,
+        35.043401,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 79.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 40.0,
+      "q_min_mvar": -40.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 112,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 1000.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 113,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 200.0,
+      "q_min_mvar": -100.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 116,
+      "cost_coeffs": [
+        0.0,
+        0.0,
+        0.0001
+      ],
+      "cost_points": null,
+      "cost_type": "polynomial",
+      "p_max_mw": 0.0,
+      "p_min_mw": 0.0,
+      "q_max_mvar": 1000.0,
+      "q_min_mvar": -1000.0,
+      "shutdown": 0.0,
+      "startup": 0.0,
+      "status": 1,
+      "vg": 1.0
+    }
+  ],
+  "load_ids": [
+    "load_bus_1",
+    "load_bus_2",
+    "load_bus_3",
+    "load_bus_4",
+    "load_bus_6",
+    "load_bus_7",
+    "load_bus_8",
+    "load_bus_11",
+    "load_bus_12",
+    "load_bus_13",
+    "load_bus_14",
+    "load_bus_15",
+    "load_bus_16",
+    "load_bus_17",
+    "load_bus_18",
+    "load_bus_19",
+    "load_bus_20",
+    "load_bus_21",
+    "load_bus_22",
+    "load_bus_23",
+    "load_bus_24",
+    "load_bus_27",
+    "load_bus_28",
+    "load_bus_29",
+    "load_bus_31",
+    "load_bus_32",
+    "load_bus_33",
+    "load_bus_34",
+    "load_bus_35",
+    "load_bus_36",
+    "load_bus_39",
+    "load_bus_40",
+    "load_bus_41",
+    "load_bus_42",
+    "load_bus_43",
+    "load_bus_44",
+    "load_bus_45",
+    "load_bus_46",
+    "load_bus_47",
+    "load_bus_48",
+    "load_bus_49",
+    "load_bus_50",
+    "load_bus_51",
+    "load_bus_52",
+    "load_bus_53",
+    "load_bus_54",
+    "load_bus_55",
+    "load_bus_56",
+    "load_bus_57",
+    "load_bus_58",
+    "load_bus_59",
+    "load_bus_60",
+    "load_bus_62",
+    "load_bus_66",
+    "load_bus_67",
+    "load_bus_70",
+    "load_bus_72",
+    "load_bus_73",
+    "load_bus_74",
+    "load_bus_75",
+    "load_bus_76",
+    "load_bus_77",
+    "load_bus_78",
+    "load_bus_79",
+    "load_bus_80",
+    "load_bus_82",
+    "load_bus_83",
+    "load_bus_84",
+    "load_bus_85",
+    "load_bus_86",
+    "load_bus_88",
+    "load_bus_90",
+    "load_bus_91",
+    "load_bus_92",
+    "load_bus_93",
+    "load_bus_94",
+    "load_bus_95",
+    "load_bus_96",
+    "load_bus_97",
+    "load_bus_98",
+    "load_bus_99",
+    "load_bus_100",
+    "load_bus_101",
+    "load_bus_102",
+    "load_bus_103",
+    "load_bus_104",
+    "load_bus_105",
+    "load_bus_106",
+    "load_bus_107",
+    "load_bus_108",
+    "load_bus_109",
+    "load_bus_110",
+    "load_bus_112",
+    "load_bus_113",
+    "load_bus_114",
+    "load_bus_115",
+    "load_bus_116",
+    "load_bus_117",
+    "load_bus_118"
+  ],
+  "loads": [
+    {
+      "bus": 1,
+      "device_id": "load_bus_1",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 51.0,
+      "q_load_mvar": 27.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 2,
+      "device_id": "load_bus_2",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 20.0,
+      "q_load_mvar": 9.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 3,
+      "device_id": "load_bus_3",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 39.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 4,
+      "device_id": "load_bus_4",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 39.0,
+      "q_load_mvar": 12.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 6,
+      "device_id": "load_bus_6",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 52.0,
+      "q_load_mvar": 22.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 7,
+      "device_id": "load_bus_7",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 19.0,
+      "q_load_mvar": 2.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 8,
+      "device_id": "load_bus_8",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 28.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 11,
+      "device_id": "load_bus_11",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 70.0,
+      "q_load_mvar": 23.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 12,
+      "device_id": "load_bus_12",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 47.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 13,
+      "device_id": "load_bus_13",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 34.0,
+      "q_load_mvar": 16.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 14,
+      "device_id": "load_bus_14",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 14.0,
+      "q_load_mvar": 1.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 15,
+      "device_id": "load_bus_15",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 90.0,
+      "q_load_mvar": 30.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 16,
+      "device_id": "load_bus_16",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 25.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 17,
+      "device_id": "load_bus_17",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 11.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 18,
+      "device_id": "load_bus_18",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 60.0,
+      "q_load_mvar": 34.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 19,
+      "device_id": "load_bus_19",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 45.0,
+      "q_load_mvar": 25.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 20,
+      "device_id": "load_bus_20",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 18.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 21,
+      "device_id": "load_bus_21",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 14.0,
+      "q_load_mvar": 8.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 22,
+      "device_id": "load_bus_22",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 10.0,
+      "q_load_mvar": 5.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 23,
+      "device_id": "load_bus_23",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 7.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 24,
+      "device_id": "load_bus_24",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 13.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 27,
+      "device_id": "load_bus_27",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 71.0,
+      "q_load_mvar": 13.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 28,
+      "device_id": "load_bus_28",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 17.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 29,
+      "device_id": "load_bus_29",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 24.0,
+      "q_load_mvar": 4.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 31,
+      "device_id": "load_bus_31",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 43.0,
+      "q_load_mvar": 27.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 32,
+      "device_id": "load_bus_32",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 59.0,
+      "q_load_mvar": 23.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 33,
+      "device_id": "load_bus_33",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 23.0,
+      "q_load_mvar": 9.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 34,
+      "device_id": "load_bus_34",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 59.0,
+      "q_load_mvar": 26.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 35,
+      "device_id": "load_bus_35",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 33.0,
+      "q_load_mvar": 9.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 36,
+      "device_id": "load_bus_36",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 31.0,
+      "q_load_mvar": 17.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 39,
+      "device_id": "load_bus_39",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 27.0,
+      "q_load_mvar": 11.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 40,
+      "device_id": "load_bus_40",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 66.0,
+      "q_load_mvar": 23.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 41,
+      "device_id": "load_bus_41",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 37.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 42,
+      "device_id": "load_bus_42",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 96.0,
+      "q_load_mvar": 23.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 43,
+      "device_id": "load_bus_43",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 18.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 44,
+      "device_id": "load_bus_44",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 16.0,
+      "q_load_mvar": 8.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 45,
+      "device_id": "load_bus_45",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 53.0,
+      "q_load_mvar": 22.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 46,
+      "device_id": "load_bus_46",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 28.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 47,
+      "device_id": "load_bus_47",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 34.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 48,
+      "device_id": "load_bus_48",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 20.0,
+      "q_load_mvar": 11.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 49,
+      "device_id": "load_bus_49",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 87.0,
+      "q_load_mvar": 30.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 50,
+      "device_id": "load_bus_50",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 17.0,
+      "q_load_mvar": 4.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 51,
+      "device_id": "load_bus_51",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 17.0,
+      "q_load_mvar": 8.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 52,
+      "device_id": "load_bus_52",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 18.0,
+      "q_load_mvar": 5.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 53,
+      "device_id": "load_bus_53",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 23.0,
+      "q_load_mvar": 11.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 54,
+      "device_id": "load_bus_54",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 113.0,
+      "q_load_mvar": 32.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 55,
+      "device_id": "load_bus_55",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 63.0,
+      "q_load_mvar": 22.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 56,
+      "device_id": "load_bus_56",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 84.0,
+      "q_load_mvar": 18.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 57,
+      "device_id": "load_bus_57",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 12.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 58,
+      "device_id": "load_bus_58",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 12.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 59,
+      "device_id": "load_bus_59",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 277.0,
+      "q_load_mvar": 113.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 60,
+      "device_id": "load_bus_60",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 78.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 62,
+      "device_id": "load_bus_62",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 77.0,
+      "q_load_mvar": 14.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 66,
+      "device_id": "load_bus_66",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 39.0,
+      "q_load_mvar": 18.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 67,
+      "device_id": "load_bus_67",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 28.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 70,
+      "device_id": "load_bus_70",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 66.0,
+      "q_load_mvar": 20.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 72,
+      "device_id": "load_bus_72",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 12.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 73,
+      "device_id": "load_bus_73",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 6.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 74,
+      "device_id": "load_bus_74",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 68.0,
+      "q_load_mvar": 27.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 75,
+      "device_id": "load_bus_75",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 47.0,
+      "q_load_mvar": 11.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 76,
+      "device_id": "load_bus_76",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 68.0,
+      "q_load_mvar": 36.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 77,
+      "device_id": "load_bus_77",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 61.0,
+      "q_load_mvar": 28.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 78,
+      "device_id": "load_bus_78",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 71.0,
+      "q_load_mvar": 26.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 79,
+      "device_id": "load_bus_79",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 39.0,
+      "q_load_mvar": 32.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 80,
+      "device_id": "load_bus_80",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 130.0,
+      "q_load_mvar": 26.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 82,
+      "device_id": "load_bus_82",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 54.0,
+      "q_load_mvar": 27.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 83,
+      "device_id": "load_bus_83",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 20.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 84,
+      "device_id": "load_bus_84",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 11.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 85,
+      "device_id": "load_bus_85",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 24.0,
+      "q_load_mvar": 15.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 86,
+      "device_id": "load_bus_86",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 21.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 88,
+      "device_id": "load_bus_88",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 48.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 90,
+      "device_id": "load_bus_90",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 163.0,
+      "q_load_mvar": 42.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 91,
+      "device_id": "load_bus_91",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 10.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 92,
+      "device_id": "load_bus_92",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 65.0,
+      "q_load_mvar": 10.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 93,
+      "device_id": "load_bus_93",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 12.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 94,
+      "device_id": "load_bus_94",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 30.0,
+      "q_load_mvar": 16.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 95,
+      "device_id": "load_bus_95",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 42.0,
+      "q_load_mvar": 31.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 96,
+      "device_id": "load_bus_96",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 38.0,
+      "q_load_mvar": 15.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 97,
+      "device_id": "load_bus_97",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 15.0,
+      "q_load_mvar": 9.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 98,
+      "device_id": "load_bus_98",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 34.0,
+      "q_load_mvar": 8.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 99,
+      "device_id": "load_bus_99",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 42.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 100,
+      "device_id": "load_bus_100",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 37.0,
+      "q_load_mvar": 18.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 101,
+      "device_id": "load_bus_101",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 22.0,
+      "q_load_mvar": 15.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 102,
+      "device_id": "load_bus_102",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 5.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 103,
+      "device_id": "load_bus_103",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 23.0,
+      "q_load_mvar": 16.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 104,
+      "device_id": "load_bus_104",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 38.0,
+      "q_load_mvar": 25.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 105,
+      "device_id": "load_bus_105",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 31.0,
+      "q_load_mvar": 26.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 106,
+      "device_id": "load_bus_106",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 43.0,
+      "q_load_mvar": 16.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 107,
+      "device_id": "load_bus_107",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 50.0,
+      "q_load_mvar": 12.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 108,
+      "device_id": "load_bus_108",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 2.0,
+      "q_load_mvar": 1.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 109,
+      "device_id": "load_bus_109",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 8.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 110,
+      "device_id": "load_bus_110",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 39.0,
+      "q_load_mvar": 30.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 112,
+      "device_id": "load_bus_112",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 68.0,
+      "q_load_mvar": 13.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 113,
+      "device_id": "load_bus_113",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 6.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 114,
+      "device_id": "load_bus_114",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 8.0,
+      "q_load_mvar": 3.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 115,
+      "device_id": "load_bus_115",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 22.0,
+      "q_load_mvar": 7.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 116,
+      "device_id": "load_bus_116",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 184.0,
+      "q_load_mvar": 0.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 117,
+      "device_id": "load_bus_117",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 20.0,
+      "q_load_mvar": 8.0,
+      "shedding_cost_per_mwh": null
+    },
+    {
+      "bus": 118,
+      "device_id": "load_bus_118",
+      "max_shed_fraction": 1.0,
+      "p_load_mw": 33.0,
+      "q_load_mvar": 15.0,
+      "shedding_cost_per_mwh": null
+    }
+  ],
+  "nd_ids": [
+    "wind_case118",
+    "solar_case118"
+  ],
+  "nondispatchable": [
+    {
+      "apparent_power_rating": 739.32591911872,
+      "bus": 105,
+      "device_id": "wind_case118",
+      "p_available": 0.0
+    },
+    {
+      "apparent_power_rating": 1498.887980390887,
+      "bus": 65,
+      "device_id": "solar_case118",
+      "p_available": 0.0
+    }
+  ],
+  "storage": [
+    {
+      "aging_weight": 1.0,
+      "apparent_power_rating": 14.436688329400003,
+      "bus": 41,
+      "capacity": 57.74675331760001,
+      "device_id": "storage_bus_41",
+      "initial_soc": 28.873376658800005,
+      "terminal_constraint": "equality",
+      "terminal_cost": null,
+      "terminal_soc": 28.873376658800005,
+      "terminal_weight": null
+    },
+    {
+      "aging_weight": 1.0,
+      "apparent_power_rating": 205.94638572560004,
+      "bus": 65,
+      "capacity": 823.7855429024002,
+      "device_id": "storage_bus_65",
+      "initial_soc": 411.8927714512001,
+      "terminal_constraint": "equality",
+      "terminal_cost": null,
+      "terminal_soc": 411.8927714512001,
+      "terminal_weight": null
+    },
+    {
+      "aging_weight": 1.0,
+      "apparent_power_rating": 28.9372558107,
+      "bus": 89,
+      "capacity": 115.7490232428,
+      "device_id": "storage_bus_89",
+      "initial_soc": 57.8745116214,
+      "terminal_constraint": "equality",
+      "terminal_cost": null,
+      "terminal_soc": 57.8745116214,
+      "terminal_weight": null
+    },
+    {
+      "aging_weight": 1.0,
+      "apparent_power_rating": 21.655032494100002,
+      "bus": 105,
+      "capacity": 86.62012997640001,
+      "device_id": "storage_bus_105",
+      "initial_soc": 43.310064988200004,
+      "terminal_constraint": "equality",
+      "terminal_cost": null,
+      "terminal_soc": 43.310064988200004,
+      "terminal_weight": null
+    }
+  ]
+}

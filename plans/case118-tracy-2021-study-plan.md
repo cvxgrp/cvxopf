@@ -1,0 +1,768 @@
+# Tracy 2021 Case118 study plan
+
+The source, active-power scaling, siting rules, and storage sizes in sections
+2–3 are approved design choices. Section 5 lists the remaining operating
+choices. Generate and validate the realized mapping in Stage A.
+
+## Execution order
+
+1. Close out the completed analytical 8,760-hour study scientifically and in
+   Git, including the required data description, heatmaps, and summaries.
+   Review and commit this scientific record as **commit 1**.
+2. **Pause for experimental-design review.** Use the fresh inspection of the
+   toy inputs and completed results to decide which toy-data scientific
+   studies, if any, should precede Tracy, and what runner changes they require.
+3. Separately triage and promote materials from the completed run's `outputs/`
+   into the Git-tracked tree. Review and commit this work as **commit 2**.
+   Do not combine these two steps into one commit.
+4. Implement and execute any selected toy-data follow-ups under their own
+   reviewed protocols, implementation commits, and compute budgets. Review
+   their findings and explicitly decide to move on to Tracy.
+5. Generate the new inputs and obtain **user review 1** of the final input
+   comparison and mapping before any Tracy study solves.
+6. Run targeted week-to-month DC studies selected using predicted congestion
+   and difficult operating periods; review them before an annual DC launch.
+7. Solve/audit the full 8,760-hour DC problem and obtain **user review 2** of
+   the data-generation choices in light of the resulting operation.
+8. Only then qualify Tracy AC and seek approval for annual AC execution.
+
+Both old-study commits and the toy-follow-up disposition must precede the
+new Tracy study. Toy-data counterfactual AC studies can use the existing
+accepted toy DC archive; they do not depend on a new Tracy annual DC solve.
+
+## 1. Objective and relationship to the completed study
+
+Build the intended 8,760-hour Tracy-driven Case118 experiment with an explicit,
+inspectable mapping from the owner's supplied composite to the network.
+Preserve its temporal relationships: available nondispatchable energy exceeds
+load over long periods, including the year, while individual hours still have
+positive net load. Dispatchable capacity is deliberately below peak net load,
+so storage must contribute. Congestion is desirable; an infeasible study is not.
+
+Keep the completed analytical-profile experiment and its execution records
+intact as a separate computational benchmark. The supplied Tracy composite
+was used in the earlier Case9 battery and M17 studies, but not the Case118
+pilot, week, month, or annual fixtures. Those Case118 studies used analytical
+temporal profiles. Do not relabel their results as Tracy results.
+
+Verify input identity directly from the source through the prepared arrays
+to the model inputs. Reuse the execution infrastructure, but regenerate all
+data-dependent results and scientific analyses for the Tracy scenario.
+
+## 2. Approved source and aggregate scaling
+
+### Source contract
+
+- File: `experiments/battery_terminal/data/9q9wtp_gen_and_load.csv`.
+- SHA-256:
+  `45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f`.
+- Year: **2021**, all 8,760 consecutive hourly rows, January 1 00:00 through
+  December 31 23:00 in the source's fixed UTC-08:00 convention.
+- Columns, interpreted as MW: `9q9wtp_load`, `9q9wtp_solar`, `9q9wtp_wind`,
+  `9q9wtp_dist_solar`. Preserve their separate identities.
+- Time step: one hour. Energy is the sum of interval MW times one hour.
+- Existing inspection found no missing, duplicate, nonfinite, or negative
+  entries in these four channels for 2021. Recheck during construction.
+- Describe this as the owner's Tracy-derived composite, not as four channels
+  of independently verified direct measurements.
+- No imputation, analytical fallback, temporal noise, year relabeling,
+  independent channel normalization, or forced equal wind/solar energy shares.
+
+For the study, load is the demand channel and distributed solar is a separate
+available injection, exactly as in the agreed net-load calculation. Do not
+subtract distributed solar from load and then also inject it. Preserve any
+source-construction metadata explaining gross/net semantics; do not silently
+reinterpret this approved accounting convention.
+
+Let source load be L(t), utility solar S(t), wind W(t), and distributed solar
+D(t). Define available net load N(t) = L(t) - S(t) - W(t) - D(t).
+
+Apply one common multiplier to all four channels:
+
+    alpha = 6000 MW / max_t N(t)
+          = 6000 / 1964.1006
+          = 3.0548333420396085.
+
+This targets **6,000 MW peak net load** and preserves the source energy ratios,
+relative timing, and sign of net load. It does not require positive annual net
+energy. Curtailment is a dispatch decision; available renewable energy is not
+the same as renewable energy actually used.
+
+### Approved system and storage sizes
+
+Use the pinned PGLib source at
+`experiments/case118_annual_hierarchy/source/pglib_opf_case118_ieee.m`, revision
+`dc6be4b2f85ca0e776952ec22cbd4c22396ea5a3`, through the provenance-checked loader.
+Do not substitute the package's different PYPOWER-derived Case118 variant.
+
+The PGLib case has 118 buses, 186 in-service branches, 4,242 MW base active load,
+and 6,515 MW positive dispatchable capacity at 19 buses. Uniformly scale each
+positive dispatchable Pmax by **5000/6515 = 0.7674597083653109**. The source Pmin
+values are zero. Keep the 35 zero-Pmax generator entries as reactive-support
+resources; scaling active capacity does not decide their Q limits.
+
+Define average load from the entire scaled 2021 gross-load series, not the
+base-case snapshot or average positive net load:
+
+    mean_load = mean_t(alpha L(t)) = 3511.6394609974527 MW
+    E_total = 4 h * mean_load = 14046.55784398981 MWh
+    P_total = E_total / 3 h = 4682.185947996603 MW.
+
+The three-hour rule applies to maximum charge and discharge active power.
+AC apparent-power ratings and any resulting P/Q tradeoff must be explicit;
+MW is not interchangeable with MVA at nonzero reactive output.
+
+The next storage comparison, not a second automatic annual run, is six
+average-load hours: **21069.836765984717 MWh / 7023.278921994905 MW**. Hold siting,
+weights, and all other inputs fixed. This increases both energy and power by
+1.5, so it is not an energy-only sensitivity. Eight hours is deferred.
+
+### Input reference values
+
+These are source-derived input checks, not solved-network results. Reconstruct
+them independently in the input package; retain full precision in computation.
+
+| Metric | Raw Tracy 2021 | Approved scaled candidate |
+| --- | ---: | ---: |
+| Annual load | 10,069,931.232 MWh | raw value times alpha |
+| Annual available utility solar | 11,219,030.212 MWh | raw value times alpha |
+| Annual available wind | 7,649,167.150 MWh | raw value times alpha |
+| Annual available distributed solar | 393,989.859 MWh | raw value times alpha |
+| Annual available ND / load energy | 1.912842 | unchanged |
+| Average load | 1,149.536 MW | 3,511.639 MW |
+| Peak gross load | 3,425.131 MW | 10,463.204 MW |
+| Peak available net load | 1,964.101 MW | 6,000 MW |
+| Peak available ND | 7,947.077 MW | 24,276.997 MW |
+| Largest instantaneous available surplus | 6,775.605 MW | 20,698.343 MW |
+
+With 5,000 MW fully available dispatchable capacity and no network/loss effects,
+the approved candidate has 42 shortfall hours in 22 continuous events. The
+longest event lasts six hours; the largest continuous event requires about
+4,202.173 MWh, on February 19 01:00–06:00 fixed UTC-08:00. Total positive
+shortfall energy across the year is about 13,652.212 MWh. None of these values
+alone establishes required storage energy, recharge feasibility, or AC
+deliverability. They explain choosing the lower, four-average-load-hour
+storage size as the first candidate.
+
+## 3. Approved spatial mapping
+
+Classify buses from the unmodified PGLib active load and positive in-service
+generator Pmax, before adding renewables or batteries. Reactive-only generator
+entries do not make a bus an active dispatchable-generation bus.
+
+| Original category | Count | Utility-renewable sites to select |
+| --- | ---: | ---: |
+| Positive load, no active dispatchable generation | 89 | 0 |
+| Positive load and active dispatchable generation | 10 | 5 |
+| Active dispatchable generation, zero load | 9 | 5 |
+| Neither positive load nor active dispatchable generation | 10 | 5 |
+
+The last three categories therefore supply **15 distinct utility-renewable
+sites**. Five of nine is the agreed integer rounding of approximately half.
+Co-location with load is permitted at existing dispatchable
+generation buses. No utility wind/solar is placed at an original load-only bus.
+
+Eligible bus IDs:
+
+- Load + active generation: **12, 31, 46, 49, 54, 59, 66, 80, 100, 103**.
+- Active generation without load: **10, 25, 26, 61, 65, 69, 87, 89, 111**.
+- Neither: **5, 9, 30, 37, 38, 63, 64, 68, 71, 81**.
+- Original load-only buses are the remaining 89 buses.
+
+### Load and distributed solar
+
+For all 99 positive-load buses, define
+
+    load_share[i] = Pbase[i] / sum_j Pbase[j] = Pbase[i] / 4242.
+    load[i,t] = load_share[i] * alpha * L(t)
+    distributed_solar_available[i,t] = load_share[i] * alpha * D(t).
+
+This is the agreed normalization onto the simplex: nonnegative shares summing
+to one, preserving base-load proportions. It is not an unscaled copy of base
+MW and not the Euclidean nearest-point projection onto the unit simplex.
+No random perturbation is applied to these load/DG shares.
+
+### Utility wind and solar
+
+Select sites uniformly without replacement within each eligible category.
+Assign each selected site independently to wind only, utility solar only, or
+both, with probability 1/3 each. These are probabilities, not exact quotas.
+A site marked both has two separate identified resource channels.
+
+For each resource r separately, start with equal allocation among its host
+sites S_r, draw independent multipliers u[i,r] ~ Uniform(0.8, 1.2), and set
+
+    resource_share[i,r] = u[i,r] / sum_{j in S_r} u[j,r].
+    available[i,r,t] = resource_share[i,r] * alpha * source[r,t].
+
+Weights are fixed for the whole year. Utility solar and wind each sum to their
+own scaled Tracy channel at every hour. Do not confuse the resource-type
+probabilities with a wind/solar energy split. Require at least one host for
+each resource; an invalid realization must be reported, not silently redrawn.
+
+### Sparse battery placement and allocation
+
+Select **27 distinct battery buses**, using the following disjoint categories:
+
+| Battery category | Eligible population | Selected count | Capacity pool |
+| --- | ---: | ---: | --- |
+| Original load-only; no dispatchable or utility wind/solar generation | 89 | 22 | Load-side half |
+| Selected utility wind/solar buses with no load | 10 | 3 | Renewable-side half |
+| Selected utility wind/solar buses with load | 5 | 2 | Renewable-side half |
+
+Distributed solar does not disqualify a load-only battery host. The 22 and 3
+counts implement the approved approximate quarter coverage. Do not place
+batteries at every load bus or every renewable bus.
+
+- Load-side pool: E_total/2 and P_total/2, allocated across the 22 selected
+  hosts in proportion to their Pbase, renormalized over those hosts only.
+- Renewable-side pool: E_total/2 and P_total/2, allocated across its five
+  selected hosts in proportion to each host's annual available utility solar
+  plus wind energy. Exclude DG solar from these weights. Renormalize over
+  these five hosts only; the two mixed sites belong solely to this pool.
+- Every battery receives the same three-hour E/P ratio. Each pool totals
+  **7,023.278921994905 MWh / 2,341.0929739983015 MW** in the primary case.
+- Distinguish the physical host category from the capacity accounting label:
+  a renewable-side battery can be at a mixed load/renewable bus.
+
+### Reproducible construction and post-construction checks
+
+Use **seed 42** and the above perturbations, followed by a post-construction
+sanity check. Use the following implementation convention
+to remove otherwise hidden randomness choices, and record it in the manifest:
+
+1. Use `numpy.random.Generator(numpy.random.PCG64(42))`; record NumPy version.
+2. Sort candidate external bus IDs. Select the five sites in each category in
+   this order: load + generation, generation/no-load, neither. Sort selected
+   lists before further processing.
+3. Process the sorted union of 15 sites, drawing one categorical assignment
+   per site with fixed order `[wind_only, solar_only, both]`.
+4. Draw solar multipliers in increasing solar-host ID order, then wind
+   multipliers in increasing wind-host ID order. Normalize each separately.
+5. Select batteries without replacement in order: 22 original load-only,
+   three selected renewable/no-load, two selected renewable/with-load.
+   Sort each candidate and selected list. Compute capacity weights without
+   additional noise.
+6. Save the complete realized bus/device table and numeric weights. The table,
+   not seed alone, is the authoritative frozen realization.
+
+Audit eligible populations, counts, disjoint battery pools, resource presence,
+nonnegative normalized weights, hourly channel conservation, 5,000 MW total
+dispatchable Pmax, exact storage totals/splits, and every battery's E/P ratio.
+Check realistic-looking concentration with a bus-role map and capacity table,
+without silently changing the declared distribution. Confirm identical output
+on repeated construction and sensible identity alignment under input ordering.
+
+Keep the first valid seeded configuration unless network checks expose a
+concrete feasibility problem. Diagnose and document any proposed targeted
+adjustment and obtain approval before refreezing it. Do not repeatedly change
+seeds until congestion disappears or a favorable optimization result occurs.
+
+## 4. Historical placement and the required old/new comparison
+
+### What was done before
+
+The Case9 battery-terminal/M17 implementation used one battery at **bus 7**,
+150 MVA / 1,000 MWh, initially 500 MWh. The battery-terminal README explains
+the single-site choice: isolate terminal-policy effects without confounding
+them with allocation among multiple storage devices. Bus 7 was a load bus;
+this was not a demonstrated optimal storage placement. Load and DG shared
+fractions 90/315, 100/315, 125/315 at buses 5, 7, 9. A separate common
+source-to-case multiplier was 315/1138.7624473656565, approximately 0.276616.
+Do not reuse that multiplier for Case118.
+
+The analytical Case118 study placed batteries at **41, 65, 89, 105**, selected
+by deterministic load-weighted four-medoids clustering using shortest-path
+electrical distance based on branch |x| (with a small positive floor).
+Clustering weights used base apparent demand. Storage capacity allocation used
+cluster base active demand. Solar went at bus 65, the medoid of the largest
+apparent-demand cluster; wind went at bus 105, the storage medoid electrically
+farthest from solar. These were pre-dispatch rules, not an optimized siting
+result. The annual case used 15% renewable/load energy, equally divided
+between wind and solar, storage power at 5% of peak gross load, and four hours
+of storage duration at that power. **That four-hour duration is not our new
+four hours of average system load.**
+
+Evidence: `experiments/battery_terminal/README.md`, `devices.py`, `scenario.py`;
+`experiments/hierarchical_battery_resilience/prepare_scenario.py` and its
+prepared manifest; `experiments/case118_annual_hierarchy/scenario.py`,
+`S0_PILOT_PROTOCOL.md`, and `S4_PROTOCOL.md`.
+
+### Like-for-like descriptive metrics
+
+As an explicit deliverable, recalculate these metrics for the actual frozen
+analytical annual fixture in 0a. In Stage A, calculate the matching Tracy 2021
+metrics and assemble the comparison, with scaled Tracy as the primary
+apples-to-apples counterpart and raw Tracy as source context:
+
+- Year/calendar, time step, source identity, load/renewable channel definitions.
+- Annual and monthly load and available renewable MWh, each channel separately
+  and combined, renewable/load ratios, and net energy.
+- Peak gross load, coincident peak net load, minimum net load, ramps, and
+  monthly max_t(load minus total available ND), not differences of maxima.
+- Hours and continuous events exceeding available dispatchable Pmax, peak
+  shortfall MW, event duration/energy, and recharge opportunities.
+- Dispatchable Pmax, storage charge/discharge MW and apparent MVA where relevant,
+  energy MWh, energy divided by average gross load, E/P duration, initial and
+  terminal SOC, and spatial coverage by resource role.
+- Base load versus new average/peak load; unchanged branch ratings; nodal
+  injection and potential transfer patterns, without claiming uncomputed
+  branch feasibility or summing line ratings as system transfer capacity.
+- Separately, available versus dispatched renewables, curtailment, losses,
+  congestion, cycling, and realized SOC where accepted solve outputs exist.
+
+Do not label an absent old DG channel as an observed zero source series, or
+compare a base-case snapshot to an annual mean without identifying the
+distinction. Multiple design dimensions change between studies; differences
+in their outcomes are not a controlled estimate of the effect of Tracy data
+alone. This comparison requires input reconstruction and existing outputs,
+not another solve of the historical execution tree. It does not itself require
+a full execution audit; any separately necessary old-study closeout analysis
+must follow the single-pass, explicitly budgeted process in work package 0a.
+
+### Required comparable final-input heatmaps and tables
+
+This section specifies a shared presentation contract across two stages, not
+a requirement to generate both datasets during closeout. **0a produces and
+commits the toy-data baseline only**, with final-input arrays, heatmaps,
+summary tables, units, calendar metadata, and reproducible plotting logic.
+Use the signal definitions, orientation, and summary metrics below so that
+these materials **will support the comparison in Stage A**. **Stage A generates
+the Tracy counterpart and assembles the actual side-by-side comparison.**
+Completing that comparison is not an exit condition for 0a or 0b.
+
+Use the actual final aggregate input signals of the completed analytical
+study ("toy data" or "sines and cosines" data), not its unitless
+profile formulas or intermediate capacity factors. In Stage A, compare them side by side
+with **scaled Tracy aggregates before allocation to buses**, in engineering
+units. Verify that summing the eventually prepared bus/device inputs exactly
+reconstructs those Tracy aggregates.
+
+For each scenario, produce **24-row by 365-column heatmaps: rows are hour of
+day (0–23), columns are days in chronological order**. Required signals are:
+
+- Total gross active load, MW.
+- Total available nondispatchable generation, MW, with the included channels
+  named explicitly.
+- Available net load (load minus total available nondispatchable), MW.
+- Separate utility solar, wind, and distributed-solar availability where
+  present. Mark the toy scenario's absent DG channel as not modeled.
+
+In Stage A, each pair must share orientation, units, colormap, and color limits computed
+jointly across the two scenarios for that signal. Use a common zero-centered
+diverging scale for net load. Do not independently normalize each panel, clip
+extremes silently, or rescale the old scenario to conceal the actual magnitude
+difference. Optional normalized-shape plots are supplementary, never replacements.
+The standalone toy plots in 0a need not anticipate Tracy's color limits.
+Stage A may render new paired plots from the committed toy arrays with joint
+limits, without modifying the historical inputs or the committed 0a record.
+Label the toy year/time convention (2025 UTC) and Tracy's 2021 fixed UTC-08:00
+calendar explicitly. Day-of-year alignment is a visual comparison, not a
+claim of matching dates, weekdays, weather, or simultaneous observations.
+
+Accompany the plots with side-by-side annual and monthly tabular summaries
+from the same final arrays: all channel MWh, average/peak load, available-ND
+and net-load extrema, energy ratios, shortfall hours/events/energy against
+each scenario's dispatchable capacity, and storage sizing/coverage metrics.
+Show the exact transformations and distinguish available input power from
+dispatched generation or curtailment. Save figure-ready arrays, units,
+provenance, and reproducible plotting logic with the reviewed material.
+
+## 5. Remaining choices to close before numerical qualification
+
+Construct the active mapping after both old-study commits and the explicit
+transition to Tracy in work packages 0a–0c.
+Present them together with the input package rather than reopening approved
+year, scale, counts, seed, or storage choices.
+
+| Item | Proposed treatment / decision needed |
+| --- | --- |
+| Reactive load | Recommend Q_i(t) = (Qbase_i/Pbase_i) load_i(t), retaining signs and fixed shunts separately. This pinned case has no zero-P/nonzero-Q load buses. Confirm and record before AC qualification. |
+| Dispatchable reactive capability | Recommend retaining source Q limits, including reactive-only units; uniform active-Pmax scaling is not approval to scale Q. Make the decision explicit. |
+| Renewable inverter ratings | Choose and label a rating rule/headroom factor; an observed availability maximum is not a measured nameplate. Avoid unintended clipping of the approved source. |
+| Battery AC operating set | Resolve apparent MVA rating versus the approved E/3 active-power limit and reactive support. If MVA headroom is larger, do not accidentally enlarge the active limit. |
+| Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
+| Economics | Inventory inherited generator costs, fleet-wide c2 = 1e-4 conditioning, storage cycling penalty, and curtailment treatment. Recommend reuse for the first comparison, but expose these assumptions rather than calling them physical data. |
+| Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy and recovery machinery. Reconsider the experimental scope and runner requirements at the post-0a design pause and after selected toy follow-ups; confirm the Tracy policy before its execution gates. |
+
+The intended primary study serves all load with rated branches and voltage/
+device constraints. No unapproved shedding, branch-rating inflation, or
+reactive-limit removal is a feasibility fix. A diagnostic relaxation, if
+separately authorized, is not an accepted operating trajectory. A failed
+nonlinear local solve also does not by itself prove physical infeasibility.
+
+## 6. Work packages and gates
+
+### 0a. TODO: scientific closeout of the completed study — commit 1
+
+This is a mandatory predecessor to new-study implementation and generation,
+not an optional parallel workstream. Its scope is the completed toy study.
+Do not generate Tracy inputs or assemble the toy-versus-Tracy comparison here;
+those belong to Stage A, after the prerequisite commits and toy-follow-up
+disposition.
+
+**Scientific and Git record TODOs**
+
+- [x] Finish the completed 8,760-hour toy-data study's scientific report and
+  formal results record, including accepted coverage, physical-audit status,
+  recovery/intervention history, resources, limitations, and what remains
+  unknown. Distinguish computational acceptance from formal closeout.
+- [x] Describe the actual data used clearly: analytical formulas and their
+  parameters, calendar/timezone, final MW scaling, renewable mix, spatial
+  allocation, generator/storage choices, and all material transformations.
+  Explicitly state that this run did not use the supplied Tracy trajectories.
+- [x] Include the toy study's final-input heatmaps and tabular summaries using
+  section 4's signal definitions, hour-row/day-column orientation, units, and
+  summary metrics. Save their supporting arrays and plotting logic so they
+  will be reusable in Stage A's comparison with scaled, pre-allocation Tracy
+  signals. The Tracy panels and side-by-side comparison are not 0a deliverables.
+  Do not substitute plots of solver outputs for the required input plots.
+- [x] Use this fresh view of the toy data to identify the questions worth
+  studying next. Relate its imposed daily/seasonal structure, renewable share,
+  net-load stress, storage sizing, and spatial placement to the observed
+  congestion, AC adjustments, and recovery patterns. Distinguish features
+  imposed by data generation from demonstrated physical or economic effects.
+  Include these observations and open questions in the closeout report.
+- [x] Verify the complete analyzer payload and formal `S5_RESULTS.json`
+  against retained evidence, and recover any missing record. Review the
+  single-pass analysis/promotion implementation and save/reuse the necessary
+  final analysis exactly once. If a full pass is required, state its scope
+  and cost and obtain execution approval. Check for an existing durable result
+  before launching reconstruction.
+- [ ] Independently review the scientific record and exact file disposition,
+  obtain the owner's closeout/commit approval, and commit the scoped record.
+  Record the resulting commit ID. A draft report or staged files alone do not
+  satisfy the Git-committed closeout gate.
+
+Exit: the owner has reviewed the scientific/input record, including its data
+description and standalone toy-data heatmaps/tables, and that scoped record is
+committed. The baseline is ready for later comparison; no completed Tracy
+comparison is required or claimed at this point.
+Report **commit 1**, then pause for the design review below before starting
+the separate `outputs/` triage step. Include
+the figures/data needed to make the scientific closeout self-contained here;
+the broader historical `outputs/` inventory and curated promotion remain 0b.
+
+#### Required pause: choose the toy-data follow-ups and runner scope
+
+Review the newly documented final inputs and scientific record with the owner.
+Decide what can still be learned from the completed toy scenario before moving
+on to Tracy. Do not assume that another annual AC rollout, the existing
+three-hour horizon, or a particular runner implementation is the next step.
+
+Consider the [targeted AC counterfactual proposal](../outputs/case118-counterfactual-ac-study.md).
+It proposes eight matched three-hour windows, with four stages separating
+small generator repair, economical small repair, unrestricted generator
+redispatch, and additional battery rescheduling. Common DC-derived starting
+and ending SOC, fixed renewable real dispatch, and common AC-evaluated costs
+define the comparison. This is a candidate diagnostic on the **toy fixture**,
+not an automatic addition to closeout or a required Tracy experiment.
+
+Evaluate whether its question and selected windows remain informative after
+the input review. Its outcome-selected sample does not estimate annual value;
+its common three-hour horizon does not compare horizon lengths; and it does
+not establish a prospective rule for skipping AC. A horizon comparison,
+renewable-flexibility study, or DC-based difficulty predictor needs its own
+question, comparison conditions, and protocol rather than being inferred
+from these counterfactuals.
+
+Record the owner's decision in a concise design checkpoint:
+
+- Studies selected, deferred, or declined, with scientific questions, expected
+  information, source fixture, comparison conditions, and bounded scope.
+- Required artifacts and extraction support to preserve/promote in 0b.
+- Runner changes required for each selected study, separate from optional
+  performance improvements. For the proposed counterfactuals, assess matched
+  window extraction, schedule locks, repair objectives/budgets, feasible
+  incumbent transfer, and cost/residual reporting. Do not assume an annual
+  scheduler redesign is necessary.
+- Implementation/review/commit sequence, execution budgets and stopping rules,
+  and the evidence needed to decide whether to proceed to Tracy.
+
+Keep the completed scientific record fixed. New runner implementations and
+experimental results receive separate commits and identities; do not fold
+them into closeout commit 1 or artifact-promotion commit 2. Selecting a study
+does not bypass its protocol, implementation review, or numerical launch gate.
+
+### 0b. TODO: separate `outputs/` triage and promotion — commit 2
+
+Start after 0a is reviewed and committed and the design checkpoint is recorded.
+Use that decision to prioritize the evidence and tooling needed by selected
+toy follow-ups. This is a distinct work package with its own file disposition,
+review, and commit, not a subsection of commit 1.
+
+**`outputs/` triage and promotion TODOs**
+
+- [ ] Inventory materials in `outputs/` produced during the completed run:
+  analysis results, figures, tables, diagnostics, notebook exports, scripts,
+  and explanatory notes. Record path, purpose, source/scenario identity,
+  producing code or reproduction command where recoverable, and dependencies.
+- [ ] Assign each item a disposition: promote a durable scientific/software
+  artifact into an appropriate Git-tracked location; retain a large/raw item
+  in its existing archive with a tracked manifest/reference; or mark it as
+  temporary, superseded, or unverified with a reason. Identify authoritative
+  versions rather than promoting duplicates indiscriminately.
+- [ ] Propose and review an exact source-to-destination promotion list. Promote
+  the selected materials and their necessary provenance/reproduction support;
+  update report/notebook links so essential evidence does not depend solely
+  on an unexplained ignored `outputs/` path. Respect source-data permissions
+  and file sizes; do not bulk-add `outputs/` or alter ignore rules broadly.
+- [ ] Include the counterfactual proposal in the disposition review. If
+  promoted, update its stale run-status language, repair relative links, and
+  update this plan's reference to the tracked destination. Preserve its
+  scientific scope unless a separately reviewed design decision changes it.
+- [ ] Verify promoted copies match the selected originals, references resolve,
+  and figures/tables are tied to the completed toy scenario. Include the
+  curated artifacts and disposition index in this separately reviewed commit.
+  Preserve the originals.
+- [ ] Obtain the owner's approval of the triage/promotion file disposition and
+  commit it as **commit 2**, separately from the scientific closeout commit.
+
+Exit: the owner has reviewed the triage dispositions, selected artifacts have
+been promoted, and that work is separately Git-committed. Report **commit 2**
+and any intentionally external archives. Both commits must exist before
+toy-follow-up implementation or work package A.
+
+### 0c. Selected toy-data studies and explicit transition to Tracy
+
+For each selected study, freeze its protocol, exact source inputs, comparison
+arms, sample rule, solver/acceptance settings, and resource budget. Implement
+the scoped runner changes in a separate experiment path, verify units,
+identity alignment, boundary conditions, and objective/residual accounting,
+and independently review and commit the implementation before numerical
+execution. Preserve the original toy fixture and accepted execution tree.
+
+For the proposed counterfactual diagnostic, retain the existing toy DC archive
+and matched DC SOC endpoints. Keep Tracy scaling, siting, and storage choices
+out of these experiments. Any departure from the proposal's restricted
+renewable dispatch or eight-window scope requires an explicit protocol change.
+Retain failed and unresolved attempts alongside feasible witnesses and observed
+cost improvements; local solver outcomes are not global optimality or
+infeasibility certificates.
+
+Review the findings and remaining questions with the owner. Decide which
+methods or runner capabilities to carry into Tracy, which require adaptation
+to its different inputs, and whether further toy work is justified. Do not
+transfer toy-specific numerical conclusions or silently expand the studies.
+
+Exit: each selected study is completed and reviewed, or explicitly deferred
+or stopped with its evidence and reason retained; the owner approves moving
+to Tracy. If no toy studies are selected, record that disposition and the
+transition decision after 0b. Stage A does not begin automatically after
+artifact promotion.
+
+### A. Generate inputs and obtain user review 1, without OPF solves
+
+1. Preserve the analytical fixture, outputs, and existing uncommitted work.
+   Give the Tracy fixture and output root distinct readable identities.
+2. Implement only the declared source adapter and mapping using existing
+   component APIs. Fail clearly on absent/wrong data; never call the analytic
+   profile generator as a fallback.
+3. Persist exact prepared arrays, the 118-bus role table, device IDs, resource
+   weights, generator and battery capacities, source provenance, RNG protocol,
+   version information, and every transformation. Use full-precision values,
+   not rounded summary values, to construct devices.
+4. Produce annual/monthly summaries, annual and representative-week plots of
+   all four channels and net load, and a network map showing roles and sizes.
+   Deliver the full side-by-side final-input heatmap and tabular comparison
+   specified in section 4: scaled Tracy-derived Case118 versus the frozen toy
+   scenario. This is where the comparison is first assembled. Reuse the
+   committed 0a toy arrays, summaries, and plotting logic; render paired plots
+   with shared scales rather than generating new historical toy inputs.
+   Include named source-to-prepared row checks and the Dec 18–21 M17 window.
+5. Independently reconstruct hourly aggregate channels and selected bus rows
+   directly from the CSV and saved mapping, not by rerunning the same builder.
+   Check the actual arrays reaching both DC and AC model construction.
+6. Add focused tests for source identity, calendar, conservation, device
+   alignment, random reproducibility, and rejection of silent substitution.
+   Use ordinary repository test commands. Keep this stage's tests input-only;
+   numerical solves begin in Stage B.
+
+**User review 1 is an explicit stop after generation, before DC solves.**
+Present one review package containing the comparable input heatmaps/tables,
+source-to-input transformations, realized bus/device map, capacity allocations,
+sanity-check results, and the section 5 choices needed for the proposed DC
+screening. Ask whether these actual inputs and data-generation choices are the
+intended study. Record the owner's approval or requested revisions against a
+specific fixture version/digest; showing the package is not approval. Revise
+and re-present affected material before proceeding if the owner changes it.
+
+Exit: source, prepared curves, realized mapping, and model inputs agree; the
+sanity check passes; DC-relevant operating choices are resolved; and the owner
+approves this concrete realization and a bounded targeted-DC protocol. A
+matching digest alone does not establish source fidelity.
+
+### B. Targeted week-to-month DC studies before the annual DC solve
+
+Do not jump from initial data generation to an 8,760-hour DC solve. Use the
+frozen input series, realized siting, branch ratings/topology, and available
+generator/storage capacities to predict where congestion and difficult
+periods are likely. Screen regional injection/export patterns and constrained
+corridors as well as system-wide net load. Label transfer/congestion scores
+as model-based indicators, not proof of AC deliverability; any additional
+optimization-based screening belongs inside the approved solve budget.
+
+Before solving, document a small set of **contiguous, non-wrapping windows on
+the order of weeks to months** (for example, 2–4 weeks around selected events
+and a 1–3 month span for persistent stress), their selection rationale, and
+their complementary coverage. Include predicted import/export bottlenecks,
+the peak/sustained deficit, high gross load, renewable surplus, large ramps,
+and potential SOC depletion/recharge difficulty; retain an ordinary-period
+control. Several criteria may select the same window. Do not substitute only
+isolated hours or short prefixes for these coupled studies, and do not use
+results from a not-yet-authorized annual solve to select them.
+
+Run the existing rated lossy-DC formulation on those windows with the same
+full-year-derived capacities, allocation weights, and physical/economic rules.
+Do not resize resources to each window. Predeclare initial/terminal SOC,
+context/padding, solve-count/time/memory limits, tolerances, and stopping rules.
+For potentially consequential finite-window boundary effects, use a bounded,
+declared boundary sensitivity rather than interpreting an arbitrary initial
+SOC or terminal target as a physical property of the year.
+
+Report residuals and load service; branch utilization/binding intervals and
+locations; dispatch, available/used renewables and curtailment; losses;
+storage power, SOC, depletion/recharge, and terminal effects; numerical
+conditioning, wall time, and memory. Distinguish observed DC difficulty from
+predicted difficulty and from untested AC behavior. Successful windows do not
+prove annual feasibility. Diagnose failures without silent siting, seed,
+rating, or source changes.
+
+Exit: the owner receives the targeted-DC findings and any proposed revisions,
+plus a full-year DC runtime/resource estimate. Obtain explicit approval for
+the annual DC solve only after the windows are reviewed. A changed fixture
+must return through the affected input-review and qualification checks.
+
+### C. Full 8,760-hour DC solve and user review 2
+
+After the targeted-DC gate, solve and physically audit the new annual convex
+outer problem. Persist its full primal trajectory, complete analysis, source
+identity, and SOC signposts. Inspect annual boundary conditions and continuity,
+not just successful solver status.
+
+**User review 2 is an explicit stop after the Tracy annual DC solve, before any
+Tracy AC solve.** Re-present the data-generation choices with their full-year DC
+consequences:
+
+- The exact reviewed final-input heatmaps/tables and proof that those arrays
+  reached the solved model; make any approved changes since review 1 visible.
+- Hours-by-days output heatmaps for dispatch, renewable use/curtailment, storage
+  charging/discharging and SOC as useful, distinctly labeled as outputs.
+- Annual/monthly balance and cost summaries; congestion locations, severity,
+  and duration; losses; dispatchable shortfalls and storage response; boundary
+  effects and residual audits; observed computational difficulty.
+- A clear assessment of whether the scaling, siting, renewable allocation,
+  and storage design produced the intended regime: useful congestion and
+  storage activity with feasible rated-network DC operation. Explain the
+  remaining limitations of using DC evidence to predict AC feasibility.
+
+Ask the owner to retain or revise the data-generation/configuration choices
+and separately approve a bounded AC qualification. Record the decision against
+the annual result and fixture. Do not treat completed DC execution as automatic
+permission for AC. If the configuration changes, regenerate affected inputs
+and results rather than reusing stale signposts or concealing the revision.
+
+Exit: accepted annual DC evidence and explicit owner acceptance of the
+configuration in light of it. Only then derive the new shard boundaries and
+states using the reviewed rule for the approved trajectory; never copy old
+states or assume old boundaries remain appropriate.
+
+### D. Bounded AC qualification, separately authorized after user review 2
+
+Freeze the selected windows, initial-state provenance, solve-count/time/memory
+budgets, recovery policy, acceptance tolerances, and stopping rules before
+launch. Resolve the remaining AC operating choices from section 5 first.
+
+Use the annual DC evidence and inputs to select a small AC qualification set
+spanning ordinary operation, predicted/observed congestion, peak net load,
+the sustained February deficit, high gross load, renewable surplus, large
+ramps, and actual new shard starts. Allow conditions to overlap so this is
+not an unnecessarily large test matrix. Include coupled windows long enough
+to expose depleted SOC and recharge needs, not only isolated peak snapshots.
+Exercise one representative shard join and checkpoint/restart path, reusing
+unaffected correctness evidence.
+
+Check load service, branch terminal MVA, voltage and reactive limits, storage
+SOC and P/Q limits, losses, curtailment, boundary continuity, and residuals.
+Track the distinction between physical infeasibility, a restrictive outer
+signpost/controller policy, and local solver failure. Detached diagnostic
+windows cannot be stitched into an accepted annual path.
+
+If a problem arises, identify whether it is siting/deliverability, active or
+reactive power, stored energy, recharge, boundary conditions, or numerical
+behavior. Bring a documented targeted revision; do not quietly redraw sites,
+retune source channels, expand budgets, or jump to larger storage. The six-hour
+storage sensitivity is the declared next size, not a universal remedy.
+
+Exit: independently reviewed qualification evidence plus a credible annual
+runtime/resource estimate and unresolved-risk summary. Representative success
+screens configurations; it does not establish full-year AC feasibility.
+
+### E. Annual AC execution, after an explicit launch decision
+
+Reuse the vectorized outer builder, controller, checkpoint/archive machinery,
+supervision, and reviewed recovery policy. Do not repeat the full historical
+S0-through-S4b engineering campaign or introduce a new scheduler research
+project as part of this input replacement.
+
+Create new scenario-bound execution records and authority bound to the already
+accepted Tracy outer dispatch, SOC signposts, and shard states from package C.
+Do not repeat the annual DC solve merely to launch AC. Generate the new AC
+actions, recovery outcomes, and scientific metrics. No toy-study numerical
+solution or checkpoint becomes part of the Tracy trajectory.
+
+The old run's approximately 139.7 active supervisor hours is budgeting context,
+not a forecast. In particular, moving from four to 27 storage devices and to
+many renewable devices changes model size as well as operating conditions.
+Use measured qualification memory and timing to budget before launch. Freeze
+the implementation checkpoint by the project's reviewed procedure; commit
+only when the owner authorizes it.
+
+### F. One final analysis and a clearly identified report
+
+At completion, perform the required independent physical/trajectory analysis,
+save its complete result, and promote that same validated object without
+repeating full reconstruction. Reuse the one-pass promotion path reviewed
+during old-study closeout, verifying any subsequent changes before use.
+
+Write the Tracy report and rebuild its plots, dashboard, stress correlations,
+and any counterfactual selection from the new accepted results. Preserve
+the analytical benchmark separately and qualify comparisons as described
+above. No conclusion about Tracy is inherited from the analytical run.
+
+## 7. Handoff and completion criteria
+
+Begin with **work package 0a: old-study scientific/Git closeout
+(commit 1)** and its **experimental-design pause**, followed by **0b: separate
+`outputs/` triage/promotion (commit 2)** and **0c: selected toy studies and the
+transition decision**. After those gates, hand off
+the new-study plan plus one compact list of the open operating choices in
+section 5. Use the existing builder and independent reviewer for a scoped
+build-review loop at each work package.
+
+For each implementation checkpoint, review source fidelity and scientific
+meaning as well as software correctness. At a clean handoff, collect proposed
+commit text and a file-by-file disposition for owner review.
+Keep scientific closeout commit 1, the design checkpoint, artifact-triage
+commit 2, toy-study reviews/transition, user review 1, targeted-DC review/annual-DC
+approval, user review 2, bounded AC approval, and annual AC launch approval
+distinct. No input check or completed DC solve is implicit permission to spend
+another annual AC run's compute budget.
+
+The final study is complete only when the owner-approved Tracy realization
+has a full accepted trajectory with audited boundaries and physical residuals,
+durably saved analysis, visible input lineage, and a report whose claims match
+the actual scenario.
+
+## 8. Decision provenance
+
+For the rationale behind the design choices, consult these source tasks:
+
+- `cvxopf-coordinator`: `01a065c7-592c-7840-ae6a-78408aedb5c4` (owner decisions).
+- `cvxopf-discuss`: `01a08988-3eef-79d0-bdaa-6c8458658878`.
+- `cvxopf-review`: `019fa526-1222-7443-8c5b-a13f55f6b56b`.
+- `cvxopf-build-2`: `01a0b007-bfeb-7083-b1b4-5172d6b0b20a` and
+  `plans/s5-tracy-recovery-plan.md`.
+
+The specifications and gates in this document govern the study; earlier
+proposals are background references, not additional execution requirements.

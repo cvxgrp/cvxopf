@@ -1,0 +1,20 @@
+{
+  "ac_end_soc_max_mwh": 1083.9014480542098,
+  "ac_end_soc_min_mwh": 2.3943081255607556e-05,
+  "ac_generation_cost": 739922321.015597,
+  "ac_renewable_used_mwh": 5573759.164347916,
+  "ac_storage_throughput_mwh": 234194.77852501388,
+  "dc_generation_cost_common_coefficients": 675764920.5648474,
+  "dc_renewable_curtailment_mwh": 0.000696985051035881,
+  "dc_renewable_used_mwh": 5573987.999320831,
+  "dc_soc_max_mwh": 1083.901444294229,
+  "dc_soc_min_mwh": 7.160736813021958e-06,
+  "dc_storage_throughput_mwh": 120423.87929283822,
+  "generation_energy_balance_residual_mwh": 7.393441592284944e-07,
+  "maximum_dc_utilization_max": 0.9999999994551144,
+  "maximum_dc_utilization_min": 0.999518590727064,
+  "mean_generator_l1_pct_load": 21.24215361088378,
+  "mean_generator_net_pct_load": 3.2157647935954556,
+  "net_generation_energy_change_mwh": 1211848.695369983,
+  "recovery_hours": 258
+}

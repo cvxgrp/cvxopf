@@ -417,3 +417,123 @@ The separate `S5_EXECUTION_AUTHORITY.json` therefore authorizes use of the
 immutable annual shard manifest for S5 planning and implementation. It does
 not authorize numerical S5 execution; that remains blocked until the annual
 runner, supervision, merge, and audit path are implemented and reviewed.
+
+## 2026-09-17 — S5 annual execution and independent analysis completed
+
+All 8,760 controlling intervals are accepted across the twelve fixed shards.
+One full independent analyzer pass returned `accepted_for_s6=true`, with
+analysis digest
+`35d703cdabd6b1a3a6771b36ca86edff7b605d308e60ca40c816cf36c8d47d3a`.
+Its invocation retained only a printed summary and digest, not the full payload;
+formal promotion to `S5_RESULTS.json` is therefore still outstanding.
+
+The accepted merge records 258 recovery-selected windows, 236 timed-out
+attempts, and 8,491 shifted-primary selections in 8,748 opportunities.
+Ten reviewed continuations, speculative recovery amendments, and once-only
+interventions at intervals 2448 and 6122 are part of this operator-assisted
+completion. They do not establish uninterrupted completion under the original
+policy or solver-certified infeasibility at the stopped windows.
+
+The draft `S5_REPORT.md` records the numerical results, recovery distribution,
+resource clocks, retained interruptions, provenance, and limits of this one
+synthetic year. Sampled worker/aggregate RSS peaks were 12,441.53/23,430.91 MiB;
+eight speculative memory-pressure events remain explicit. The summed active
+supervisor duration was 502,850.83 seconds, distinct from cumulative window
+durations and calendar elapsed time.
+
+The closeout code now lets promotion perform one analysis and save that exact
+result, instead of having the CLI analyze and promotion analyze again. The
+write-up and this correction required no new study solves or full re-audit.
+Formal closeout and subsequent S6 work remain pending.
+
+## 2026-09-17 — Stage 0a toy-input and scientific closeout package
+
+The owner assigned the current study task as builder, retained `cvxopf-review`
+as independent reviewer, and requested input from `cvxopf-discuss`. The latter
+provided read-only scientific guidance on input regularity, signed versus
+absolute changes, inherited SoC, and descriptive correlations.
+
+Added standalone `s5_closeout.py` and the `s5_closeout/` data/figure package.
+Exact final active/reactive/renewable arrays retain the historical hashes;
+annual and monthly summaries and hour-by-day input heatmaps now expose the
+actual analytical fixture. A fixed complete dashboard snapshot supplies all
+8,760 first-action comparisons, with all checkpoint memberships checked and
+six selected actions independently recomputed. DC covariates are reconstructed
+from the accepted outer primal. No new study solves, dashboard refresh, full
+S5 audit, or runner changes were made.
+
+The report now distinguishes mean net generator change (+138.339 MW), mean
+device-wise absolute change (878.237 MW), and opposing redispatch (369.949 MW).
+It includes annual loss/curtailment balancing, storage activity, branch loading,
+and raw/calendar-adjusted correlation sensitivities without causal or minimum
+repair claims. It explicitly identifies the run as a toy fixture, not Tracy.
+
+All 29 S5 execution tests and four new closeout tests passed. The reviewer
+separately found the one-pass promotion correction clean. The full reporting
+checkpoint subsequently received a CLEAN scientific review, including
+independent annual DC covariates, state recurrences, selected correlations,
+and two additional archive-backed AC actions. The missing complete analysis
+still requires owner execution approval; the proposed single-pass budget and
+commit disposition are in `S5_CLOSEOUT_CHECKPOINT.md`.
+
+The owner approved the S5 report on 2026-09-17 and separately requested a
+low-overhead parallel-analysis refactor. Report approval is recorded; it is
+not interpreted as launch or commit approval. The analyzer adds opt-in
+`--workers 2`, independent spawned shard audits, and ordered summary collection.
+It removes the two redundant top-level verification traversals for completed
+shards while preserving verification of incomplete cross-version segments.
+Existing physical audit and annual merge code remain unchanged. All 92 focused
+parallel/execution/source-transition/speculative-integration tests passed in
+191.91 seconds; only the existing OpenMP import warning was emitted. Independent
+review returned CLEAN after 54 separately run tests and inspection of validation
+coverage, process initialization, deterministic ordering, and error/publication
+semantics. At the owner's request, the proposed analysis budget now applies
+12 GiB (revised from 8 GiB) to the aggregate parent/worker process tree. No
+measured peak RSS for the prior serial analyzer was found in the retained
+analysis summary or retired builder history; the retained worker RSS figures
+describe AC solves.
+
+The owner then authorized launch with “please start the run now.” The single
+two-worker analysis started with a 45-minute wall limit and 12 GiB sampled
+aggregate RSS limit. A detached monitor includes the analyzer, descendants,
+and its own memory, samples once per second, stops the analysis process group
+on a bound, and retains stdout, stderr, measurements, and completion status in
+`outputs/s5_analysis/closeout-analysis-20260917T211119Z/`. No automatic retry,
+OPF solve, commit, or Stage 0b execution is authorized by this launch.
+
+The first monitor startup (`closeout-analysis-20260917T211006Z/`) failed
+within two seconds because the sandbox denied process enumeration. The
+analysis process exited; no result was published. Process inspection was then
+verified outside the sandbox and the supervised launch was made there, with
+a process-inspection preflight before creating the analysis subprocess. This
+was a monitoring startup correction, not a retry after an audit or resource
+bound failure. Both startup records are retained.
+
+The supervised analysis completed successfully at 2026-09-17 21:18:38 UTC
+in 434.83 seconds (7 min 15 s), with 429 resource samples and maximum sampled
+aggregate RSS 9,365,012,480 bytes (8.72 GiB), below the 12 GiB cap. Parent
+peak was 2,479,816,704 bytes; the two audit workers peaked individually at
+3,718,594,560 and 3,538,059,264 bytes. These individual peaks need not coincide.
+Stderr was empty, exit status was zero, and all run processes exited. The
+42,822-byte canonical `S5_RESULTS.json` was published and matches stdout. Its
+internal analysis digest is
+`2ff4b2158c8eb1e2829f92f9f01869b5c6c35d6b29c2fab306e2fed64c3d56d4`.
+Every retained prior summary field agrees exactly except the full analysis
+digest, which includes changed analyzer-source provenance. The final merge
+remains `11c88aaa54957a1fe787a7932bab72e8e8c492a811806fe288f3ef028f461f5a`.
+The five-minute reporting heartbeat was paused after completion. Independent
+result review and owner commit approval remain pending.
+
+The analyzer-source fingerprint includes the protocol text. The post-run
+protocol status edit therefore changes the working-tree fingerprint. Restoring
+only its pre-run opening status paragraph reproduces the saved source hash
+exactly; the checkpoint records the exact substitution and the run directory
+retains the explicitly reconstructed protocol. No analysis code changed.
+
+Independent final scientific result and commit-disposition review returned
+CLEAN, with no actionable findings. The reviewer independently checked the
+complete result and stdout, prior summary equality, twelve shard/checkpoint
+identities, sixteen supervision hashes, continuations, all study resource
+aggregates, analyzer resource samples, report/package agreement, exact source
+fingerprint substitution, and all 25 package file sizes. Owner closeout/commit
+approval is the remaining Stage 0a gate; no commit or Stage 0b work was done.

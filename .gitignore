@@ -280,6 +280,7 @@ experiments/dnlp_vs_pypower/*.synctex.gz
 # Local research and presentation material retained outside the public repository
 /experiments/ecosystem_positioning/
 /presentations/
+/plans/s5-tracy-recovery-plan.md
 
 # Local agent skills and configuration
 .agents/

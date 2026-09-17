@@ -346,6 +346,14 @@ def test_initial_pending_transition_can_be_analyzed_before_worker_start(
     assert result["resource_summary"]["total_supervisor_critical_path_seconds"] == 2.0
     assert result["initial_execution_context"] == old
 
+    # A segment with no final shard result must still receive full validation.
+    def reject_incomplete(*args, **kwargs):
+        raise ValueError("incomplete state chain corrupt")
+
+    monkeypatch.setattr(s5_analysis, "verify_shard_artifacts", reject_incomplete)
+    with pytest.raises(ValueError, match="incomplete state chain corrupt"):
+        s5_analysis.analyze_s5(root, authority_path=authority_path, workers=2)
+
 
 @pytest.mark.parametrize("second_restart", [False, True])
 def test_complete_synthetic_transition_merges_and_retains_original_wall_time(
@@ -355,7 +363,10 @@ def test_complete_synthetic_transition_merges_and_retains_original_wall_time(
     monkeypatch.setattr(run_s5, "execution_context", lambda: new)
     monkeypatch.setattr(run_s5, "_outer", lambda: object())
     monkeypatch.setattr(s5_analysis, "_outer", lambda: object())
-    monkeypatch.setattr(s5_analysis, "verify_shard_artifacts", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        s5_analysis, "verify_shard_artifacts",
+        lambda *a, **kw: pytest.fail("completed shards are verified inside audit_shard"),
+    )
     authority_path = root.parent / "new-authority.json"
     authority_path.write_text(json.dumps(authority))
 
