@@ -491,6 +491,7 @@ def run_wave(
     authority_path: Path,
     output_root: Path,
     reviewed_resume: bool,
+    use_completed_prefix_anchor: bool = False,
     poll_seconds: float = 1.0,
 ) -> Mapping[str, object]:
     """Numerical entry: unavailable unless the owner has bound the new policy."""
@@ -510,7 +511,16 @@ def run_wave(
         raise ValueError("speculative poll interval must be in (0, 10] seconds")
     from experiments.case118_annual_hierarchy.run_s5 import _validate_completed_prefix
 
-    _validate_completed_prefix(output_root, index, context, authority)
+    if use_completed_prefix_anchor:
+        _validate_completed_prefix(
+            output_root,
+            index,
+            context,
+            authority,
+            use_completed_prefix_anchor=True,
+        )
+    else:
+        _validate_completed_prefix(output_root, index, context, authority)
     adapter = WaveAdapter(
         output_root, authority_path, context, transition["contract_sha256"]
     )

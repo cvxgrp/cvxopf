@@ -148,6 +148,8 @@ def _validate_completed_prefix(
     next_wave: object,
     context: Mapping[str, object],
     authority: Mapping[str, object],
+    *,
+    use_completed_prefix_anchor: bool = False,
 ) -> None:
     """Audit the retained prefix and completed peers before permitting more work."""
     if (
@@ -163,8 +165,25 @@ def _validate_completed_prefix(
     completed = set(_completed_shards(output_root))
     if not required <= completed or not completed <= allowed:
         raise ValueError("S5 retained completed prefix violates the wave schedule")
+    anchored: frozenset[str] = frozenset()
+    if use_completed_prefix_anchor and next_wave >= 5:
+        from experiments.case118_annual_hierarchy.s5_prefix_anchor import (
+            verified_completed_prefix,
+        )
+
+        try:
+            anchored = verified_completed_prefix(output_root)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            # The anchor never authorizes execution. A changed or unavailable
+            # anchor restores the original complete semantic-audit path.
+            print(f"S5 prefix anchor unavailable; using full audit: {exc}")
+        else:
+            if not anchored <= completed:
+                raise ValueError("anchored S5 prefix is not completed")
     for shard_id in ANNUAL_SHARD_IDS:
         if shard_id in completed:
+            if shard_id in anchored:
+                continue
             worker, _summary = _audited_completed_worker(
                 _shard_directory(shard_id, output_root), shard_id, context
             )
@@ -268,6 +287,7 @@ def supervise_wave(
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_resume: bool = False,
+    use_completed_prefix_anchor: bool = False,
     poll_seconds: float = POLL_SECONDS,
     observation_reader: Callable[
         [], Sequence[ProcessObservation]
@@ -296,6 +316,7 @@ def supervise_wave(
             authority_path=authority_path,
             output_root=output_root,
             reviewed_resume=reviewed_resume,
+            use_completed_prefix_anchor=use_completed_prefix_anchor,
             poll_seconds=poll_seconds,
         )
     _outer()
@@ -662,6 +683,7 @@ def run_annual(
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
+    use_completed_prefix_anchor: bool = False,
     source_transition_path: Path | None = None,
     operator_intervention_path: Path | None = None,
     diagnostic_root: Path | None = None,
@@ -783,7 +805,11 @@ def run_annual(
         }:
             raise ValueError("S5 reviewed continuation provenance or state mismatch")
         _validate_completed_prefix(
-            output_root, progress["next_wave"], context, authority
+            output_root,
+            progress["next_wave"],
+            context,
+            authority,
+            use_completed_prefix_anchor=use_completed_prefix_anchor,
         )
         next_wave = cast(int, progress["next_wave"])
         supervision_records = list(
@@ -854,12 +880,14 @@ def run_annual(
                 ).is_file()
             )
             if pending:
-                result = supervisor(
-                    pending,
-                    authority_path=authority_path,
-                    output_root=output_root,
-                    reviewed_resume=reviewed_continue,
-                )
+                supervisor_kwargs: dict[str, object] = {
+                    "authority_path": authority_path,
+                    "output_root": output_root,
+                    "reviewed_resume": reviewed_continue,
+                }
+                if use_completed_prefix_anchor:
+                    supervisor_kwargs["use_completed_prefix_anchor"] = True
+                result = supervisor(pending, **supervisor_kwargs)
                 supervision_records.append(
                     _supervision_reference(result, output_root, next_wave)
                 )
@@ -987,6 +1015,7 @@ def run_annual_supervised(
     authority_path: Path = DEFAULT_NUMERICAL_AUTHORITY_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     reviewed_continue: bool = False,
+    use_completed_prefix_anchor: bool = False,
     source_transition_path: Path | None = None,
     operator_intervention_path: Path | None = None,
     diagnostic_root: Path | None = None,
@@ -1003,6 +1032,7 @@ def run_annual_supervised(
             authority_path=authority_path,
             output_root=output_root,
             reviewed_continue=reviewed_continue,
+            use_completed_prefix_anchor=use_completed_prefix_anchor,
             source_transition_path=source_transition_path,
             operator_intervention_path=operator_intervention_path,
             diagnostic_root=diagnostic_root,
@@ -1018,6 +1048,7 @@ def main() -> None:
     )
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--reviewed-continue", action="store_true")
+    parser.add_argument("--use-completed-prefix-anchor", action="store_true")
     parser.add_argument("--source-transition", type=Path)
     parser.add_argument("--operator-intervention", type=Path)
     parser.add_argument("--diagnostic-root", type=Path)
@@ -1028,6 +1059,7 @@ def main() -> None:
                 authority_path=args.authority,
                 output_root=args.output_root.resolve(),
                 reviewed_continue=args.reviewed_continue,
+                use_completed_prefix_anchor=args.use_completed_prefix_anchor,
                 source_transition_path=args.source_transition,
                 operator_intervention_path=args.operator_intervention,
                 diagnostic_root=args.diagnostic_root,

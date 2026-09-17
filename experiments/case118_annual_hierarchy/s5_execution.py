@@ -66,6 +66,7 @@ SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/s5_retry_transition.py",
     "experiments/case118_annual_hierarchy/s5_source_transition.py",
     "experiments/case118_annual_hierarchy/S5_SPECULATIVE_RECOVERY_PLAN.md",
+    "experiments/case118_annual_hierarchy/S5_COMPLETED_PREFIX_ANCHOR.json",
     "experiments/case118_annual_hierarchy/s5_speculative_archive.py",
     "experiments/case118_annual_hierarchy/s5_speculative_attempt.py",
     "experiments/case118_annual_hierarchy/s5_speculative_continuation.py",
@@ -76,6 +77,7 @@ SOURCE_FILES = (
     "experiments/case118_annual_hierarchy/s5_speculative_transaction.py",
     "experiments/case118_annual_hierarchy/s5_speculative_window.py",
     "experiments/case118_annual_hierarchy/s5_speculative_worker.py",
+    "experiments/case118_annual_hierarchy/s5_prefix_anchor.py",
     "experiments/case118_annual_hierarchy/streaming_archive.py",
     "experiments/case118_annual_hierarchy/streaming_runner.py",
     "experiments/case118_annual_hierarchy/streaming_schema.py",
@@ -143,6 +145,23 @@ def execution_context() -> Mapping[str, object]:
         "platform": platform.platform(),
         "architecture": platform.machine(),
         "software_versions": dict(_software_versions()),
+    }
+
+
+def execution_identity_unchanged(
+    start: Mapping[str, object], end: Mapping[str, object]
+) -> bool:
+    """Ignore incidental Git-state changes while scientific bytes stay fixed.
+
+    Entry still binds a clean reviewed commit. An unrelated file or a commit
+    containing only non-execution material can change ``git_clean`` or HEAD
+    during a long solve. The child retains the original bound commit and
+    records the observed drift, but never accepts changed executable-source,
+    scientific-input, solver, or environment fingerprints.
+    """
+    incidental = {"git_clean", "git_commit"}
+    return {key: value for key, value in start.items() if key not in incidental} == {
+        key: value for key, value in end.items() if key not in incidental
     }
 
 

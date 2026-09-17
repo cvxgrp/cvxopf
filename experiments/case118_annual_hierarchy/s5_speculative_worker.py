@@ -14,6 +14,7 @@ from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
 from experiments.case118_annual_hierarchy.s4b_manifest import object_sha256
 from experiments.case118_annual_hierarchy.s5_execution import (
     execution_context,
+    execution_identity_unchanged,
     load_numerical_authority,
 )
 from experiments.case118_annual_hierarchy.s5_source_transition import (
@@ -71,11 +72,47 @@ def restore_source(
     )
 
 
+def verify_end_context(directory: Path, start: Mapping[str, object]) -> None:
+    """Retain incidental worktree drift without discarding a valid solve."""
+    end = execution_context()
+    if not execution_identity_unchanged(start, end):
+        raise ValueError("speculative child execution context changed")
+    if end != start:
+        atomic_immutable_json(
+            directory / "end-context.json",
+            {
+                "classification": "non_source_worktree_change_after_solve",
+                "start_context": start,
+                "end_context": end,
+            },
+        )
+
+
+def bound_execution_context(
+    directory: Path, request: Mapping[str, Any]
+) -> Mapping[str, object]:
+    """Use the clean wave context if only unrelated worktree files changed."""
+    bound = request["execution_context"]
+    if not isinstance(bound, dict) or bound.get("git_clean") is not True:
+        raise ValueError("speculative child lacks a bound clean execution source")
+    current = execution_context()
+    if not execution_identity_unchanged(bound, current):
+        raise ValueError("speculative child executable or scientific source changed")
+    if current != bound:
+        atomic_immutable_json(
+            directory / "entry-context.json",
+            {
+                "classification": "non_source_worktree_change_before_solve",
+                "bound_context": bound,
+                "observed_context": current,
+            },
+        )
+    return bound
+
+
 def execute(directory: Path) -> None:
     request = json.loads((directory / "request.json").read_text())
-    context = execution_context()
-    if context.get("git_clean") is not True or request["execution_context"] != context:
-        raise ValueError("speculative child requires the bound clean execution source")
+    context = bound_execution_context(directory, request)
     authority = load_numerical_authority(
         Path(request["authority_path"]),
         expected_execution_commit=str(context["git_commit"]),
@@ -186,9 +223,10 @@ def execute(directory: Path) -> None:
             {"invocation": asdict(spec), "exception": f"{type(exc).__name__}: {exc}"},
         )
         raise
-    # Detect source/environment changes without attributing a new context to data.
-    if execution_context() != context:
-        raise ValueError("speculative child execution context changed")
+    # The source and scientific environment must remain fixed. Record, but do
+    # not discard an audited solve solely because an unrelated worktree file
+    # appeared while IPOPT was running.
+    verify_end_context(directory, context)
 
 
 def main() -> None:

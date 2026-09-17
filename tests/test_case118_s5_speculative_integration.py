@@ -10,6 +10,9 @@ import pytest
 
 from experiments.case118_annual_hierarchy import s5_speculative_archive as archives
 from experiments.case118_annual_hierarchy import s5_speculative_runtime as runtime
+from experiments.case118_annual_hierarchy import (
+    s5_speculative_worker as speculative_worker,
+)
 from experiments.case118_annual_hierarchy import streaming_runner as streaming
 from experiments.case118_annual_hierarchy.audit import ProbeAudit
 from experiments.case118_annual_hierarchy.s5_speculative_attempt import (
@@ -54,6 +57,84 @@ from tests.test_case118_s5_speculative_attempt import (
 )  # noqa: F401
 
 fixture_outer = attempt_tests.fixture_outer
+
+
+def test_post_solve_unrelated_worktree_drift_is_recorded_not_rejected(
+    tmp_path, monkeypatch
+):
+    start = {
+        "git_commit": "a" * 40,
+        "git_clean": True,
+        "source_fingerprint": "b" * 64,
+        "scenario_sha256": "c" * 64,
+    }
+    observed = {**start, "git_clean": False, "git_commit": "new-unrelated-commit"}
+    monkeypatch.setattr(speculative_worker, "execution_context", lambda: observed)
+    speculative_worker.verify_end_context(tmp_path, start)
+    note = json.loads((tmp_path / "end-context.json").read_text())
+    assert note["classification"] == "non_source_worktree_change_after_solve"
+    assert note["start_context"] == start
+    assert note["end_context"] == observed
+
+
+def test_new_candidate_keeps_bound_wave_context_during_unrelated_drift(
+    tmp_path, monkeypatch
+):
+    bound = {
+        "git_commit": "a" * 40,
+        "git_clean": True,
+        "source_fingerprint": "b" * 64,
+    }
+    monkeypatch.setattr(
+        speculative_worker,
+        "execution_context",
+        lambda: {**bound, "git_clean": False, "git_commit": "new-unrelated-commit"},
+    )
+    assert (
+        speculative_worker.bound_execution_context(
+            tmp_path, {"execution_context": bound}
+        )
+        == bound
+    )
+    note = json.loads((tmp_path / "entry-context.json").read_text())
+    assert note["classification"] == "non_source_worktree_change_before_solve"
+
+
+def test_new_candidate_rejects_executable_source_drift(tmp_path, monkeypatch):
+    bound = {
+        "git_commit": "a" * 40,
+        "git_clean": True,
+        "source_fingerprint": "b" * 64,
+    }
+    monkeypatch.setattr(
+        speculative_worker,
+        "execution_context",
+        lambda: {**bound, "git_clean": False, "source_fingerprint": "changed"},
+    )
+    with pytest.raises(ValueError, match="source changed"):
+        speculative_worker.bound_execution_context(
+            tmp_path, {"execution_context": bound}
+        )
+
+
+@pytest.mark.parametrize("field", ["source_fingerprint", "scenario_sha256"])
+def test_post_solve_scientific_identity_change_is_rejected(
+    tmp_path, monkeypatch, field
+):
+    start = {
+        "git_commit": "a" * 40,
+        "git_clean": True,
+        "source_fingerprint": "b" * 64,
+        "scenario_sha256": "c" * 64,
+    }
+    monkeypatch.setattr(
+        speculative_worker,
+        "execution_context",
+        lambda: {**start, "git_clean": False, field: "changed"},
+    )
+    with pytest.raises(ValueError, match="execution context changed"):
+        speculative_worker.verify_end_context(tmp_path, start)
+    assert not (tmp_path / "end-context.json").exists()
 
 
 def test_target_free_source_selection_is_confined_to_current_window(tmp_path):
@@ -1132,6 +1213,48 @@ def test_new_wave_receipt_opens_next_wave_only_after_complete_peer_audits(
         run_s5._validate_completed_prefix(
             tmp_path, 2, record["execution_context"], record["authority"]
         )
+
+
+def test_reviewed_anchor_skips_only_immutable_completed_shards(tmp_path, monkeypatch):
+    from experiments.case118_annual_hierarchy import run_s5, s5_prefix_anchor
+
+    anchored = list(s5_prefix_anchor.CERTIFIED_SHARDS)
+    monkeypatch.setattr(run_s5, "_completed_shards", lambda root: anchored)
+    monkeypatch.setattr(
+        s5_prefix_anchor, "verified_completed_prefix", lambda root: frozenset(anchored)
+    )
+    monkeypatch.setattr(
+        run_s5,
+        "_audited_completed_worker",
+        lambda *args: pytest.fail("anchored shard was re-audited"),
+    )
+    run_s5._validate_completed_prefix(
+        tmp_path, 5, {}, {}, use_completed_prefix_anchor=True
+    )
+
+
+def test_invalid_anchor_falls_back_to_full_completed_audit(tmp_path, monkeypatch):
+    from experiments.case118_annual_hierarchy import run_s5, s5_prefix_anchor
+
+    completed = list(s5_prefix_anchor.CERTIFIED_SHARDS)
+    monkeypatch.setattr(run_s5, "_completed_shards", lambda root: completed)
+
+    def reject_anchor(root):
+        raise ValueError("anchor bytes changed")
+
+    monkeypatch.setattr(s5_prefix_anchor, "verified_completed_prefix", reject_anchor)
+    audited = []
+
+    def audit(directory, shard_id, context):
+        audited.append(shard_id)
+        return {}, {}
+
+    monkeypatch.setattr(run_s5, "_audited_completed_worker", audit)
+    monkeypatch.setattr(run_s5, "_require_completed_worker_binding", lambda *a: None)
+    run_s5._validate_completed_prefix(
+        tmp_path, 5, {}, {}, use_completed_prefix_anchor=True
+    )
+    assert audited == completed
 
 
 def test_failed_v2_launch_reconciliation_retry_preserves_checkpoints(tmp_path):
