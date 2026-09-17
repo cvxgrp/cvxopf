@@ -780,6 +780,10 @@ package environment.
 
 ## Roadmap
 
+- [ ] Phase-angle DC OPF: add a lossless, angle-constrained network model
+  alongside AC, the existing lossy-DC network-flow model, and single-node
+  dispatch (planned M24; see [plan](plans/milestone-24-phase-angle-dc.md)).
+
 - [x] Repository skeleton
 - [x] Port and modularize working code
 - [x] Pypower fixture generation and validation tests

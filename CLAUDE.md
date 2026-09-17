@@ -286,6 +286,7 @@ without API changes. Planned future formulations:
 |---|---|
 | `"fast_decoupled"` | Fast-decoupled AC (convex) |
 | `"socp"` | SOCP relaxation (convex) |
+| `"phase_angle_dc"` | Planned M24: lossless phase-angle DC OPF (convex QP); distinct from the existing `lossy_dc` network-flow model. See `plans/milestone-24-phase-angle-dc.md`. |
 
 To add a new formulation, follow the complete formulation-extension contract
 under **Module responsibilities**. In brief: implement and register both
@@ -710,6 +711,10 @@ is present.
 
 ## Milestones
 
+M24 adds the planned phase-angle DC formulation. Numbers 22 and 23 are already
+assigned to load-group penalties and unit commitment on the development branch;
+their plans are not imported by this documentation-only addition.
+
 | Milestone | Status | Notes |
 |---|---|---|
 | 0 — Repository skeleton | ✅ Complete | |
@@ -734,6 +739,7 @@ is present.
 | 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
 | 20 — AC voltage and reactive-dispatch regularization | 🔲 Future | Characterize whether reactive/voltage bound activity reflects physical support, unpriced nonuniqueness, or local-solver selection. Then add optional, normalized, time-integrated AC operating preferences with exact disabled-policy compatibility and measured economic displacement. No voltage-stability, market-pricing, or global-uniqueness claim. See `plans/milestone-20-ac-voltage-reactive-regularization.md`. |
 | 21 — Configurable and extensible formulation hierarchies | 🔲 Future | Generalize the completed M17 controller behind typed layer adapters and explicit, identity-aligned handoffs while preserving exact `lossy_dc`→`ac` compatibility. Support selectable planning formulations and validate a reference `singlenode_dc`→`socp`→`ac` hierarchy after M11 freezes SOCP relaxation and audit semantics. This remains a closed set of reviewed repository formulations, not an unrestricted plugin framework. See `plans/milestone-21-configurable-hierarchy.md`. |
+| 24 — Phase-angle DC optimal power flow | 🔲 Future | Add explicit `phase_angle_dc` alongside existing formulations, with affine angle/flow equations, fixed transformers, island references, shared devices, and independent DC-OPF validation. Preserve existing models/defaults. See `plans/milestone-24-phase-angle-dc.md`. |
 
 ---
 
