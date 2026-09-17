@@ -18,17 +18,26 @@ choices. Generate and validate the realized mapping in Stage A.
 4. Implement and execute any selected toy-data follow-ups under their own
    reviewed protocols, implementation commits, and compute budgets. Review
    their findings and explicitly decide to move on to Tracy.
-5. Generate the new inputs and obtain **user review 1** of the final input
+5. **Close the `big-experiment` PR at the end of Stage 0c.** Record completed
+   and explicitly deferred toy follow-ups, finish documentation and regression
+   checks, and prepare the closeout handoff. The **user, not the agent**, merges
+   `big-experiment`, updates local `main`, verifies the merged state, and creates
+   a fresh Tracy-study branch from that `main` before Stage A.
+6. Generate the new inputs and obtain **user review 1** of the final input
    comparison and mapping before any Tracy study solves.
-6. Run targeted week-to-month DC studies selected using predicted congestion
+7. Run targeted week-to-month DC studies selected using predicted congestion
    and difficult operating periods; review them before an annual DC launch.
-7. Solve/audit the full 8,760-hour DC problem and obtain **user review 2** of
+8. Solve/audit the full 8,760-hour DC problem and obtain **user review 2** of
    the data-generation choices in light of the resulting operation.
-8. Only then qualify Tracy AC and seek approval for annual AC execution.
+9. Only then qualify Tracy AC and seek approval for annual AC execution.
 
 Both old-study commits and the toy-follow-up disposition must precede the
-new Tracy study. Toy-data counterfactual AC studies can use the existing
-accepted toy DC archive; they do not depend on a new Tracy annual DC solve.
+Stage 0c PR closeout and fresh-branch gate. This Tracy plan may merge with
+`big-experiment`: it documents future work and does not imply that Tracy input
+generation or execution has begun. Keep the new study's data, decisions, and
+results distinct from the analytical benchmark. Toy-data counterfactual AC
+studies can use the existing accepted toy DC archive; they do not depend on
+a new Tracy annual DC solve.
 
 ## 1. Objective and relationship to the completed study
 
@@ -393,7 +402,7 @@ nonlinear local solve also does not by itself prove physical infeasibility.
 
 ## 6. Work packages and gates
 
-### 0a. TODO: scientific closeout of the completed study — commit 1
+### 0a. Completed scientific closeout — commit 1 (`9c26366`)
 
 This is a mandatory predecessor to new-study implementation and generation,
 not an optional parallel workstream. Its scope is the completed toy study.
@@ -429,7 +438,7 @@ disposition.
   final analysis exactly once. If a full pass is required, state its scope
   and cost and obtain execution approval. Check for an existing durable result
   before launching reconstruction.
-- [ ] Independently review the scientific record and exact file disposition,
+- [x] Independently review the scientific record and exact file disposition,
   obtain the owner's closeout/commit approval, and commit the scoped record.
   Record the resulting commit ID. A draft report or staged files alone do not
   satisfy the Git-committed closeout gate.
@@ -443,30 +452,88 @@ the separate `outputs/` triage step. Include
 the figures/data needed to make the scientific closeout self-contained here;
 the broader historical `outputs/` inventory and curated promotion remain 0b.
 
-#### Required pause: choose the toy-data follow-ups and runner scope
+#### Design checkpoint: approved analysis questions and remaining runner scope
 
-Review the newly documented final inputs and scientific record with the owner.
-Decide what can still be learned from the completed toy scenario before moving
-on to Tracy. Do not assume that another annual AC rollout, the existing
-three-hour horizon, or a particular runner implementation is the next step.
+The owner approved the three-question analysis framework below on 2026-09-17.
+The [next design checkpoint](case118-toy-ac-analysis-design.md) proposes the
+episode sample, matched comparisons, tooling, and bounded execution scope;
+its concrete choices remain proposals until reviewed and approved. The owner
+also requested the [separate AC look-ahead-horizon study](case118-toy-ac-horizon-design.md):
+plan it before Stage 0b, then select periods from the first analysis's findings
+and execute in Stage 0c. Keep hourly updates unchanged; do not reorder stages.
+Both studies reuse the existing two-main/one-helper setup and memory gates.
+Retain the implemented revision-2 slow-solve ladder for free-battery arm B and
+the horizon study, including H=1. In fixed-battery R1/R2/G, the locked schedule
+already determines terminal SOC, so target-free is not a substantive relaxation.
+Specify and qualify an explicit initialization adaptation for those arms;
+the exact choice remains open in the design checkpoint. Do not drop locks or
+silently disable dependent helper starts. Preserve
+causal/dependency order within each experiment and parallelize independent
+work. Qualify recovery attempts against the new arm constraints/objectives;
+comparison stages and controlling steps are not counts of total solver attempts.
+Use it to guide toy follow-ups, the evidence/tooling preserved in 0b, and the
+standard analysis of shorter Tracy runs before annual execution. This records
+the scientific direction; exact diagnostic windows, implementation choices,
+and numerical execution budgets remain to be specified. Do not assume that
+another annual AC rollout or a particular runner implementation is needed.
 
-Consider the [targeted AC counterfactual proposal](../outputs/case118-counterfactual-ac-study.md).
-It proposes eight matched three-hour windows, with four stages separating
+**1. Where and when does the realization change?** Retain net, total absolute,
+and opposing generator changes; battery power and SOC differences; losses,
+curtailment, and cost components. Examine their timing and spatial
+concentration alongside branch loading, voltage/reactive constraints, and
+storage headroom. Extend the annual descriptive summaries into explanations
+of particular episodes, preserving units, signs, state-versus-flow distinctions,
+and the distinction between observed association and demonstrated mechanism.
+
+**2. What operational value do those changes provide?** Use the existing
+matched-window counterfactual proposal as the starting point: small generator
+repair, economical small repair, unrestricted generator redispatch, and then
+battery rescheduling under common AC constraints and storage endpoints. Use
+common AC-evaluated cost components to distinguish an available small repair
+from an available economic improvement. Nonconvex solves provide feasible
+witnesses and observed improvements, not certified minimum repair or global
+value. Evaluate whole matched windows so temporal shifts are compared under
+the same energy boundary conditions.
+
+**Approved selection change: select episodes with surrounding context before
+selecting exact solve windows.** Inspect retained input, DC, and AC trajectories
+first. Three-hour matched comparisons suit the existing controller, but a
+battery shift across midday and evening may require a longer view. Reserve
+longer counterfactual solves for a specific unresolved question supported by
+that inspection. Do not equate the context span with the solve horizon or
+silently expand the numerical budget.
+
+**3. Which conditions deserve early attention in Tracy?** Develop period
+selection criteria from quantities available before AC execution: net load
+and ramps, renewable availability, DC loading patterns, storage headroom, and
+signpost movement. Investigate these criteria using the toy AC outcomes, then
+test their usefulness on the shorter Tracy runs. Carry the definitions and
+selection logic forward; select Tracy periods from Tracy's own prepared inputs
+and DC results. Toy outcome-selected periods do not establish prospective
+predictive skill or authorize a rule for skipping AC.
+
+The [targeted AC counterfactual proposal](../outputs/case118-counterfactual-ac-study.md)
+originally proposes eight matched three-hour windows, with four stages separating
 small generator repair, economical small repair, unrestricted generator
 redispatch, and additional battery rescheduling. Common DC-derived starting
 and ending SOC, fixed renewable real dispatch, and common AC-evaluated costs
-define the comparison. This is a candidate diagnostic on the **toy fixture**,
-not an automatic addition to closeout or a required Tracy experiment.
+define the comparison. The owner approved this diagnostic structure as a
+starting point on the **toy fixture**, subject to the episode-first selection
+change above. The original eight-window ranking is not a frozen sample for
+the follow-up. Record the selected episodes, context spans, exact solve
+windows, and total solve budget in its protocol before numerical execution.
 
-Evaluate whether its question and selected windows remain informative after
-the input review. Its outcome-selected sample does not estimate annual value;
+Evaluate its sample in light of the input and episode review. An
+outcome-selected sample does not estimate annual value;
 its common three-hour horizon does not compare horizon lengths; and it does
 not establish a prospective rule for skipping AC. A horizon comparison,
 renewable-flexibility study, or DC-based difficulty predictor needs its own
 question, comparison conditions, and protocol rather than being inferred
-from these counterfactuals.
+from these counterfactuals. The separately planned horizon study supplies that
+comparison for a few periods selected after the first analysis, under its own
+implementation review and numerical budget.
 
-Record the owner's decision in a concise design checkpoint:
+Complete this design checkpoint with:
 
 - Studies selected, deferred, or declined, with scientific questions, expected
   information, source fixture, comparison conditions, and bounded scope.
@@ -486,7 +553,9 @@ does not bypass its protocol, implementation review, or numerical launch gate.
 
 ### 0b. TODO: separate `outputs/` triage and promotion — commit 2
 
-Start after 0a is reviewed and committed and the design checkpoint is recorded.
+Start after 0a is reviewed and committed and the design checkpoint is recorded,
+including the separate horizon-study plan. Its numerical periods are selected
+later from the first AC analysis; this dependency does not block artifact triage.
 Use that decision to prioritize the evidence and tooling needed by selected
 toy follow-ups. This is a distinct work package with its own file disposition,
 review, and commit, not a subsection of commit 1.
@@ -509,8 +578,17 @@ review, and commit, not a subsection of commit 1.
   and file sizes; do not bulk-add `outputs/` or alter ignore rules broadly.
 - [ ] Include the counterfactual proposal in the disposition review. If
   promoted, update its stale run-status language, repair relative links, and
-  update this plan's reference to the tracked destination. Preserve its
-  scientific scope unless a separately reviewed design decision changes it.
+  update this plan's reference to the tracked destination. Incorporate the
+  approved episode-first selection change and label the original eight-window
+  sample as a proposal awaiting the episode review. Preserve other scientific
+  comparison conditions unless a separately reviewed decision changes them.
+- [ ] Preserve extraction and reporting support needed for the three approved
+  questions: time- and device-aligned dispatch/SOC differences, losses and
+  component costs, branch and voltage/reactive diagnostics, storage headroom,
+  episode context, and pre-AC period-selection covariates. Identify support
+  already available and any scoped additions needed in 0c. Include the separate
+  horizon study's needs: matched rolling initialization/endpoints, explicit
+  horizon/target timing, and executed-trajectory cost/resource comparison.
 - [ ] Verify promoted copies match the selected originals, references resolve,
   and figures/tables are tied to the completed toy scenario. Include the
   curated artifacts and disposition index in this separately reviewed commit.
@@ -523,7 +601,16 @@ been promoted, and that work is separately Git-committed. Report **commit 2**
 and any intentionally external archives. Both commits must exist before
 toy-follow-up implementation or work package A.
 
-### 0c. Selected toy-data studies and explicit transition to Tracy
+### 0c. Selected toy-data studies and PR closeout gate
+
+Implement the approved three-question framework in sequence: inspect retained
+trajectories and select contextualized episodes; run the separately specified
+matched-window diagnostic; assess which pre-AC selection criteria merit tests
+on shorter Tracy runs. Then use these findings to select periods for the
+separate, non-exhaustive look-ahead-horizon study, keeping hourly updates fixed.
+Review and budget that study separately before its execution. Record unresolved
+questions and explicitly deferred extensions from both studies. This framework is reusable across the toy and Tracy scenarios;
+their inputs, numerical results, and scientific claims remain separate.
 
 For each selected study, freeze its protocol, exact source inputs, comparison
 arms, sample rule, solver/acceptance settings, and resource budget. Implement
@@ -534,8 +621,12 @@ execution. Preserve the original toy fixture and accepted execution tree.
 
 For the proposed counterfactual diagnostic, retain the existing toy DC archive
 and matched DC SOC endpoints. Keep Tracy scaling, siting, and storage choices
-out of these experiments. Any departure from the proposal's restricted
-renewable dispatch or eight-window scope requires an explicit protocol change.
+out of these experiments. Episode-first selection supersedes the original
+fixed ranking as the selection workflow; settle the number and lengths of
+solve windows in the reviewed protocol. Retain the proposal's restricted
+renewable dispatch unless an explicit protocol change is approved. Longer
+counterfactual windows require a specific unresolved question and a declared
+comparison and compute budget.
 Retain failed and unresolved attempts alongside feasible witnesses and observed
 cost improvements; local solver outcomes are not global optimality or
 infeasibility certificates.
@@ -545,13 +636,33 @@ methods or runner capabilities to carry into Tracy, which require adaptation
 to its different inputs, and whether further toy work is justified. Do not
 transfer toy-specific numerical conclusions or silently expand the studies.
 
-Exit: each selected study is completed and reviewed, or explicitly deferred
-or stopped with its evidence and reason retained; the owner approves moving
-to Tracy. If no toy studies are selected, record that disposition and the
-transition decision after 0b. Stage A does not begin automatically after
-artifact promotion.
+**End-of-Stage-0c PR closeout checklist**
+
+- [ ] Record each selected toy follow-up as completed and reviewed, explicitly
+  deferred, or stopped, with its evidence, remaining questions, and reason.
+  If no toy studies are selected, record that disposition after 0b.
+- [ ] Finish documentation and relevant regression checks. Record their
+  outcomes, retained limitations, and the methods or capabilities to carry
+  into Tracy. Obtain the owner's decision to move on to the new study.
+- [ ] **User action, not agent action:** merge `big-experiment`, update local
+  `main`, and verify the merged state. Record the merged baseline commit and
+  verification outcome in the handoff.
+- [ ] **User action, not agent action:** create a fresh Tracy-study branch
+  from the verified local `main` before Stage A input generation. Record its
+  branch name and baseline commit in the handoff.
+
+Exit: the toy-follow-up disposition and documentation/regression checks are
+complete, the owner approves the transition, and the user has completed the
+merge, local-main verification, and fresh-branch actions above. This is the
+PR closeout gate for the analytical benchmark. Including this future-work
+plan in that PR does not begin the Tracy study. Stage A does not begin
+automatically after artifact promotion or toy-study review.
 
 ### A. Generate inputs and obtain user review 1, without OPF solves
+
+Prerequisite: Stage 0c is closed and the user has created the fresh Tracy-study
+branch from verified `main`. Generate Tracy inputs on that branch, with the
+merged analytical benchmark as the recorded baseline.
 
 1. Preserve the analytical fixture, outputs, and existing uncommitted work.
    Give the Tracy fixture and output root distinct readable identities.
@@ -735,8 +846,9 @@ above. No conclusion about Tracy is inherited from the analytical run.
 Begin with **work package 0a: old-study scientific/Git closeout
 (commit 1)** and its **experimental-design pause**, followed by **0b: separate
 `outputs/` triage/promotion (commit 2)** and **0c: selected toy studies and the
-transition decision**. After those gates, hand off
-the new-study plan plus one compact list of the open operating choices in
+PR closeout gate**. The user performs the merge, local `main` update and merged
+state verification, and fresh Tracy-study branch creation. After those gates,
+hand off the new-study plan plus one compact list of the open operating choices in
 section 5. Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.
 
@@ -744,7 +856,8 @@ For each implementation checkpoint, review source fidelity and scientific
 meaning as well as software correctness. At a clean handoff, collect proposed
 commit text and a file-by-file disposition for owner review.
 Keep scientific closeout commit 1, the design checkpoint, artifact-triage
-commit 2, toy-study reviews/transition, user review 1, targeted-DC review/annual-DC
+commit 2, toy-study reviews/transition, the Stage 0c PR closeout and fresh-branch
+gate, user review 1, targeted-DC review/annual-DC
 approval, user review 2, bounded AC approval, and annual AC launch approval
 distinct. No input check or completed DC solve is implicit permission to spend
 another annual AC run's compute budget.
