@@ -1,0 +1,231 @@
+{
+  "accepted": 12,
+  "lifecycles": 12,
+  "artifact_hashes_verified": 66,
+  "budget_consumed": {
+    "ac_attempts": 6,
+    "active_wall_seconds": 421.902524916979,
+    "dc_attempts": 6,
+    "total_worker_seconds": 638.2417097901343
+  },
+  "sampled_peak_aggregate_gib": 13.170761108398438,
+  "sampled_peak_worker_gib": 7.5763702392578125,
+  "rows": [
+    {
+      "window": "may03",
+      "formulation": "dc",
+      "arm": "F",
+      "generation_cost": 238936.02254786334,
+      "storage_cost": 7.036272329544574e-05,
+      "native_objective": 238942.31689941304,
+      "fleet_battery_mw": [
+        -2.6357030876362856e-05,
+        -2.0440824136615814e-05,
+        -1.9960496690760365e-05
+      ],
+      "throughput_mwh": 7.036272329544574e-05,
+      "recurrence_error_mwh": 4.534061424006392e-14,
+      "terminal_error_mwh": 3.1086244689504383e-15,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "may03",
+      "formulation": "dc",
+      "arm": "B",
+      "generation_cost": 238936.02253998676,
+      "storage_cost": 6.678847516285162e-05,
+      "native_objective": 238942.31688778222,
+      "fleet_battery_mw": [
+        -2.5782928516784935e-05,
+        -2.049984232550139e-05,
+        -2.047558086433389e-05
+      ],
+      "throughput_mwh": 6.678847516285162e-05,
+      "recurrence_error_mwh": 1.6591816202911442e-14,
+      "terminal_error_mwh": 2.842170943040401e-14,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "may03",
+      "formulation": "ac",
+      "arm": "F",
+      "generation_cost": 262351.8221857415,
+      "storage_cost": 7.036272187412313e-05,
+      "native_objective": 262351.8222561042,
+      "fleet_battery_mw": [
+        -2.635703030192539e-05,
+        -2.0440823818352576e-05,
+        -1.9960496391607478e-05
+      ],
+      "throughput_mwh": 7.036272187412313e-05,
+      "recurrence_error_mwh": 2.6071571794907336e-13,
+      "terminal_error_mwh": 2.6068036618198676e-13,
+      "branch_loss_mwh": 437.36155771704574,
+      "accepted": true
+    },
+    {
+      "window": "may03",
+      "formulation": "ac",
+      "arm": "B",
+      "generation_cost": 261739.13387098434,
+      "storage_cost": 386.9282025403336,
+      "native_objective": 262126.06207352466,
+      "fleet_battery_mw": [
+        -193.1049328985265,
+        -0.35918052132578504,
+        193.46404666150514
+      ],
+      "throughput_mwh": 386.9282025403336,
+      "recurrence_error_mwh": 1.0808784321411375e-12,
+      "terminal_error_mwh": 1.0809131367750524e-12,
+      "branch_loss_mwh": 429.32966919205325,
+      "accepted": true
+    },
+    {
+      "window": "may22",
+      "formulation": "dc",
+      "arm": "F",
+      "generation_cost": 241574.136404912,
+      "storage_cost": 5.376396081515827e-05,
+      "native_objective": 241580.38945006137,
+      "fleet_battery_mw": [
+        -2.006538856082796e-05,
+        -1.4803688510559659e-05,
+        -1.4721967558286385e-05
+      ],
+      "throughput_mwh": 5.376396081515827e-05,
+      "recurrence_error_mwh": 7.701063340154126e-14,
+      "terminal_error_mwh": 5.684341886080802e-14,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "may22",
+      "formulation": "dc",
+      "arm": "B",
+      "generation_cost": 241574.13638575806,
+      "storage_cost": 4.959104460802384e-05,
+      "native_objective": 241580.3894243735,
+      "fleet_battery_mw": [
+        -1.0458789389264307e-05,
+        -1.0314765555323327e-05,
+        -2.88174896634362e-05
+      ],
+      "throughput_mwh": 4.959104460802384e-05,
+      "recurrence_error_mwh": 2.8186007193445554e-14,
+      "terminal_error_mwh": 0.0,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "may22",
+      "formulation": "ac",
+      "arm": "F",
+      "generation_cost": 264018.1010572562,
+      "storage_cost": 5.3763959019878525e-05,
+      "native_objective": 264018.1011110202,
+      "fleet_battery_mw": [
+        -2.0065387717718078e-05,
+        -1.4803688344095333e-05,
+        -1.4721967455207492e-05
+      ],
+      "throughput_mwh": 5.3763959019878525e-05,
+      "recurrence_error_mwh": 2.0135110382669703e-13,
+      "terminal_error_mwh": 2.0250467969162855e-13,
+      "branch_loss_mwh": 439.581410069633,
+      "accepted": true
+    },
+    {
+      "window": "may22",
+      "formulation": "ac",
+      "arm": "B",
+      "generation_cost": 263385.3863502068,
+      "storage_cost": 372.98932152215394,
+      "native_objective": 263758.375671729,
+      "fleet_battery_mw": [
+        -186.2073335238583,
+        -0.28732820840480044,
+        186.49461214122095
+      ],
+      "throughput_mwh": 372.98932152215394,
+      "recurrence_error_mwh": 5.269219274438694e-13,
+      "terminal_error_mwh": 5.266898028821743e-13,
+      "branch_loss_mwh": 430.9597519257642,
+      "accepted": true
+    },
+    {
+      "window": "jun16",
+      "formulation": "dc",
+      "arm": "F",
+      "generation_cost": 235339.31834391266,
+      "storage_cost": 5.288514107398449e-05,
+      "native_objective": 235345.95287771488,
+      "fleet_battery_mw": [
+        -2.0008800654049823e-05,
+        -1.4463297044013112e-05,
+        -1.382169933051519e-05
+      ],
+      "throughput_mwh": 5.288514107398449e-05,
+      "recurrence_error_mwh": 4.670392086257065e-14,
+      "terminal_error_mwh": 3.552713678800501e-15,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "jun16",
+      "formulation": "dc",
+      "arm": "B",
+      "generation_cost": 235339.3183263071,
+      "storage_cost": 4.829379695392514e-05,
+      "native_objective": 235345.95285242458,
+      "fleet_battery_mw": [
+        -3.182235901460238e-05,
+        -9.69061794757446e-06,
+        -6.780819991748306e-06
+      ],
+      "throughput_mwh": 4.829379695392514e-05,
+      "recurrence_error_mwh": 5.0409930769306025e-14,
+      "terminal_error_mwh": 3.552713678800501e-15,
+      "branch_loss_mwh": null,
+      "accepted": true
+    },
+    {
+      "window": "jun16",
+      "formulation": "ac",
+      "arm": "F",
+      "generation_cost": 261048.02776796292,
+      "storage_cost": 5.288513888453385e-05,
+      "native_objective": 261048.02782084807,
+      "fleet_battery_mw": [
+        -2.0008799765555047e-05,
+        -1.4463296620904393e-05,
+        -1.3821698948599353e-05
+      ],
+      "throughput_mwh": 5.288513888453385e-05,
+      "recurrence_error_mwh": 3.9173260752008946e-13,
+      "terminal_error_mwh": 3.801403636316536e-13,
+      "branch_loss_mwh": 451.7926176632135,
+      "accepted": true
+    },
+    {
+      "window": "jun16",
+      "formulation": "ac",
+      "arm": "B",
+      "generation_cost": 260370.0925975276,
+      "storage_cost": 416.28886609540626,
+      "native_objective": 260786.38146362302,
+      "fleet_battery_mw": [
+        -207.7792839257247,
+        -0.3651581582249656,
+        208.14439379015712
+      ],
+      "throughput_mwh": 416.28886609540626,
+      "recurrence_error_mwh": 1.0985398381973058e-12,
+      "terminal_error_mwh": 1.0977885267493548e-12,
+      "branch_loss_mwh": 442.69420994526007,
+      "accepted": true
+    }
+  ]
+}

@@ -1,14 +1,27 @@
-# Matched Case118 AC counterfactuals
+# Case118: AC dispatch adjustments and battery operation
 
-This implements the retained toy R1/R2/G/B study in
+This experiment examines the feasibility and economic value of adjustments
+from DC dispatch to AC operation, as specified in
 [the protocol](../../plans/case118-toy-ac-counterfactual-protocol.md).
 It preserves the historical toy objective (including battery weight 1.0).
 Tracy cost changes and the deferred horizon study are outside this code.
 
-Implementation is not numerical launch authority. Select episodes with context,
-review the exact windows and protocol settings, independently review and commit
-the code, then obtain the separate numerical go-ahead. No OPF solve was needed
-to build or test this package; the numerical pilot remains outstanding.
+Two sets of results are complete and independently reviewed:
+
+- [AC dispatch adjustments](ac_dispatch_adjustments/REPORT.md): one three-hour
+  window comparing small generator adjustments, their cost, further generator
+  redispatch, and battery rescheduling.
+- [Battery operation in AC and DC](battery_operation/REPORT.md): three
+  three-hour windows testing whether shifting battery energy across time lowers
+  operating cost in each model. The separate proposed 1 and 5 MWh transfer
+  comparisons have not been run.
+
+Reports, launch protocols, context, and analysis scripts live in the two folders
+above. Retained solver artifacts live in this experiment's `results/` directory,
+following the existing experiment convention; only that directory is Git-ignored.
+See [the relocation record](RESULT_LOCATIONS.md) for the unchanged execution
+records' original paths. New numerical work still requires its agreed review
+and launch authorization.
 
 ## Model and evidence
 
@@ -42,11 +55,11 @@ From the repository root:
 
 ```sh
 uv run --extra dev python -m experiments.case118_counterfactual.data \
-  --output outputs/counterfactual-candidates
+  --output experiments/case118_counterfactual/results/candidates-RUN
 
 uv run --extra dev python -m experiments.case118_counterfactual.data \
   --start CONTEXT_START --stop CONTEXT_STOP \
-  --output outputs/counterfactual-context-EPISODE
+  --output experiments/case118_counterfactual/results/context-EPISODE
 ```
 
 Both destinations must be new. The first command ranks trailing six-hour
@@ -118,7 +131,8 @@ After separate launch approval, use:
 
 ```sh
 uv run --extra dev python -m experiments.case118_counterfactual.runner \
-  --protocol REVIEWED_PROTOCOL.json --output outputs/counterfactual-RUN
+  --protocol REVIEWED_PROTOCOL.json \
+  --output experiments/case118_counterfactual/results/ac_dispatch_adjustments-RUN
 ```
 
 The CLI requires a clean committed tree and a new destination. It saves the
@@ -131,22 +145,23 @@ reaps all contenders, and saves partial stages with available incumbents. It
 does not call a local failure physical infeasibility or launch extra B-only
 diagnostics. Such a follow-up can be proposed separately. There is no automatic
 resume or retry: a later run uses a fresh directory and explicit disposition of
-the interrupted one. The already planned one-window pilot is the checkpoint
-for deciding whether further windows add distinct information.
+the interrupted one. The completed one-window comparison and any separately
+approved follow-up are documented in the reports above.
 
 ## Verification
 
-### Battery mechanism: fixed/free AC and DC phase
+### Battery operation in AC and DC
 
 `mechanism.py` implements the first phase of the separately reviewed
-[three-window mechanism plan](../../plans/case118-toy-battery-mechanism-test.md).
+[battery operation plan](../../plans/case118-toy-battery-mechanism-test.md).
 It runs six DC solves serially, then the three AC G/B chains through the
 existing 2+1 supervisor. G is the fixed-battery F arm in this study's language;
 no R1/R2 repair solves are launched. Original R1/R2/G/B behavior is unchanged.
 
 ```sh
 uv run --extra dev python -m experiments.case118_counterfactual.mechanism \
-  --protocol REVIEWED_PHASE_ONE_PROTOCOL.json --output outputs/mechanism-RUN
+  --protocol REVIEWED_PHASE_ONE_PROTOCOL.json \
+  --output experiments/case118_counterfactual/results/battery_operation-RUN
 ```
 
 The explicit protocol adds `phase: "fixed_free"`, `dc_options`, and

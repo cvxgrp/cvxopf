@@ -1,0 +1,58 @@
+{
+  "context_interval": [
+    2916,
+    2964
+  ],
+  "comparison_interval": [
+    2940,
+    2943
+  ],
+  "comparison_timestamps": [
+    "2025-05-03T12:00:00+00:00",
+    "2025-05-03T15:00:00+00:00"
+  ],
+  "context_shards": [
+    3
+  ],
+  "context_interventions": [],
+  "comparison_historical_generator_net_mwh": 390.64071921503296,
+  "comparison_historical_generator_l1_mwh": 3979.23106685725,
+  "comparison_historical_opposing_mwh": 1794.2951738211086,
+  "comparison_historical_battery_change_l1_mwh": 63.04134220991341,
+  "comparison_dc_generation_cost": 150560.35103078716,
+  "comparison_dc_battery_throughput_mwh": 0.00030482310056627825,
+  "comparison_dc_initial_soc_mwh": [
+    0.021208412955286804,
+    255.68702539802234,
+    3.637252147458758,
+    62.42942410523934
+  ],
+  "comparison_dc_terminal_soc_mwh": [
+    0.021217956009746696,
+    255.68719577953428,
+    3.6373749831904876,
+    62.42942616804179
+  ],
+  "comparison_historical_ac_initial_soc_mwh": [
+    0.021208252787252566,
+    192.645731779566,
+    3.6372565484771027,
+    62.4294226782705
+  ],
+  "comparison_historical_ac_terminal_soc_mwh": [
+    0.021227295801124483,
+    255.68719699803546,
+    3.637359414411908,
+    62.42942557893204
+  ],
+  "comparison_ac_peak_utilization": 0.9999999995574708,
+  "comparison_dc_peak_utilization": 0.9999999860096084,
+  "comparison_ac_voltage_min": 1.002342276597466,
+  "comparison_ac_voltage_max": 1.0599999987403672,
+  "capacity_mwh": [
+    57.74675331760001,
+    823.7855429024002,
+    115.7490232428,
+    86.62012997640001
+  ]
+}

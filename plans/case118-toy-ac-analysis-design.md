@@ -1,11 +1,14 @@
 # Case118 toy AC analysis: design checkpoint
 
-Prepared 2026-09-17. Original design review CLEAN; owner design review pending.
+Prepared 2026-09-17. Original design review CLEAN; subsequently approved by owner.
 Owner-directed reuse of the existing parallel recovery setup is recorded below;
 independent scientific review of that execution amendment is CLEAN.
 The separate look-ahead-horizon addition reflects the owner's clarified scope
 and has also received a CLEAN independent scientific design review.
-Planning only.
+The completed [AC dispatch adjustments](../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md)
+and [battery operation in AC and DC](../experiments/case118_counterfactual/battery_operation/REPORT.md)
+comparisons are recorded separately. The design below does not authorize
+additional windows beyond those explicitly selected.
 
 **Owner scope update, 2026-09-17:** retain this first AC analysis study, with
 the intention to replicate its methods on Tracy results. Defer the separate
@@ -23,9 +26,9 @@ results, and claims. New methods and results belong to separate work.
 
 ## Purpose and selected work
 
-**Bounded mechanism follow-up:** after the matched pilot and read-only onset
-screen, the owner selected three three-hour battery-excursion windows for a
-[matched AC/DC battery mechanism test](case118-toy-battery-mechanism-test.md).
+**Battery operation follow-up:** after the AC dispatch comparison and inspection
+of saved battery trajectories, the owner selected three three-hour windows for a
+[study of battery operation in AC and DC](case118-toy-battery-mechanism-test.md).
 It compares fixed/free schedules and two prescribed energy transfers: 24
 primary solves proposed across the three windows, with a result checkpoint
 between phases and separately bounded recovery. This is additional scoped
@@ -258,8 +261,8 @@ runner or repeat unaffected historical qualification.
    inspect the candidate cards and choose exact matched windows.
 3. Specify the short counterfactual protocol, implement its minimal runner,
    independently review the necessary tests, and commit the implementation.
-4. Launch one selected window as a four-comparison-stage pilot only after numerical
-   approval. Use its evidence to confirm the remaining study budget and ask
+4. After numerical approval, compare the four sets of operating restrictions
+   in one selected window. Use its evidence to confirm the remaining study budget and ask
    whether additional windows would add distinct scientific information.
    The proposed six-window scope is not a quota: any reduction or extension is
    an explicit owner decision, preserving attempts and ordinary comparisons.
@@ -341,7 +344,7 @@ silently increasing them.
 
 Parallelize independent work: different matched windows may occupy the two
 main lanes, while R1 -> R2 -> G -> B dependencies and incumbent transfers remain
-ordered within each window. A one-window pilot may leave a main lane idle.
+ordered within each window. A one-window comparison may leave a main lane idle.
 In the horizon study, independent episode/horizon trajectories can occupy
 main lanes, but successive executed hours within each trajectory stay causal.
 Do not race successive states or treat the helper as a third main experiment.
@@ -369,11 +372,12 @@ do not replace the scheduler to accommodate the new experiments. Verify that
 helper winners satisfy the same comparison contract as main-lane winners and
 that worse new candidates cannot erase retained feasible incumbents.
 
-The proposed pilot has four comparison stages for one selected window. The
-full initial diagnostic has 24 comparison stages total, including the pilot;
+The first selected window has four comparisons. The broader six-window proposal
+would have 24 comparisons total, including those first four;
 recovery, target-free sources, replays, and canceled competitors are additional
 solver attempts. Retain both counts, total solve effort, and concurrent elapsed
-time. The earlier 90-minute pilot and six-hour full-study figures are provisional
+time. The earlier budgets of 90 minutes for the first window and six hours for
+the broader study are provisional
 planning envelopes to reassess against this ladder; they are not stage deadlines
 or launch authorizations. Before launch, agree the aggregate attempt/work and
 wall-time budgets and specify how a study stop interrupts uncapped contenders.
@@ -438,6 +442,6 @@ After the owner deferred the toy horizon study, `cvxopf-discuss` assessed the
 revised scope read-only and agreed with the scientific prioritization. Its
 qualifications are incorporated above: preserve conditional findings from the
 first study, distinguish added cycling from timing rearrangement, use the
-pilot as an information-value checkpoint, and transfer methods rather than toy
+first comparison as an information-value checkpoint, and transfer methods rather than toy
 numerical conclusions. This assessment is not an independent implementation
 review or execution authorization.

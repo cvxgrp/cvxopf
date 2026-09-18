@@ -681,12 +681,17 @@ toy-follow-up implementation or work package A.
 ### 0c. Selected toy-data studies and PR closeout gate
 
 The owner also selected a bounded
-[three-window AC/DC battery mechanism test](case118-toy-battery-mechanism-test.md)
-after the first matched pilot. Its fixed/free and prescribed-transfer phases
+[three-window study of battery operation in AC and DC](case118-toy-battery-mechanism-test.md)
+after the first study of AC dispatch adjustments. Its fixed/free and prescribed-transfer phases
 propose 24 primary solves in total, retaining historical toy economics and
 three-hour horizons. Complete or explicitly disposition this selected
 follow-up at closeout; its detailed design, implementation and numerical
 launch checkpoints remain separate. The toy horizon study stays deferred.
+
+The [AC dispatch adjustments](../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md)
+comparison and the first 12 [battery operation comparisons](../experiments/case118_counterfactual/battery_operation/REPORT.md)
+are complete and independently reviewed. The proposed prescribed energy
+transfers have not been run; they remain subject to the owner result checkpoint.
 
 Implement the approved three-question framework in sequence: inspect retained
 trajectories and select contextualized episodes; run the separately specified
@@ -728,7 +733,9 @@ transfer toy-specific numerical conclusions or silently expand the studies.
 
 - [ ] Record each selected toy follow-up as completed and reviewed, explicitly
   deferred, or stopped, with its evidence, remaining questions, and reason.
-  Current disposition: the first AC analysis remains selected; the toy AC
+  Current disposition: the AC dispatch comparisons and the first 12 battery
+  operation comparisons are complete and independently reviewed. The prescribed
+  energy-transfer comparisons await the owner's decision. The toy AC
   look-ahead-horizon study is deferred for the economic-model reason above.
 - [ ] Finish documentation and relevant regression checks. Record their
   outcomes, retained limitations, and the methods or capabilities to carry

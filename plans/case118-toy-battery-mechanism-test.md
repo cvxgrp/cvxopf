@@ -1,8 +1,10 @@
-# Case118 toy battery mechanism test
+# Case118 toy study: battery operation in AC and DC
 
-Status: design review CLEAN; owner approved proceeding with execution.
-Phase-one implementation review is CLEAN (151 targeted tests passed). The reviewed/committed implementation
-gate precedes launch; the result checkpoint between steps 2 and 3 remains.
+Status: the 12 comparisons of fixed versus rescheduled battery power are
+complete; independent implementation and numerical reviews are CLEAN.
+See [Battery operation in AC and DC](../experiments/case118_counterfactual/battery_operation/REPORT.md).
+The proposed 1 and 5 MWh transfer comparisons have not been run and remain
+behind the owner result checkpoint. The protocol below records the agreed design.
 
 ## Question and limits
 
@@ -13,8 +15,8 @@ throughput weight 1.0. This tests a possible explanation for the historical
 activity despite those economics; it does not test the intended Tracy
 levelization mechanism. The separate toy horizon study remains deferred.
 
-The completed matched pilot at [2940,2943) found a substantial generator
-redispatch improvement and no resolved incremental battery benefit. It began
+The completed AC dispatch comparison at [2940,2943) found a substantial
+generator redispatch improvement and no resolved incremental battery benefit. It began
 with a common DC SoC, while historical AC began about 63 MWh below that state.
 The new windows instead start where historical AC is already close to DC and
 plans an appreciable charge/discharge excursion with nearly unchanged endpoints.
@@ -28,7 +30,7 @@ These are windows, not independent episodes. Full planned trajectories were
 checked, not concatenated implemented actions from overlapping solves.
 
 Screen provenance and arrays are retained in
-`outputs/battery-excursion-screen-20260917/`; interval-table SHA256 is
+`experiments/case118_counterfactual/battery_operation/screening/`; interval-table SHA256 is
 `9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e`.
 
 ## Owner-selected windows
@@ -52,13 +54,13 @@ d0a6eac9b178f7df850fde8f68959dcee91e584c43d1c0f5973405f5013e5cf2
 ```
 
 Retain 48-hour context for each window, marking source shard boundaries.
-May 3 already has context [2916,2964) in the pilot preparation. Extract
+May 3 already has context [2916,2964) from the AC dispatch comparison. Extract
 [3376,3424) and [3976,4024) for the other two. Context does not change the
 three-hour solve horizon. Freeze full source references, identities, transfer
 weights, arrays and numerical settings in a machine-readable launch manifest.
 
 All three contexts are now extracted. The inspected figure
-`outputs/battery-excursion-screen-20260917/selected-context.png` overlays the
+`experiments/case118_counterfactual/battery_operation/screening/selected-context.png` overlays the
 original planned trajectories on the implemented paths. Later reoptimization
 changes the actual discharge timing; the historical three-hour plan must not
 be described as three implemented actions or a full realized cycle.
@@ -136,7 +138,7 @@ in these three windows) without fitting weights to new cost outcomes.
 
 Both proposed magnitudes passed read-only storage power/SoC/endpoint checks
 in all three windows. Exact weights, schedules, states and residuals are in
-`outputs/battery-excursion-screen-20260917/proposed-transfer-prechecks.json`.
+`experiments/case118_counterfactual/battery_operation/screening/proposed-transfer-prechecks.json`.
 Use the full-precision values in the launch manifest, not this rounded table.
 
 Prescribe the full battery schedule as DC plus
@@ -198,7 +200,7 @@ do not reset them or transfer unused counts into unplanned configurations.
 Preserve the existing helper clocks/escalation and interrupt remaining workers
 at a total limit, retaining partial evidence. Count failed/canceled work.
 
-Keep frozen physical acceptance tolerances and prior pilot comparison checks:
+Keep frozen physical acceptance tolerances and prior AC comparison checks:
 schedule locks 1e-4 MW, cost reconstruction 1e-4 absolute + 1e-9 relative.
 Use original frozen AC solver options and current verified DC solver defaults,
 recording effective options and versions before launch. Add independent DC
@@ -219,7 +221,7 @@ results and do not generalize this selected sample to an annual frequency.
 1. Review this design and proposed parameters/resources with cvxopf-review and
    the owner; inspect the retained context. No solves at this checkpoint.
 2. Implement narrow reusable F/B/prescribed-schedule support and DC comparison
-   accounting; preserve the existing R1/R2/G/B pilot path. Verify identities,
+   accounting; preserve the existing AC comparison code. Verify identities,
    units, endpoints, objective components and both formulations' audits.
 3. Independently review and commit implementation before numerical execution.
 4. Freeze launch manifests and execute step 2 only after launch authorization.
@@ -232,7 +234,7 @@ the existing AC G/B models (G is F here), runs DC serially first, and records
 cumulative budget consumption. The current implementation ends after step 2;
 prescribed-transfer execution is intentionally deferred until its result
 checkpoint. Proposed launch manifest:
-`outputs/battery-mechanism-preparation-20260917/protocol.json`.
+`experiments/case118_counterfactual/battery_operation/protocol.json`.
 
 An optional `--snapshot-reviewed-worktree` execution route has been proposed
 to preserve the owner's commit control while retaining immutable source bytes
