@@ -8,7 +8,9 @@ transfer comparisons. Implementation passed independent review, the owner
 committed it as `dd21216`, and the authorized 12 comparisons have now run.
 See the [result report](../experiments/case118_counterfactual/battery_operation/TRANSFER_REPORT.md):
 an additional owner-requested June 16 5 MWh AC solve returned `optimal` with
-lower cost. Both attempts are retained. Results await owner review.
+lower cost. Both attempts are retained. Independent numerical reviews are
+CLEAN; the owner-committed reports and final Stage 0c findings are recorded in
+`0f3b392`. This selected study is complete; no further solves are planned.
 The protocol below records the agreed design.
 
 ## Question and limits

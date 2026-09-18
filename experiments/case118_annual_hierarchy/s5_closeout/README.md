@@ -4,7 +4,9 @@ This package supports [S5_REPORT.md](../S5_REPORT.md), Stage 0a of the
 [study plan](../../../plans/case118-tracy-2021-study-plan.md). It contains
 the **analytical 2025 UTC** fixture and descriptive results, not Tracy data.
 The complete accepted analysis is saved in [S5_RESULTS.json](../S5_RESULTS.json).
-Independent result review is CLEAN; formal closeout remains pending owner commit approval.
+Independent result review is CLEAN; the owner committed the scientific
+closeout as `9c26366`. S5's formal closure and omission of the optional S6
+toy congestion study are recorded in `3513284`.
 
 ## What is saved
 
@@ -134,6 +136,6 @@ the separate one-pass `s5_analysis --promote` gate. The annual DC archive is
 read once to recompute covariates and verify the saved active/reactive load
 arrays; its accepted identity and storage trajectory are checked without solves.
 
-The completed full reconstruction and remaining review gates are described in
-the [Stage 0a review checkpoint](../S5_CLOSEOUT_CHECKPOINT.md). The new full
-analysis has passed independent review; owner commit approval remains pending.
+The completed full reconstruction and historical review gates are described in
+the [Stage 0a review checkpoint](../S5_CLOSEOUT_CHECKPOINT.md). The full
+analysis passed independent review and was committed in `9c26366`.

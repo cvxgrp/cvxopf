@@ -6,6 +6,13 @@ economics and remaining operating choices. Battery regularization is selected
 through the shorter studies, not fixed for annual execution now. Generate and
 validate the realized mapping in Stage A.
 
+**Current handoff:** the analytical study and selected Stage 0c follow-ups are
+complete and committed. The annual S5 closeout and owner decision to omit S6
+are recorded in `3513284`; the Stage 0c findings are recorded in `0f3b392`.
+The toy horizon study remains deferred. The remaining transition steps are
+the user's PR merge, local `main` update and verification, fresh Tracy branch,
+and authorization to begin Stage A. No Tracy input generation has begun.
+
 ## Execution order
 
 1. Close out the completed analytical 8,760-hour study scientifically and in
@@ -736,13 +743,17 @@ toy-follow-up implementation or work package A.
 
 ### 0c. Selected toy-data studies and PR closeout gate
 
+Scientific work is complete; the Git transition and Stage A authorization
+remain outstanding. The completed-study disposition below supersedes the
+earlier design and launch checkpoints, which are retained in their protocols.
+
 The owner also selected a bounded
 [three-window study of battery operation in AC and DC](case118-toy-battery-mechanism-test.md)
 after the first study of AC dispatch adjustments. Its fixed/free and prescribed-transfer phases
-propose 24 primary solves in total, retaining historical toy economics and
-three-hour horizons. Complete or explicitly disposition this selected
-follow-up at closeout; its detailed design, implementation and numerical
-launch checkpoints remain separate. The toy horizon study stays deferred.
+completed 24 primary comparisons, retaining historical toy economics and
+three-hour horizons, plus the separately authorized June 16 AC retry.
+Its design, implementation, numerical execution, and review records remain
+separate. The toy horizon study stays deferred.
 
 The [AC dispatch adjustments](../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md)
 comparison and the 12 [battery operation comparisons](../experiments/case118_counterfactual/battery_operation/REPORT.md)
@@ -751,10 +762,12 @@ are complete, independently reviewed, and reviewed by the owner. Step 3, the
 implementation `dd21216`. See the
 [result report](../experiments/case118_counterfactual/battery_operation/TRANSFER_REPORT.md),
 including the additional owner-requested June 16 5 MWh AC solve that returned
-`optimal` with lower cost. Both attempts are retained. Results await owner
-review; this work has not been deferred.
+`optimal` with lower cost. Both attempts are retained. Independent numerical
+reviews are CLEAN; the owner reviewed the findings and committed the reports,
+verification, and final Stage 0c summary as `0f3b392`.
 
-Implement the approved three-question framework in sequence: inspect retained
+The retained analysis design follows the approved three-question framework:
+inspect retained
 trajectories and select contextualized episodes; run the separately specified
 matched-window diagnostic; assess which pre-AC selection criteria merit tests
 on shorter Tracy runs. Retain this first study as a limited demonstration of
@@ -797,8 +810,12 @@ cycles while the matched DC model showed no resolved benefit. This answers
 the owner's present question about stronger temporal variation in battery
 power value in the implemented AC model. It does not isolate individual
 network effects or certify global value, and the numerical result is not a
-prediction for Tracy. The separate decision on the planned step-3 comparisons
-remains open.
+prediction for Tracy. The completed prescribed-transfer comparisons strengthen
+that finding: all six selected shifts have lower-cost feasible AC solutions,
+while the corresponding DC shifts increase cost. The owner-requested retry
+resolved the initially inaccurate June 16 5 MWh return; both results remain
+visible. The owner has also omitted the annual plan's optional S6 congestion
+study on toy data. No further toy experiments are planned.
 
 Carry forward the following methods and capabilities:
 
@@ -822,23 +839,33 @@ disposition does not launch Tracy input generation or numerical work.
 
 **End-of-Stage-0c PR closeout checklist**
 
-- [ ] Record each selected toy follow-up as completed and reviewed, explicitly
+- [x] Record each selected toy follow-up as completed and reviewed, explicitly
   deferred, or stopped, with its evidence, remaining questions, and reason.
   Current disposition: the AC dispatch comparisons and the 12 battery
   operation comparisons are complete, independently reviewed, and reviewed by
-  the owner. The prescribed energy-transfer comparisons have now run and
-  await owner review. The additional owner-requested June 16 5 MWh AC solve
-  returned `optimal` with lower cost; both attempts are retained. The toy AC
-  look-ahead-horizon study is deferred for the economic-model reason above.
-- [ ] Finish documentation and relevant regression checks. Record their
+  the owner. The prescribed energy-transfer comparisons and owner-requested
+  June 16 retry are complete, independently reviewed, and included in the
+  owner-committed result package `0f3b392`. Both June 16 attempts are retained.
+  The toy AC look-ahead-horizon study is deferred for the economic-model reason
+  above. S5 is closed, S6 is omitted by owner decision, and S7 is complete
+  (`3513284`).
+- [x] Finish documentation and relevant regression checks. Record their
   outcomes, retained limitations, and the methods or capabilities to carry
-  into Tracy. Obtain the owner's decision to move on to the new study.
+  into Tracy. The [implementation checkpoint](../experiments/case118_counterfactual/battery_operation/transfer-implementation.md)
+  records 157 passing targeted tests and the subsequent eight-test transfer
+  file, including two added orchestration cases. Independent implementation
+  and numerical reviews are CLEAN; the reports retain read-only result
+  verification and limitations. The final closeout changes are documentation
+  only; existing numerical evidence is unchanged.
 - [ ] **User action, not agent action:** merge `big-experiment`, update local
   `main`, and verify the merged state. Record the merged baseline commit and
   verification outcome in the handoff.
 - [ ] **User action, not agent action:** create a fresh Tracy-study branch
   from the verified local `main` before Stage A input generation. Record its
   branch name and baseline commit in the handoff.
+- [ ] Obtain the owner's authorization to begin Stage A on that fresh branch.
+  Closing the toy study and including this plan in the PR do not themselves
+  launch Tracy work.
 
 Exit: the toy-follow-up disposition and documentation/regression checks are
 complete, the owner approves the transition, and the user has completed the

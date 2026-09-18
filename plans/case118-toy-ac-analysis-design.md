@@ -29,14 +29,16 @@ results, and claims. New methods and results belong to separate work.
 **Battery operation follow-up:** after the AC dispatch comparison and inspection
 of saved battery trajectories, the owner selected three three-hour windows for a
 [study of battery operation in AC and DC](case118-toy-battery-mechanism-test.md).
-It compares fixed/free schedules and two prescribed energy transfers: 24
-primary solves proposed across the three windows, with a result checkpoint
+It compared fixed/free schedules and two prescribed energy transfers: 24
+primary comparisons across the three windows, with a result checkpoint
 between phases and separately bounded recovery. The 12 fixed/free comparisons
-are complete and reviewed by the owner; the remaining 12 prescribed-transfer
+are complete and reviewed by the owner; the 12 prescribed-transfer
 solves have now run from the owner-committed implementation. See the
 [result report](../experiments/case118_counterfactual/battery_operation/TRANSFER_REPORT.md),
 including the additional owner-requested June 16 5 MWh AC solve that returned
-`optimal` with lower cost. Both attempts are retained. Results await owner review.
+`optimal` with lower cost. Both attempts are retained. Independent numerical
+reviews are CLEAN; the owner-committed reports and final Stage 0c findings are
+recorded in `0f3b392`. No further toy experiments are planned.
 This was additional scoped
 mechanism work, not a revival of the deferred horizon study or authorization
 to launch the earlier full six-window R1/R2/G/B proposal.
