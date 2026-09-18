@@ -853,15 +853,17 @@ package environment.
 - [ ] SOCP network model
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
-- [ ] M14 time-vectorized multistep formulations: the explicit time-last
-  lossy-DC path is integrated into the Case118 `big-experiment` branch; its
-  conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
-  accepted. The retained
-  stepwise builder remains the default. The historical stepwise/CPP profiling
+- [ ] M14 time-vectorized multistep formulations: M14a–c are complete and
+  merged into `main` with the completed Case118 study. The vectorized lossy-DC
+  path's conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
+  accepted. The retained stepwise builder remains the default. The historical
+  stepwise/CPP profiling
   mismatch and the certificate-backed tight-tolerance disposition are both
   tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual
   realization. A non-promotional default-solver matrix found no accepted
-  alternative annual arm (see
+  alternative annual arm. M14d remains: single-node DC vectorization, followed
+  by AC vectorization using existing initialization helpers and initial
+  Case9 performance comparisons (see
   `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
