@@ -1,0 +1,28 @@
+{
+  "accepted": true,
+  "status": "optimal",
+  "artifact_hashes_verified": 6,
+  "committed_runtime_unchanged": true,
+  "changes_from_fixed": {
+    "branch_loss_mwh": 0.025542793533588792,
+    "common_cost": -14.71242996014189,
+    "generation_cost": -24.71242996014189,
+    "storage_cost": 10.000000000000949,
+    "throughput_mwh": 10.000000000000949
+  },
+  "cost_change_from_previous_attempt": -93.75892038299935,
+  "phase_budget_consumed": {
+    "ac_attempts": 1,
+    "active_wall_seconds": 46.04947495798115,
+    "dc_attempts": 0,
+    "total_worker_seconds": 46.042460583965294
+  },
+  "cumulative_budget_consumed": {
+    "ac_attempts": 14,
+    "active_wall_seconds": 842.270134499995,
+    "dc_attempts": 12,
+    "total_worker_seconds": 1394.779224291211
+  },
+  "peak_sampled_worker_gib": 9.234039306640625,
+  "peak_sampled_aggregate_gib": 10.04107666015625
+}

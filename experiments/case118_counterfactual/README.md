@@ -14,8 +14,10 @@ Two sets of results are complete and independently reviewed:
 - [Battery operation in AC and DC](battery_operation/REPORT.md): three
   three-hour windows testing whether shifting battery energy across time lowers
   operating cost in each model. The owner has authorized the separate 1 and
-  5 MWh transfer comparisons. Their implementation has passed independent
-  review; numerical execution awaits the execution-source checkpoint.
+  5 MWh transfer comparisons. All 12 have now run; see
+  [Cost of prescribed battery energy shifts](battery_operation/TRANSFER_REPORT.md).
+  A subsequent owner-requested June 16 5 MWh AC solve returned `optimal`
+  and a lower-cost feasible solution; both attempts are retained.
 
 Reports, launch protocols, context, and analysis scripts live in the two folders
 above. Retained solver artifacts live in this experiment's `results/` directory,
@@ -23,6 +25,63 @@ following the existing experiment convention; only that directory is Git-ignored
 See [the relocation record](RESULT_LOCATIONS.md) for the unchanged execution
 records' original paths. New numerical work still requires its agreed review
 and launch authorization.
+
+## Stage 0c findings
+
+AC realization can change both the economical allocation of generation and
+the value of shifting battery energy across time, even with the toy model's
+weak generator curvature. The controlled comparisons establish the following
+results for the selected windows.
+
+1. **Larger generator adjustments can provide substantial economic value.**
+   In the first three-hour window, unrestricted generator redispatch reduced
+   cost by **13.35%** relative to the economical small-adjustment solution.
+   Total absolute generator movement increased, while net additional
+   generation and losses decreased. Net changes alone therefore miss important
+   rearrangements among generators. See the
+   [dispatch-adjustment report](ac_dispatch_adjustments/REPORT.md).
+
+2. **Battery value depends on the episode and storage boundary conditions.**
+   That first window showed no resolved benefit from battery rescheduling
+   under common DC initial and terminal states. Historical AC had entered
+   about **63 MWh below** the DC state, so its historical recharge addressed
+   a different operational problem. The null matched result neither explains
+   away that recharge nor establishes that batteries lack value elsewhere.
+
+3. **The three later windows showed an economic incentive for battery cycling
+   in AC that was absent in DC.** Allowing battery rescheduling produced AC net
+   savings of **226–262 cost units**, about **0.086–0.100%** of window cost,
+   after paying the substantial throughput penalty. The matched DC solutions
+   remained effectively idle. Fixed-battery AC was already feasible, so cycling
+   provided an observed economic improvement rather than being required for
+   real-power feasibility. Reactive controls remained available in both
+   comparisons. See the [battery-operation report](battery_operation/REPORT.md).
+
+4. **Prescribing the same small energy shifts made the AC/DC distinction more
+   direct.** Charging earlier and discharging later, with identical endpoints
+   and device allocations, yielded lower-cost AC solutions for **both 1 and
+   5 MWh shifts in all three windows**. Net AC savings were approximately
+   **2.35–2.95 cost units per MWh shifted**; the corresponding DC shifts
+   **increased cost by about 1.18 per MWh**. Some AC savings accompanied slightly
+   higher total branch-loss energy, so reduced aggregate losses cannot explain
+   every improvement. These comparisons do not separate congestion,
+   voltage/reactive constraints, loss timing and location, or changes among
+   marginal generators. DC's objective also retains its separate loss proxy.
+   See the [prescribed-shift report](battery_operation/TRANSFER_REPORT.md).
+
+5. **The numerical and modeling lessons matter for Tracy.** June 16's initial
+   higher-cost `optimal_inaccurate` result became a lower-cost `optimal` result
+   with another initialization. Physical feasibility alone does not establish
+   economic quality: these remain feasible improvements relative to retained
+   local solutions, not certified global values. The toy's nearly linear
+   generation costs, high battery penalty, and unrealistic temporal inputs
+   limit its relevance to the intended levelization question.
+
+For Tracy, carry forward matched comparisons, episode context, separate cost
+accounting, and retained solver evidence, and explicitly study **generator
+curvature and battery regularization**. The toy results demonstrate a mechanism
+worth examining; their numerical magnitudes are not predictions for Tracy,
+and these selected windows do not estimate annual frequency or benefit.
 
 ## Model and evidence
 

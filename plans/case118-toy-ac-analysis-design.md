@@ -33,8 +33,10 @@ It compares fixed/free schedules and two prescribed energy transfers: 24
 primary solves proposed across the three windows, with a result checkpoint
 between phases and separately bounded recovery. The 12 fixed/free comparisons
 are complete and reviewed by the owner; the remaining 12 prescribed-transfer
-solves are now authorized by the owner. Their implementation has passed
-independent review; numerical execution awaits the execution-source checkpoint.
+solves have now run from the owner-committed implementation. See the
+[result report](../experiments/case118_counterfactual/battery_operation/TRANSFER_REPORT.md),
+including the additional owner-requested June 16 5 MWh AC solve that returned
+`optimal` with lower cost. Both attempts are retained. Results await owner review.
 This was additional scoped
 mechanism work, not a revival of the deferred horizon study or authorization
 to launch the earlier full six-window R1/R2/G/B proposal.

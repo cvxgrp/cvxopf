@@ -89,7 +89,8 @@ This selected sample provides no estimate of annual frequency or benefit.
 ## Checkpoint
 
 The owner has reviewed these results and authorized step 3, the 1 and 5 MWh
-transfer comparisons. Their implementation has passed independent review;
-numerical execution awaits the execution-source checkpoint. See the
-[implementation record](transfer-implementation.md). The completed comparisons support the reported AC/DC distinction;
+transfer comparisons. Those 12 comparisons have now run; see the separate
+[prescribed energy shift report](TRANSFER_REPORT.md), including the subsequent
+owner-requested June 16 5 MWh AC solve that returned `optimal` with lower cost.
+Both attempts remain retained. The completed comparisons support the reported AC/DC distinction;
 the more detailed question of which network effects produce it remains open.

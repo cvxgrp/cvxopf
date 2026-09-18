@@ -1,8 +1,10 @@
 # Cost of prescribed battery energy shifts: implementation checkpoint
 
-Status (2026-09-17): owner authorized step 3; independent implementation review
-is CLEAN under the scientific review standard. No step-3 numerical solves have
-been run. Execution awaits the source checkpoint described below.
+Status (2026-09-17): independent implementation review is CLEAN under the
+scientific review standard. The owner committed the implementation as
+`dd21216` and authorized execution. All 12 comparisons have now run; see the
+[result report](TRANSFER_REPORT.md). The checkpoint below records the
+pre-execution review; the source-snapshot alternative was not used.
 
 ## Scope and implementation
 

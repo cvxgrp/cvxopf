@@ -4,9 +4,11 @@ Status: the 12 comparisons of fixed versus rescheduled battery power are
 complete; independent implementation and numerical reviews are CLEAN.
 See [Battery operation in AC and DC](../experiments/case118_counterfactual/battery_operation/REPORT.md).
 The owner has reviewed the results and authorized step 3, the 1 and 5 MWh
-transfer comparisons. Implementation has passed independent review; no step-3
-solves have been run. The execution-source checkpoint precedes launch; see
-the [implementation record](../experiments/case118_counterfactual/battery_operation/transfer-implementation.md).
+transfer comparisons. Implementation passed independent review, the owner
+committed it as `dd21216`, and the authorized 12 comparisons have now run.
+See the [result report](../experiments/case118_counterfactual/battery_operation/TRANSFER_REPORT.md):
+an additional owner-requested June 16 5 MWh AC solve returned `optimal` with
+lower cost. Both attempts are retained. Results await owner review.
 The protocol below records the agreed design.
 
 ## Question and limits
