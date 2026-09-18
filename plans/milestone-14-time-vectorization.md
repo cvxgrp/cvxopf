@@ -560,8 +560,13 @@ comparison, not a new solver qualification study or a required speedup contest.
 - Reuse the Tracy source and existing Case9 mapping in
   `experiments/battery_terminal/scenario.py`, with the shared formulation setup
   in `experiments/battery_terminal/problem_setup.py`. Use the same inputs and
-  device settings within each representation pair. The source window and
-  intermediate horizon steps remain to be selected.
+  device settings within each representation pair. The owner selected the
+  **2021-12-22 00:00 through 2021-12-28 23:00, fixed UTC−08:00**
+  energy-balance week for T=168. Its raw Tracy net energy is −0.411313 GWh,
+  peak net load is 1,765.9732 MW, minimum net load is −5,426.0595 MW, and
+  108 of 168 hours have positive net load. These are source-scale input
+  statistics, before Case9 scaling, curtailment, losses, or storage dispatch.
+  The T=3 slice and intermediate horizon steps remain to be selected.
 - Inherit the AC initialization helper method developed for the Case118
   hierarchical study. CVXPY variable `.value` is the initialization interface
   for scalar and array variables alike. Adapt the existing helpers' shapes and
