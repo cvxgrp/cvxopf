@@ -54,8 +54,20 @@ class Child:
     launched: float
     process: subprocess.Popen[bytes] | None = None
     log: BinaryIO | None = None
-    completion: Completion | None = None
+    completion: Completion | DirectCompletion | None = None
     reaped: bool = False
+
+
+@dataclass(frozen=True)
+class DirectCompletion:
+    """Independent non-speculative audit; no AC replay/x0 contract is claimed."""
+
+    attempt: AttemptSpec
+    outcome: str
+
+    def __post_init__(self):
+        if self.outcome not in ("accepted", "rejected"):
+            raise ValueError("direct completion must follow an independent audit")
 
 
 class SubprocessBackend:
@@ -72,13 +84,17 @@ class SubprocessBackend:
         *,
         cwd: Path,
         command: Callable[[AttemptSpec, Path], Sequence[str]],
-        audit: Callable[[AttemptSpec, Path], Completion],
+        audit: Callable[[AttemptSpec, Path], Completion | DirectCompletion],
         publish: Callable[
             [AttemptSpec, Sequence[Completion], Mapping[str, Path]], None
         ],
         advance: Callable[[AttemptSpec, Mapping[str, Path]], None],
         clock: Callable[[], float] = time.monotonic,
+        phase_prefix: str = "ac",
     ) -> None:
+        if phase_prefix not in ("ac", "dc"):
+            raise ValueError("phase prefix must be ac or dc")
+        self.phase_prefix = phase_prefix
         self.root, self.cwd = root, cwd
         self.command, self.audit = command, audit
         self.publish, self.advance = publish, advance
@@ -100,7 +116,9 @@ class SubprocessBackend:
         directory = (
             self.root
             / attempt.window.shard_id
-            / (f"ac-{attempt.window.iteration:06d}-spec-{attempt.order:02d}")
+            / (
+                f"{self.phase_prefix}-{attempt.window.iteration:06d}-spec-{attempt.order:02d}"
+            )
         )
         if not directory.resolve().is_relative_to(self.root.resolve()):
             raise ValueError("invalid shard directory")
@@ -157,7 +175,7 @@ class SubprocessBackend:
         starts = [
             float(cast(float, item["monotonic_seconds"]))
             for item in self._phases(child)
-            if item["phase"] == "before_ac_solve"
+            if item["phase"] == f"before_{self.phase_prefix}_solve"
         ]
         if len(starts) > 1:
             raise ValueError("single-attempt worker reported multiple solves")
@@ -168,7 +186,7 @@ class SubprocessBackend:
         returns = [
             float(cast(float, item["monotonic_seconds"]))
             for item in phases
-            if item["phase"] == "after_ac_solve"
+            if item["phase"] == f"after_{self.phase_prefix}_solve"
         ]
         if len(returns) > 1 or (returns and self.solve_started_at(attempt) is None):
             raise ValueError("invalid single-attempt solve return")
@@ -181,7 +199,9 @@ class SubprocessBackend:
             return False
         return load_retained_start(path).invocation == attempt
 
-    def poll_audited(self, attempt: AttemptSpec) -> Completion | None:
+    def poll_audited(
+        self, attempt: AttemptSpec
+    ) -> Completion | DirectCompletion | None:
         child = self.children[attempt.attempt_id]
         process = child.process
         if process is None or process.poll() is None:
@@ -197,10 +217,10 @@ class SubprocessBackend:
             else:
                 phases = [item["phase"] for item in self._phases(child)]
                 if phases != [
-                    "before_ac_build",
-                    "after_ac_build",
-                    "before_ac_solve",
-                    "after_ac_solve",
+                    f"before_{self.phase_prefix}_build",
+                    f"after_{self.phase_prefix}_build",
+                    f"before_{self.phase_prefix}_solve",
+                    f"after_{self.phase_prefix}_solve",
                 ]:
                     raise ValueError("returned candidate lacks complete solve phases")
                 child.completion = self.audit(attempt, child.directory)
@@ -244,7 +264,7 @@ class SubprocessBackend:
                     (
                         ended - float(cast(float, item["monotonic_seconds"]))
                         for item in phases
-                        if item["phase"] == "after_ac_solve"
+                        if item["phase"] == f"after_{self.phase_prefix}_solve"
                     ),
                     None,
                 ),

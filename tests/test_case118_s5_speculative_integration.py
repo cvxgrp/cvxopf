@@ -298,7 +298,8 @@ def test_transition_report_preserves_recovery_audit_ancestor(tmp_path, successor
         summary = summary.get("predecessor")
 
 
-def test_real_process_return_is_audited_and_reaped(tmp_path, monkeypatch):
+@pytest.mark.parametrize("phase_prefix", ["ac", "dc"])
+def test_real_process_return_is_audited_and_reaped(tmp_path, monkeypatch, phase_prefix):
     spec = AttemptSpec(WindowKey("s4b-shard-000", 0), 0, 0)
     calls = []
 
@@ -313,7 +314,8 @@ def test_real_process_return_is_audited_and_reaped(tmp_path, monkeypatch):
                 + "); "
                 "s=json.loads(" + repr(json.dumps(asdict(attempt))) + "); "
                 "events=[{'phase':name,'monotonic_seconds':time.monotonic()} for name in "
-                "['before_ac_build','after_ac_build','before_ac_solve','after_ac_solve']]; "
+                f"['before_{phase_prefix}_build','after_{phase_prefix}_build',"
+                f"'before_{phase_prefix}_solve','after_{phase_prefix}_solve']]; "
                 "(p/'phase.json').write_text(json.dumps({'invocation':s,'events':events})); "
                 "(p/'result.json').write_text('{}')"
             ),
@@ -330,6 +332,7 @@ def test_real_process_return_is_audited_and_reaped(tmp_path, monkeypatch):
         audit=audit,
         publish=lambda *args: None,
         advance=lambda *args: None,
+        phase_prefix=phase_prefix,
     )
     backend.launch(spec)
     child = backend.children[spec.attempt_id]

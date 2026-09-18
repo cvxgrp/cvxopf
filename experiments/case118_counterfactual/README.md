@@ -136,6 +136,56 @@ for deciding whether further windows add distinct information.
 
 ## Verification
 
+### Battery mechanism: fixed/free AC and DC phase
+
+`mechanism.py` implements the first phase of the separately reviewed
+[three-window mechanism plan](../../plans/case118-toy-battery-mechanism-test.md).
+It runs six DC solves serially, then the three AC G/B chains through the
+existing 2+1 supervisor. G is the fixed-battery F arm in this study's language;
+no R1/R2 repair solves are launched. Original R1/R2/G/B behavior is unchanged.
+
+```sh
+uv run --extra dev python -m experiments.case118_counterfactual.mechanism \
+  --protocol REVIEWED_PHASE_ONE_PROTOCOL.json --output outputs/mechanism-RUN
+```
+
+The explicit protocol adds `phase: "fixed_free"`, `dc_options`, and
+`max_dc_attempts: 12` to the common protocol fields. The latter is the
+whole-study DC cap; this phase performs six calls, with no automatic retry.
+Set the unused `epsilon_repair_mwh` to zero. `max_attempts` is the cumulative
+AC attempt cap. The phase summary records consumed AC/DC counts, active wall
+time and summed worker elapsed time for the later transfer phase. The DC
+consumption is deducted before starting AC. Each phase uses a fresh output
+directory; no automatic restart or continuation is provided.
+
+DC keeps its native loss-proxy objective term, independently reconstructed
+using per-unit flows, resistance, time-step duration and the original loss
+weight. Both native objective and generation/storage cost sum are reported.
+Independent physical, device-bound, input, schedule and cost audits run in
+the DC worker and again in the parent. A free-battery candidate cannot erase
+a cheaper destination-audited fixed-battery incumbent. Failed DC attempts
+stop this phase with partial evidence instead of silently retrying or being
+called infeasible. The shared process backend uses DC phase labels and the
+same process-group cleanup and hard RSS limits, without speculative DC jobs.
+
+The entry point normally requires a clean committed implementation. A proposed
+alternative for an explicitly approved uncommitted execution is
+`--snapshot-reviewed-worktree`: it retains all runtime Python source bytes
+(including new, nonignored modules), their verified fingerprint, the base
+commit, tracked Git diff, and untracked test/plan files in an immutable snapshot.
+The study manifest references that snapshot by hash, and each worker still
+checks the exact source before/after its solve. This flag does not confer
+permission to bypass the agreed commit checkpoint; resolve that disposition
+with the owner before using it. The original counterfactual CLI retains its
+clean-tree gate.
+
+The phase-one entry point **stops for owner result review after fixed/free
+comparisons**. Prescribed-transfer
+execution and cumulative-budget resumption belong to the next checkpoint;
+they are not implemented or launched by this phase-one entry point.
+
+### Tests
+
 ```sh
 uv run --extra dev pytest tests/test_case118_counterfactual.py \
   tests/test_case118_s5_speculative_policy.py \

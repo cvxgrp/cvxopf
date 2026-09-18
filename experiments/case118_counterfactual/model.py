@@ -190,7 +190,8 @@ def map_start(model: ArmModel, source: Mapping[str, object] | None):
     return values
 
 
-def cost_and_changes(inputs, window, result):
+def device_costs(inputs, result):
+    """Shared independent device-cost reconstruction, in engineering units."""
     pg, b = np.asarray(result["Pg"]), np.asarray(result["b"])
     delta = inputs.delta
     generation = (
@@ -208,6 +209,13 @@ def cost_and_changes(inputs, window, result):
     battery_cost = float(
         throughput @ np.array([s.aging_weight for s in inputs.storage])
     )
+    return generation, battery_cost, throughput
+
+
+def cost_and_changes(inputs, window, result):
+    pg, b = np.asarray(result["Pg"]), np.asarray(result["b"])
+    delta = inputs.delta
+    generation, battery_cost, throughput = device_costs(inputs, result)
     dg, db = pg - window.pg_mw, b - window.battery_mw
     net, l1 = dg.sum(axis=1), np.abs(dg).sum(axis=1)
     branch_loss = (

@@ -680,6 +680,14 @@ toy-follow-up implementation or work package A.
 
 ### 0c. Selected toy-data studies and PR closeout gate
 
+The owner also selected a bounded
+[three-window AC/DC battery mechanism test](case118-toy-battery-mechanism-test.md)
+after the first matched pilot. Its fixed/free and prescribed-transfer phases
+propose 24 primary solves in total, retaining historical toy economics and
+three-hour horizons. Complete or explicitly disposition this selected
+follow-up at closeout; its detailed design, implementation and numerical
+launch checkpoints remain separate. The toy horizon study stays deferred.
+
 Implement the approved three-question framework in sequence: inspect retained
 trajectories and select contextualized episodes; run the separately specified
 matched-window diagnostic; assess which pre-AC selection criteria merit tests

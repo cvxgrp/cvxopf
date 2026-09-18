@@ -23,6 +23,15 @@ results, and claims. New methods and results belong to separate work.
 
 ## Purpose and selected work
 
+**Bounded mechanism follow-up:** after the matched pilot and read-only onset
+screen, the owner selected three three-hour battery-excursion windows for a
+[matched AC/DC battery mechanism test](case118-toy-battery-mechanism-test.md).
+It compares fixed/free schedules and two prescribed energy transfers: 24
+primary solves proposed across the three windows, with a result checkpoint
+between phases and separately bounded recovery. This is additional scoped
+mechanism work, not a revival of the deferred horizon study or authorization
+to launch the earlier full six-window R1/R2/G/B proposal.
+
 Develop a standard analysis that explains the completed toy AC realization,
 tests the operational value of selected adjustments, and supplies useful
 period-selection criteria for shorter Tracy runs. The analysis should be

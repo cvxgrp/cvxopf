@@ -115,17 +115,36 @@ class FixedBatteryRace(WindowRace):
         return None
 
 
+def execution_sources():
+    """Include new nonignored experiment modules before their first commit."""
+    names = subprocess.check_output(
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "src",
+            "experiments",
+        ],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    return {
+        name: (ROOT / name).read_bytes()
+        for name in sorted(set(names))
+        if name.endswith(".py")
+    }
+
+
 def execution_identity():
     commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    names = subprocess.check_output(
-        ["git", "ls-files", "src", "experiments"], cwd=ROOT, text=True
-    ).splitlines()
     digest = hashlib.sha256()
-    for name in names:
-        if name.endswith(".py"):
-            digest.update(name.encode() + b"\0" + (ROOT / name).read_bytes())
+    for name, content in execution_sources().items():
+        digest.update(name.encode() + b"\0" + content)
     return {"commit": commit, "python_source_sha256": digest.hexdigest()}
 
 
@@ -251,7 +270,10 @@ def validate_protocol(protocol):
 
 
 class Study:
-    def __init__(self, source, protocol, output):
+    def __init__(self, source, protocol, output, *, arms=ARMS):
+        if tuple(arms) not in (ARMS, ("G", "B")):
+            raise ValueError("supported chains are R1/R2/G/B or G/B")
+        self.arms = tuple(arms)
         self.source, self.protocol, self.output = source, protocol, output
         self.inputs, self.policy = source.fixture.inputs, source.fixture.policy
         self.tolerances = ComparisonTolerances(**protocol["tolerances"])
@@ -288,7 +310,7 @@ class Study:
 
     def admit(self, name):
         stage_index = len(self.stages[name])
-        arm = ARMS[stage_index]
+        arm = self.arms[stage_index]
         prior = self.stages[name][-1] if stage_index else None
         r1 = self.stages[name][0] if stage_index else None
         budget = None
@@ -500,7 +522,7 @@ class Study:
                     raise RuntimeError("declared study/worker/work budget exhausted")
                 for key in self.supervisor.tick(now):
                     name = self.jobs[key]["name"]
-                    if len(self.stages[name]) < 4:
+                    if len(self.stages[name]) < len(self.arms):
                         self.admit(name)
                     else:
                         active.remove(name)
