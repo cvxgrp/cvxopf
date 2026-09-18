@@ -17,6 +17,36 @@ HISTORICAL_REFERENCE = Path(
 )
 
 
+@pytest.fixture
+def profile_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Portable context inputs; frozen archive-chain audits remain separate."""
+    reference = tmp_path / "reference"
+    reference.mkdir()
+    result = reference / "ladder-result.json"
+    result.write_text('{"fixture": "context construction only"}\n')
+    monkeypatch.setattr(runner, "PREFIX_LADDER_OUTPUT_DIRECTORY", reference)
+    monkeypatch.setattr(
+        runner, "REFERENCE_LADDER_RESULT_SHA256", runner.sha256_path(result)
+    )
+    monkeypatch.setattr(
+        analysis, "REFERENCE_LADDER_RESULT_SHA256", runner.sha256_path(result)
+    )
+    monkeypatch.setattr(
+        runner, "_git", lambda *args: "" if args[0] == "status" else "1" * 40
+    )
+    monkeypatch.setattr(analysis, "_git", lambda *args: runner.M14C_INTEGRATION_COMMIT)
+    for module in (runner, analysis):
+        monkeypatch.setattr(
+            module, "profile_source_fingerprint", lambda commit=None: "2" * 64
+        )
+        monkeypatch.setattr(
+            module,
+            "shared_production_fingerprint",
+            lambda commit=None: "3" * 64 if commit in (None, "1" * 40) else "4" * 64,
+        )
+    return runner.profile_execution_context
+
+
 def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -> None:
     relative = {
         path.relative_to(runner.ROOT).as_posix()
@@ -32,6 +62,10 @@ def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -
     assert len(runner.profile_source_fingerprint()) == 64
 
 
+@pytest.mark.skipif(
+    not (runner.ROOT / runner.PREFIX_LADDER_OUTPUT_DIRECTORY).is_dir(),
+    reason="local M14c reference execution archive is not distributed with the repository",
+)
 def test_conditioned_reference_chain_is_complete() -> None:
     assert tuple(runner.validate_reference_ladder()) == (24, 168, 720)
 
@@ -41,8 +75,8 @@ def test_sigterm_handler_raises_catchable_supervisor_interruption() -> None:
         runner._sigterm_handler(15, object())
 
 
-def test_profile_context_freezes_production_pair_and_reference() -> None:
-    context = runner.profile_execution_context(24)
+def test_profile_context_freezes_production_pair_and_reference(profile_context) -> None:
+    context = profile_context(24)
     assert context["temporal_assembly"] == "stepwise"
     assert context["canonicalization_backend"] == "CPP"
     assert context["reference_temporal_assembly"] == "vectorized"
@@ -58,15 +92,10 @@ def test_profile_context_freezes_production_pair_and_reference() -> None:
 
 
 @pytest.mark.parametrize("horizon", (24, 168, 720))
-def test_analyzer_validates_complete_stepwise_context(horizon: int) -> None:
-    context = json.loads(
-        (
-            runner.ROOT
-            / runner.PROFILE_OUTPUT_DIRECTORY
-            / f"stepwise-{horizon:04d}"
-            / "execution-context.json"
-        ).read_text()
-    )
+def test_analyzer_validates_complete_stepwise_context(
+    horizon: int, profile_context
+) -> None:
+    context = dict(profile_context(horizon))
     analysis._validate_stepwise_context(context, horizon)
     context["annual_execution_authorized"] = True
     with pytest.raises(ValueError, match="context"):
@@ -142,6 +171,10 @@ def test_branch_flows_are_residual_gated_but_schema_bound() -> None:
     assert analysis._result_mismatches(left, right) == ["p_flows.schema"]
 
 
+@pytest.mark.skipif(
+    not (runner.ROOT / HISTORICAL_REFERENCE).is_dir(),
+    reason="local historical M14c execution archive is not distributed with the repository",
+)
 def test_historical_outer_is_rejected_by_conditioned_fixture() -> None:
     root = runner.ROOT / HISTORICAL_REFERENCE
     result = json.loads((root / "ladder-result.json").read_text())

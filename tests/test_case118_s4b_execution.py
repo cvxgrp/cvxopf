@@ -11,16 +11,19 @@ import numpy as np
 import pytest
 
 from experiments.case118_annual_hierarchy.p0_fixture import load_p0_fixture
+from experiments.case118_annual_hierarchy.audit import ProbeAudit
 from experiments.case118_annual_hierarchy import run_s4b
 from experiments.case118_annual_hierarchy import s4b_analysis
 from experiments.case118_annual_hierarchy import s4b_execution
 from experiments.case118_annual_hierarchy.s4b_manifest import (
     EXPECTED_MANIFEST_SHA256,
     PRIMARY_ATTEMPT_BUDGET_SECONDS,
+    S4_OUTER_ARCHIVE_SHA256,
     load_verified_manifest,
     object_sha256,
 )
 from experiments.case118_annual_hierarchy.streaming_runner import (
+    StreamingOuterPlan,
     execute_streaming_window,
     snapshot_inputs,
     solve_frozen_outer,
@@ -30,6 +33,26 @@ from experiments.case118_annual_hierarchy.streaming_archive import (
     window_archive_payload,
 )
 from experiments.case118_annual_hierarchy.streaming_schema import WindowIndexEntry
+
+
+def _test_outer() -> StreamingOuterPlan:
+    """Real frozen signposts only; these tests do not audit the full outer primal."""
+    path = Path(__file__).parent / "fixtures/case118_s4_signposts.npz"
+    with np.load(path, allow_pickle=False) as data:
+        metadata = json.loads(str(data["metadata"]))
+        states = data["boundary_soc_mwh"]
+    assert metadata.pop("source_archive_sha256") == S4_OUTER_ARCHIVE_SHA256
+    audit = metadata.pop("audit")
+    audit["missing_or_nonfinite_fields"] = tuple(audit["missing_or_nonfinite_fields"])
+    metadata["storage_device_ids"] = tuple(metadata["storage_device_ids"])
+    return StreamingOuterPlan(
+        **metadata,
+        build=None,
+        result={},
+        audit=ProbeAudit(**audit),
+        global_boundary_indices=np.arange(len(states)),
+        boundary_soc_mwh=states,
+    )
 
 
 def _recovery_evidence(ordinals):
@@ -87,7 +110,7 @@ def test_recovery_phase_audit_requires_accepted_final_controller(mutation):
 
 
 def test_annual_signposts_verify_once_and_preserve_every_row(monkeypatch):
-    outer = run_s4b._outer()
+    outer = _test_outer()
     calls = []
     original = type(outer).verify_signpost_integrity
 
@@ -111,7 +134,7 @@ def test_annual_signposts_verify_once_and_preserve_every_row(monkeypatch):
 
 
 def test_signpost_materialization_still_rejects_drift():
-    outer = run_s4b._outer()
+    outer = _test_outer()
     changed = outer.boundary_soc_mwh.copy()
     changed[1, 0] += 1
     object.__setattr__(outer, "boundary_soc_mwh", changed)
@@ -121,7 +144,7 @@ def test_signpost_materialization_still_rejects_drift():
 
 def test_shard_verification_reuses_one_mapping_per_pass(tmp_path, monkeypatch):
     # Isolate traversal/caching from the separately tested window schema.
-    outer = run_s4b._outer()
+    outer = _test_outer()
     shard = _first_shard()
     initial = shard["storage"]["initial_state"]["soc_mwh"]
     entries = []
@@ -179,9 +202,7 @@ def test_shard_verification_reuses_one_mapping_per_pass(tmp_path, monkeypatch):
 
 
 def _first_shard() -> dict[str, object]:
-    registry = cast(
-        dict[str, Any], s4b_execution.qualification_registry(run_s4b._outer())
-    )
+    registry = cast(dict[str, Any], s4b_execution.qualification_registry(_test_outer()))
     return cast(dict[str, object], registry["shards"][0])
 
 
@@ -281,7 +302,7 @@ def test_qualification_authority_is_exact_and_never_annual(tmp_path: Path) -> No
 
 
 def test_qualification_registry_is_bounded_and_rejects_annual_shards() -> None:
-    outer = run_s4b._outer()
+    outer = _test_outer()
     registry = s4b_execution.qualification_registry(outer)
     shards = cast(list[dict[str, Any]], registry["shards"])
     assert [item["interval"] for item in shards] == [
@@ -318,9 +339,7 @@ def test_shard_checkpoint_uses_global_contiguous_coordinates() -> None:
 
 
 def test_later_shard_checkpoint_rejects_local_iteration_numbering() -> None:
-    payload = cast(
-        dict[str, Any], s4b_execution.qualification_registry(run_s4b._outer())
-    )
+    payload = cast(dict[str, Any], s4b_execution.qualification_registry(_test_outer()))
     shard = cast(dict[str, object], payload["shards"][2])
     initial = cast(
         dict[str, Any], cast(dict[str, Any], shard["storage"])["initial_state"]
@@ -504,9 +523,7 @@ def test_operator_intervention_timing_separates_overlapping_diagnostic(
 
 
 def test_bounded_partition_merge_completes_at_24_not_8760() -> None:
-    registry = cast(
-        dict[str, Any], s4b_execution.qualification_registry(run_s4b._outer())
-    )
+    registry = cast(dict[str, Any], s4b_execution.qualification_registry(_test_outer()))
     shards = cast(list[dict[str, object]], registry["shards"])[1:]
     merged = s4b_execution.merge_shard_summaries(
         [_summary(item) for item in shards], registry_shards=shards
@@ -814,7 +831,7 @@ def test_completed_publication_is_validated_before_checkpoint_reconciliation(
         tmp_path,
         entry,
         shard=shard,
-        outer=run_s4b._outer(),
+        outer=_test_outer(),
     )
 
     assert actual == archive
@@ -845,7 +862,7 @@ def test_completed_ready_publication_is_selected_without_new_solve(
         tmp_path,
         iteration,
         shard=_first_shard(),
-        outer=run_s4b._outer(),
+        outer=_test_outer(),
         execution_scope=run_s4b.QUALIFICATION_SCOPE,
     )
 
@@ -890,7 +907,7 @@ def test_incomplete_ready_publication_permits_new_retry(
         tmp_path,
         iteration,
         shard=_first_shard(),
-        outer=run_s4b._outer(),
+        outer=_test_outer(),
         execution_scope=run_s4b.QUALIFICATION_SCOPE,
     )
 

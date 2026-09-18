@@ -82,21 +82,30 @@ def test_prefix_source_registry_binds_runner_analyzer_and_recursive_package() ->
 def test_historical_execution_context_allows_new_analyzer_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context = json.loads(
-        (
-            runner.ROOT
-            / runner.PREFIX_LADDER_OUTPUT_DIRECTORY
-            / "execution-context.json"
-        ).read_text()
+    # Exercise context validation without requiring an ignored run or old Git
+    # objects (CI uses a shallow checkout). Historical byte provenance is a
+    # separate archive audit, not the behavior under test here.
+    monkeypatch.setattr(
+        runner, "_git", lambda *args: "" if args[0] == "status" else "1" * 40
     )
+    monkeypatch.setattr(runner, "prefix_source_fingerprint", lambda: "2" * 64)
+    monkeypatch.setattr(analysis, "prefix_source_fingerprint", lambda commit: "2" * 64)
+    context = dict(runner.ladder_execution_context())
     context.update(
         {
+            "m14c_integration_sha256": analysis.PRE_LADDER_INTEGRATION_SHA256,
+            "m14c_integration_checkpoint": analysis.PRE_LADDER_INTEGRATION_CHECKPOINT,
+            "prefix_ladder_executed": False,
+            "annual_execution_authorized": False,
             "platform": "different-analysis-platform",
             "architecture": "different-analysis-architecture",
         }
     )
     monkeypatch.setattr(analysis, "_git", lambda *args: M14C_INTEGRATION_COMMIT)
     analysis._validate_execution_context(context)
+    context["source_fingerprint"] = "3" * 64
+    with pytest.raises(ValueError, match="historical execution provenance"):
+        analysis._validate_execution_context(context)
 
 
 def test_ladder_refuses_dirty_source_before_equivalence_or_output(

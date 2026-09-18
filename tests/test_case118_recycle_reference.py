@@ -102,6 +102,10 @@ def test_clean_reference_verification_rejects_coherent_reference_drift(
         extract_s2_reference.verify_tracked_reference()
 
 
+@pytest.mark.skipif(
+    not extract_s2_reference.S2_TRAJECTORY_DIR.is_dir(),
+    reason="local S2 execution archive is not distributed with the repository",
+)
 def test_reference_regenerates_from_the_validated_s2_source():
     tracked = json.loads(extract_s2_reference.REFERENCE_PATH.read_text())
 
