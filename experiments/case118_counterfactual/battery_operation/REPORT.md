@@ -77,7 +77,7 @@ This selected sample provides no estimate of annual frequency or benefit.
 - Six serial DC solves, then six AC primary solves using two main lanes.
   No helpers, retries, cancellations, or rejected candidates were needed.
 - Active wall: 421.9025 seconds; summed worker wall: 638.2417 seconds.
-  These costs remain consumed for the possible prescribed-transfer phase.
+  These costs remain consumed for the prescribed-transfer phase.
 - Sampled peak aggregate RSS: 13.1708 GiB; sampled peak worker RSS: 7.5764 GiB.
 - All 12 children exited successfully and were reaped; no run processes remain.
 - `check_results.py` rechecked source and context identities, all selected
@@ -88,7 +88,8 @@ This selected sample provides no estimate of annual frequency or benefit.
 
 ## Checkpoint
 
-The owner has reviewed these results. Step 3, the proposed 1 and 5 MWh transfer
-comparisons, has not been run and remains pending the owner's decision at
-this results-review checkpoint. The completed comparisons support the reported AC/DC distinction;
+The owner has reviewed these results and authorized step 3, the 1 and 5 MWh
+transfer comparisons. Their implementation has passed independent review;
+numerical execution awaits the execution-source checkpoint. See the
+[implementation record](transfer-implementation.md). The completed comparisons support the reported AC/DC distinction;
 the more detailed question of which network effects produce it remains open.

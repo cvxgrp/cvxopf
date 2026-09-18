@@ -21,7 +21,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_json,
 )
 from .data import restore_window
-from .model import ComparisonTolerances, device_costs
+from .model import ComparisonTolerances, device_costs, fixed_schedule
 from .worker import jsonable
 
 
@@ -33,7 +33,9 @@ def storage_for(inputs, window):
     )
 
 
-def build_dc(inputs, policy, window, arm):
+def build_dc(inputs, policy, window, arm, *, battery_schedule_mw=None):
+    if battery_schedule_mw is not None and arm != "F":
+        raise ValueError("prescribed battery schedules require fixed DC power")
     window.validate(inputs, policy)
     if arm not in ("F", "B"):
         raise ValueError("DC phase one supports fixed or free battery power")
@@ -44,7 +46,10 @@ def build_dc(inputs, policy, window, arm):
     if inputs.nondispatchable:
         constraints.append(cp.vstack(build.variables["p_nd"]) == window.renewable_mw)
     if arm == "F":
-        constraints.append(cp.vstack(build.variables["b"]) == window.battery_mw)
+        constraints.append(
+            cp.vstack(build.variables["b"])
+            == fixed_schedule(window, battery_schedule_mw)
+        )
     build.prob = cp.Problem(build.prob.objective, constraints)
     return build
 
@@ -82,7 +87,10 @@ def audit_dc(
     *,
     exception=None,
     reported_loss_cost=None,
+    battery_schedule_mw=None,
 ):
+    if battery_schedule_mw is not None and arm != "F":
+        raise ValueError("prescribed battery schedules require fixed DC power")
     if arm not in ("F", "B"):
         raise ValueError("unknown DC arm")
     n = window.stop - window.start
@@ -186,7 +194,11 @@ def audit_dc(
         tolerances.lock_mw_abs,
     )
     if arm == "F":
-        check("battery_lock_mw_abs", b - window.battery_mw, tolerances.lock_mw_abs)
+        check(
+            "battery_lock_mw_abs",
+            b - fixed_schedule(window, battery_schedule_mw),
+            tolerances.lock_mw_abs,
+        )
     if inputs.nondispatchable:
         p = np.asarray(result["p_nd"])
         available = (
@@ -253,7 +265,13 @@ def execute_dc(directory, inputs, policy, request):
     if (directory / "result.json").exists() or (directory / "phase.json").exists():
         raise FileExistsError("DC attempt already contains evidence")
     phase("before_dc_build")
-    build = build_dc(inputs, policy, window, request["arm"])
+    build = build_dc(
+        inputs,
+        policy,
+        window,
+        request["arm"],
+        battery_schedule_mw=request.get("battery_schedule_mw"),
+    )
     phase("after_dc_build")
     exception = None
     phase("before_dc_solve")
@@ -284,6 +302,7 @@ def execute_dc(directory, inputs, policy, request):
                 ComparisonTolerances(**request["tolerances"]),
                 exception=exception,
                 reported_loss_cost=loss,
+                battery_schedule_mw=request.get("battery_schedule_mw"),
             ),
             "solver_num_iters": getattr(build.prob.solver_stats, "num_iters", None),
         }

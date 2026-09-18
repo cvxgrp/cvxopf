@@ -109,7 +109,18 @@ class ArmModel:
     physical_names: tuple[str, ...]
 
 
-def build_arm(inputs, policy, window, arm, *, repair_budget_mwh=None, hard_target=True):
+def build_arm(
+    inputs,
+    policy,
+    window,
+    arm,
+    *,
+    repair_budget_mwh=None,
+    hard_target=True,
+    battery_schedule_mw=None,
+):
+    if battery_schedule_mw is not None and arm != "G":
+        raise ValueError("prescribed battery schedules require the economic fixed arm")
     window.validate(inputs, policy)
     if arm not in ARMS or (not hard_target and arm != "B"):
         raise ValueError("only B permits source-only target-free construction")
@@ -138,7 +149,10 @@ def build_arm(inputs, policy, window, arm, *, repair_budget_mwh=None, hard_targe
     if inputs.nondispatchable:
         constraints.append(cp.vstack(build.variables["p_nd"]) == window.renewable_mw)
     if arm != "B":
-        constraints.append(cp.vstack(build.variables["b"]) == window.battery_mw)
+        constraints.append(
+            cp.vstack(build.variables["b"])
+            == fixed_schedule(window, battery_schedule_mw)
+        )
     if arm in ("R1", "R2"):
         # Explicit epigraph with a stable name supports transfer across arms.
         epigraph = cp.Variable(difference.shape, nonneg=True, name="cf_departure_mw")
@@ -157,6 +171,15 @@ def build_arm(inputs, policy, window, arm, *, repair_budget_mwh=None, hard_targe
         common_cost,
         departure,
         physical_names,
+    )
+
+
+def fixed_schedule(window, prescribed=None):
+    """Keep the DC reference intact when a comparison prescribes another schedule."""
+    return (
+        window.battery_mw
+        if prescribed is None
+        else array(prescribed, window.battery_mw.shape, "prescribed battery power")
     )
 
 
@@ -314,8 +337,11 @@ def audit_result(
     hard_target=True,
     exception=None,
     reported_common_cost=None,
+    battery_schedule_mw=None,
 ):
     """Audit public arrays without trusting worker acceptance or a new solve."""
+    if battery_schedule_mw is not None and arm != "G":
+        raise ValueError("prescribed battery schedules require the economic fixed arm")
     shapes = result_shapes(inputs, window.stop - window.start)
     unavailable = [
         k
@@ -396,7 +422,12 @@ def audit_result(
         limits["renewable_lock_mw_abs"] = tolerances.lock_mw_abs
     if arm != "B":
         residuals["battery_lock_mw_abs"] = float(
-            np.max(np.abs(np.asarray(result["b"]) - window.battery_mw))
+            np.max(
+                np.abs(
+                    np.asarray(result["b"])
+                    - fixed_schedule(window, battery_schedule_mw)
+                )
+            )
         )
         limits["battery_lock_mw_abs"] = tolerances.lock_mw_abs
     metrics = cost_and_changes(inputs, window, result)

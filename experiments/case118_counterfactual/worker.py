@@ -83,6 +83,7 @@ def execute_attempt(directory, inputs, policy, solve_config, request):
         arm,
         repair_budget_mwh=request["repair_budget_mwh"],
         hard_target=spec.hard_target,
+        battery_schedule_mw=request.get("battery_schedule_mw"),
     )
     source_id = None
     source = None
@@ -124,6 +125,8 @@ def execute_attempt(directory, inputs, policy, solve_config, request):
             or replay.invocation.source_slot != spec.source_slot
             or replay.request_sha256 != object_sha256(old_request)
             or any(old_request[k] != request[k] for k in contract_keys)
+            or old_request.get("battery_schedule_mw")
+            != request.get("battery_schedule_mw")
         ):
             raise ValueError("replay belongs to a different arm, model, or invocation")
         raw, assigned = dict(replay.raw), dict(replay.assigned)
@@ -186,6 +189,7 @@ def execute_attempt(directory, inputs, policy, solve_config, request):
         hard_target=spec.hard_target,
         exception=run.exception,
         reported_common_cost=cost,
+        battery_schedule_mw=request.get("battery_schedule_mw"),
     )
     variables = streaming.variables_by_name(model.build)
     values = {name: v.value for name, v in variables.items()}

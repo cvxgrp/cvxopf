@@ -89,7 +89,10 @@ def selected_dc(inputs, policy, window, result, incumbent, tolerances):
 
 
 class SerialDC:
-    def __init__(self, study, output):
+    def __init__(self, study, output, *, arms=("F", "B")):
+        if tuple(arms) not in (("F", "B"), ("F",)):
+            raise ValueError("DC sequence must be F/B or fixed F")
+        self.arms = tuple(arms)
         self.study, self.output = study, output
         self.records, self.results, self.jobs = {}, {}, {}
         self.backend = SubprocessBackend(
@@ -114,6 +117,10 @@ class SerialDC:
                 "execution": self.study.execution,
             }
         )
+        if name in self.study.battery_schedules:
+            request["battery_schedule_mw"] = jsonable(
+                self.study.battery_schedules[name]
+            )
         atomic_immutable_json(directory / "request.json", request)
         return [
             sys.executable,
@@ -143,6 +150,7 @@ class SerialDC:
             self.study.tolerances,
             exception=payload["exception"],
             reported_loss_cost=payload["reported_loss_cost"],
+            battery_schedule_mw=self.study.battery_schedules.get(name),
         )
         if jsonable(audit) != payload["audit"]:
             raise ValueError("DC worker and coordinator audits disagree")
@@ -154,7 +162,7 @@ class SerialDC:
         try:
             for name, window in self.study.windows.items():
                 records = self.records[name] = []
-                for arm in ("F", "B"):
+                for arm in self.arms:
                     key = WindowKey(f"{name}-{arm}", window.start)
                     self.jobs[key] = (name, arm)
                     spec = AttemptSpec(key, 0, 0)

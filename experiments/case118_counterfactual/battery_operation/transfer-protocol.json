@@ -1,0 +1,23 @@
+{
+  "phase": "prescribed_transfers",
+  "transfer_mwh": [
+    1,
+    5
+  ],
+  "previous_study": {
+    "path": "/Users/bmeyers/github/cvxopf/experiments/case118_counterfactual/results/battery_operation_20260917/study.json",
+    "sha256": "a92e3bad079a7ebe98f3c7263d734ac666a0ea23d46133ade3c03ed48e38f477"
+  },
+  "previous_summary": {
+    "path": "/Users/bmeyers/github/cvxopf/experiments/case118_counterfactual/results/battery_operation_20260917/summary.json",
+    "sha256": "d0819e2fe3bf06419a7368e2c0c1f750373dd9228c3104fe72025779f87c3d69"
+  },
+  "historical_plans": {
+    "path": "/Users/bmeyers/github/cvxopf/experiments/case118_counterfactual/battery_operation/screening/plans.json",
+    "sha256": "13aecccd69cd05f3beb2f49b90d7c6dad39ebcb5b1f88365aa66859c8f4e1b8b"
+  },
+  "transfer_prechecks": {
+    "path": "/Users/bmeyers/github/cvxopf/experiments/case118_counterfactual/battery_operation/screening/proposed-transfer-prechecks.json",
+    "sha256": "12bfe774d080cf980ec89514f4d556c920128d8bc45304edddfde780496bda17"
+  }
+}

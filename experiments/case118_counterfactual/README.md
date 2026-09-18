@@ -13,9 +13,9 @@ Two sets of results are complete and independently reviewed:
   redispatch, and battery rescheduling.
 - [Battery operation in AC and DC](battery_operation/REPORT.md): three
   three-hour windows testing whether shifting battery energy across time lowers
-  operating cost in each model. The separate proposed 1 and 5 MWh transfer
-  comparisons have not been run and remain pending the owner's decision
-  at the results-review checkpoint.
+  operating cost in each model. The owner has authorized the separate 1 and
+  5 MWh transfer comparisons. Their implementation has passed independent
+  review; numerical execution awaits the execution-source checkpoint.
 
 Reports, launch protocols, context, and analysis scripts live in the two folders
 above. Retained solver artifacts live in this experiment's `results/` directory,
@@ -196,9 +196,52 @@ with the owner before using it. The original counterfactual CLI retains its
 clean-tree gate.
 
 The phase-one entry point **stops for owner result review after fixed/free
-comparisons**. The owner has reviewed those results; the decision on the
-prescribed-transfer comparisons remains pending. They are not implemented or launched by
-this entry point; the completed results and consumed budgets remain retained.
+comparisons**. The owner reviewed those results and authorized the prescribed
+energy-transfer comparisons. They use the separate entry point below; the
+completed results and consumed budgets remain retained.
+
+### Cost of prescribed battery energy shifts
+
+`transfers.py` implements step 3: add 1 or 5 MWh of first-hour charging and
+third-hour discharging to the DC battery schedule in each selected window.
+The weights were saved before the fixed/free results. Generator dispatch is
+reoptimized with battery real power fixed to the prescribed schedule; SoC
+endpoints, renewable dispatch and all physical limits are unchanged.
+
+The launch protocol binds the previous study and summary, historical plans,
+and full-precision transfer prechecks by hash. Preparation re-audits both
+models' fixed-battery baselines and checks their source identities, verifies
+the previous lifecycle artifacts and work ledger, reconstructs all six
+prescribed schedules, and checks storage power/SoC/endpoints before launch.
+
+Six DC solves run serially, followed by six independent AC comparisons using
+the existing two main lanes and shared helper. Each AC solve starts from its
+window's accepted fixed-battery solution. That source is not eligible as an
+incumbent for the altered schedule. Explicit start perturbations and replays
+preserve the new battery lock; target-free recovery is inapplicable.
+
+The previous phase's 421.902525 active seconds, 638.241710 aggregate worker
+seconds, six AC attempts and six DC solves remain consumed. The remaining
+limits are read from those saved records, not reset for this phase. Summary
+records retain both this phase's use and cumulative use, including failed or
+canceled work. An unresolved solve retains partial evidence without a new
+schedule, smaller transfer, substituted baseline or automatic retry for DC.
+
+After implementation review and the execution-source checkpoint:
+
+```sh
+uv run --extra dev python -m experiments.case118_counterfactual.transfers \
+  --protocol experiments/case118_counterfactual/battery_operation/transfer-protocol.json \
+  --output experiments/case118_counterfactual/results/battery_transfers_20260917
+```
+
+The same clean-commit gate and explicitly authorized snapshot alternative
+apply. The output includes the full schedules, baseline references, original
+DC references, effective remaining limits and execution provenance. Report
+cost changes as prescribed minus fixed, so a negative change is a saving.
+Keep generation, throughput penalty, common device costs and DC loss proxy
+separate; report native and device-cost changes per MWh transferred. These
+are finite schedule comparisons, not nodal dual prices or certified optima.
 
 ### Tests
 

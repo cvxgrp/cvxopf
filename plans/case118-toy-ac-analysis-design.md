@@ -33,8 +33,9 @@ It compares fixed/free schedules and two prescribed energy transfers: 24
 primary solves proposed across the three windows, with a result checkpoint
 between phases and separately bounded recovery. The 12 fixed/free comparisons
 are complete and reviewed by the owner; the remaining 12 prescribed-transfer
-solves have not been run and remain pending the owner's decision at the
-results-review checkpoint. This was additional scoped
+solves are now authorized by the owner. Their implementation has passed
+independent review; numerical execution awaits the execution-source checkpoint.
+This was additional scoped
 mechanism work, not a revival of the deferred horizon study or authorization
 to launch the earlier full six-window R1/R2/G/B proposal.
 

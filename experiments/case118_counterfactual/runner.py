@@ -270,9 +270,22 @@ def validate_protocol(protocol):
 
 
 class Study:
-    def __init__(self, source, protocol, output, *, arms=ARMS):
-        if tuple(arms) not in (ARMS, ("G", "B")):
-            raise ValueError("supported chains are R1/R2/G/B or G/B")
+    def __init__(
+        self,
+        source,
+        protocol,
+        output,
+        *,
+        arms=ARMS,
+        battery_schedules=None,
+        initial_sources=None,
+    ):
+        if tuple(arms) not in (ARMS, ("G", "B"), ("G",)):
+            raise ValueError("supported chains are R1/R2/G/B, G/B or fixed G")
+        self.battery_schedules = battery_schedules or {}
+        self.initial_sources = initial_sources or {}
+        if (self.battery_schedules or self.initial_sources) and tuple(arms) != ("G",):
+            raise ValueError("prescribed schedules and external starts require fixed G")
         self.arms = tuple(arms)
         self.source, self.protocol, self.output = source, protocol, output
         self.inputs, self.policy = source.fixture.inputs, source.fixture.policy
@@ -281,6 +294,10 @@ class Study:
         self.windows = {
             x["id"]: source.window(x["start"], x["steps"]) for x in protocol["windows"]
         }
+        if (set(self.battery_schedules) | set(self.initial_sources)) - set(
+            self.windows
+        ):
+            raise ValueError("schedule or initialization names an unknown window")
         for selected in protocol["windows"]:
             context = json.loads(Path(selected["context"]["path"]).read_text())
             window = self.windows[selected["id"]]
@@ -334,7 +351,7 @@ class Study:
         if len(self.backend.children) > self.protocol["max_attempts"]:
             raise RuntimeError("study attempt budget exhausted")
         job = self.jobs[spec.window]
-        source_ref = job["incumbent"]
+        source_ref = self.initial_sources.get(job["name"], job["incumbent"])
         if spec.source_slot in (2, 3, 4, 5):
             possible = [
                 (s, ref)
@@ -368,6 +385,10 @@ class Study:
                 else "explicit_start_perturbations",
             }
         )
+        if job["name"] in self.battery_schedules:
+            request["battery_schedule_mw"] = jsonable(
+                self.battery_schedules[job["name"]]
+            )
         atomic_immutable_json(directory / "request.json", request)
         return [
             sys.executable,
@@ -405,6 +426,7 @@ class Study:
             hard_target=spec.hard_target,
             exception=payload["exception"],
             reported_common_cost=payload["common_cost_expression"],
+            battery_schedule_mw=self.battery_schedules.get(job["name"]),
         )
         if jsonable(audit) != payload["audit"]:
             raise ValueError("worker and independent coordinator audits disagree")

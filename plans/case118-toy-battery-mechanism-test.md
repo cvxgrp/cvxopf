@@ -3,10 +3,11 @@
 Status: the 12 comparisons of fixed versus rescheduled battery power are
 complete; independent implementation and numerical reviews are CLEAN.
 See [Battery operation in AC and DC](../experiments/case118_counterfactual/battery_operation/REPORT.md).
-The owner has reviewed the results. Step 3, the proposed 1 and 5 MWh transfer
-comparisons, has not been run and remains pending the owner's decision at
-the results-review checkpoint. The protocol below records the design,
-including that unexecuted proposal.
+The owner has reviewed the results and authorized step 3, the 1 and 5 MWh
+transfer comparisons. Implementation has passed independent review; no step-3
+solves have been run. The execution-source checkpoint precedes launch; see
+the [implementation record](../experiments/case118_counterfactual/battery_operation/transfer-implementation.md).
+The protocol below records the agreed design.
 
 ## Question and limits
 
@@ -110,8 +111,8 @@ native-objective improvement from local battery rescheduling. A material DC
 F–B improvement should first trigger numerical/model-match scrutiny, rather
 than immediately be interpreted as a newly discovered economic opportunity.
 
-Checkpoint status: the owner reviewed all three step-2 comparisons; the
-decision on step 3 remains pending.
+Checkpoint status: the owner reviewed all three step-2 comparisons and
+authorized step 3.
 An unresolved or null comparison is an outcome, not grounds to select another
 window, relax physical checks, or expand the horizon automatically.
 
@@ -235,9 +236,16 @@ results and do not generalize this selected sample to an annual frequency.
 Phase-one entry point: `experiments.case118_counterfactual.mechanism`. It reuses
 the existing AC G/B models (G is F here), runs DC serially first, and records
 cumulative budget consumption. The current implementation ends after step 2;
-prescribed-transfer execution remains pending the owner's step-3 decision.
+prescribed-transfer execution uses `experiments.case118_counterfactual.transfers`
+after implementation review and the execution-source checkpoint.
 The completed comparisons used this launch manifest:
 `experiments/case118_counterfactual/battery_operation/protocol.json`.
+
+Step 3 launch protocol:
+`experiments/case118_counterfactual/battery_operation/transfer-protocol.json`.
+It binds the preceding study/summary and pre-outcome historical schedules and
+transfer prechecks. Remaining budgets are derived from the preceding recorded
+consumption; the owner-review pause is excluded from active time.
 
 An optional `--snapshot-reviewed-worktree` execution route has been proposed
 to preserve the owner's commit control while retaining immutable source bytes

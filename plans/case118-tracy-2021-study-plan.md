@@ -747,9 +747,9 @@ launch checkpoints remain separate. The toy horizon study stays deferred.
 The [AC dispatch adjustments](../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md)
 comparison and the 12 [battery operation comparisons](../experiments/case118_counterfactual/battery_operation/REPORT.md)
 are complete, independently reviewed, and reviewed by the owner. Step 3, the
-proposed 1 and 5 MWh energy-transfer comparisons, has not been run and remains
-pending the owner's decision at the results-review checkpoint. It has not
-been deferred.
+1 and 5 MWh energy-transfer comparisons, is now authorized by the owner.
+Its implementation has passed independent review; numerical execution awaits
+the execution-source checkpoint. It has not been deferred.
 
 Implement the approved three-question framework in sequence: inspect retained
 trajectories and select contextualized episodes; run the separately specified
@@ -823,8 +823,8 @@ disposition does not launch Tracy input generation or numerical work.
   deferred, or stopped, with its evidence, remaining questions, and reason.
   Current disposition: the AC dispatch comparisons and the 12 battery
   operation comparisons are complete, independently reviewed, and reviewed by
-  the owner. The prescribed energy-transfer comparisons have not been run;
-  their disposition remains pending the owner's decision. The toy AC
+  the owner. The prescribed energy-transfer comparisons are authorized and
+  implementation-reviewed, awaiting the execution-source checkpoint. The toy AC
   look-ahead-horizon study is deferred for the economic-model reason above.
 - [ ] Finish documentation and relevant regression checks. Record their
   outcomes, retained limitations, and the methods or capabilities to carry
