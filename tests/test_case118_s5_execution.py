@@ -21,6 +21,10 @@ from experiments.case118_annual_hierarchy.s4b_manifest import (
 )
 
 
+# These tests exercise supervision and publication, not manifest derivation.
+pytestmark = pytest.mark.usefixtures("reuse_verified_s5_manifest")
+
+
 def _authority(commit: str = "a" * 40, source: str = "b" * 64) -> dict[str, object]:
     return {
         "schema_version": 1,

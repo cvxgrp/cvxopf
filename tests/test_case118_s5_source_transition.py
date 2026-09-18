@@ -17,6 +17,10 @@ from experiments.case118_annual_hierarchy.s4b_manifest import object_sha256
 from tests.test_case118_s5_execution import _authority, _context, _summary, _supervision
 
 
+# Retain transition checks while reusing the separately verified frozen input.
+pytestmark = pytest.mark.usefixtures("reuse_verified_s5_manifest")
+
+
 @pytest.fixture
 def retained(tmp_path, monkeypatch):
     root = tmp_path / "run"
