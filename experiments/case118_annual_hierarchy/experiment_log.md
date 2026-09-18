@@ -537,3 +537,30 @@ identities, sixteen supervision hashes, continuations, all study resource
 aggregates, analyzer resource samples, report/package agreement, exact source
 fingerprint substitution, and all 25 package file sizes. Owner closeout/commit
 approval is the remaining Stage 0a gate; no commit or Stage 0b work was done.
+
+## Formal S5 closeout and S6 decision checkpoint
+
+At the owner's request before closing `big-experiment`, reconciled the annual
+plan and status documents with the completed work. The approval-pending
+statements above describe the historical checkpoint: the owner subsequently
+committed the scientific closeout as `9c26366` and artifact promotion as
+`0ae9d86`. S5 is formally closed with all 8,760 accepted hourly actions,
+audited shard joins, and its operator-assisted execution history intact.
+
+This documentation pass checked canonical bytes and the internal digest of
+`S5_RESULTS.json`, exact byte equality with `9c26366`, accepted/full-coverage
+fields, and independent-audit agreement. It did not rerun an OPF or the full
+annual reconstruction. The annual analysis and reproducibility work listed as
+S7 are already represented by the committed report and preserved evidence.
+
+S6 is the optional PGLib active-power-increase congestion sensitivity. The
+`accepted_for_s6` flag records eligibility, not a decision to run it. The
+owner agreed with the recommendation to omit this sensitivity: "no congestion
+study on the toy data." The temporal-input and economic limitations inform
+this decision. S6 was not run and is not an outstanding toy-study prerequisite;
+any Tracy congestion study would require a separate design and authorization.
+S7's annual analysis and reproducibility work are complete, closing the annual
+toy study's scaling ladder. The completed
+Stage 0c dispatch/battery comparisons are separate experiments, committed as
+`0f3b392`, and do not constitute S6. No S6 execution or PR merge is authorized
+by this checkpoint.

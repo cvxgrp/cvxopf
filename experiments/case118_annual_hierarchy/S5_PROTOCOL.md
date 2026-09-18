@@ -2,10 +2,16 @@
 
 ## Status and authority
 
-**2026-09-17 status:** All 8,760 intervals and the authorized full reconstruction
+**Closeout status:** All 8,760 intervals and the authorized full reconstruction
 are complete (`accepted_for_s6=true`). The owner approved `S5_REPORT.md`, and
 the complete accepted payload is saved in `S5_RESULTS.json`. Formal closeout
-awaits owner commit approval; independent result review is CLEAN. The implementation
+is complete: the scientific record was committed in `9c26366`, artifact
+promotion in `0ae9d86`, and independent result review is CLEAN.
+`accepted_for_s6=true` records eligibility, not authorization or a requirement
+to run the optional sensitivity. The owner chose to omit S6: no congestion
+study will be conducted on the toy data.
+These status updates do not change the retained execution authorities or the
+historical analyzer source record. The implementation
 checkpoint and stopping-point narratives below describe historical states,
 not the current execution status. Applied authorities and continuations remain
 in the retained execution tree.

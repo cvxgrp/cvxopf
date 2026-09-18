@@ -3,7 +3,9 @@
 Scientific report approved by the owner on 2026-09-17. Numerical execution and
 the authorized full reconstruction are complete; the complete accepted payload
 is saved in [S5_RESULTS.json](S5_RESULTS.json). Independent result review is
-CLEAN; formal closeout remains pending owner commit approval. The figures and descriptive analysis
+CLEAN. The scientific closeout was committed in `9c26366`, followed by artifact
+promotion in `0ae9d86`; S5 is formally closed. The owner chose to omit S6's
+optional congestion sensitivity on the toy data. The figures and descriptive analysis
 below use the frozen inputs and retained results. The closeout reconstruction
 re-audited the archives without new study solves.
 
@@ -510,5 +512,8 @@ The historical roughly 25-minute serial timing is not a controlled speedup
 benchmark: this pass also removes redundant verification traversals.
 The [review checkpoint](S5_CLOSEOUT_CHECKPOINT.md) records execution evidence
 and file disposition. Independent result and file-disposition review is CLEAN;
-scientific commit 1 remains pending owner approval;
-the toy-study design pause and separate artifact-triage commit 2 follow it.
+scientific commit 1 is `9c26366`, and separate artifact-triage commit 2 is
+`0ae9d86`. Subsequent toy studies are documented in the
+[counterfactual experiment](../case118_counterfactual/README.md); they do not
+change this annual result. S5 is closed; the owner chose to omit the optional
+S6 congestion sensitivity on the toy data.

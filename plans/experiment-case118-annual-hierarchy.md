@@ -1,6 +1,50 @@
 # Experiment — Annual case118 hierarchical AC dispatch
 
-**Status:** Draft for review
+**Status:** Study complete: S5 is formally closed, the owner chose to omit S6
+from the toy study, and S7's annual scientific analysis and reproducibility
+record are complete. The stage designs below retain the original experimental scope;
+historical pre-execution requirements are not statements of current run status.
+
+## S5 closeout
+
+S5 completed all **8,760 hourly AC actions**, with full coverage across twelve
+qualified shards and six waves. The retained independent reconstruction is
+`classification="accepted"`, `execution_complete=true`, and
+`accepted_for_s6=true`. The owner-approved
+[scientific report](../experiments/case118_annual_hierarchy/S5_REPORT.md) and
+[complete result](../experiments/case118_annual_hierarchy/S5_RESULTS.json) were
+committed in `9c26366`; artifact promotion and analysis tools followed in
+`0ae9d86`. Independent numerical and evidence-disposition reviews were CLEAN.
+No new annual solve or reconstruction is needed for this documentation closeout.
+
+The result is a complete, residual-checked **operator-assisted, partitioned
+toy-data trajectory**. It preserves storage recurrence, audited shard joins,
+and the annual terminal obligation without load shedding. Ten reviewed
+continuations, recovery-policy amendments, and two once-only interventions
+remain part of its provenance. This does not establish that the original
+autonomous policy completed the year, equality to an uninterrupted controller,
+global annual AC optimality, or performance on the owner's Tracy inputs.
+
+The subsequent [Stage 0c studies](../experiments/case118_counterfactual/README.md#stage-0c-findings)
+provide separate evidence about economical generator adjustments and temporal
+battery value. They do not alter the accepted annual record or constitute S6's
+proposed PGLib active-power-increase sensitivity. Their results and the toy
+input/economic limitations inform the transition to the separately planned
+[Tracy study](case118-tracy-2021-study-plan.md).
+
+`accepted_for_s6=true` records satisfaction of S5's numerical advancement gate;
+it neither requires nor authorizes the optional S6 experiment. The owner
+decided **not to conduct a congestion study on the toy data**. S6 is omitted,
+not an outstanding prerequisite or an automatically transferred Tracy task.
+The toy temporal inputs and economics limit the value of adding this stress
+sensitivity now. Any future Tracy congestion study requires its own question,
+design, and authorization.
+
+S7's annual analysis/reproducibility work is already
+represented by the report, complete reconstruction, and preserved analysis
+package. This closes the annual toy study's scaling ladder without another
+analysis pass. PR merge and the fresh Tracy branch remain owner actions under
+the separate Stage 0c closeout gate.
 
 ## Goal
 
@@ -352,9 +396,9 @@ No stage may silently advance after a failed gate.
 | S3 (complete) | 720 h | One-month frozen hierarchy and memory-retention study using selected `recycle_every_16` policy | Completed 720/720 accepted intervals with 44 planned restarts, three successful copied-target-free recoveries, no abnormal stop, and independently reconstructed numerical/resource evidence |
 | S4 (complete; accepted annual outer promoted) | 8,760-step outer only | Build and solve the exact annual lossy-DC plan before any annual AC loop | Accepted vectorized/SCIPY/CLARABEL outer primal and independent audit are retained in `S4_RESULTS.json`; its immutable signposts now open S4b planning |
 | S4b (complete) | bounded qualification plus annual partition | Validate scheduler-neutral sharding and select annual shard boundaries from the frozen S4 outer trajectory | Passed; exact sequential process equivalence, fresh-process execution, deterministic merge/audit, and the bounded two-worker demonstration authorize the immutable manifest for S5 |
-| S5 (open; manifest use authorized, execution not yet authorized) | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | Implement and review the annual runner before numerical authorization; then complete and merge every shard into one boundary-continuous annual record, or retain an explicit partial-horizon scientific record |
-| S6 | selected horizons | Optional PGLib active-power-increase congestion sensitivity | Same acceptance and accounting gates as the ordinary PGLib network |
-| S7 | — | Analysis, reproducibility record, and conclusions | Independent reconstruction of all reported totals and hashes |
+| S5 (complete; closed) | 8,760 h | Full annual hierarchical execution from the frozen shard manifest | All intervals and shard joins accepted; complete independent reconstruction and owner-approved report committed in `9c26366`, artifact promotion in `0ae9d86`; operator assistance and policy changes retained explicitly |
+| S6 (omitted by owner decision) | — | Optional PGLib active-power-increase congestion sensitivity | No congestion study on the toy data; no numerical work performed for S6 and no automatic transfer to Tracy |
+| S7 (complete) | — | Analysis, reproducibility record, and conclusions | Complete independent reconstruction, report, and retained analysis package available; S6 disposition recorded and annual toy study closed |
 
 Direct AC is a characterization comparator at small horizons only. Failure to
 build or solve larger direct AC cases is itself a recorded scaling result; it

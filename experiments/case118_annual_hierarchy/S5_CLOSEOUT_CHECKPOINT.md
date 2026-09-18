@@ -1,5 +1,13 @@
 # Stage 0a review checkpoint
 
+**Current disposition:** this checkpoint was completed and committed as
+`9c26366`; the owner-approved scientific report and complete accepted
+`S5_RESULTS.json` are the formal S5 record. Separate artifact promotion was
+committed as `0ae9d86`. S5 is closed; the owner chose to omit S6's optional
+congestion sensitivity on the toy data. The preparation, approval-pending statements,
+proposed commit text, and source-fingerprint reconstruction below are retained
+as the historical checkpoint narrative, not current outstanding work.
+
 Prepared 2026-09-17 by the current builder task, `case118-tracy-2021-study`.
 The owner retired the previous builder and assigned `cvxopf-review` as the
 independent reviewer. Scope is the completed **toy** study, per

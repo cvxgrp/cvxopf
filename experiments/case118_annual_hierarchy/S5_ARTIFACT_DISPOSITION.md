@@ -1,11 +1,10 @@
 # S5 Stage 0b artifact disposition
 
 Status: implementation and verification complete; independent scientific review
-by `cvxopf-review` is CLEAN. Owner approval and the separate Stage 0b commit
-remain pending. Subsequent owner-requested dashboard tabs and signed-ramp
+by `cvxopf-review` is CLEAN. The owner approved and committed the separate
+Stage 0b package as `0ae9d86`. Subsequent owner-requested dashboard tabs and signed-ramp
 scatter and AC/DC operating heatmaps are documented in the validation record;
-the new descriptive views are under
-owner evaluation and was not part of the original review.
+those descriptive additions were not part of the original promotion review.
 The completed scientific closeout was committed separately as `9c26366`.
 This package preserves evidence and tools; it does not begin Stage 0c solves
 or Tracy input generation.

@@ -1,7 +1,26 @@
 # Annual case118 hierarchy experiment
 
-This directory will contain the reproducible scaling study defined in
+This directory contains the reproducible scaling study defined in
 [`plans/experiment-case118-annual-hierarchy.md`](../../plans/experiment-case118-annual-hierarchy.md).
+
+**Current status:** S5 is complete and formally closed. All 8,760 hourly AC
+actions and the annual merge passed independent reconstruction. The
+owner-approved [S5 report](S5_REPORT.md) and [complete result](S5_RESULTS.json)
+were committed in `9c26366`; [artifact promotion](S5_ARTIFACT_DISPOSITION.md)
+and analysis tools were committed in `0ae9d86`.
+
+This is an operator-assisted, partitioned synthetic toy-data trajectory,
+including the retained recovery amendments and interventions. It is not the
+Tracy study or evidence of uninterrupted autonomous annual execution.
+The [Stage 0c follow-up findings](../case118_counterfactual/README.md#stage-0c-findings)
+are separate experiments about dispatch adjustments and battery value.
+The owner chose to omit the optional S6 PGLib active-power-increase sensitivity:
+no congestion study will be conducted on the toy data. `accepted_for_s6=true`
+remains an eligibility result, not a requirement to execute S6. The annual
+analysis and reproducibility record proposed as S7 are complete, closing this
+study. Any future Tracy congestion study requires a separate design and
+authorization. The remaining text describes the original design and
+early-stage execution history.
 
 The experiment tests whether the M17 hierarchical controller can realize a
 storage-coupled AC trajectory over progressively longer horizons on the rated
