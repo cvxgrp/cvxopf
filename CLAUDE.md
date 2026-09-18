@@ -296,6 +296,7 @@ without API changes. Planned future formulations:
 | Key | Description |
 |---|---|
 | `"socp"` | SOCP relaxation (convex) |
+| `"phase_angle_dc"` | Planned M24: lossless phase-angle DC OPF (convex QP); distinct from the existing `lossy_dc` network-flow model. See `plans/milestone-24-phase-angle-dc.md`. |
 
 To add a new formulation, follow the complete formulation-extension contract
 under **Module responsibilities**. In brief: implement and register both
@@ -721,6 +722,10 @@ is present.
 
 ## Milestones
 
+M24 adds the planned phase-angle DC formulation. Numbers 22 and 23 are already
+assigned to load-group penalties and unit commitment on the development branch;
+their plans are not imported by this documentation-only addition.
+
 | Milestone | Status | Notes |
 |---|---|---|
 | 0 — Repository skeleton | ✅ Complete | |
@@ -747,6 +752,7 @@ is present.
 | 21 — Configurable and extensible formulation hierarchies | 🔲 Future | Generalize the completed M17 controller behind typed layer adapters and explicit, identity-aligned handoffs while preserving exact `lossy_dc`→`ac` compatibility. Support selectable planning formulations and validate a reference `singlenode_dc`→`socp`→`ac` hierarchy after M11 freezes SOCP relaxation and audit semantics. This remains a closed set of reviewed repository formulations, not an unrestricted plugin framework. See `plans/milestone-21-configurable-hierarchy.md`. |
 | 22 — Nonconvex load-group penalties | 🔲 Future | Add identity-aligned interactions among groups of sheddable loads, beginning with mutually exclusive customer-group shedding and soft bilinear joint-shedding penalties. Use convex-hull or McCormick relaxation, typed deterministic rounding, and fixed-policy physical polishing; validate with exact small references, congested lossy-DC cases, and AC realization. See `plans/milestone-22-nonconvex-load-group-penalties.md`. |
 | 23 — Unit commitment | 🔲 Future | Add opt-in relaxed generator commitment to `lossy_dc` and `singlenode_dc`, use a deterministic relax–partial-round–resolve–final-round–polish procedure, and pass the resulting fixed commitment schedule plus polished SoC signposts into an explicitly configured AC realization. The MVP omits startup/shutdown logic, minimum-up/down times, reserves, and mixed-integer global-optimality claims. See `plans/milestone-23-unit-commitment.md`. |
+| 24 — Phase-angle DC optimal power flow | 🔲 Future | Add explicit `phase_angle_dc` alongside existing formulations, with affine angle/flow equations, fixed transformers, island references, shared devices, and independent DC-OPF validation. Preserve existing models/defaults. See `plans/milestone-24-phase-angle-dc.md`. |
 
 ---
 
