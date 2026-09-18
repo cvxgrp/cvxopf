@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import cvxpy as cp
+from cvxpy.reductions.dnlp2smooth.dnlp2smooth import Dnlp2Smooth
 
 from cvxopf.testcases import case9
 from cvxopf.problem import (
@@ -20,6 +21,7 @@ from cvxopf.storage import (
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
     storage_cost_expr,
+    vectorized_storage_cost_rate,
     terminal_cost_expr as storage_terminal_cost_expr,
 )
 
@@ -111,6 +113,67 @@ def _solve_dc_multistep(T, df_P, df_Q, storage=None, delta=1.0,
 
 
 class TestStorageComponentInterface:
+    @pytest.mark.parametrize("steps", [None, 1, 2])
+    @pytest.mark.parametrize(
+        "weights",
+        [(0.0, 0.0, 0.0), (0.0, 0.5, 0.0), (0.0, 1e-12, 0.0), (0.2, 0.5, 0.7)],
+    )
+    def test_throughput_cost_omits_unpenalized_dnlp_auxiliaries(
+        self, steps, weights
+    ):
+        units = [_default_unit(aging_weight=weight) for weight in weights]
+        values = np.array([[-3.0, 5.0], [2.0, -4.0], [-7.0, 1.0]])
+        if steps is not None:
+            values = values[:, :steps]
+            power = cp.Variable(values.shape)
+            cost = vectorized_storage_cost_rate(units, power)
+            expected = np.asarray(weights) @ np.abs(values)
+            assert cost.shape == (steps,)
+        else:
+            values = values[:, 0]
+            power = cp.Variable(values.shape)
+            cost = storage_cost_expr(units, power)
+            expected = np.asarray(weights) @ np.abs(values)
+            assert cost.shape == ()
+        assert cost.value is None
+        power.value = values
+        assert cost.is_dcp()
+        np.testing.assert_allclose(cost.value, expected, rtol=1e-12, atol=0.0)
+
+        # Keep every physical power variable in the problem, then count only
+        # auxiliaries introduced by DNLP's absolute-value transformation.
+        problem = cp.Problem(cp.Minimize(cp.sum(cost)), [power == values])
+        smooth, _ = Dnlp2Smooth().apply(problem)
+        auxiliary_size = sum(v.size for v in smooth.variables()) - power.size
+        assert auxiliary_size == np.count_nonzero(weights) * (steps or 1)
+
+    @pytest.mark.parametrize(
+        ("formulation", "assembly"),
+        [("ac", None), ("lossy_dc", None), ("singlenode_dc", None),
+         ("lossy_dc", "stepwise"), ("lossy_dc", "vectorized")],
+    )
+    def test_zero_throughput_cost_is_unavailable_without_primal(
+        self, formulation, assembly
+    ):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            if assembly is None:
+                build = build_opf(
+                    case9(), formulation=formulation,
+                    storage=[_default_unit()], delta=0.25,
+                )
+            else:
+                df_P, df_Q = _flat_load_dfs(case9, T=2)
+                build = build_opf_multistep(
+                    case9(), df_P, df_Q, T=2, formulation=formulation,
+                    temporal_assembly=assembly,
+                    storage=[_default_unit()], delta=0.25,
+                )
+        results = extract_results(build)
+        assert results["b"] is None
+        assert results["soc"] is None
+        assert np.isnan(results["storage_cost"])
+
     def test_ac_and_dc_injections_have_fixed_arity(self):
         units = [_default_unit(bus=4)]
         b = cp.Variable(1)
@@ -582,8 +645,11 @@ class TestStorageTerminalPolicy:
             build = build_opf(
                 case9(), formulation=formulation, storage=[unit], delta=1.0
             )
-        build.solve()
-        return extract_results(build)
+        # Pytest retains solver diagnostics for a failed CI test.
+        build.solve(verbose=True)
+        results = extract_results(build)
+        assert results["status"] == "optimal"
+        return results
 
     @pytest.mark.parametrize(
         "formulation", ["ac", "lossy_dc", "singlenode_dc"]
@@ -818,6 +884,7 @@ class TestStorageTerminalPolicy:
         assert set(results) == expected
         if results["Pg"] is None:
             assert np.isnan(results["objective"])
+            assert np.isnan(results["storage_cost"])
             assert results["storage_terminal_deviation"] is None
 
     def test_multistep_terminal_uses_last_post_step_soc(self):

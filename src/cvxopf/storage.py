@@ -589,7 +589,12 @@ def vectorized_coupling_constraints(
 def storage_cost_expr(storage_units: list, b: cp.Variable) -> cp.Expression:
     """L1 cycling cost rate; integration is owned by shared assembly."""
     weights = _storage_static_data(storage_units)["storage_aging_weight"]
-    return cp.sum(cp.multiply(weights, cp.abs(b)))
+    # A zero-weight abs still creates an unpenalized auxiliary in DNLP.
+    active = weights > 0.0
+    if not np.any(active):
+        # Retain the power dependency so an unavailable primal reports no cost.
+        return 0.0 * cp.sum(b)
+    return cp.sum(cp.multiply(weights[active], cp.abs(b[active])))
 
 
 def vectorized_storage_cost_rate(
@@ -598,7 +603,12 @@ def vectorized_storage_cost_rate(
 ) -> cp.Expression:
     """Return the time-last L1 cycling cost rate for every interval."""
     weights = _storage_static_data(storage_units)["storage_aging_weight"]
-    return cp.sum(cp.multiply(weights[:, np.newaxis], cp.abs(power)), axis=0)
+    active = weights > 0.0
+    if not np.any(active):
+        return 0.0 * cp.sum(power, axis=0)
+    return cp.sum(
+        cp.multiply(weights[active, np.newaxis], cp.abs(power[active, :])), axis=0
+    )
 
 
 def terminal_cost_expr(
