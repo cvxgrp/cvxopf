@@ -8,8 +8,8 @@ from experiments.case118_annual_hierarchy.p0_persistence_gate import (
 )
 
 
-def test_resume_corruption_atomicity_and_release_gate(tmp_path):
-    report = run_persistence_gate(tmp_path)
+def test_resume_corruption_atomicity_and_release_gate(p0_persistence_report):
+    report = p0_persistence_report
 
     assert report.passed, report.failures
     assert report.stopped_intervals == 2

@@ -41,11 +41,40 @@ def test_tracked_formal_p0_result_is_integrity_bound_and_clean():
 
 
 def test_consolidated_p0_gate_executes_complete_frozen_registry(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, p0_nominal_report, p0_injected_report,
+    p0_persistence_report,
 ):
-    report = run_consolidated_p0(
-        tmp_path / "work", clean_source_required=False
-    )
+    root = tmp_path / "work"
+    calls = []
+
+    # Share freshly executed sub-gates with their detailed assertion tests.
+    # Keep the real consolidated runner and verify every requested case/path.
+    def nominal_report(horizon, path):
+        assert path == root / f"nominal-{horizon}h"
+        calls.append(("nominal", horizon))
+        return p0_nominal_report(horizon)
+
+    def injected_report(case, path):
+        assert case == next(item for item in INJECTED_CASES if item.name == case.name)
+        assert path == root / f"injected-{case.name}"
+        calls.append(("injected", case.name))
+        return p0_injected_report(case.name)
+
+    def persistence_report(path):
+        assert path == root / "persistence"
+        calls.append(("persistence", None))
+        return p0_persistence_report
+
+    monkeypatch.setattr(p0_consolidated_gate, "run_nominal_equivalence", nominal_report)
+    monkeypatch.setattr(p0_consolidated_gate, "run_injected_equivalence", injected_report)
+    monkeypatch.setattr(p0_consolidated_gate, "run_persistence_gate", persistence_report)
+    report = run_consolidated_p0(root, clean_source_required=False)
+
+    assert calls == [
+        ("nominal", 6), ("nominal", 24),
+        *(("injected", case.name) for case in INJECTED_CASES),
+        ("persistence", None),
+    ]
 
     assert report.passed, report.failures
     assert tuple(item.horizon_steps for item in report.nominal) == (6, 24)

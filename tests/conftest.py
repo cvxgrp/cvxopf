@@ -3,6 +3,7 @@ Shared pytest fixtures.
 """
 
 import json
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,49 @@ from cvxopf.testcases import case9, case14
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(scope="session")
+def p0_nominal_report(tmp_path_factory):
+    """Compute each requested horizon once; reports contain only frozen values."""
+    from experiments.case118_annual_hierarchy.p0_equivalence import (
+        run_nominal_equivalence,
+    )
+
+    @cache
+    def run(horizon_steps):
+        return run_nominal_equivalence(
+            horizon_steps, tmp_path_factory.mktemp(f"p0-nominal-{horizon_steps}h")
+        )
+
+    return run
+
+
+@pytest.fixture(scope="session")
+def p0_injected_report(tmp_path_factory):
+    """Run only requested frozen cases, sharing results across their assertions."""
+    from experiments.case118_annual_hierarchy.p0_injected_equivalence import (
+        INJECTED_CASES, run_injected_equivalence,
+    )
+
+    cases = {case.name: case for case in INJECTED_CASES}
+
+    @cache
+    def run(case_name):
+        return run_injected_equivalence(
+            cases[case_name], tmp_path_factory.mktemp(f"p0-injected-{case_name}")
+        )
+
+    return run
+
+
+@pytest.fixture(scope="session")
+def p0_persistence_report(tmp_path_factory):
+    from experiments.case118_annual_hierarchy.p0_persistence_gate import (
+        run_persistence_gate,
+    )
+
+    return run_persistence_gate(tmp_path_factory.mktemp("p0-persistence"))
 
 
 @pytest.fixture(scope="session")

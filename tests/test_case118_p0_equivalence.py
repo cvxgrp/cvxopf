@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.case118_annual_hierarchy.p0_equivalence import run_nominal_equivalence
 from experiments.case118_annual_hierarchy.p0_equivalence import _canonical_layout
 
 
@@ -29,8 +28,10 @@ def test_layout_normalization_preserves_model_owned_variable_names():
 
 
 @pytest.mark.parametrize("horizon_steps", [6, 24])
-def test_nominal_public_and_streaming_trajectories_are_equivalent(tmp_path, horizon_steps):
-    report = run_nominal_equivalence(horizon_steps, tmp_path / str(horizon_steps))
+def test_nominal_public_and_streaming_trajectories_are_equivalent(
+    p0_nominal_report, horizon_steps
+):
+    report = p0_nominal_report(horizon_steps)
 
     assert report.equivalent, report.mismatches
     assert report.completed_intervals == horizon_steps

@@ -1012,6 +1012,7 @@ def test_wave_record_peak_counts_replacement_and_shared_helper():
 
 
 @pytest.mark.parametrize("complete", [False, True])
+@pytest.mark.usefixtures("reuse_verified_s5_manifest")
 def test_annual_analyzer_consumes_new_policy_complete_and_partial_waves(
     tmp_path, monkeypatch, complete
 ):
@@ -1368,6 +1369,7 @@ def test_speculative_source_correction_retains_immutable_predecessor(tmp_path):
         load_record(tmp_path, predecessor)
 
 
+@pytest.mark.usefixtures("reuse_verified_s5_manifest")
 def test_root_consumes_mixed_wave_schemas_and_finishes_annual_merge(
     tmp_path, monkeypatch
 ):
