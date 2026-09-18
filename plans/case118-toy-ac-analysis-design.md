@@ -307,15 +307,14 @@ H=1 is different: its battery movement is fixed **through the terminal
 equality**, not by an additional battery-power lock. Removing that equality
 frees battery movement, so target-free remains relevant even at H=1.
 
-**Fixed-battery protocol decision remains open.** The recommendation is to
-use explicitly declared starts or perturbations around the primary
+**Fixed-battery initialization approved during implementation.** Use
+explicitly declared starts or perturbations around the primary
 initialization (R1) or a mapped feasible prior-arm incumbent (R2/G, when
 available). These are not preceding-hour causal starts or target-free
 solutions. Define their source identities, availability, budgets, and audits
-in a small policy adaptation, then qualify it before execution. Alternatively,
-retaining the original target-free branch solely as a redundant-equation
-numerical heuristic requires an explicit decision and evidence; it is not
-assumed useful by this design.
+in the [counterfactual implementation](../experiments/case118_counterfactual/README.md),
+then qualify it before execution. The redundant-equation target-free heuristic
+was not selected for R1/R2/G. B retains its target-free recovery path.
 
 Do not simply disable one source slot and leave the rest implicit: copied and
 perturbed target-free starts depend on an accepted target-free source, while
@@ -423,8 +422,8 @@ A subsequent read-only scientific applicability check confirmed the storage
 recurrence argument and actual target-free construction. It distinguishes
 fixed-battery R1/R2/G from free-battery B and all horizon variants, including
 H=1, and identifies the helper-source dependency when target-free is omitted.
-The owner requested this distinction be recorded. The fixed-battery source
-policy remains an explicit protocol decision, not an implemented change.
+The owner requested this distinction be recorded and subsequently approved
+explicit primary/prior-arm perturbations when authorizing the implementation.
 
 After the owner deferred the toy horizon study, `cvxopf-discuss` assessed the
 revised scope read-only and agreed with the scientific prioritization. Its

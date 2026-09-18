@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Protocol, Sequence
+from typing import Callable, Protocol, Sequence
 
 from experiments.case118_annual_hierarchy.s5_speculative_policy import (
     AttemptSpec,
@@ -96,8 +96,9 @@ class SpeculativeSupervisor:
     Caller-owned shard/wave audits must gate admission of the next wave.
     """
 
-    def __init__(self, backend: RaceBackend) -> None:
+    def __init__(self, backend: RaceBackend, *, race_factory: Callable = WindowRace) -> None:
         self.backend = backend
+        self.race_factory = race_factory
         self.memory_policy = MemoryPolicy()
         self.queue = HelperQueue()
         self.races: dict[WindowKey, WindowRace] = {}
@@ -116,7 +117,7 @@ class SpeculativeSupervisor:
         pending = set(self.races) - self.finished
         if len(pending) >= 2 or any(key.shard_id == window.shard_id for key in pending):
             raise ValueError("only one window per shard and two shards may be active")
-        race = WindowRace(window, has_preceding=has_preceding)
+        race = self.race_factory(window, has_preceding=has_preceding)
         self.races[window] = race
         try:
             self._launch(race.primary, now)

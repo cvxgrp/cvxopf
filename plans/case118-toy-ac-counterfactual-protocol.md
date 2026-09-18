@@ -255,17 +255,26 @@ resource admission, and the escalation ladder described in the
 [analysis design](case118-toy-ac-analysis-design.md#owner-directed-execution-setup-two-main-lanes-and-one-shared-helper).
 All helper calls, retries, and alternatives count against the reviewed budget.
 
-Arm-specific initialization still needs the protocol decision recorded in
-that design. For R1/R2/G, fixed battery real power plus initial SoC and recurrence
+The owner approved explicit primary/prior-arm start perturbations for
+R1/R2/G during implementation. For these arms, fixed battery real power plus initial SoC and recurrence
 already imply terminal SoC: removing only the terminal equation adds no physical
 freedom. A target-free solve is therefore not a substantive relaxation for these
-arms; any use as a representation heuristic is unproven. Prefer the explicit
-arm-specific adaptation using applicable primary/prior-arm starts, preserving
-battery locks and the R2 repair budget. Do not silently disable dependent helper
-starts. In B, target-free remains relevant as an initialization source because
+arms; any use as a representation heuristic is unproven. Use the approved
+arm-specific adaptation with primary/prior-arm starts, preserving
+battery locks and the R2 repair budget. Mark target-free and its dependent
+starts explicitly inapplicable in these arms. In B, target-free remains relevant as an initialization source because
 battery power is free, but only the fully target-conditioned audited result can
 be a scientific candidate. These choices must be reviewed before execution.
 An interrupted or timed-out optimization is not an infeasibility certificate.
+
+Implementation lives in [case118_counterfactual](../experiments/case118_counterfactual/README.md).
+It reuses the existing 2+1 supervisor and process backend, with a fixed-battery
+race adapter and no horizon-study additions. Exact windows, numerical options,
+comparison tolerances, repair allowance, and whole-study budgets remain explicit
+launch-protocol inputs. The code does not select them automatically. Exhausted
+recovery or a declared resource stop ends the bounded run with retained partial
+evidence/incumbents; a B-only follow-up after restricted failure requires a
+separate decision rather than automatic continuation.
 
 Separate build/canonicalization, solve, audit, and archival timing. This is a
 feasibility/economics experiment, not a solver-runtime benchmark. Bind clean
