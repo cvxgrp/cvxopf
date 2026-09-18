@@ -1,0 +1,15 @@
+{
+  "reason": "completed",
+  "returncode": 0,
+  "elapsed_seconds": 434.83417704098974,
+  "maximum_sampled_aggregate_rss_bytes": 9365012480,
+  "maximum_sampled_rss_bytes_by_pid": {
+    "8161": 22691840,
+    "8162": 2479816704,
+    "8290": 19185664,
+    "8291": 3718594560,
+    "8292": 3538059264
+  },
+  "finished_utc": "2026-09-17T21:18:38.979522+00:00",
+  "promoted_result_exists": true
+}

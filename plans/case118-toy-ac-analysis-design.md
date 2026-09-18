@@ -132,7 +132,7 @@ reporting, not new physical data generation.
 
 ## 2. Matched AC comparisons
 
-Use the [existing counterfactual proposal](../outputs/case118-counterfactual-ac-study.md)
+Use the [existing counterfactual proposal](case118-toy-ac-counterfactual-protocol.md)
 as the mathematical starting point. Preserve equal exogenous inputs, AC
 constraints, and DC-derived initial/terminal SOC in every arm. Fix renewable
 real dispatch to its accepted DC schedule initially; reactive controls remain

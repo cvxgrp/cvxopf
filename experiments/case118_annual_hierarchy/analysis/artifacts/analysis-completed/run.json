@@ -1,0 +1,24 @@
+{
+  "started_utc": "2026-09-17T21:11:24.139703+00:00",
+  "command": [
+    "/Users/bmeyers/github/cvxopf/.venv/bin/python3",
+    "-m",
+    "experiments.case118_annual_hierarchy.s5_analysis",
+    "--workers",
+    "2",
+    "--output-root",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac",
+    "--authority",
+    "outputs/s5_authority/speculative-cutover/S5_GIT_DRIFT_NUMERICAL_EXECUTION_AUTHORITY.json",
+    "--promote",
+    "experiments/case118_annual_hierarchy/S5_RESULTS.json"
+  ],
+  "supervisor_pid": 8161,
+  "analysis_pid": 8162,
+  "workers": 2,
+  "aggregate_rss_limit_bytes": 12884901888,
+  "wall_limit_seconds": 2700,
+  "sample_interval_seconds": 1,
+  "rss_scope": "analysis process tree plus monitor",
+  "automatic_retry": false
+}

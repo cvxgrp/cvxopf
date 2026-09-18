@@ -1,8 +1,10 @@
 # Tracy 2021 Case118 study plan
 
 The source, active-power scaling, siting rules, and storage sizes in sections
-2–3 are approved design choices. Section 5 lists the remaining operating
-choices. Generate and validate the realized mapping in Stage A.
+2–3 are approved design choices. Section 5 records the approved starting
+economics and remaining operating choices. Battery regularization is selected
+through the shorter studies, not fixed for annual execution now. Generate and
+validate the realized mapping in Stage A.
 
 ## Execution order
 
@@ -314,6 +316,9 @@ apples-to-apples counterpart and raw Tracy as source context:
 - Dispatchable Pmax, storage charge/discharge MW and apparent MVA where relevant,
   energy MWh, energy divided by average gross load, E/P duration, initial and
   terminal SOC, and spatial coverage by resource role.
+- Generator linear/quadratic coefficients and marginal-cost ranges at each
+  scenario's actual power caps; battery throughput weights and their units.
+  Identify the changed economic assumptions separately from the changed data.
 - Base load versus new average/peak load; unchanged branch ratings; nodal
   injection and potential transfer patterns, without claiming uncomputed
   branch feasibility or summing line ratings as system transfer capacity.
@@ -377,7 +382,61 @@ Show the exact transformations and distinguish available input power from
 dispatched generation or curtailment. Save figure-ready arrays, units,
 provenance, and reproducible plotting logic with the reviewed material.
 
-## 5. Remaining choices to close before numerical qualification
+## 5. Starting economics and remaining operating choices
+
+### Approved economic starting point — September 17 update
+
+Intertemporal leveling from convex generation costs is an intended mechanism
+of the Tracy study. Use economically meaningful quadratic generator costs and
+**low battery throughput regularization**. The completed toy fixture used
+fleet-wide generator c2 = 1e-4 and an explicit battery `aging_weight=1.0`
+override. Those historical settings remain part of its record; they are not
+the Tracy starting economics. This replaces the earlier recommendation to
+reuse them for the first comparison.
+
+**Generators — owner-confirmed rule.** Keep the inherited linear coefficients
+unchanged, rescale maximum powers as approved, and set each generator's
+quadratic contribution to exactly one-third of its linear contribution at
+its updated maximum power. Start from the pinned PGLib generator models,
+also retaining their inherited constant coefficients. For each
+of the 19 active generators, let G_i be its **updated** maximum power in MW
+after the approved 5000/6515 capacity scaling. In the repository convention,
+
+    C_i(P) = c0_i + c1_i P + c2_i P^2,
+    c2_i = c1_i / (3 G_i),       0 <= P <= G_i.
+
+Thus c2_i G_i^2 = (c1_i G_i)/3: the quadratic contribution at maximum power
+is one-third of the linear contribution (approximately 33%, not 33% of their
+sum). This is the confirmed Tracy rule, motivated by the owner's previous
+toy-model prescription while preserving the inherited heterogeneous linear
+costs. For normalized output x = P/G_i, the equivalent
+coefficients are A_i = c1_i G_i and B_i = A_i/3 in C_i = c0_i + A_i x + B_i x^2.
+The resulting marginal cost spans c1_i to (5/3)c1_i over the unit's
+power range. This is a declared study assumption, not calibrated plant data.
+
+Derive curvature from the updated caps rather than adding the toy c2 = 1e-4
+conditioning term. Keep the 35 zero-Pmax entries as reactive-support resources
+with their inherited costs; the ratio rule does not apply at G_i = 0. Verify
+positive inherited c1_i for every positive-capacity unit before applying the
+rule, and surface any source mismatch rather than inventing a coefficient.
+
+**Batteries.** Begin with `StorageUnitIdeal`'s current default
+`aging_weight=0.01`, in objective units/MWh of absolute, one-way throughput.
+Use the default at initial device construction and record its resolved numeric
+value in the prepared inputs. There is no initial scenario-specific override.
+The integrated term is delta * sum_{s,t} lambda_s |b_{s,t}|, so charging and
+discharging 1 MWh costs 0.02 objective units for ideal storage at this starting
+weight. Treat it as low regularization, not a calibrated degradation charge.
+Low numerical magnitude alone does not establish a negligible effect on the
+solution; assess that effect in Stage B before choosing the annual setting.
+
+The bounded shorter-study protocol will specify regularization sensitivities;
+do not freeze a sensitivity grid or final weight now. Explain every proposed
+override and show its operational consequences before carrying it into annual
+execution. Keep the selected generator and battery economics consistent
+between the DC planner and AC realization.
+
+### Remaining choices to close before numerical qualification
 
 Construct the active mapping after both old-study commits and the explicit
 transition to Tracy in work packages 0a–0c.
@@ -391,7 +450,7 @@ year, scale, counts, seed, or storage choices.
 | Renewable inverter ratings | Choose and label a rating rule/headroom factor; an observed availability maximum is not a measured nameplate. Avoid unintended clipping of the approved source. |
 | Battery AC operating set | Resolve apparent MVA rating versus the approved E/3 active-power limit and reactive support. If MVA headroom is larger, do not accidentally enlarge the active limit. |
 | Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
-| Economics | Inventory inherited generator costs, fleet-wide c2 = 1e-4 conditioning, storage cycling penalty, and curtailment treatment. Recommend reuse for the first comparison, but expose these assumptions rather than calling them physical data. |
+| Economics | Apply the starting generator rule and default battery regularization above. Select the final battery weight after Stage B sensitivity evidence; explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
 | Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy and recovery machinery. Reconsider the experimental scope and runner requirements at the post-0a design pause and after selected toy follow-ups; confirm the Tracy policy before its execution gates. |
 
 The intended primary study serves all load with rated branches and voltage/
@@ -512,7 +571,7 @@ selection logic forward; select Tracy periods from Tracy's own prepared inputs
 and DC results. Toy outcome-selected periods do not establish prospective
 predictive skill or authorize a rule for skipping AC.
 
-The [targeted AC counterfactual proposal](../outputs/case118-counterfactual-ac-study.md)
+The [targeted AC counterfactual proposal](case118-toy-ac-counterfactual-protocol.md)
 originally proposes eight matched three-hour windows, with four stages separating
 small generator repair, economical small repair, unrestricted generator
 redispatch, and additional battery rescheduling. Common DC-derived starting
@@ -551,7 +610,7 @@ experimental results receive separate commits and identities; do not fold
 them into closeout commit 1 or artifact-promotion commit 2. Selecting a study
 does not bypass its protocol, implementation review, or numerical launch gate.
 
-### 0b. TODO: separate `outputs/` triage and promotion — commit 2
+### 0b. Ready for owner approval: separate `outputs/` triage and promotion — commit 2
 
 Start after 0a is reviewed and committed and the design checkpoint is recorded,
 including the separate horizon-study plan. Its numerical periods are selected
@@ -560,36 +619,41 @@ Use that decision to prioritize the evidence and tooling needed by selected
 toy follow-ups. This is a distinct work package with its own file disposition,
 review, and commit, not a subsection of commit 1.
 
-**`outputs/` triage and promotion TODOs**
+The Stage 0b [disposition record](../experiments/case118_annual_hierarchy/S5_ARTIFACT_DISPOSITION.md)
+links the exact promotion manifest and complete inventory. Implementation and
+verification are complete; independent scientific review by `cvxopf-review` is
+CLEAN. Owner approval and commit 2 remain pending.
 
-- [ ] Inventory materials in `outputs/` produced during the completed run:
+**`outputs/` triage and promotion checklist**
+
+- [x] Inventory materials in `outputs/` produced during the completed run:
   analysis results, figures, tables, diagnostics, notebook exports, scripts,
   and explanatory notes. Record path, purpose, source/scenario identity,
   producing code or reproduction command where recoverable, and dependencies.
-- [ ] Assign each item a disposition: promote a durable scientific/software
+- [x] Assign each item a disposition: promote a durable scientific/software
   artifact into an appropriate Git-tracked location; retain a large/raw item
   in its existing archive with a tracked manifest/reference; or mark it as
   temporary, superseded, or unverified with a reason. Identify authoritative
   versions rather than promoting duplicates indiscriminately.
-- [ ] Propose and review an exact source-to-destination promotion list. Promote
+- [x] Propose and review an exact source-to-destination promotion list. Promote
   the selected materials and their necessary provenance/reproduction support;
   update report/notebook links so essential evidence does not depend solely
   on an unexplained ignored `outputs/` path. Respect source-data permissions
   and file sizes; do not bulk-add `outputs/` or alter ignore rules broadly.
-- [ ] Include the counterfactual proposal in the disposition review. If
+- [x] Include the counterfactual proposal in the disposition review. If
   promoted, update its stale run-status language, repair relative links, and
   update this plan's reference to the tracked destination. Incorporate the
   approved episode-first selection change and label the original eight-window
   sample as a proposal awaiting the episode review. Preserve other scientific
   comparison conditions unless a separately reviewed decision changes them.
-- [ ] Preserve extraction and reporting support needed for the three approved
+- [x] Preserve extraction and reporting support needed for the three approved
   questions: time- and device-aligned dispatch/SOC differences, losses and
   component costs, branch and voltage/reactive diagnostics, storage headroom,
   episode context, and pre-AC period-selection covariates. Identify support
   already available and any scoped additions needed in 0c. Include the separate
   horizon study's needs: matched rolling initialization/endpoints, explicit
   horizon/target timing, and executed-trajectory cost/resource comparison.
-- [ ] Verify promoted copies match the selected originals, references resolve,
+- [x] Verify promoted copies match the selected originals, references resolve,
   and figures/tables are tied to the completed toy scenario. Include the
   curated artifacts and disposition index in this separately reviewed commit.
   Preserve the originals.
@@ -673,6 +737,12 @@ merged analytical benchmark as the recorded baseline.
    weights, generator and battery capacities, source provenance, RNG protocol,
    version information, and every transformation. Use full-precision values,
    not rounded summary values, to construct devices.
+   Include a per-generator table of inherited c0/c1, original/updated Pmax,
+   derived c2, linear/quadratic costs at updated Pmax, their ratio, and marginal
+   costs at zero/full output. Record actual battery weights and the complete
+   objective with units, defaults, and explicit overrides. Independently check
+   the one-third rule and resolved default against the devices supplied to both
+   formulations; an unexpected override is a discrepancy to resolve.
 4. Produce annual/monthly summaries, annual and representative-week plots of
    all four channels and net load, and a network map showing roles and sizes.
    Deliver the full side-by-side final-input heatmap and tabular comparison
@@ -693,7 +763,9 @@ merged analytical benchmark as the recorded baseline.
 Present one review package containing the comparable input heatmaps/tables,
 source-to-input transformations, realized bus/device map, capacity allocations,
 sanity-check results, and the section 5 choices needed for the proposed DC
-screening. Ask whether these actual inputs and data-generation choices are the
+screening. Include the economic table and explain the scale of generation
+curvature versus battery regularization, not just their coefficient values.
+Ask whether these actual inputs and data-generation choices are the
 intended study. Record the owner's approval or requested revisions against a
 specific fixture version/digest; showing the package is not approval. Revise
 and re-present affected material before proceeding if the owner changes it.
@@ -725,11 +797,24 @@ results from a not-yet-authorized annual solve to select them.
 
 Run the existing rated lossy-DC formulation on those windows with the same
 full-year-derived capacities, allocation weights, and physical/economic rules.
-Do not resize resources to each window. Predeclare initial/terminal SOC,
+Vary only the declared economic parameter in a matched regularization
+sensitivity. Do not resize resources to each window. Predeclare initial/terminal SOC,
 context/padding, solve-count/time/memory limits, tolerances, and stopping rules.
 For potentially consequential finite-window boundary effects, use a bounded,
 declared boundary sensitivity rather than interpreting an arbitrary initial
 SOC or terminal target as a physical property of the year.
+
+Within this bounded shorter-study program, assess battery regularization
+starting from 0.01. Select a small sensitivity set and solve budget in the
+protocol, with matched windows, generator costs, physical constraints, and
+storage endpoints. Compare generation leveling and marginal-cost variation,
+battery power/throughput and SOC, and generation, regularization, and other
+objective components separately. Changing the penalty changes the objective:
+do not interpret a lower total objective under a lower weight as an operating
+improvement by itself. Inspect congestion and endpoint restrictions alongside
+the incentives when explaining idle or active storage. Use this evidence to
+recommend the annual weight; do not assume either zero or the starting default
+is the final choice.
 
 Report residuals and load service; branch utilization/binding intervals and
 locations; dispatch, available/used renewables and curtailment; losses;
@@ -739,7 +824,8 @@ predicted difficulty and from untested AC behavior. Successful windows do not
 prove annual feasibility. Diagnose failures without silent siting, seed,
 rating, or source changes.
 
-Exit: the owner receives the targeted-DC findings and any proposed revisions,
+Exit: the owner receives the targeted-DC findings, the regularization
+sensitivity and proposed annual economic settings, and any other revisions,
 plus a full-year DC runtime/resource estimate. Obtain explicit approval for
 the annual DC solve only after the windows are reviewed. A changed fixture
 must return through the affected input-review and qualification checks.
@@ -835,6 +921,13 @@ At completion, perform the required independent physical/trajectory analysis,
 save its complete result, and promote that same validated object without
 repeating full reconstruction. Reuse the one-pass promotion path reviewed
 during old-study closeout, verifying any subsequent changes before use.
+
+The owner requested a dashboard similar to the toy explorer, adapted to the
+new run. Preserve reusable loaders, metrics, calendar views, and stress/timing
+plots during Stage 0b. Design the Tracy dashboard when its inputs and runner
+outputs are available: use its actual time axis, fleet and renewable inputs,
+storage configuration, and study-specific diagnostics. Keep the frozen toy
+explorer as a separate reference; the future dashboard is not implemented in 0b.
 
 Write the Tracy report and rebuild its plots, dashboard, stress correlations,
 and any counterfactual selection from the new accepted results. Preserve

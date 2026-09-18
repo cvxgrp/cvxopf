@@ -1,0 +1,78 @@
+import datetime, json, os, signal, subprocess, sys, time, traceback
+from pathlib import Path
+import psutil
+
+folder = Path(__file__).resolve().parent
+root = Path('/Users/bmeyers/github/cvxopf')
+command = [sys.executable, '-m', 'experiments.case118_annual_hierarchy.s5_analysis', '--workers', '2', '--output-root', 'experiments/case118_annual_hierarchy/results/s4b_annual_ac', '--authority', 'outputs/s5_authority/speculative-cutover/S5_GIT_DRIFT_NUMERICAL_EXECUTION_AUTHORITY.json', '--promote', 'experiments/case118_annual_hierarchy/S5_RESULTS.json']
+limit_bytes = 12 * 1024**3
+limit_seconds = 45 * 60
+started = time.monotonic()
+child = None
+peak = 0
+per_process_peak = {}
+reason = 'monitor_error'
+returncode = None
+
+def save(name, value):
+    temporary = folder / (name + '.tmp')
+    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    temporary.replace(folder / name)
+
+def stop_tree():
+    if child is None:
+        return
+    try:
+        os.killpg(child.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    time.sleep(2)
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    child.wait()
+
+try:
+    with (folder / 'stdout.json').open('w') as stdout, (folder / 'stderr.log').open('w') as stderr, (folder / 'resources.jsonl').open('w', buffering=1) as samples:
+        child = subprocess.Popen(command, cwd=root, stdout=stdout, stderr=stderr, start_new_session=True)
+        save('run.json', {'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'command': command, 'supervisor_pid': os.getpid(), 'analysis_pid': child.pid, 'workers': 2, 'aggregate_rss_limit_bytes': limit_bytes, 'wall_limit_seconds': limit_seconds, 'sample_interval_seconds': 1, 'rss_scope': 'analysis process tree plus monitor', 'automatic_retry': False})
+        while True:
+            elapsed = time.monotonic() - started
+            processes = [psutil.Process(os.getpid())]
+            try:
+                parent = psutil.Process(child.pid)
+                processes += [parent] + parent.children(recursive=True)
+            except psutil.NoSuchProcess:
+                pass
+            observations = {}
+            for process in processes:
+                try:
+                    rss = process.memory_info().rss
+                    observations[str(process.pid)] = rss
+                    per_process_peak[str(process.pid)] = max(per_process_peak.get(str(process.pid), 0), rss)
+                except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                    pass
+            aggregate = sum(observations.values())
+            peak = max(peak, aggregate)
+            sample = {'elapsed_seconds': elapsed, 'aggregate_rss_bytes': aggregate, 'process_rss_bytes': observations, 'peak_aggregate_rss_bytes': peak}
+            samples.write(json.dumps(sample) + '\n')
+            save('status.json', sample)
+            if aggregate >= limit_bytes or elapsed >= limit_seconds:
+                reason = 'aggregate_rss_limit' if aggregate >= limit_bytes else 'wall_time_limit'
+                stop_tree()
+                returncode = child.returncode
+                break
+            returncode = child.poll()
+            if returncode is not None:
+                reason = 'completed' if returncode == 0 else 'analysis_error'
+                if returncode != 0:
+                    stop_tree()
+                break
+            time.sleep(1)
+except BaseException:
+    (folder / 'monitor-error.log').write_text(traceback.format_exc())
+    stop_tree()
+    returncode = child.returncode if child else None
+finally:
+    save('completion.json', {'reason': reason, 'returncode': returncode, 'elapsed_seconds': time.monotonic() - started, 'maximum_sampled_aggregate_rss_bytes': peak, 'maximum_sampled_rss_bytes_by_pid': per_process_peak, 'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'promoted_result_exists': (root / 'experiments/case118_annual_hierarchy/S5_RESULTS.json').exists()})

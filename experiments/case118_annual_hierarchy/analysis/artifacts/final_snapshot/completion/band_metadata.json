@@ -1,0 +1,8 @@
+{
+  "start": "2026-09-14T14:32:06.367944-07:00",
+  "start_basis": "retained first successful speculative worker launch",
+  "end": "2026-09-14T16:30:00-07:00",
+  "end_basis": "operator-reported original fan addition; approximate",
+  "reboot_within_band": "2026-09-14T15:43:21-07:00",
+  "note": "This groups the interventions; it does not isolate their causal effects."
+}
