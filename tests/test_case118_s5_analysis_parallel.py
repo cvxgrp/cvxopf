@@ -1,7 +1,6 @@
 """Real spawn-pool tests with synthetic audits; no annual reconstruction/solves."""
 import json
 import os
-from pathlib import Path
 import time
 
 import pytest
