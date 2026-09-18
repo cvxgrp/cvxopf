@@ -1,0 +1,17 @@
+{
+  "snapshot": "/Users/bmeyers/github/cvxopf/outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z",
+  "finished_utc": "2026-09-17T15:28:13.381083+00:00",
+  "source_sha256": {
+    "outputs/s5_analysis/dashboard_support.py": "754186a9a2cca9e9114c7f70aae70d3c2754c5514623296796fc791ec958d087",
+    "outputs/s5_analysis/s5_dashboard.py": "fc5f77c3cb283b1f673b1c01309669028131617feb00cd7916cd1fcc2d8dc56f",
+    "outputs/s5_analysis/analyze_dispatch_changes.py": "37826eddafa5265db70fb00b590dd0596baca2854fd21e1392a2da55fbc473ef",
+    "outputs/analysis/refresh_completion_band.py": "da80694e8a8df539097065cf8405c0d540b75a52460e21f1908aa8cc256427c3",
+    "presentations/annual_ac_20260915/refresh.py": "3cce6eec3b73b2679e7ef6452e1d90b0aa7400c41d44353f806ea0a1606880ea",
+    "presentations/annual_ac_20260915/prepare_assets.py": "b3471ae795a7e561abd5efaa3a0a6bf4d8208ee4203d312aca19a515aab07ae6",
+    "presentations/annual_ac_20260915/events.json": "be057083b75b2658b58fa168c9e15f9a40f415f36df64cb7a4d0c3677e796af8",
+    "presentations/annual_ac_20260915/scripts/collect_completion.py": "88c4c5899bf9eb8a94aad130373acb5a3097dfda2e2317125d39d58334d5bbc2",
+    "presentations/annual_ac_20260915/scripts/collect_periods.py": "7335f9d8644fd70ef5b75bd02c6528d7e9e6c28d5aa1f2f3f96a80b952f0bfbf",
+    "presentations/annual_ac_20260915/scripts/collect_solves.py": "818569680ebe4da32e43acd83b90d94e5ee423662c51f84cdd0a90b38dc78014"
+  },
+  "note": "Separate read-only collector snapshots; see each source's timestamp and exclusions. No study writes or solves."
+}

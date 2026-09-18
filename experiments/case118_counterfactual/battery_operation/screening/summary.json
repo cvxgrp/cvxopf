@@ -1,0 +1,85 @@
+{
+  "source_csv": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/dispatch/intervals.csv",
+  "source_csv_sha256": "9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e",
+  "input_sha256": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+  "checks": [
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-000/checkpoint.json",
+      "sha256": "0598a454a1f86125dfde5b7f34dedace77149532e53490c2398f2cb91f087736"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-001/checkpoint.json",
+      "sha256": "7a95ab4e207ec6f5d90701675552a27bbee2acfad9f048723c291b02599cd455"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-002/checkpoint.json",
+      "sha256": "f3191b3086526afffd2d73f9520e6b98e9dae0fd9b7f691c354f34468430bcf2"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-003/checkpoint.json",
+      "sha256": "075d92a2c288b9ff596c0986d09f84d48bca5acba09dd2ac8a741a6607163054"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-004/checkpoint.json",
+      "sha256": "3167ad5ac2f12bbfd7bb70066fb9c9535b3eaecf1195f0a0984cefe9cce462e7"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-005/checkpoint.json",
+      "sha256": "9f24e240d4901eaf86e5bc35d74b08181759907915621d19c1fcd2b1f4db7d65"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-006/checkpoint.json",
+      "sha256": "a4144c11a29a39f4a2dfdda05239c25aaef415f8ee78ff4f515f1e612076be24"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-007/checkpoint.json",
+      "sha256": "95ec1e785f71c938b972190bc935eeb16769c95e33a0ea61a97fc92d249f7cbb"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-008/checkpoint.json",
+      "sha256": "7820b83b1ace30b4dac584c31f53982c0b139fe9fb0388b12f5b7c0da4297576"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-009/checkpoint.json",
+      "sha256": "99f3023544d59e3afafb3223f36c0107aac5e2318dfecacd175dd0b4b91822aa"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-010/checkpoint.json",
+      "sha256": "ce06a68938399c04ddd544fc3bb4ea8acf87e0874fddae7aff32af0f4156210a"
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-011/checkpoint.json",
+      "sha256": "94ab5fe004f4e471bb91963e57adda2fefc11ff749d09d8ee1d6cf26d48dc0d1"
+    }
+  ],
+  "criteria": {
+    "initial_soc_l1_max_mwh": 0.001,
+    "first_battery_departure_min_mw": 10,
+    "no_operator_intervention": true,
+    "clean_round_trip_extra": {
+      "hours": 3,
+      "no_shard_reset": true,
+      "endpoint_movement_l1_max_mwh": 0.001,
+      "dc_throughput_max_mwh": 0.001,
+      "excess_ac_throughput_min_mwh": 20
+    }
+  },
+  "total_intervals": 8760,
+  "preliminary_candidates": 181,
+  "verified_clean_round_trip_windows": 142,
+  "clean_monthly_counts": {
+    "2025-01": 5,
+    "2025-02": 3,
+    "2025-03": 4,
+    "2025-04": 13,
+    "2025-05": 25,
+    "2025-06": 12,
+    "2025-07": 11,
+    "2025-08": 15,
+    "2025-09": 20,
+    "2025-10": 18,
+    "2025-11": 11,
+    "2025-12": 5
+  },
+  "note": "Counts are windows, not independent episodes. Original optimized plans, not stitched executed actions. Selected-window primal records verified; no dual/economic causality conclusion and no new solves."
+}

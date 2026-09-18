@@ -1,0 +1,229 @@
+{
+  "clean_source_required": true,
+  "created_at_utc": "2026-08-22T05:24:48.055006+00:00",
+  "decision": "advance_to_s2",
+  "execution_context": {
+    "combined_source_sha256": "0b79859fc0726777e9a00b1b79ab939c507ed15b182b4c944b8a6f2972152b67",
+    "git_commit": "81b31894e70ef3c13720b5f44aeddcff6f70bd71",
+    "git_status_porcelain": "",
+    "source_sha256": {
+      "audit.py": "736b284b0ac88950d8c16e1718ada82e7662022b83dd2745fe00eadf2c9f7347",
+      "p0_consolidated_gate.py": "2647c4bd2cbe363152c22247b77b8d90a25fd23e1b6d0dc5b850175811fa605c",
+      "p0_equivalence.py": "878e62be3448b13e8568f574cd79511b407f445c956a17c676ed1cb0cf35d842",
+      "p0_fixture.py": "45d9f27072818f942f30ac3308c6713eb13ddee243cf980f787d1302e312b1b7",
+      "p0_import_gate.py": "44a68768e7aeaa6d15a64afad080d4b3f1c69a7037da7b01f30aaee0c88e4a9e",
+      "p0_injected_equivalence.py": "10cd0bb918ab3e1e3d7291778131e2397b2d2ceb10f6ead86e25b0c77c964df9",
+      "p0_persistence_gate.py": "5e57a6e19cb35a6d97608479f14f4163fa1910a9ef93181f7a3be42e258f5f25",
+      "p0_s1_boundary_gate.py": "75d37d362d3e530d1466e0e7c173cad4eddd08a60b077b89c34d668a3970dc6c",
+      "p0_s3b_gate.py": "88d3d310c138266eaca81a840764b8ce80e132feb780a360617be94ec4457696",
+      "streaming_archive.py": "dec7fb10f71af7b19ba76e26e270e655d8770bc8cb726dced0d36fdbca71cd5f",
+      "streaming_driver.py": "2f5c491bf0d8187a66a8387964eb0fab0d7f8402c85d0b62def6fe5bf23d3979",
+      "streaming_runner.py": "bfc40ca14f9bef43b76b8711a9d3329b803a9f6a034ca7ff4d4194e475e8cdaa",
+      "streaming_schema.py": "748562a65f85c8b39fe0fcd3066fa427671418adb36a61c0425ea98ccfb6e9e7"
+    }
+  },
+  "failures": [],
+  "import_boundary": {
+    "scanned_modules": [
+      "audit.py",
+      "p0_fixture.py",
+      "streaming_schema.py",
+      "streaming_runner.py",
+      "streaming_archive.py",
+      "streaming_driver.py"
+    ],
+    "violations": []
+  },
+  "injected": [
+    {
+      "case_name": "nominal_shifted_primary",
+      "controlling_ordinals": [
+        0
+      ],
+      "mismatches": [],
+      "public_completed_intervals": 1,
+      "streaming_completed_intervals": 1,
+      "terminal_outcome": null,
+      "unsuccessful_evidence_count": 0,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "copied_recovery",
+      "controlling_ordinals": [
+        2
+      ],
+      "mismatches": [],
+      "public_completed_intervals": 1,
+      "streaming_completed_intervals": 1,
+      "terminal_outcome": null,
+      "unsuccessful_evidence_count": 1,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "target_free_perturbation",
+      "controlling_ordinals": [
+        4
+      ],
+      "mismatches": [],
+      "public_completed_intervals": 1,
+      "streaming_completed_intervals": 1,
+      "terminal_outcome": null,
+      "unsuccessful_evidence_count": 3,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "causal_perturbation",
+      "controlling_ordinals": [
+        0,
+        6
+      ],
+      "mismatches": [],
+      "public_completed_intervals": 2,
+      "streaming_completed_intervals": 2,
+      "terminal_outcome": null,
+      "unsuccessful_evidence_count": 2,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "certified_infeasibility",
+      "controlling_ordinals": [],
+      "mismatches": [],
+      "public_completed_intervals": 0,
+      "streaming_completed_intervals": 0,
+      "terminal_outcome": "solver_certified_infeasible",
+      "unsuccessful_evidence_count": 5,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "exception_then_unusable",
+      "controlling_ordinals": [
+        6
+      ],
+      "mismatches": [],
+      "public_completed_intervals": 1,
+      "streaming_completed_intervals": 1,
+      "terminal_outcome": null,
+      "unsuccessful_evidence_count": 2,
+      "unsuccessful_evidence_verified": true
+    },
+    {
+      "case_name": "recovery_exhaustion",
+      "controlling_ordinals": [],
+      "mismatches": [],
+      "public_completed_intervals": 0,
+      "streaming_completed_intervals": 0,
+      "terminal_outcome": "solver_failure",
+      "unsuccessful_evidence_count": 5,
+      "unsuccessful_evidence_verified": true
+    }
+  ],
+  "nominal": [
+    {
+      "attempt_count": 54,
+      "compared_runtime_numerically": false,
+      "completed_intervals": 6,
+      "controlling_ordinals": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "executed_interval_count": 6,
+      "horizon_steps": 6,
+      "mismatches": [],
+      "outer_plan_count": 1,
+      "public_runtime_seconds": 0.8599713330331724,
+      "streaming_runtime_seconds": 0.7123193749575876
+    },
+    {
+      "attempt_count": 216,
+      "compared_runtime_numerically": false,
+      "completed_intervals": 24,
+      "controlling_ordinals": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "executed_interval_count": 24,
+      "horizon_steps": 24,
+      "mismatches": [],
+      "outer_plan_count": 1,
+      "public_runtime_seconds": 4.166751208016649,
+      "streaming_runtime_seconds": 3.605227917956654
+    }
+  ],
+  "passed": true,
+  "persistence": {
+    "ac_builds_released": true,
+    "corruption_cases_rejected": [
+      "window",
+      "checkpoint",
+      "resource"
+    ],
+    "failures": [],
+    "outer_build_released": true,
+    "prior_checkpoint_preserved": true,
+    "reconstructed_attempt_id": "ac-001-00-primary_controlling",
+    "reconstructed_variable_count": 45,
+    "resumed_intervals": 6,
+    "retry_boundary_intervals": 2,
+    "stopped_intervals": 2,
+    "stopped_reason": "p0 safe boundary",
+    "stopped_status": "observer_terminated",
+    "zero_boundary_recovered": true
+  },
+  "s1_boundary": {
+    "accepted_record_count": 4,
+    "direct_ac_nonexecution_count": 2,
+    "failures": [],
+    "networks": [
+      "pglib_rated",
+      "pglib_effectively_unlimited"
+    ],
+    "reconstructed_audit_count": 4,
+    "source_artifact_available": true,
+    "source_integrity_verified": true,
+    "source_rederived": true,
+    "tracked_fixture_digest_verified": true
+  },
+  "s3b": {
+    "controlling_ordinal": 2,
+    "derived_fixture_verified": true,
+    "executed_ordinals": [
+      0,
+      1,
+      2
+    ],
+    "failures": [],
+    "recovery_iteration": 80,
+    "slot_count": 9,
+    "source_artifact_available": true,
+    "source_integrity_verified": true,
+    "tracked_fixture_digest_verified": true
+  },
+  "schema_version": 1,
+  "wall_time_seconds": 22.965144333982607
+}

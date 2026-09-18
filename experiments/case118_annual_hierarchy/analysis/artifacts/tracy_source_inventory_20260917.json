@@ -1,0 +1,240 @@
+{
+  "source_path": "experiments/battery_terminal/data/9q9wtp_gen_and_load.csv",
+  "source_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+  "columns": [
+    "9q9wtp_load",
+    "9q9wtp_solar",
+    "9q9wtp_wind",
+    "9q9wtp_dist_solar"
+  ],
+  "years": [
+    {
+      "year": 2018,
+      "rows": 8756,
+      "calendar_hours": 8760,
+      "missing_timestamp_hours": 4,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 312.0345,
+          "max": 2856.8866,
+          "sum_mwh_at_1h": 9401806.084299948
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 4305.745305076776,
+          "sum_mwh_at_1h": 10838020.842581246
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 3500.0,
+          "sum_mwh_at_1h": 6703024.329999989
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 189.53952731785316,
+          "sum_mwh_at_1h": 381714.0138089364
+        }
+      }
+    },
+    {
+      "year": 2019,
+      "rows": 8760,
+      "calendar_hours": 8760,
+      "missing_timestamp_hours": 0,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 160.6729,
+          "max": 3284.0523,
+          "sum_mwh_at_1h": 10197899.629800035
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 4381.925756930271,
+          "sum_mwh_at_1h": 10860783.554361992
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 3500.0,
+          "sum_mwh_at_1h": 6857690.330000016
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 191.7065760656588,
+          "sum_mwh_at_1h": 379670.8246012178
+        }
+      }
+    },
+    {
+      "year": 2020,
+      "rows": 8784,
+      "calendar_hours": 8784,
+      "missing_timestamp_hours": 0,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 25,
+          "negative": 0,
+          "min": 164.3904,
+          "max": 3328.6029,
+          "sum_mwh_at_1h": 10041175.193199987
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 4360.490075230914,
+          "sum_mwh_at_1h": 11047301.663687494
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 3500.0,
+          "sum_mwh_at_1h": 6591731.979999979
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 191.2674133322052,
+          "sum_mwh_at_1h": 391030.1677123469
+        }
+      }
+    },
+    {
+      "year": 2021,
+      "rows": 8760,
+      "calendar_hours": 8760,
+      "missing_timestamp_hours": 0,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 349.4044,
+          "max": 3425.1309,
+          "sum_mwh_at_1h": 10069931.231600009
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 4379.630407541195,
+          "sum_mwh_at_1h": 11219030.212085886
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 3500.0,
+          "sum_mwh_at_1h": 7649167.149999993
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 191.46501734335465,
+          "sum_mwh_at_1h": 393989.8592498346
+        }
+      }
+    },
+    {
+      "year": 2022,
+      "rows": 8760,
+      "calendar_hours": 8760,
+      "missing_timestamp_hours": 0,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 8,
+          "negative": 0,
+          "min": 93.7579,
+          "max": 3461.5521,
+          "sum_mwh_at_1h": 10152179.143899985
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 4347.699328924959,
+          "sum_mwh_at_1h": 11446790.142483408
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 32,
+          "negative": 0,
+          "min": 0.0,
+          "max": 3500.0,
+          "sum_mwh_at_1h": 7632938.229999982
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 0,
+          "negative": 0,
+          "min": 0.0,
+          "max": 192.52344689884958,
+          "sum_mwh_at_1h": 401332.1544439499
+        }
+      }
+    },
+    {
+      "year": 2023,
+      "rows": 118,
+      "calendar_hours": 8760,
+      "missing_timestamp_hours": 8642,
+      "duplicate_timestamps": 0,
+      "strictly_hourly": true,
+      "channels": {
+        "9q9wtp_load": {
+          "missing_or_nonfinite": 118,
+          "negative": 0,
+          "min": null,
+          "max": null,
+          "sum_mwh_at_1h": 0
+        },
+        "9q9wtp_solar": {
+          "missing_or_nonfinite": 118,
+          "negative": 0,
+          "min": null,
+          "max": null,
+          "sum_mwh_at_1h": 0
+        },
+        "9q9wtp_wind": {
+          "missing_or_nonfinite": 118,
+          "negative": 0,
+          "min": null,
+          "max": null,
+          "sum_mwh_at_1h": 0
+        },
+        "9q9wtp_dist_solar": {
+          "missing_or_nonfinite": 118,
+          "negative": 0,
+          "min": null,
+          "max": null,
+          "sum_mwh_at_1h": 0
+        }
+      }
+    }
+  ]
+}

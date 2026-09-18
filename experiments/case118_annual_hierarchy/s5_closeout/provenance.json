@@ -1,0 +1,63 @@
+{
+  "artifacts": {
+    "aggregate_inputs.csv": "ea7eb4cc583f86793cbfb25f3b206c65110e10252e3d7719b8d0e1804653abd3",
+    "bus_resources.csv": "84db1134c81ef11cc8f9b9f127ea4c93afea0959946e6a0d7530d9289aff927a",
+    "correlations_calendar.csv": "f011fa81271218d573ea16efe906cbd3580deccba984e267a2a29982b45c1a4b",
+    "correlations_raw.csv": "9753d0f7ca3d52ef70392f7620144441c1fcd82ed6ca1d639d4e7d4fda698542",
+    "correlations_rounded_calendar.csv": "202d845b36d09999591630106bcee2e4340f4730d8dab63d06e01f0bdeea7554",
+    "correlations_without_interventions.csv": "f776c65ff74522343e2b63f0547aa4328a620c305da7f82fb6e2432fec27aae3",
+    "dc_branch_loading.csv": "d70d48425463f848fa949f14ae07689a2f896d5c820f6fb7e70ccfa2b6428543",
+    "devices.json": "bf857ba9d5ba4654fd2d0ac9421ad164878104b9d568cd4d6bb1a0f9ff30fc8c",
+    "dispatch_source.json": "50d69df0b891c2c96b1a3e31921320260bf8387c0f8e6c7beee30842fc228a0c",
+    "dispatch_summary.csv": "9091f89f5a3a4369e5def4c51992e8f655560a332dcf10f6ff4d2c8d09cf62fe",
+    "final_inputs.npz": "7ca658075e87c322a971d15e359d61bee4c2bd84d48896f14e07cdd9dcacdab5",
+    "hourly_comparison.csv": "efcdc3859d768bf8abca0fa5ee4ab901645fa0c45edb0854acedb00f41bf4a8e",
+    "input_summary.json": "c02f4b840b1c67135a8d2fd4a6c3ab98b4a917bd06bc6bce4fe15e298120b186",
+    "monthly_inputs.csv": "a1b8e87a4d40945ddcda347503262344328d990991ec9b0fdb0d192d4ef23d2d",
+    "monthly_recovery_groups.csv": "de57f2fa5a762ac508b9e2b70ef881ee8c0d1e48e3702fb9686a85d035d5b251",
+    "operation_summary.json": "37a5ee10f1749851866b3519f96c1de2df1c3bee55155a8e1738bc8a31f24270",
+    "prior_analysis_summary.json": "d3d353fc066baca266cc7ac7e2ad352c7e4bd8f213f498933cef4f5e60c4252c",
+    "retained_merge.json": "933a77d0a71f29e21f6a8414e72b69e8bb7b0f22ad98d00b3c6d8eb7df915faf",
+    "shortfall_events.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  "calendar": "2025 UTC, hourly interval starts; end-SoC plotted at start hour",
+  "fixture_hashes": {
+    "case": "815ed943bb2e38dc4da0ad176c0df5fd95b09d352000378987849acbd1eb46ca",
+    "input_fingerprint": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+    "load_p": "2f1845f158ed5149b36cb5587d579c09d821d475e02285d2e348f6521bf27764",
+    "load_q": "e11d9fe44698056270896f6134735d5f1300da774b65b10bbb942ac5f4baf90b",
+    "nondispatchable": "529e2cd33f57c16b9ca5702d2c023e4739d1fedf43d1134456cd1a9ab2c4245b",
+    "scenario": "94cbf310b7e5c911d66ff44a71f7f0a94bcc8271c65849cc3e6cd1c4050e3f07"
+  },
+  "sampled_ac_hours": [
+    0,
+    2448,
+    3201,
+    5008,
+    6122,
+    8759
+  ],
+  "scenario": "analytical toy Case118, not Tracy",
+  "schema_version": 1,
+  "snapshot_utc": "2026-09-17T15:26:36.699886+00:00",
+  "sources": {
+    "experiments/case118_annual_hierarchy/results/s4_annual_outer_rated_attempt_005/outer-plan.json.gz": "6e7d88e8eed39de4a0141b0fe3c8a146fd2ae298a3d3ddc2768ae57247e87031",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/merged-result.json": "933a77d0a71f29e21f6a8414e72b69e8bb7b0f22ad98d00b3c6d8eb7df915faf",
+    "experiments/case118_annual_hierarchy/s4_fixture.py": "c62ed6f027fe3d623363ee3724e77de037c63679c7a6dfa675cf2792d5e13490",
+    "experiments/case118_annual_hierarchy/s5_closeout.py": "a5a13bfcbd7595952a4f126c5c76c495be66cc298f448c978144c9ea345f53b0",
+    "experiments/case118_annual_hierarchy/scenario.py": "2af4da420a2df4c9901bb9e23a2de75c83bc6a3782484bbef50917ff1a10f83d",
+    "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/dispatch/intervals.csv": "9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e",
+    "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/dispatch/report.json": "50d69df0b891c2c96b1a3e31921320260bf8387c0f8e6c7beee30842fc228a0c"
+  },
+  "units": {
+    "differences": "MW for power, MWh for end-SoC; sum of state differences is not throughput",
+    "final_inputs": "MW, MVAr; see NPZ field suffixes",
+    "inputs": "MW; hourly energy MW \u00d7 1 h"
+  },
+  "verification": "All checkpoint memberships and input hashes; bounded first-action recomputation. No full S5 audit.",
+  "versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "python": "3.11.15"
+  }
+}

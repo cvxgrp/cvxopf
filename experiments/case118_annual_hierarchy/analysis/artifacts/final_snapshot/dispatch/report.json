@@ -1,0 +1,216 @@
+{
+  "snapshot_utc": "2026-09-17T15:26:36.699886+00:00",
+  "completed": 8760,
+  "horizon": 8760,
+  "summary": {
+    "generator_l1_mw": {
+      "mean": 878.2367683411459,
+      "median": 870.71915374401,
+      "p90": 1194.9044856218925,
+      "p95": 1325.6131565166256,
+      "maximum": 1471.802544961806
+    },
+    "battery_l1_mw": {
+      "mean": 16.415749842088474,
+      "median": 1.49465599832837,
+      "p90": 56.92790447748487,
+      "p95": 85.8575252149764,
+      "maximum": 224.15945974728356
+    },
+    "soc_end_l1_mwh": {
+      "mean": 35.35428608408691,
+      "median": 16.576001944326688,
+      "p90": 96.35792836970738,
+      "p95": 154.62355191666998,
+      "maximum": 317.32214556580266
+    },
+    "generator_l1_pct_load": {
+      "mean": 21.24215361088378,
+      "median": 20.446135393974263,
+      "p90": 32.07331213046304,
+      "p95": 35.45147316880238,
+      "maximum": 42.351770217835416
+    },
+    "battery_l1_pct_fleet_rating": {
+      "mean": 6.058023024355883,
+      "median": 0.5515837252922543,
+      "p90": 21.008516782384156,
+      "p95": 31.684624191396086,
+      "maximum": 82.72318848296086
+    },
+    "soc_end_l1_pct_fleet_capacity": {
+      "mean": 3.2617620450991054,
+      "median": 1.52929050449217,
+      "p90": 8.889915999241632,
+      "p95": 14.26546223336731,
+      "maximum": 29.275922246435037
+    },
+    "generator_counterdirection_mw": {
+      "mean": 369.9485085700351,
+      "median": 366.09327484221706,
+      "p90": 545.4096811553363,
+      "p95": 607.0496365993223,
+      "maximum": 686.6933941232512
+    },
+    "soc_initial_l1_mwh": {
+      "mean": 35.354286084034996,
+      "median": 16.576001944326688,
+      "p90": 96.35792836970738,
+      "p95": 154.62355191666998,
+      "maximum": 317.32214556580266
+    },
+    "pearson_generator_vs_battery": -0.11483498188473115
+  },
+  "outer_sha256": "6e7d88e8eed39de4a0141b0fe3c8a146fd2ae298a3d3ddc2768ae57247e87031",
+  "manifest_sha256": "6d37eff9a3922cf17303d30f66cf4d23417f6ef2cc9dfc6cbba2365d5ec8633a",
+  "fixture_hashes": {
+    "case": "815ed943bb2e38dc4da0ad176c0df5fd95b09d352000378987849acbd1eb46ca",
+    "load_p": "2f1845f158ed5149b36cb5587d579c09d821d475e02285d2e348f6521bf27764",
+    "load_q": "e11d9fe44698056270896f6134735d5f1300da774b65b10bbb942ac5f4baf90b",
+    "nondispatchable": "529e2cd33f57c16b9ca5702d2c023e4739d1fedf43d1134456cd1a9ab2c4245b",
+    "input_fingerprint": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+    "scenario": "94cbf310b7e5c911d66ff44a71f7f0a94bcc8271c65849cc3e6cd1c4050e3f07"
+  },
+  "checkpoints": [
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-000/checkpoint.json",
+      "sha256": "0598a454a1f86125dfde5b7f34dedace77149532e53490c2398f2cb91f087736",
+      "completed": 682
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-001/checkpoint.json",
+      "sha256": "7a95ab4e207ec6f5d90701675552a27bbee2acfad9f048723c291b02599cd455",
+      "completed": 770
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-002/checkpoint.json",
+      "sha256": "f3191b3086526afffd2d73f9520e6b98e9dae0fd9b7f691c354f34468430bcf2",
+      "completed": 761
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-003/checkpoint.json",
+      "sha256": "075d92a2c288b9ff596c0986d09f84d48bca5acba09dd2ac8a741a6607163054",
+      "completed": 752
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-004/checkpoint.json",
+      "sha256": "3167ad5ac2f12bbfd7bb70066fb9c9535b3eaecf1195f0a0984cefe9cce462e7",
+      "completed": 758
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-005/checkpoint.json",
+      "sha256": "9f24e240d4901eaf86e5bc35d74b08181759907915621d19c1fcd2b1f4db7d65",
+      "completed": 745
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-006/checkpoint.json",
+      "sha256": "a4144c11a29a39f4a2dfdda05239c25aaef415f8ee78ff4f515f1e612076be24",
+      "completed": 743
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-007/checkpoint.json",
+      "sha256": "95ec1e785f71c938b972190bc935eeb16769c95e33a0ea61a97fc92d249f7cbb",
+      "completed": 745
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-008/checkpoint.json",
+      "sha256": "7820b83b1ace30b4dac584c31f53982c0b139fe9fb0388b12f5b7c0da4297576",
+      "completed": 770
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-009/checkpoint.json",
+      "sha256": "99f3023544d59e3afafb3223f36c0107aac5e2318dfecacd175dd0b4b91822aa",
+      "completed": 749
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-010/checkpoint.json",
+      "sha256": "ce06a68938399c04ddd544fc3bb4ea8acf87e0874fddae7aff32af0f4156210a",
+      "completed": 712
+    },
+    {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-011/checkpoint.json",
+      "sha256": "94ab5fe004f4e471bb91963e57adda2fefc11ff749d09d8ee1d6cf26d48dc0d1",
+      "completed": 573
+    }
+  ],
+  "storage_ids": [
+    "storage_bus_41",
+    "storage_bus_65",
+    "storage_bus_89",
+    "storage_bus_105"
+  ],
+  "generator_order": "Frozen Case118 generator-table row order; extraction scales Pg to MW for both formulations.",
+  "generator_buses": [
+    1,
+    4,
+    6,
+    8,
+    10,
+    12,
+    15,
+    18,
+    19,
+    24,
+    25,
+    26,
+    27,
+    31,
+    32,
+    34,
+    36,
+    40,
+    42,
+    46,
+    49,
+    54,
+    55,
+    56,
+    59,
+    61,
+    62,
+    65,
+    66,
+    69,
+    70,
+    72,
+    73,
+    74,
+    76,
+    77,
+    80,
+    85,
+    87,
+    89,
+    90,
+    91,
+    92,
+    99,
+    100,
+    103,
+    104,
+    105,
+    107,
+    110,
+    111,
+    112,
+    113,
+    116
+  ],
+  "fleet_rating_mw": 270.97536235980004,
+  "fleet_capacity_mwh": 1083.9014494392002,
+  "delta_hours": 1.0,
+  "operator_intervention_intervals": [
+    2448,
+    6122
+  ],
+  "analysis_script_sha256": "37826eddafa5265db70fb00b590dd0596baca2854fd21e1392a2da55fbc473ef",
+  "analysis_commit": "e0eb8f05d0f7da1265489a6e69a3f0ecf4c6ec91",
+  "limitations": [
+    "Descriptive differences selected by this controller; not minimum feasibility repair or causal AC-only effect.",
+    "Annual DC versus receding-horizon AC also changes horizon, realized initial state, and numerical solution path.",
+    "Generator L1 includes net loss balancing and opposing redispatch; opposing changes count both legs.",
+    "End SoC L1 includes inherited trajectory divergence; battery power L1 measures current-action difference.",
+    "Operator interventions and recovery-policy changes included and labeled; no full independent AC reaudit.",
+    "Only executed first actions are compared, not unexecuted predictions; synthetic timestamps label interval starts."
+  ]
+}

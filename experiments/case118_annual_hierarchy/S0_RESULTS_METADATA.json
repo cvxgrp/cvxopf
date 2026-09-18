@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "path": "results/s0_six_hour.json.gz",
+    "bytes": 238745,
+    "sha256": "47c094887a54ba5de28c19500e7235be8972c351a60528a6e86f9956c186b534",
+    "hash_role": "integrity identifier for this execution, not a byte-identical rerun guarantee"
+  },
+  "created_utc": "2026-08-21T07:46:22.494588+00:00",
+  "execution_source": {
+    "git_commit": "634dc1f487a245b8caddfff29a5555d77daeb23d",
+    "git_clean": true,
+    "runner_sha256": "763c0923ecb928ec4c4336021bc99268b4282ce35d094b592a0d5fb5703a3c67",
+    "source_fingerprint": "089d002fecf5d119cdbc68fb7a68aebc5ba9c07836583ec8760309035c5bff6c"
+  },
+  "software_versions": {
+    "python": "3.11.15",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "clarabel": "0.11.1",
+    "cyipopt": "1.7.0",
+    "ipopt": [3, 14, 19]
+  },
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "pilot_parameters": {
+    "renewable_energy_share": 0.15,
+    "storage_power_fraction_of_peak": 0.05,
+    "storage_duration_hours": 4.0
+  },
+  "horizon_steps": 6,
+  "all_accepted": true,
+  "pilot_selected": false,
+  "selection_reason": "The rated-network storage movement is tolerance-level numerical noise; the protocol must define meaningful movement before another pilot point is interpreted.",
+  "runs": [
+    {
+      "network": "pglib_rated",
+      "formulation": "lossy_dc",
+      "status": "optimal",
+      "objective": 551459.4820734119,
+      "solve_call_seconds": 0.0677240829973016,
+      "solver_num_iters": 24,
+      "accepted_primal": true,
+      "maximum_branch_utilization": 0.999999999828937,
+      "storage_throughput_mwh": 0.000003432133456795883,
+      "maximum_absolute_storage_power_mw": 0.0000008573885035660166,
+      "renewable_output_mwh": 2798.029118933019,
+      "renewable_curtailment_mwh": 0.000000021906998881604522
+    },
+    {
+      "network": "pglib_rated",
+      "formulation": "ac",
+      "status": "optimal",
+      "objective": 616867.7420485999,
+      "solve_call_seconds": 585.2473771249934,
+      "solver_num_iters": null,
+      "accepted_primal": true,
+      "maximum_branch_utilization": 0.9999999996506934,
+      "storage_throughput_mwh": 0.000019511420031179167,
+      "maximum_absolute_storage_power_mw": 0.000004652376402322534,
+      "renewable_output_mwh": 2798.0291179952474,
+      "renewable_curtailment_mwh": 0.0000009596791983849996
+    },
+    {
+      "network": "pglib_effectively_unlimited",
+      "formulation": "lossy_dc",
+      "status": "optimal",
+      "objective": 550512.6648309797,
+      "solve_call_seconds": 0.05702483298955485,
+      "solver_num_iters": 16,
+      "accepted_primal": true,
+      "maximum_branch_utilization": 0.00098484683852928,
+      "maximum_flow_fraction_of_branch_limit_sentinel": 0.00098484683852928,
+      "storage_throughput_mwh": 0.000000681045675381524,
+      "maximum_absolute_storage_power_mw": 0.00000009601453386066686,
+      "renewable_output_mwh": 2798.0291184553653,
+      "renewable_curtailment_mwh": 0.0000004995614517611102
+    },
+    {
+      "network": "pglib_effectively_unlimited",
+      "formulation": "ac",
+      "status": "optimal_inaccurate",
+      "objective": 587031.4477284243,
+      "solve_call_seconds": 117.13728341599926,
+      "solver_num_iters": null,
+      "accepted_primal": true,
+      "maximum_branch_utilization": null,
+      "maximum_flow_fraction_of_branch_limit_sentinel": 0.0006829157065434624,
+      "storage_throughput_mwh": 6.001193259869558,
+      "maximum_absolute_storage_power_mw": 3.0005966217087696,
+      "renewable_output_mwh": 2762.4444230329887,
+      "renewable_curtailment_mwh": 35.58469592193734
+    }
+  ],
+  "memory_observation": {
+    "process_peak_rss_mib_before_rated_ac": 171.1875,
+    "process_peak_rss_mib_after_rated_ac": 14541.28125,
+    "limitation": "ru_maxrss is a cumulative process peak and does not show memory release or isolate the later unlimited solve."
+  }
+}

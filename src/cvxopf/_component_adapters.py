@@ -8,7 +8,7 @@ without duplicating their physics, feasible sets, or cost models.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence, cast
+from typing import Literal, Mapping, Sequence, cast
 
 import cvxpy as cp
 import numpy as np
@@ -26,8 +26,17 @@ from cvxopf._component_adapter import (
     PreparationContext,
     StepContext,
     VariableSpec,
+    VectorizedContext,
+    VectorizedModelContribution,
 )
 from cvxopf._component_assembly import ComponentRequest
+from cvxopf._temporal_assembly import (
+    HorizonVariableSpec,
+    TemporalClass,
+    VariableBoxFamily,
+    box_representation_decision,
+    prepare_box_bounds,
+)
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.hvdc import HVDCLink
 from cvxopf.load import Load
@@ -38,6 +47,58 @@ from cvxopf.storage import StorageUnitIdeal
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
     """Return one prepared numerical array under the typed adapter contract."""
     return cast(np.ndarray, prepared[key])
+
+
+def _leaf_bounds(
+    lower: np.ndarray,
+    upper: np.ndarray,
+    *,
+    native_shape: tuple[int, ...],
+    context: VectorizedContext,
+    family: VariableBoxFamily,
+    lower_temporal_class: TemporalClass = "static",
+    upper_temporal_class: TemporalClass = "static",
+    variable_temporal_class: Literal["interval", "boundary"] = "interval",
+) -> Mapping[str, object]:
+    """Return validated CVXPY leaf-bound attributes for one horizon variable."""
+    decision = box_representation_decision(context.formulation, family)
+    if decision.representation != "leaf":
+        raise RuntimeError(
+            f"{context.formulation} {family.value} is not qualified for leaf bounds"
+        )
+    box = prepare_box_bounds(
+        lower,
+        upper,
+        native_shape=native_shape,
+        horizon_steps=context.horizon_steps,
+        lower_temporal_class=lower_temporal_class,
+        upper_temporal_class=upper_temporal_class,
+        variable_temporal_class=variable_temporal_class,
+    )
+    return {"bounds": [box.lower, box.upper]}
+
+
+def _time_major_values(
+    values: np.ndarray,
+    temporal_class: TemporalClass,
+    *,
+    horizon_steps: int,
+    device_count: int,
+    label: str,
+) -> np.ndarray:
+    """Validate temporal provenance and expose a non-tiled time-major view."""
+    source = np.asarray(values, dtype=float)
+    expected = (
+        (device_count,) if temporal_class == "static" else (horizon_steps, device_count)
+    )
+    if source.shape != expected:
+        raise ValueError(
+            f"{label} with temporal_class={temporal_class!r} must have shape "
+            f"{expected}, got {source.shape}"
+        )
+    if temporal_class == "static":
+        return np.broadcast_to(source[np.newaxis, :], (horizon_steps, device_count))
+    return source
 
 
 def _load_prepare(
@@ -53,23 +114,29 @@ def _load_prepare(
         set(context.ext_bus_ids),
     )
     if inputs is None:
-        p_mw = np.tile(
-            _array(prepared, "load_p_mw"),
-            (context.horizon_steps, 1),
-        )
-        q_mvar = np.tile(
-            _array(prepared, "load_q_mvar"),
-            (context.horizon_steps, 1),
-        )
+        p_source = _array(prepared, "load_p_mw")
+        q_source = _array(prepared, "load_q_mvar")
+        p_temporal_class: TemporalClass = "static"
+        q_temporal_class: TemporalClass = "static"
     else:
-        p_mw = inputs.p_mw
-        q_mvar = inputs.q_mvar
-    expected_shape = (context.horizon_steps, len(units))
-    if p_mw.shape != expected_shape or q_mvar.shape != expected_shape:
-        raise ValueError(
-            "load input channels must both have shape "
-            f"{expected_shape}, got {p_mw.shape} and {q_mvar.shape}"
-        )
+        p_source = inputs.p_mw
+        q_source = inputs.q_mvar
+        p_temporal_class = inputs.p_temporal_class
+        q_temporal_class = inputs.q_temporal_class
+    p_mw = _time_major_values(
+        p_source,
+        p_temporal_class,
+        horizon_steps=context.horizon_steps,
+        device_count=len(units),
+        label="load input channels (active)",
+    )
+    q_mvar = _time_major_values(
+        q_source,
+        q_temporal_class,
+        horizon_steps=context.horizon_steps,
+        device_count=len(units),
+        label="load input channels (reactive)",
+    )
     if not np.all(np.isfinite(p_mw)) or not np.all(np.isfinite(q_mvar)):
         raise ValueError("load input channels must contain only finite values")
     if inputs is not None and inputs.has_reactive is not None:
@@ -80,11 +147,19 @@ def _load_prepare(
             )
         prepared = dict(prepared)
         prepared["load_has_reactive"] = inputs.has_reactive
-    prepared["_load_p_mw_by_step"] = np.array(p_mw, copy=True)
-    prepared["_load_q_mvar_by_step"] = np.array(q_mvar, copy=True)
+    prepared["_load_p_mw_source"] = p_source
+    prepared["_load_q_mvar_source"] = q_source
+    prepared["_load_p_temporal_class"] = p_temporal_class
+    prepared["_load_q_temporal_class"] = q_temporal_class
+    prepared["_load_vectorized_assembly"] = (
+        False if inputs is None else inputs.vectorized_assembly
+    )
+    prepared["_load_p_mw_by_step"] = p_mw
+    prepared["_load_q_mvar_by_step"] = q_mvar
+    vectorized_preparation = cast(bool, prepared["_load_vectorized_assembly"])
     prepared["_load_parameters"] = (
         None
-        if cast(int, prepared["nsheddable"]) == 0
+        if cast(int, prepared["nsheddable"]) == 0 or vectorized_preparation
         else load._PreparedLoadParameters.create(p_mw, q_mvar)
     )
     return prepared
@@ -94,7 +169,13 @@ def _load_metadata(
     prepared: Mapping[str, object],
     formulation: Formulation,
 ) -> Mapping[str, object]:
-    return load._build_metadata(dict(prepared))
+    metadata = dict(load._build_metadata(dict(prepared)))
+    if cast(bool, prepared["_load_vectorized_assembly"]):
+        metadata["load_p_temporal_class"] = prepared["_load_p_temporal_class"]
+        metadata["load_q_temporal_class"] = prepared["_load_q_temporal_class"]
+        metadata["load_p_source_mw"] = prepared["_load_p_mw_source"]
+        metadata["load_q_source_mvar"] = prepared["_load_q_mvar_source"]
+    return metadata
 
 
 def _load_variable_specs(
@@ -114,16 +195,10 @@ def _load_step_channels(
     context: StepContext,
 ) -> Mapping[str, cp.Expression]:
     """Return all load input, served, and conditional shed channels."""
-    parameters = cast(
-        load._PreparedLoadParameters | None, prepared["_load_parameters"]
-    )
+    parameters = cast(load._PreparedLoadParameters | None, prepared["_load_parameters"])
     if parameters is None:
-        p_load = cp.Constant(
-            _array(prepared, "_load_p_mw_by_step")[context.step]
-        )
-        q_load = cp.Constant(
-            _array(prepared, "_load_q_mvar_by_step")[context.step]
-        )
+        p_load = cp.Constant(_array(prepared, "_load_p_mw_by_step")[context.step])
+        q_load = cp.Constant(_array(prepared, "_load_q_mvar_by_step")[context.step])
         p_eligible = cp.Constant(np.empty(0))
     else:
         p_load = parameters.p_load_mw[context.step]
@@ -173,9 +248,7 @@ def _load_operating_constraints(
     fraction = variables.get("load_shed_fraction")
     if fraction is None:
         return ()
-    parameters = cast(
-        load._PreparedLoadParameters, prepared["_load_parameters"]
-    )
+    parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
     indices = _array(prepared, "sheddable_load_indices")
     maximum_fraction = _array(prepared, "load_max_shed_fraction")[indices]
     constraint_method = (
@@ -223,12 +296,8 @@ def _load_horizon(
     context: HorizonContext,
 ) -> HorizonContribution:
     if cast(int, prepared["nsheddable"]) == 0:
-        return HorizonContribution(
-            constraints=tuple(load.coupling_constraints())
-        )
-    parameters = cast(
-        load._PreparedLoadParameters, prepared["_load_parameters"]
-    )
+        return HorizonContribution(constraints=tuple(load.coupling_constraints()))
+    parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
     indices = _array(prepared, "sheddable_load_indices")
     fractions = variable_history["load_shed_fraction"]
     shed_by_step = [
@@ -247,7 +316,108 @@ def _load_horizon(
     )
 
 
-LOAD_ACTIVE = FormulationAdapter[Load](
+def _load_vectorized_variable_specs(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    nsheddable = cast(int, prepared["nsheddable"])
+    if nsheddable == 0:
+        return ()
+    indices = _array(prepared, "sheddable_load_indices")
+    maximum = _array(prepared, "load_max_shed_fraction")[indices]
+    p_temporal_class = cast(TemporalClass, prepared["_load_p_temporal_class"])
+    active = (
+        _array(prepared, "_load_p_mw_source")[indices]
+        if p_temporal_class == "static"
+        else _array(prepared, "_load_p_mw_by_step")[:, indices]
+    )
+    upper = (active > 0.0).astype(float) * (
+        maximum if p_temporal_class == "static" else maximum[np.newaxis, :]
+    )
+    attributes = _leaf_bounds(
+        np.zeros(nsheddable),
+        upper,
+        native_shape=(nsheddable,),
+        context=context,
+        family=VariableBoxFamily.LOAD_SHED_FRACTION,
+        lower_temporal_class="static",
+        upper_temporal_class=p_temporal_class,
+    )
+    return (
+        HorizonVariableSpec(
+            "load_shed_fraction",
+            (nsheddable,),
+            attributes=attributes,
+        ),
+    )
+
+
+def _load_vectorized_assembly(
+    units: Sequence[Load],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    p_values = _array(prepared, "_load_p_mw_by_step").T
+    q_values = _array(prepared, "_load_q_mvar_by_step").T
+    p_load = cp.Constant(p_values)
+    q_load = cp.Constant(q_values)
+    expressions: dict[str, cp.Expression] = {
+        "p_load": p_load,
+        "q_load": q_load,
+    }
+    fraction = variables.get("load_shed_fraction")
+    stage_cost_rate: cp.Expression | None = None
+    horizon = HorizonContribution()
+    if fraction is None:
+        p_served = p_load
+        expressions["p_load_served"] = p_served
+    else:
+        indices = _array(prepared, "sheddable_load_indices")
+        p_temporal_class = cast(TemporalClass, prepared["_load_p_temporal_class"])
+        eligible_values = (
+            np.maximum(_array(prepared, "_load_p_mw_source"), 0.0)[:, np.newaxis]
+            if p_temporal_class == "static"
+            else np.maximum(p_values, 0.0)
+        )
+        channels = load.served_and_shed_expressions(
+            p_load,
+            q_load,
+            cp.Constant(eligible_values),
+            fraction,
+            indices,
+            cast(int, prepared["nload"]),
+            interval_axis=1,
+        )
+        channels.pop("q_load_served", None)
+        channels.pop("q_load_shed", None)
+        p_shed = channels["p_load_shed"]
+        p_served = channels["p_load_served"]
+        costs = _array(prepared, "load_shedding_cost_per_mwh")[indices]
+        stage_cost_rate = load.shedding_cost_rate(
+            p_shed,
+            costs[:, np.newaxis],
+            interval_axis=1,
+        )
+        ens_by_load = cp.multiply(context.delta, cp.sum(p_shed, axis=1))
+        expressions.update(channels)
+        horizon = HorizonContribution(
+            expressions={
+                "energy_not_served_by_load": ens_by_load,
+                "energy_not_served": cp.sum(ens_by_load),
+            }
+        )
+    p_pu, q_pu, scale = load.dc_injections(p_served, _array(prepared, "Cload"))
+    return VectorizedModelContribution(
+        injection=InjectionContribution(p_pu, q_pu, scale),
+        stage_cost_rate=stage_cost_rate,
+        expressions=expressions,
+        horizon=horizon,
+    )
+
+
+LOAD_AC = FormulationAdapter[Load](
     capability=FormulationCapability.ACTIVE,
     variable_specs=_load_variable_specs,
     injections=_load_injections,
@@ -255,6 +425,17 @@ LOAD_ACTIVE = FormulationAdapter[Load](
     step_cost=_load_step_cost,
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
+)
+LOAD_DC = FormulationAdapter[Load](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_load_variable_specs,
+    injections=_load_injections,
+    operating_constraints=_load_operating_constraints,
+    step_cost=_load_step_cost,
+    step_expressions=_load_step_expressions,
+    horizon=_load_horizon,
+    vectorized_variable_specs=_load_vectorized_variable_specs,
+    vectorized_assembly=_load_vectorized_assembly,
 )
 
 
@@ -265,14 +446,19 @@ class LoadInputs:
     p_mw: np.ndarray
     q_mvar: np.ndarray
     has_reactive: np.ndarray | None = None
+    p_temporal_class: TemporalClass = "interval"
+    q_temporal_class: TemporalClass = "interval"
+    vectorized_assembly: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "p_mw", np.array(self.p_mw, dtype=float, copy=True)
-        )
+        object.__setattr__(self, "p_mw", np.array(self.p_mw, dtype=float, copy=True))
         object.__setattr__(
             self, "q_mvar", np.array(self.q_mvar, dtype=float, copy=True)
         )
+        if self.p_temporal_class not in {"static", "interval"}:
+            raise ValueError("active load temporal class must be static or interval")
+        if self.q_temporal_class not in {"static", "interval"}:
+            raise ValueError("reactive load temporal class must be static or interval")
         if self.has_reactive is not None:
             object.__setattr__(
                 self,
@@ -286,9 +472,9 @@ LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
     prepare=_load_prepare,
     metadata=_load_metadata,
     formulations={
-        "ac": LOAD_ACTIVE,
-        "lossy_dc": LOAD_ACTIVE,
-        "singlenode_dc": LOAD_ACTIVE,
+        "ac": LOAD_AC,
+        "lossy_dc": LOAD_DC,
+        "singlenode_dc": LOAD_DC,
     },
     cost_expression_name="load_shedding_cost",
 )
@@ -312,9 +498,7 @@ def _generator_metadata(
     prepared: Mapping[str, object],
     formulation: Formulation,
 ) -> Mapping[str, object]:
-    return generator._build_metadata(
-        dict(prepared), reactive=formulation == "ac"
-    )
+    return generator._build_metadata(dict(prepared), reactive=formulation == "ac")
 
 
 def _generator_variable_specs(
@@ -432,6 +616,45 @@ def _generator_horizon(
     return HorizonContribution(constraints=tuple(constraints))
 
 
+def _generator_vectorized_variable_specs(
+    units: Sequence[DispatchableGenerator],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    ng = cast(int, prepared["ng"])
+    attributes = _leaf_bounds(
+        _array(prepared, "Pgmin"),
+        _array(prepared, "Pgmax"),
+        native_shape=(ng,),
+        context=context,
+        family=VariableBoxFamily.DISPATCHABLE_P,
+    )
+    return (HorizonVariableSpec("Pg", (ng,), attributes=attributes),)
+
+
+def _generator_vectorized_assembly(
+    units: Sequence[DispatchableGenerator],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    p_pu, q_pu, scale = generator.dc_injections(
+        list(units),
+        variables["Pg"],
+        dict(context.ext_to_int),
+        incidence=_array(prepared, "Cg"),
+    )
+    cost_rate = generator.horizon_cost_rate(
+        _array(prepared, "gencost"),
+        context.base_mva * variables["Pg"],
+        context.horizon_steps,
+    )
+    return VectorizedModelContribution(
+        injection=InjectionContribution(p_pu, q_pu, scale),
+        stage_cost_rate=cost_rate,
+    )
+
+
 GENERATOR_AC = FormulationAdapter[DispatchableGenerator](
     capability=FormulationCapability.ACTIVE,
     variable_specs=_generator_variable_specs,
@@ -449,6 +672,8 @@ GENERATOR_DC = FormulationAdapter[DispatchableGenerator](
     network_constraints=_generator_network_constraints,
     step_cost=_generator_step_cost,
     horizon=_generator_horizon,
+    vectorized_variable_specs=_generator_vectorized_variable_specs,
+    vectorized_assembly=_generator_vectorized_assembly,
 )
 GENERATOR_ADAPTER = ComponentAdapter[DispatchableGenerator, None](
     name="generator",
@@ -467,6 +692,8 @@ class NondispatchableInputs:
     """Normalized ND availability supplied to component preparation."""
 
     available_mw: np.ndarray
+    temporal_class: TemporalClass = "interval"
+    vectorized_assembly: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -474,6 +701,10 @@ class NondispatchableInputs:
             "available_mw",
             np.array(self.available_mw, dtype=float, copy=True),
         )
+        if self.temporal_class not in {"static", "interval"}:
+            raise ValueError(
+                "nondispatchable temporal class must be static or interval"
+            )
 
 
 def _nd_prepare(
@@ -481,17 +712,17 @@ def _nd_prepare(
     inputs: NondispatchableInputs,
     context: PreparationContext,
 ) -> Mapping[str, object]:
-    available = inputs.available_mw
-    expected_shape = (context.horizon_steps, len(units))
-    if available.shape != expected_shape:
-        raise ValueError(
-            "nondispatchable availability must have shape "
-            f"{expected_shape}, got {available.shape}"
-        )
+    source = inputs.available_mw
+    available = _time_major_values(
+        source,
+        inputs.temporal_class,
+        horizon_steps=context.horizon_steps,
+        device_count=len(units),
+        label="nondispatchable availability",
+    )
     if not np.all(np.isfinite(available)) or np.any(available < 0):
         raise ValueError(
-            "nondispatchable availability must contain finite, "
-            "nonnegative values"
+            "nondispatchable availability must contain finite, nonnegative values"
         )
     prepared = nondispatchable._prepare_data(
         list(units),
@@ -499,7 +730,10 @@ def _nd_prepare(
         dict(context.ext_to_int),
         set(context.ext_bus_ids),
     )
-    prepared["nd_available_mw"] = np.array(available, copy=True)
+    prepared["nd_available_source_mw"] = source
+    prepared["nd_available_temporal_class"] = inputs.temporal_class
+    prepared["nd_vectorized_assembly"] = inputs.vectorized_assembly
+    prepared["nd_available_mw"] = available
     prepared["horizon_steps"] = context.horizon_steps
     prepared["is_multistep"] = context.is_multistep
     return prepared
@@ -515,6 +749,11 @@ def _nd_metadata(
         metadata["nd_available"] = available
     else:
         metadata["nd_p_available"] = available[0]
+    if cast(bool, prepared["nd_vectorized_assembly"]):
+        metadata["nd_available_temporal_class"] = prepared[
+            "nd_available_temporal_class"
+        ]
+        metadata["nd_available_source_mw"] = prepared["nd_available_source_mw"]
     return metadata
 
 
@@ -593,6 +832,52 @@ def _nd_horizon(
     return HorizonContribution(constraints=tuple(constraints))
 
 
+def _nd_vectorized_variable_specs(
+    units: Sequence[NondispatchableUnit],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    nnd = cast(int, prepared["nnd"])
+    temporal_class = cast(TemporalClass, prepared["nd_available_temporal_class"])
+    available = (
+        _array(prepared, "nd_available_source_mw")
+        if temporal_class == "static"
+        else _array(prepared, "nd_available_mw")
+    )
+    rating = _array(prepared, "nd_apparent_power_rating")
+    upper = np.minimum(
+        available,
+        rating if temporal_class == "static" else rating[np.newaxis, :],
+    )
+    attributes = _leaf_bounds(
+        np.zeros(nnd),
+        upper,
+        native_shape=(nnd,),
+        context=context,
+        family=VariableBoxFamily.NONDISPATCHABLE_REAL_POWER,
+        lower_temporal_class="static",
+        upper_temporal_class=temporal_class,
+    )
+    return (HorizonVariableSpec("p_nd", (nnd,), attributes=attributes),)
+
+
+def _nd_vectorized_assembly(
+    units: Sequence[NondispatchableUnit],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    p_pu, q_pu, scale = nondispatchable.dc_injections(
+        list(units),
+        variables["p_nd"],
+        dict(context.ext_to_int),
+        incidence=_array(prepared, "Cnd"),
+    )
+    return VectorizedModelContribution(
+        injection=InjectionContribution(p_pu, q_pu, scale)
+    )
+
+
 ND_AC = FormulationAdapter[NondispatchableUnit](
     capability=FormulationCapability.ACTIVE,
     variable_specs=_nd_variable_specs,
@@ -606,10 +891,10 @@ ND_DC = FormulationAdapter[NondispatchableUnit](
     injections=_nd_injections,
     operating_constraints=_nd_operating_constraints,
     horizon=_nd_horizon,
+    vectorized_variable_specs=_nd_vectorized_variable_specs,
+    vectorized_assembly=_nd_vectorized_assembly,
 )
-NONDISPATCHABLE_ADAPTER = ComponentAdapter[
-    NondispatchableUnit, NondispatchableInputs
-](
+NONDISPATCHABLE_ADAPTER = ComponentAdapter[NondispatchableUnit, NondispatchableInputs](
     name="nondispatchable",
     prepare=_nd_prepare,
     metadata=_nd_metadata,
@@ -722,12 +1007,78 @@ def _storage_horizon(
     constraints = storage.coupling_constraints(
         list(units), b_history, soc_history, context.delta
     )
-    terminal_cost = storage.terminal_cost_expr(
-        list(units), soc_history[-1]
-    )
+    terminal_cost = storage.terminal_cost_expr(list(units), soc_history[-1])
     return HorizonContribution(
         constraints=tuple(constraints),
         terminal_cost=terminal_cost,
+    )
+
+
+def _storage_vectorized_variable_specs(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    ns = cast(int, prepared["ns"])
+    rating = _array(prepared, "storage_apparent_power_rating")
+    capacity = _array(prepared, "storage_capacity")
+    power_attributes = _leaf_bounds(
+        -rating,
+        rating,
+        native_shape=(ns,),
+        context=context,
+        family=VariableBoxFamily.STORAGE_REAL_POWER,
+    )
+    soc_attributes = _leaf_bounds(
+        np.zeros(ns),
+        capacity,
+        native_shape=(ns,),
+        context=context,
+        family=VariableBoxFamily.STORAGE_SOC,
+        variable_temporal_class="boundary",
+    )
+    return (
+        HorizonVariableSpec("b", (ns,), attributes=power_attributes),
+        HorizonVariableSpec(
+            "soc",
+            (ns,),
+            temporal_class="boundary",
+            attributes=soc_attributes,
+            result_view="post_step_boundaries",
+        ),
+    )
+
+
+def _storage_vectorized_assembly(
+    units: Sequence[StorageUnitIdeal],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    power = variables["b"]
+    soc = variables["soc"]
+    p_pu, q_pu, scale = storage.dc_injections(
+        list(units),
+        power,
+        dict(context.ext_to_int),
+        incidence=_array(prepared, "Cs"),
+    )
+    constraints = storage.vectorized_coupling_constraints(
+        list(units), power, soc, context.delta
+    )
+    stage_cost_rate = storage.vectorized_storage_cost_rate(list(units), power)
+    terminal_cost = storage.terminal_cost_expr(list(units), soc[:, -1])
+    horizon_expressions = (
+        {} if terminal_cost is None else {"storage_terminal_cost": terminal_cost}
+    )
+    return VectorizedModelContribution(
+        injection=InjectionContribution(p_pu, q_pu, scale),
+        stage_cost_rate=stage_cost_rate,
+        horizon=HorizonContribution(
+            constraints=tuple(constraints),
+            terminal_cost=terminal_cost,
+            expressions=horizon_expressions,
+        ),
     )
 
 
@@ -746,6 +1097,8 @@ STORAGE_DC = FormulationAdapter[StorageUnitIdeal](
     operating_constraints=_storage_operating_constraints,
     step_cost=_storage_step_cost,
     horizon=_storage_horizon,
+    vectorized_variable_specs=_storage_vectorized_variable_specs,
+    vectorized_assembly=_storage_vectorized_assembly,
 )
 STORAGE_ADAPTER = ComponentAdapter[StorageUnitIdeal, None](
     name="storage",
@@ -765,11 +1118,15 @@ class HVDCInputs:
 
     p_min_mw: np.ndarray
     p_max_mw: np.ndarray
+    temporal_class: TemporalClass = "interval"
+    vectorized_assembly: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self, "p_min_mw", np.array(self.p_min_mw, dtype=float, copy=True)
         )
+        if self.temporal_class not in {"static", "interval"}:
+            raise ValueError("HVDC temporal class must be static or interval")
         object.__setattr__(
             self, "p_max_mw", np.array(self.p_max_mw, dtype=float, copy=True)
         )
@@ -788,23 +1145,49 @@ def _hvdc_prepare(
     )
     if inputs is None:
         p_min, p_max = hvdc._hvdc_static_box(list(units))
-        p_min = np.tile(p_min, (context.horizon_steps, 1))
-        p_max = np.tile(p_max, (context.horizon_steps, 1))
+        temporal_class: TemporalClass = "static"
     else:
         p_min = inputs.p_min_mw
         p_max = inputs.p_max_mw
-    expected_shape = (context.horizon_steps, len(units))
-    if p_min.shape != expected_shape or p_max.shape != expected_shape:
+        temporal_class = inputs.temporal_class
+    p_min_source = p_min
+    p_max_source = p_max
+    expected_shape = (
+        (len(units),)
+        if temporal_class == "static"
+        else (context.horizon_steps, len(units))
+    )
+    if p_min_source.shape != expected_shape or p_max_source.shape != expected_shape:
         raise ValueError(
             "HVDC bounds must both have shape "
-            f"{expected_shape}, got {p_min.shape} and {p_max.shape}"
+            f"{expected_shape}, got {p_min_source.shape} and {p_max_source.shape}"
         )
+    p_min = _time_major_values(
+        p_min_source,
+        temporal_class,
+        horizon_steps=context.horizon_steps,
+        device_count=len(units),
+        label="HVDC lower bounds",
+    )
+    p_max = _time_major_values(
+        p_max_source,
+        temporal_class,
+        horizon_steps=context.horizon_steps,
+        device_count=len(units),
+        label="HVDC upper bounds",
+    )
     if not np.all(np.isfinite(p_min)) or not np.all(np.isfinite(p_max)):
         raise ValueError("HVDC bounds must contain only finite values")
     if np.any(p_min > p_max):
         raise ValueError("HVDC bounds must satisfy p_min_mw <= p_max_mw")
-    prepared["hvdc_p_min_mw"] = np.array(p_min, copy=True)
-    prepared["hvdc_p_max_mw"] = np.array(p_max, copy=True)
+    prepared["hvdc_p_min_source_mw"] = p_min_source
+    prepared["hvdc_p_max_source_mw"] = p_max_source
+    prepared["hvdc_temporal_class"] = temporal_class
+    prepared["hvdc_vectorized_assembly"] = (
+        False if inputs is None else inputs.vectorized_assembly
+    )
+    prepared["hvdc_p_min_mw"] = p_min
+    prepared["hvdc_p_max_mw"] = p_max
     return prepared
 
 
@@ -812,7 +1195,12 @@ def _hvdc_metadata(
     prepared: Mapping[str, object],
     formulation: Formulation,
 ) -> Mapping[str, object]:
-    return hvdc._build_metadata(dict(prepared))
+    metadata = dict(hvdc._build_metadata(dict(prepared)))
+    if cast(bool, prepared["hvdc_vectorized_assembly"]):
+        metadata["hvdc_temporal_class"] = prepared["hvdc_temporal_class"]
+        metadata["hvdc_p_min_source_mw"] = prepared["hvdc_p_min_source_mw"]
+        metadata["hvdc_p_max_source_mw"] = prepared["hvdc_p_max_source_mw"]
+    return metadata
 
 
 def _hvdc_variable_specs(
@@ -834,9 +1222,7 @@ def _hvdc_injections(
     context: StepContext,
 ) -> InjectionContribution:
     injection_method = (
-        hvdc.ac_injections
-        if context.formulation == "ac"
-        else hvdc.dc_injections
+        hvdc.ac_injections if context.formulation == "ac" else hvdc.dc_injections
     )
     p_pu, q_pu, inv_base_mva = injection_method(
         list(units),
@@ -897,13 +1283,102 @@ def _hvdc_horizon(
     return HorizonContribution(constraints=tuple(constraints))
 
 
-HVDC_ACTIVE = FormulationAdapter[HVDCLink](
+def _hvdc_vectorized_variable_specs(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    count = cast(int, prepared["n_hvdc"])
+    temporal_class = cast(TemporalClass, prepared["hvdc_temporal_class"])
+    lower = (
+        _array(prepared, "hvdc_p_min_source_mw")
+        if temporal_class == "static"
+        else _array(prepared, "hvdc_p_min_mw")
+    )
+    upper = (
+        _array(prepared, "hvdc_p_max_source_mw")
+        if temporal_class == "static"
+        else _array(prepared, "hvdc_p_max_mw")
+    )
+    attributes = _leaf_bounds(
+        lower,
+        upper,
+        native_shape=(count,),
+        context=context,
+        family=VariableBoxFamily.HVDC_INPUT_POWER,
+        lower_temporal_class=temporal_class,
+        upper_temporal_class=temporal_class,
+    )
+    return (
+        HorizonVariableSpec("p_hvdc_in", (count,), attributes=attributes),
+        HorizonVariableSpec("p_hvdc_out", (count,)),
+    )
+
+
+def _hvdc_vectorized_coefficients(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+) -> np.ndarray:
+    """Select owner-defined loss branches before any static broadcast."""
+    temporal_class = cast(TemporalClass, prepared["hvdc_temporal_class"])
+    if temporal_class == "static":
+        coefficients = hvdc.loss_branch_coefficients(
+            list(units),
+            _array(prepared, "hvdc_p_min_source_mw"),
+            _array(prepared, "hvdc_p_max_source_mw"),
+        )
+        return coefficients[:, np.newaxis]
+    return hvdc.loss_branch_coefficients(
+        list(units),
+        _array(prepared, "hvdc_p_min_mw").T,
+        _array(prepared, "hvdc_p_max_mw").T,
+    )
+
+
+def _hvdc_vectorized_assembly(
+    units: Sequence[HVDCLink],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    p_in = variables["p_hvdc_in"]
+    p_out = variables["p_hvdc_out"]
+    p_pu, q_pu, scale = hvdc.dc_injections(
+        list(units),
+        p_in,
+        p_out,
+        dict(context.ext_to_int),
+        incidence=(
+            _array(prepared, "Ch_from"),
+            _array(prepared, "Ch_to"),
+        ),
+    )
+    coefficients = _hvdc_vectorized_coefficients(units, prepared)
+    cost_rate = hvdc.hvdc_cost_expr(list(units), p_in)
+    return VectorizedModelContribution(
+        injection=InjectionContribution(p_pu, q_pu, scale),
+        operating_constraints=(p_out == cp.multiply(coefficients, p_in),),
+        stage_cost_rate=cost_rate,
+    )
+
+
+HVDC_AC = FormulationAdapter[HVDCLink](
     capability=FormulationCapability.ACTIVE,
     variable_specs=_hvdc_variable_specs,
     injections=_hvdc_injections,
     operating_constraints=_hvdc_operating_constraints,
     step_cost=_hvdc_step_cost,
     horizon=_hvdc_horizon,
+)
+HVDC_DC = FormulationAdapter[HVDCLink](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_hvdc_variable_specs,
+    injections=_hvdc_injections,
+    operating_constraints=_hvdc_operating_constraints,
+    step_cost=_hvdc_step_cost,
+    horizon=_hvdc_horizon,
+    vectorized_variable_specs=_hvdc_vectorized_variable_specs,
+    vectorized_assembly=_hvdc_vectorized_assembly,
 )
 HVDC_NULL = FormulationAdapter[HVDCLink](
     capability=FormulationCapability.NULL,
@@ -913,8 +1388,8 @@ HVDC_ADAPTER = ComponentAdapter[HVDCLink, HVDCInputs | None](
     prepare=_hvdc_prepare,
     metadata=_hvdc_metadata,
     formulations={
-        "ac": HVDC_ACTIVE,
-        "lossy_dc": HVDC_ACTIVE,
+        "ac": HVDC_AC,
+        "lossy_dc": HVDC_DC,
         "singlenode_dc": HVDC_NULL,
     },
 )

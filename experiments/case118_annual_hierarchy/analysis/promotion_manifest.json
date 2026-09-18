@@ -1,0 +1,493 @@
+{
+  "status": "Base promotion independently reviewed CLEAN; owner-requested dashboard additions under evaluation; owner approval and Stage 0b commit pending",
+  "files": [
+    {
+      "source": "outputs/s5_analysis/analyze_dispatch_changes.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/analyze_dispatch_changes.py",
+      "transformation": "relocate; explicit frozen inputs/default output paths; preserve numerical definitions",
+      "source_bytes": 9287,
+      "source_sha256": "37826eddafa5265db70fb00b590dd0596baca2854fd21e1392a2da55fbc473ef",
+      "destination_bytes": 9292,
+      "destination_sha256": "cbd02d540e02f8203ab0bf6dbd3c9caac900166f38b6812ecfb2e6fa17ef4c2c"
+    },
+    {
+      "source": "outputs/s5_analysis/analyze_stress_correlations.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/analyze_stress_correlations.py",
+      "transformation": "relocate; explicit frozen inputs/default output paths; preserve numerical definitions; create missing output parents while refusing existing result directory",
+      "source_bytes": 11359,
+      "source_sha256": "e906c30388aa8a6e2d8d4f172c33e7284ed536544512cf68a824ec9a926bd678",
+      "destination_bytes": 11298,
+      "destination_sha256": "357335e610d0d1af3c9b8901f907d50322b4e73bc193a02590d58510ee345cd6"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_stress.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/dashboard_stress.py",
+      "transformation": "relocate; explicit frozen inputs/default output paths; preserve numerical definitions",
+      "source_bytes": 8237,
+      "source_sha256": "7f89b90ddc75793b509d201902f977f150facc7364eff9257e2cf823190cd790",
+      "destination_bytes": 8267,
+      "destination_sha256": "e44729be1a5fa415e3a099369e864264474bc2cc95dabe7375b3ea3cf14f0638"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_support.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/dashboard_support.py",
+      "transformation": "relocate; explicit frozen inputs/default output paths; preserve numerical definitions",
+      "source_bytes": 9071,
+      "source_sha256": "754186a9a2cca9e9114c7f70aae70d3c2754c5514623296796fc791ec958d087",
+      "destination_bytes": 5326,
+      "destination_sha256": "b5232027dcc24fa0b8464ca496966e572dd5d2603418983cfaa05512980a45c6"
+    },
+    {
+      "source": "outputs/s5_analysis/s5_dashboard.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/s5_dashboard.py",
+      "transformation": "relocate; explicit frozen inputs/default output paths; preserve numerical definitions; owner-requested Matrix/Tensor tabs and Inputs tab displaying existing s5_closeout/input_heatmaps.png; preserve selected tab on control updates; owner-requested exploratory signed backward net-load ramp versus signed executed AC fleet battery-power scatter, reconstructed from existing aligned DC power and AC-minus-DC data; owner-requested AC/DC operating heatmaps of dispatchable generation, signed battery power, and end-of-hour fleet SoC; move Inputs alongside Executed AC/DC plan, leaving Matrix/Tensor differences below; size Inputs image to full tab width with preserved aspect ratio; replace stretched report PNG with report-data heatmaps using the shared AC/DC plotting layout, width and typography; synchronized 72-hour AC/DC/Inputs time-series tabs with one hourly start slider, stable tab selection, and explicit SoC endpoint/reset handling",
+      "source_bytes": 19676,
+      "source_sha256": "5df54600a82378b7ab881e5c047607c3e34d859f0c79b38d78658bb4ccf949bf",
+      "destination_bytes": 35455,
+      "destination_sha256": "855cf756f6c2b5ff6d0b1a804c70c4ffef0a29fdd5a274dd4250059034997b08"
+    },
+    {
+      "source": "outputs/s5_coverage/coverage_report.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/coverage_report.py",
+      "transformation": "relocate repo root and ignored default output directory",
+      "source_bytes": 32859,
+      "source_sha256": "8b1b32f836d94b52b9a7a403488b7ec84d4c859679e06613a84bc58607e068f4",
+      "destination_bytes": 32862,
+      "destination_sha256": "f2a580507357b490c3d6071b1d832df62fc0d3cf7aa80fbc53b50dbf77a174fe"
+    },
+    {
+      "source": "outputs/s5_coverage/test_coverage_report.py",
+      "destination": "tests/test_case118_s5_coverage.py",
+      "transformation": "import promoted module",
+      "source_bytes": 7496,
+      "source_sha256": "ee5abf65dedb595086c41238cea06dc550d545abf6216b4850cb7186058a6b5b",
+      "destination_bytes": 7459,
+      "destination_sha256": "12265b408c1a2faa42f01ccb550dab1fc4f87ac0b3d1993fbb29b363cf363835"
+    },
+    {
+      "source": "outputs/s5_analysis/test_dashboard_support.py",
+      "destination": "tests/test_case118_s5_dashboard.py",
+      "transformation": "import promoted module; replace obsolete live-refresh test with frozen snapshot loading; add clean-output-tree reproduction and existing-output refusal checks",
+      "source_bytes": 3649,
+      "source_sha256": "dce236c5239b8614454a6a3111916e3ef7489d14dd8e2713111039e0b6a33619",
+      "destination_bytes": 6059,
+      "destination_sha256": "72cd06667e8d19f70add4f9c79a92375b470873cf70ea07e12add9253a9ebb33"
+    },
+    {
+      "source": "outputs/case118-counterfactual-ac-study.md",
+      "destination": "plans/case118-toy-ac-counterfactual-protocol.md",
+      "transformation": "update completion, approved episode-first design, six-window proposal, shared execution and arm applicability; fix links",
+      "source_bytes": 16758,
+      "source_sha256": "23ca47377701832306f6a7892034060ed69b5549c31732081b799de5c0bcb227",
+      "destination_bytes": 17785,
+      "destination_sha256": "14d92487cf74125c510011cb590c45cad7de4b8f4b11fd70b4ea3a1094d1516a"
+    },
+    {
+      "source": "presentations/annual_ac_20260915/scripts/collect_completion.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/collectors/collect_completion.py",
+      "transformation": "exact copy",
+      "source_bytes": 6757,
+      "source_sha256": "88c4c5899bf9eb8a94aad130373acb5a3097dfda2e2317125d39d58334d5bbc2",
+      "destination_bytes": 6757,
+      "destination_sha256": "88c4c5899bf9eb8a94aad130373acb5a3097dfda2e2317125d39d58334d5bbc2"
+    },
+    {
+      "source": "presentations/annual_ac_20260915/scripts/collect_periods.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/collectors/collect_periods.py",
+      "transformation": "exact copy",
+      "source_bytes": 9914,
+      "source_sha256": "7335f9d8644fd70ef5b75bd02c6528d7e9e6c28d5aa1f2f3f96a80b952f0bfbf",
+      "destination_bytes": 9914,
+      "destination_sha256": "7335f9d8644fd70ef5b75bd02c6528d7e9e6c28d5aa1f2f3f96a80b952f0bfbf"
+    },
+    {
+      "source": "presentations/annual_ac_20260915/scripts/collect_solves.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/collectors/collect_solves.py",
+      "transformation": "exact copy",
+      "source_bytes": 8132,
+      "source_sha256": "818569680ebe4da32e43acd83b90d94e5ee423662c51f84cdd0a90b38dc78014",
+      "destination_bytes": 8132,
+      "destination_sha256": "818569680ebe4da32e43acd83b90d94e5ee423662c51f84cdd0a90b38dc78014"
+    },
+    {
+      "source": "outputs/analysis/refresh_completion_band.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/collectors/refresh_completion_band.py",
+      "transformation": "portable root; use promoted collector; create missing output parents while refusing existing result directory",
+      "source_bytes": 1942,
+      "source_sha256": "da80694e8a8df539097065cf8405c0d540b75a52460e21f1908aa8cc256427c3",
+      "destination_bytes": 1947,
+      "destination_sha256": "72e6b2c2e76d4433ec2d78cec3af0b52e9ca51b8eb5103aeac524aff2968b087"
+    },
+    {
+      "source": "presentations/annual_ac_20260915/refresh.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/render_saved_timing.py",
+      "transformation": "retain saved-data renderer; remove live/deck publication; require fresh output directory",
+      "source_bytes": 18045,
+      "source_sha256": "3cce6eec3b73b2679e7ef6452e1d90b0aa7400c41d44353f806ea0a1606880ea",
+      "destination_bytes": 13139,
+      "destination_sha256": "eca7e040593829d92549b40af2301b3fb3600d613301e2678732561a2ed9517d"
+    },
+    {
+      "source": "outputs/analysis/S5_OPERATOR_OBSERVATIONS.md",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/operator_observations.md",
+      "transformation": "exact copy",
+      "source_bytes": 3468,
+      "source_sha256": "f7b70ae75c6bfdf9f67c6646a578e375ca9b16e07d715d4e678ad01d441dd57a",
+      "destination_bytes": 3468,
+      "destination_sha256": "f7b70ae75c6bfdf9f67c6646a578e375ca9b16e07d715d4e678ad01d441dd57a"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/dashboard.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/dashboard.json",
+      "transformation": "exact copy",
+      "source_bytes": 1556,
+      "source_sha256": "03d1a293e1efe2254404e0799b59aaa0936873ad5dcc334f754622e77e8060f1",
+      "destination_bytes": 1556,
+      "destination_sha256": "03d1a293e1efe2254404e0799b59aaa0936873ad5dcc334f754622e77e8060f1"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/events.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/events.json",
+      "transformation": "exact copy",
+      "source_bytes": 482,
+      "source_sha256": "be057083b75b2658b58fa168c9e15f9a40f415f36df64cb7a4d0c3677e796af8",
+      "destination_bytes": 482,
+      "destination_sha256": "be057083b75b2658b58fa168c9e15f9a40f415f36df64cb7a4d0c3677e796af8"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/dispatch/report.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/dispatch/report.json",
+      "transformation": "exact copy",
+      "source_bytes": 7309,
+      "source_sha256": "50d69df0b891c2c96b1a3e31921320260bf8387c0f8e6c7beee30842fc228a0c",
+      "destination_bytes": 7309,
+      "destination_sha256": "50d69df0b891c2c96b1a3e31921320260bf8387c0f8e6c7beee30842fc228a0c"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/dispatch/intervals.csv",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/dispatch/intervals.csv",
+      "transformation": "exact copy",
+      "source_bytes": 4671997,
+      "source_sha256": "9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e",
+      "destination_bytes": 4671997,
+      "destination_sha256": "9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/completion/summary.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/completion/summary.json",
+      "transformation": "exact copy",
+      "source_bytes": 4711,
+      "source_sha256": "091b6a87a89f1c5b7617995dc8301251ad9845d3748835b59da71ad0cf39841a",
+      "destination_bytes": 4711,
+      "destination_sha256": "091b6a87a89f1c5b7617995dc8301251ad9845d3748835b59da71ad0cf39841a"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/completion/checkpoint_snapshot.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/completion/checkpoint_snapshot.json",
+      "transformation": "exact copy",
+      "source_bytes": 1518978,
+      "source_sha256": "b1932033e7d353ff86b879feea8a17c38afa3e5072990684a88bb91526cf60b0",
+      "destination_bytes": 1518978,
+      "destination_sha256": "b1932033e7d353ff86b879feea8a17c38afa3e5072990684a88bb91526cf60b0"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/completion/completion.csv",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/completion/completion.csv",
+      "transformation": "exact copy",
+      "source_bytes": 2500926,
+      "source_sha256": "87aec5639ad875175f4491a55595acd0c6221b851e3afc484c063c03e98bbda8",
+      "destination_bytes": 2500926,
+      "destination_sha256": "87aec5639ad875175f4491a55595acd0c6221b851e3afc484c063c03e98bbda8"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/completion/band_metadata.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/completion/band_metadata.json",
+      "transformation": "exact copy",
+      "source_bytes": 370,
+      "source_sha256": "5d7939e43975f32a3b84615867fabf7e936d5e46677b9a05ce6f47cb9e49aa9a",
+      "destination_bytes": 370,
+      "destination_sha256": "5d7939e43975f32a3b84615867fabf7e936d5e46677b9a05ce6f47cb9e49aa9a"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/completion/completion_walltime_band.png",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/completion/completion_walltime_band.png",
+      "transformation": "exact copy",
+      "source_bytes": 144413,
+      "source_sha256": "034d9b7f0fa4074a427c9dcdbcf3817c61cf87daf34dbe01af32653e175596c5",
+      "destination_bytes": 144413,
+      "destination_sha256": "034d9b7f0fa4074a427c9dcdbcf3817c61cf87daf34dbe01af32653e175596c5"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/periods/summary.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/periods/summary.json",
+      "transformation": "exact copy",
+      "source_bytes": 2396779,
+      "source_sha256": "49fb67f8ee4ef789bf4486e4fc8830d2ae99cc46529ec8754fcac7058f5d35d5",
+      "destination_bytes": 2396779,
+      "destination_sha256": "49fb67f8ee4ef789bf4486e4fc8830d2ae99cc46529ec8754fcac7058f5d35d5"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/periods/periods.csv",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/periods/periods.csv",
+      "transformation": "exact copy",
+      "source_bytes": 957750,
+      "source_sha256": "5daadb1ab475c29e5310e004f960649bceafa73c53b9b5b40ddf22c5203bfd83",
+      "destination_bytes": 957750,
+      "destination_sha256": "5daadb1ab475c29e5310e004f960649bceafa73c53b9b5b40ddf22c5203bfd83"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/periods/rolling_p95.csv",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/periods/rolling_p95.csv",
+      "transformation": "exact copy",
+      "source_bytes": 101300,
+      "source_sha256": "dc271458fd750f2a5aa01ef9a8c8dd1eab062b5df6ec0a292890bada17011792",
+      "destination_bytes": 101300,
+      "destination_sha256": "dc271458fd750f2a5aa01ef9a8c8dd1eab062b5df6ec0a292890bada17011792"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/solves/summary.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/solves/summary.json",
+      "transformation": "exact copy",
+      "source_bytes": 3268734,
+      "source_sha256": "1995ecb904e66072b7f7def70946b0622e42e17f01111fd695d0d3121fa59c52",
+      "destination_bytes": 3268734,
+      "destination_sha256": "1995ecb904e66072b7f7def70946b0622e42e17f01111fd695d0d3121fa59c52"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/solves/solve_times.csv",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/solves/solve_times.csv",
+      "transformation": "exact copy",
+      "source_bytes": 2207641,
+      "source_sha256": "a0bebcbbd3b3cb34bfb623392dc49ec1e94bdbe4a51ae30113aed87c9aeaa76e",
+      "destination_bytes": 2207641,
+      "destination_sha256": "a0bebcbbd3b3cb34bfb623392dc49ec1e94bdbe4a51ae30113aed87c9aeaa76e"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/data/progress_snapshot.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/data/progress_snapshot.json",
+      "transformation": "exact copy",
+      "source_bytes": 143831,
+      "source_sha256": "78de907f379dfbc70677ef4a874f3d8ec5f2bf33d3c6875eecdea5cf716dd5b7",
+      "destination_bytes": 143831,
+      "destination_sha256": "78de907f379dfbc70677ef4a874f3d8ec5f2bf33d3c6875eecdea5cf716dd5b7"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/assets/completion_zoom.png",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/assets/completion_zoom.png",
+      "transformation": "exact copy",
+      "source_bytes": 110075,
+      "source_sha256": "12703c87be2d745a80303a3b2a3aa610e0a992bef52b5471acc2f1a31f0ebeac",
+      "destination_bytes": 110075,
+      "destination_sha256": "12703c87be2d745a80303a3b2a3aa610e0a992bef52b5471acc2f1a31f0ebeac"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/assets/period_p95.png",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/assets/period_p95.png",
+      "transformation": "exact copy",
+      "source_bytes": 164745,
+      "source_sha256": "d7b08429f0e1828b1de2b571db58d92e615b26a1117529dd88b0ff59d061569a",
+      "destination_bytes": 164745,
+      "destination_sha256": "d7b08429f0e1828b1de2b571db58d92e615b26a1117529dd88b0ff59d061569a"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/assets/post_reboot_distribution.png",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/assets/post_reboot_distribution.png",
+      "transformation": "exact copy",
+      "source_bytes": 97121,
+      "source_sha256": "c668285f6849fd3909445678d4e0346a805fc3a533f4d89e8fc16056d374db7e",
+      "destination_bytes": 97121,
+      "destination_sha256": "c668285f6849fd3909445678d4e0346a805fc3a533f4d89e8fc16056d374db7e"
+    },
+    {
+      "source": "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z/assets/parallel_throughput.png",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/assets/parallel_throughput.png",
+      "transformation": "exact copy",
+      "source_bytes": 110042,
+      "source_sha256": "d2af8a7910e4adae12dea3850d1c2b85e703157efaaffd246ec08483768e7c09",
+      "destination_bytes": 110042,
+      "destination_sha256": "d2af8a7910e4adae12dea3850d1c2b85e703157efaaffd246ec08483768e7c09"
+    },
+    {
+      "source": "outputs/s5_coverage/reports/20260915T173653331961Z/annual_features.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/dc_features/annual_features.json",
+      "transformation": "exact copy",
+      "source_bytes": 6628316,
+      "source_sha256": "07780f8d906fbcbe27680a033997bd6b8f0a39cdf364c6ded26aae32a3a140d3",
+      "destination_bytes": 6628316,
+      "destination_sha256": "07780f8d906fbcbe27680a033997bd6b8f0a39cdf364c6ded26aae32a3a140d3"
+    },
+    {
+      "source": "outputs/s5_coverage/reports/20260915T173653331961Z/report.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/dc_features/report.json",
+      "transformation": "exact copy",
+      "source_bytes": 148930,
+      "source_sha256": "139891d0701ab5326902919cd7739df6e944b23335803e2fdf701a20922bdadf",
+      "destination_bytes": 148930,
+      "destination_sha256": "139891d0701ab5326902919cd7739df6e944b23335803e2fdf701a20922bdadf"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/stderr.log",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/stderr.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 0,
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "destination_bytes": 0,
+      "destination_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/monitor.log",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/monitor.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 1508,
+      "source_sha256": "f3e9864e9e21c22b3984d533fec1ec3afcd8c4ffd181f2353f7074a5f344fc22",
+      "destination_bytes": 1508,
+      "destination_sha256": "f3e9864e9e21c22b3984d533fec1ec3afcd8c4ffd181f2353f7074a5f344fc22"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/monitor-error.log",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/monitor-error.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 1038,
+      "source_sha256": "6467531c31af2510d00abf3252cb85f9e0bb84eecd61714983b3cbea00ae3302",
+      "destination_bytes": 1038,
+      "destination_sha256": "6467531c31af2510d00abf3252cb85f9e0bb84eecd61714983b3cbea00ae3302"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/resources.jsonl",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/resources.jsonl",
+      "transformation": "exact copy",
+      "source_bytes": 0,
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "destination_bytes": 0,
+      "destination_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/run.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/run.json",
+      "transformation": "exact copy",
+      "source_bytes": 753,
+      "source_sha256": "ee7b1d3af0926cabb84bc565c8d80572f4a70524c021079fc4c5807960f6ef8d",
+      "destination_bytes": 753,
+      "destination_sha256": "ee7b1d3af0926cabb84bc565c8d80572f4a70524c021079fc4c5807960f6ef8d"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/supervise.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/supervise.py.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 3982,
+      "source_sha256": "50ac911346b72ce771d91158d8a30dc521df34bca986d9e06ee476a1f84703b7",
+      "destination_bytes": 3982,
+      "destination_sha256": "50ac911346b72ce771d91158d8a30dc521df34bca986d9e06ee476a1f84703b7"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211006Z/completion.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-startup-failure/completion.json",
+      "transformation": "exact copy",
+      "source_bytes": 269,
+      "source_sha256": "4680184ef28aef5f87b91051cbb2baec80257f559461c14bd39dde8c6cbaeac5",
+      "destination_bytes": 269,
+      "destination_sha256": "4680184ef28aef5f87b91051cbb2baec80257f559461c14bd39dde8c6cbaeac5"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/stderr.log",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/stderr.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 0,
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "destination_bytes": 0,
+      "destination_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/monitor.log",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/monitor.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 0,
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "destination_bytes": 0,
+      "destination_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/S5_PROTOCOL_at_analysis_reconstructed.md",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/S5_PROTOCOL_at_analysis_reconstructed.md",
+      "transformation": "exact copy",
+      "source_bytes": 15630,
+      "source_sha256": "fbefdbe593060652ba732e42bb95046fbb96992f026fde2dd2fc5ba7411ae104",
+      "destination_bytes": 15630,
+      "destination_sha256": "fbefdbe593060652ba732e42bb95046fbb96992f026fde2dd2fc5ba7411ae104"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/resources.jsonl",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/resources.jsonl",
+      "transformation": "exact copy",
+      "source_bytes": 97157,
+      "source_sha256": "d53b61aff67629197ad3503273b6a8617836bf295079977a838b68fe96a21a88",
+      "destination_bytes": 97157,
+      "destination_sha256": "d53b61aff67629197ad3503273b6a8617836bf295079977a838b68fe96a21a88"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/run.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/run.json",
+      "transformation": "exact copy",
+      "source_bytes": 753,
+      "source_sha256": "9cfe04b6227f7507b27c3776bc243ce65c2d1d1f345de619e2005a94edea020a",
+      "destination_bytes": 753,
+      "destination_sha256": "9cfe04b6227f7507b27c3776bc243ce65c2d1d1f345de619e2005a94edea020a"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/supervise.py",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/supervise.py.txt",
+      "transformation": "exact bytes; archival text filename",
+      "source_bytes": 4085,
+      "source_sha256": "4b0d23aa22f50b1c05b76fb45830caa284132c3dc75bb40fbc33818bf02326a5",
+      "destination_bytes": 4085,
+      "destination_sha256": "4b0d23aa22f50b1c05b76fb45830caa284132c3dc75bb40fbc33818bf02326a5"
+    },
+    {
+      "source": "outputs/s5_analysis/closeout-analysis-20260917T211119Z/completion.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/analysis-completed/completion.json",
+      "transformation": "exact copy",
+      "source_bytes": 389,
+      "source_sha256": "670dbbf180a02767228287558e45f5112246de9375142f2f9cb8f7c58174fe8e",
+      "destination_bytes": 389,
+      "destination_sha256": "670dbbf180a02767228287558e45f5112246de9375142f2f9cb8f7c58174fe8e"
+    },
+    {
+      "source": "outputs/s5_analysis/tracy_source_inventory_20260917.json",
+      "destination": "experiments/case118_annual_hierarchy/analysis/artifacts/tracy_source_inventory_20260917.json",
+      "transformation": "exact copy",
+      "source_bytes": 6254,
+      "source_sha256": "bbdf7a9804a7a6d5f8d0ff76033dc18d6133d1953756660fdf1360641572706d",
+      "destination_bytes": 6254,
+      "destination_sha256": "bbdf7a9804a7a6d5f8d0ff76033dc18d6133d1953756660fdf1360641572706d"
+    }
+  ],
+  "additional_runtime_dependencies": [
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_closeout/aggregate_inputs.csv",
+      "sha256": "ea7eb4cc583f86793cbfb25f3b206c65110e10252e3d7719b8d0e1804653abd3",
+      "purpose": "Report input data and identity verification for shared-layout Inputs heatmaps; already tracked, no duplicate copy"
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_closeout/provenance.json",
+      "sha256": "06416a0ac885b7ae01a497e3b59432caa322e5111d0d21a5836c17c1ffd74675",
+      "purpose": "Report input data and identity verification for shared-layout Inputs heatmaps; already tracked, no duplicate copy"
+    }
+  ],
+  "owner_requested_additions": [
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/extract_dc_operating_totals.py",
+      "bytes": 3589,
+      "sha256": "215fd387f9f88fb80a3dcaa779f70300228a588915d65720dc6d442a8803787f"
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/artifacts/operating_totals/dc_operating_totals.csv",
+      "bytes": 558260,
+      "sha256": "7e932fe7e0a23d987dda6967a6e843019bfbf90b47ae509abc1fcfabd9b4cbdb"
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/artifacts/operating_totals/provenance.json",
+      "bytes": 2208,
+      "sha256": "eb3cd7adff3a0548eb539a0fa714d474ba88c3cc0a0ba3791d2173da4ffee121"
+    }
+  ]
+}

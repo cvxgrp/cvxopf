@@ -1,0 +1,27 @@
+{
+  "windows": [
+    {
+      "id": "joint-may03",
+      "start": 2940,
+      "steps": 3,
+      "selection_reason": "One-window implementation/numerical pilot: central three hours of the highest six-hour joint generator-opposing/battery-change rank episode (span 2939-2944), after inspection of retained 48-hour context [2916,2964). No shard reset or operator intervention. Historical AC enters with a 63.041 MWh SoC deficit versus DC; all counterfactual arms instead start at common DC SoC, so this is not a replay of historical recharge. Selection predates counterfactual outcomes.",
+      "context": {
+        "path": "/Users/bmeyers/github/cvxopf/outputs/counterfactual-pilot-preparation-20260917/joint-episode/context.json",
+        "sha256": "a5ab4dedc16bc8d0de90269b52953816f1b774c507a8fec657af480eea7de069"
+      }
+    }
+  ],
+  "fixed_battery_initialization": "explicit_start_perturbations",
+  "epsilon_repair_mwh": 1.0,
+  "tolerances": {
+    "lock_mw_abs": 0.0001,
+    "repair_mwh_abs": 0.001,
+    "cost_abs": 0.0001,
+    "cost_rel": 1e-09
+  },
+  "ac_options": {},
+  "max_attempts": 40,
+  "study_wall_seconds": 5400,
+  "worker_wall_seconds": 5400,
+  "total_worker_seconds": 10800
+}

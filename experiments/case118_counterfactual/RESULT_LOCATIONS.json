@@ -1,0 +1,1040 @@
+{
+  "description": "Original locations and byte hashes at relocation, before report and script corrections. Raw execution records, launch protocols and source contexts are preserved unchanged.",
+  "directories": {
+    "outputs/counterfactual-pilot-20260917": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch",
+    "outputs/counterfactual-pilot-20260917-r2": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917",
+    "outputs/counterfactual-pilot-preparation-20260917": "experiments/case118_counterfactual/ac_dispatch_adjustments",
+    "outputs/battery-excursion-screen-20260917": "experiments/case118_counterfactual/battery_operation/screening",
+    "outputs/battery-mechanism-phase1-20260917": "experiments/case118_counterfactual/results/battery_operation_20260917",
+    "outputs/battery-mechanism-preparation-20260917": "experiments/case118_counterfactual/battery_operation",
+    "outputs/case118-counterfactual-ac-study.md": "experiments/case118_counterfactual/ac_dispatch_adjustments/proposal-20260916.md"
+  },
+  "files": [
+    {
+      "old": "outputs/counterfactual-pilot-20260917/summary.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/summary.json",
+      "bytes": 384,
+      "sha256": "731037a2dfeba27e7f797f0030e579eaaaa61d983bf3e53dda3976d525725b43"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/study.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/study.json",
+      "bytes": 15536,
+      "sha256": "386a345f1993d11b4783a72b606cac85ab640901e399d9197a4c010ed7742908"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/supervisor-progress.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/supervisor-progress.json",
+      "bytes": 511,
+      "sha256": "7f641dc7719de4e940ee264a9ad119796e9167cc535925aeb05e6990a9ffe1f9"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/joint-may03/R1.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/joint-may03/R1.json",
+      "bytes": 115,
+      "sha256": "4d5a250087578191f55f6cccd51a78c924eaeca812a0471c4c9bc7edb456f375"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/joint-may03-R1/ac-002940-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/joint-may03-R1/ac-002940-spec-00/request.json",
+      "bytes": 14455,
+      "sha256": "16b167010bb0661338f2fc80ab4968d2b7472fedaba169fbf47efcb9cdf57779"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/joint-may03-R1/ac-002940-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/joint-may03-R1/ac-002940-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/joint-may03-R1/ac-002940-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/joint-may03-R1/ac-002940-spec-00/lifecycle.json",
+      "bytes": 914,
+      "sha256": "e4b15b1c69458ea1be4a9c381537d6508329925120d623cfd3ccf65961c673b1"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917/joint-may03-R1/ac-002940-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch/joint-may03-R1/ac-002940-spec-00/launch.json",
+      "bytes": 508,
+      "sha256": "59ebf1079875d8d9d150218a6c4970761195f0ba8961018aa798aacb3a10bf16"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/summary.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/summary.json",
+      "bytes": 17773,
+      "sha256": "af91bd2373612d50d9203ccbd045813aa1f44f3500a4233c29fae20ef3da0a5a"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/study.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/study.json",
+      "bytes": 15536,
+      "sha256": "386a345f1993d11b4783a72b606cac85ab640901e399d9197a4c010ed7742908"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/supervisor-progress.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/supervisor-progress.json",
+      "bytes": 721828,
+      "sha256": "eb95cc54d3cd5071d1199aa0ec431f9ffd2903554add7f7f89d0c5252dd03949"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03/R1.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03/R1.json",
+      "bytes": 4222,
+      "sha256": "5b5c4c516d5f5d299dff918c6febd2a9f56dc7ab20d7fb2b6d17017b9290955d"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03/G.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03/G.json",
+      "bytes": 4217,
+      "sha256": "e8606f35985b333e933c60262a3a207fdf97b26522f938d50c076b580a23a357"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03/R2.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03/R2.json",
+      "bytes": 4310,
+      "sha256": "b4af92c285d8b51832246df8a7b116639862d133c5a3b896be63483c2e8a71b6"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03/B.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03/B.json",
+      "bytes": 4152,
+      "sha256": "8283c159ace3ad64e6fcac24159d0a7fab6ed1060a531f61a311f335ab0bc819"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/request.json",
+      "bytes": 14665,
+      "sha256": "b3564b90ce3020e7ce43658bfbce0ecd64347eb8f4c7d2886c56a09e09d32747"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/result.json",
+      "bytes": 260090,
+      "sha256": "3b2d52327e76e77651c55994c0344e18e9d42550efcd209d6a9f4a16ee4cd723"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/lifecycle.json",
+      "bytes": 1788,
+      "sha256": "e86b606fcd3981f33a970eed15b2715fa7f8c951db55b4eb512d119d9276e502"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/start.json",
+      "bytes": 721225,
+      "sha256": "24fb220d90af4c2140f2d56122b92256bcf72f6a15303b69c63c58a957da95d1"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/launch.json",
+      "bytes": 513,
+      "sha256": "1dd48540ffbffd4c7d9bb39ccb580218ebce0b4a5650ce064f186a1f15d926ca"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R2/ac-002940-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R2/ac-002940-spec-00/phase.json",
+      "bytes": 378,
+      "sha256": "c36db4aa4fcdb67f364565dcdbf510af25de5997dad3473bdd9a2a1807ad692a"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/request.json",
+      "bytes": 14650,
+      "sha256": "cbe535ea67aec8e82ea9a0c3cb702cc22db78c1c03d8636f8e87811dbf7b5b08"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/result.json",
+      "bytes": 256698,
+      "sha256": "65b1ca2210f2ae0b52e46a03d62da5d8e325b293c9b2d4d1cecb6c253f991bb8"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/lifecycle.json",
+      "bytes": 1793,
+      "sha256": "adbe2ac1ffd6449f63a14be94578e8703b71ef748eddd5bfc4054092f41d55d7"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/start.json",
+      "bytes": 710724,
+      "sha256": "9feb6f4fa0af38d9403432c36273bfa42bb2c26afd421cb3dbecf04a2df43b02"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/launch.json",
+      "bytes": 511,
+      "sha256": "8d6ea9f23844b57b390d981a00f53cf83c17dc69324384922cfee28f1a372635"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-G/ac-002940-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-G/ac-002940-spec-00/phase.json",
+      "bytes": 383,
+      "sha256": "6c550d6cc13aec1c495402f11d1223bd129534fd566423830d107b8b46902601"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/request.json",
+      "bytes": 14634,
+      "sha256": "6fbdcd21db965203acbdad9f19f2e6b686a39dae12e1a33710171cef2f641c53"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/result.json",
+      "bytes": 255289,
+      "sha256": "8c37f0e53a85960d508ba29c8af295d0c63814931cc8f7f1cfc24da6d6652629"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/lifecycle.json",
+      "bytes": 1790,
+      "sha256": "7c7af5452b48625504e89719736b6057d96d4a95f05408be200477bfe6f57e80"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/start.json",
+      "bytes": 711846,
+      "sha256": "483781d459ad4d0edbd945cd27359d76ca88c7fe134bbdd67a94ab009deadd44"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/launch.json",
+      "bytes": 511,
+      "sha256": "aabab73dc899df2e6300361f1a84b03762ee58d7cf405e39520b81be1ecdc13f"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-B/ac-002940-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-B/ac-002940-spec-00/phase.json",
+      "bytes": 380,
+      "sha256": "c44ab2aad0cc6475263874ab7db243a7ec8804d087ea576b50200b6c5b4ee150"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/request.json",
+      "bytes": 14455,
+      "sha256": "16b167010bb0661338f2fc80ab4968d2b7472fedaba169fbf47efcb9cdf57779"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/result.json",
+      "bytes": 259792,
+      "sha256": "7090d5ecc1800d32f36a8cd6c12f0b16b02b495f25725971e9135f982d7b7793"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/lifecycle.json",
+      "bytes": 1793,
+      "sha256": "45f04a4ff38ca470a4389fab0844500f27c15fcc23ca163d05f7655ab5763a77"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/start.json",
+      "bytes": 390218,
+      "sha256": "51cea948deec92c649c647bbae594f89702fca7904cb3a49a15ff42ec3c7cea3"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/launch.json",
+      "bytes": 513,
+      "sha256": "7b9631c1460edb4bcad667ab7066c255ac7aea5e305f096bb917e10e5e6f56d7"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-00/phase.json",
+      "bytes": 383,
+      "sha256": "92737f9726c4f5df52f9bf63147f603a5959d216bfa3e33bf1d6646e17d6ba78"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/request.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/request.json",
+      "bytes": 14455,
+      "sha256": "7e1cde6945fbf577506e01e9aa8793a7b3faf93c39617c5b5097d6e381c07924"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/worker.log",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/lifecycle.json",
+      "bytes": 1367,
+      "sha256": "cedc2637dcd3dfbcb0822b057db81596779549b80c4d8ae59b2a564cb37c6e07"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/start.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/start.json",
+      "bytes": 778555,
+      "sha256": "bde8473662ce0c580fc4faca29467eb0cb46b5a812570e20a1a72809a02ec561"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/launch.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/launch.json",
+      "bytes": 513,
+      "sha256": "3a3f6f16a1213385870190ab5fa16dfe8ad79e3457e6bcb95b466c35731bbfb8"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2/joint-may03-R1/ac-002940-spec-01/phase.json",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917/joint-may03-R1/ac-002940-spec-01/phase.json",
+      "bytes": 320,
+      "sha256": "f3eddd1bcc693ed3ba0d1223093888c83b30c560af389adbcc75694e989e9be8"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/inspect_context.py",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/inspect_context.py",
+      "bytes": 4131,
+      "sha256": "d6c2a91bc5fa9dcc48b9ca1e0de57801afe6add835dc43f105488775905a8bdd"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-results.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md",
+      "bytes": 5950,
+      "sha256": "37e85ea5e71e27c5b0c53f40296b4f62316d5f394db2c106059b5e7125d938ed"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/candidate-provenance.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/candidate-provenance.json",
+      "bytes": 302,
+      "sha256": "fcc09453ff3beb4202231f867e18f274a7196bb30858fe34b1deb981955d1134"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-note.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/execution.md",
+      "bytes": 2390,
+      "sha256": "1a6bf64e92ef25a8715a762f5572e18dcec768e47b435a4c6b8c309d5f4741f2"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/candidates.csv",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/candidates.csv",
+      "bytes": 5774760,
+      "sha256": "3431b41211475ced0fcb72a0ebd4a948f707a57a367cc471afeacc8ff168e308"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/context-summary.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/context-summary.json",
+      "bytes": 1458,
+      "sha256": "63651bc05f861af42c31b48eb10cf45af0bdc03969bdf956c475b6a71bdcbfad"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/check_results.py",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/check_results.py",
+      "bytes": 2218,
+      "sha256": "c40f30ef495a8187bd845cdc9a9db4d2f8257bfbb1764ba6046391a052d9e36d"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/protocol.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/protocol.json",
+      "bytes": 1190,
+      "sha256": "0e9f215f6fcfacc367f61e1e21c36029bcbc5e3902561fd24a2de8dfe480e815"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/verification.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/verification.json",
+      "bytes": 783,
+      "sha256": "7d94835dfbcbab6a47718b49cb82021a0e9334774108a8ca9afe161c5a6049cb"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-context.png",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/context.png",
+      "bytes": 275470,
+      "sha256": "c125b35fe510536edf3118482419be750cb4f7bd52c3496f1398f0c1e02b0ec8"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/joint-episode/context.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/joint-episode/context.json",
+      "bytes": 1747648,
+      "sha256": "a5ab4dedc16bc8d0de90269b52953816f1b774c507a8fec657af480eea7de069"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/screen.py",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/screen.py",
+      "bytes": 5298,
+      "sha256": "9025468ddf1193333d682e7412276266bcec2c68b6bca1f7929a680eb4006279"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/summary.json",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/summary.json",
+      "bytes": 3986,
+      "sha256": "552b1049ab977c5d888d74a314469404e3bbf1957443eae2f7c582d7390da860"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/screened-windows.csv",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/screened-windows.csv",
+      "bytes": 98684,
+      "sha256": "40e07216bbdcc35087aa3d9e7b0baec4a861bdc29685f240b78e7f1d80e17f05"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/selected-context.png",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/selected-context.png",
+      "bytes": 267273,
+      "sha256": "05160807be405731bb1495cdd04cda5b7e9326965896727e2842200f51570601"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/proposed-transfer-prechecks.json",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/proposed-transfer-prechecks.json",
+      "bytes": 8045,
+      "sha256": "12bfe774d080cf980ec89514f4d556c920128d8bc45304edddfde780496bda17"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/plot_context.py",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/plot_context.py",
+      "bytes": 1976,
+      "sha256": "216724642e3593da657a5b990feb07eae36fd6cce21ee29da8cfcd67792d4c52"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/README.md",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/README.md",
+      "bytes": 3530,
+      "sha256": "c403d4f3770512f38062ff21af1b34f2abcac225587edf14207d425e9b09c1ab"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/plans.json",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/plans.json",
+      "bytes": 435107,
+      "sha256": "13aecccd69cd05f3beb2f49b90d7c6dad39ebcb5b1f88365aa66859c8f4e1b8b"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/may22-context/context.json",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/may22-context/context.json",
+      "bytes": 1747645,
+      "sha256": "f15cf9c50df94e3dfafa3f2e4970dc014d89959dc9fa054bc8fdda3546d90aee"
+    },
+    {
+      "old": "outputs/battery-excursion-screen-20260917/jun16-context/context.json",
+      "new": "experiments/case118_counterfactual/battery_operation/screening/jun16-context/context.json",
+      "bytes": 1745212,
+      "sha256": "0419c4c3bc0321980cd71c9c6fdcb407cb4f2304de60eb5cfb5fa60885772b30"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/summary.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/summary.json",
+      "bytes": 49052,
+      "sha256": "d0819e2fe3bf06419a7368e2c0c1f750373dd9228c3104fe72025779f87c3d69"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/study.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/study.json",
+      "bytes": 43944,
+      "sha256": "a92e3bad079a7ebe98f3c7263d734ac666a0ea23d46133ade3c03ed48e38f477"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/summary.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/summary.json",
+      "bytes": 26059,
+      "sha256": "f967f7665808cd3df2d6bb4cb01a9820a886dc77ac770578a91fef0193fa573c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/supervisor-progress.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/supervisor-progress.json",
+      "bytes": 634876,
+      "sha256": "18b126fbfcdbfe260f120c889108182f93507445781a06e7297758616499dc3b"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/supervisor-progress.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/supervisor-progress.json",
+      "bytes": 7086,
+      "sha256": "be2ed194dc5e9903b0a0b07c1342d1ad87fdb7f827f7d08d49364dbac0dfbbad"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03/F.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03/F.json",
+      "bytes": 1977,
+      "sha256": "524418fc9cc16b2f0568b98f32a540761f553c56baad353df3a4278b822f73fb"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03/B.json",
+      "bytes": 1904,
+      "sha256": "c3cacb998ed44585e86ddbe5317b2fec8871d277f10f1ca8de2505510e637773"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16/F.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16/F.json",
+      "bytes": 1974,
+      "sha256": "e955b6159349222e6fe0b94ffe3fb6e91ad32dcbd9c0c8dab8f400dbd1ae6209"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16/B.json",
+      "bytes": 1906,
+      "sha256": "4a06a24b46ca3e04701a311101999e7356d03621bae3f47a1e3b6ff71ad1e8f9"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22/F.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22/F.json",
+      "bytes": 2014,
+      "sha256": "72b600ce52a6d42a19cf7e9ef1b3af3ef7e681a0121af06cff0fed8a8d06fb6d"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22/B.json",
+      "bytes": 1886,
+      "sha256": "112ea06ba7ff8693b87df361c4beeed5a6654050ed9f9875bb9ca1c5f8001f1b"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/request.json",
+      "bytes": 14280,
+      "sha256": "ed691e417d17f8dd4b51bb2e9c7d8fd9167e9499eb22a652b10f16d3c41a85d5"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/result.json",
+      "bytes": 35666,
+      "sha256": "905afe955ef039352c80b0c139a5539dabb575a6dcc9eceddb92edc9bb757fea"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/lifecycle.json",
+      "bytes": 1557,
+      "sha256": "8704ea7b9ebd6032ab492f3f768e4e5f66109252cc6b57ff211ac73fb16d729f"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/launch.json",
+      "bytes": 498,
+      "sha256": "15a4e2dd8e308e668728ff5cacaec80f5ab0dbae92c58534217a81dcaa31ef7f"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-B/dc-004000-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-B/dc-004000-spec-00/phase.json",
+      "bytes": 377,
+      "sha256": "e2d382fe72636c9ec47af3ed6dd2a07e408b28647a9bc9d9b3dc860520844fbb"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/request.json",
+      "bytes": 14285,
+      "sha256": "067c414112cfc4124433ae92bf5a3c4bec1f6af6ff3fd16c18032438c100e9e5"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/result.json",
+      "bytes": 36692,
+      "sha256": "43a9e0cc5234513f8fd1b7399b7fff47f8dd8cd7e2ca5a5817a5e81546e36241"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/lifecycle.json",
+      "bytes": 1555,
+      "sha256": "97e67affaf6e3077a582d3dc41455e3dcc6055fb08fc2d6dc631ec6ad99c3e77"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/launch.json",
+      "bytes": 498,
+      "sha256": "b937a67ea6ee695aa2210ada0794887c42e6c8b0ab7a8e9f4eb7ded240facb14"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-F/dc-002944-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-F/dc-002944-spec-00/phase.json",
+      "bytes": 374,
+      "sha256": "92882c96fed7ce1cac5b2e1fc3024110ab249e70e807a22446c8447a7c6ec31d"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/request.json",
+      "bytes": 14275,
+      "sha256": "e411c082d05224c6dcf0e49304742a31e93ada7f11add2d4fb42cc6ae5cc2f10"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/result.json",
+      "bytes": 34926,
+      "sha256": "9643bccab0adcef8b4489e7ede79bb314e4201d1f0df4e74af0d61daebeefd6d"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/lifecycle.json",
+      "bytes": 1557,
+      "sha256": "5f9be975a820719f7bdabfeaa4c53a603a119ab1d5b9332570523681db651f19"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/launch.json",
+      "bytes": 496,
+      "sha256": "ae660e5575b5f1c5047b8198742bc1964b18bf82447bbcd3c2bab0a48d39cc30"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-F/dc-003400-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-F/dc-003400-spec-00/phase.json",
+      "bytes": 377,
+      "sha256": "d2597cdf22a1e86747b149435de118761e123cd032cdf4dba86a6faf3a57dc7c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/request.json",
+      "bytes": 14280,
+      "sha256": "c46cf03af64656555e9a6b1c5b4df567ea2aea277e0cc55b2bc5e98f524c2024"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/result.json",
+      "bytes": 35630,
+      "sha256": "a86e42fea80cea6ec210b33d1ef5b984bf41c1521de204e4ffda48da213c9b0c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/lifecycle.json",
+      "bytes": 1559,
+      "sha256": "7a4a1efa93bddadaa7cc0c69609b82f42fef7b280bcf49691ad5d6cf2c36cb1c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/launch.json",
+      "bytes": 498,
+      "sha256": "8676b41f283e1034c87802bdbdd4f586bb084857e0145f12412c4dfd42308db4"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/jun16-F/dc-004000-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/jun16-F/dc-004000-spec-00/phase.json",
+      "bytes": 377,
+      "sha256": "85804f2ecf371b2c708d8c796511ee497d99c34a844258f52638d7ab360a9ef3"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/request.json",
+      "bytes": 14285,
+      "sha256": "bf186106915002b2d52930b3027a9471182f4e56c6b3ecf191bd1972004b9c2c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/result.json",
+      "bytes": 36642,
+      "sha256": "7dea5a39a09cb894772bc741e40231f9500db7613854755f1ddf95f58b7b7321"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/lifecycle.json",
+      "bytes": 1558,
+      "sha256": "7626cb30cdffa2a6ae3b86247fd4cb6f126aa20d8dd2eb73f1f516229e3ff84b"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/launch.json",
+      "bytes": 498,
+      "sha256": "9d8526d3f56888f9e255757f2d92f84d91d71ea4d87aa0a291fc35c9c59cae35"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may03-B/dc-002944-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may03-B/dc-002944-spec-00/phase.json",
+      "bytes": 377,
+      "sha256": "11f3d4cf47d0cb32c2bf78ead716f457b70a0bab7c176edbab3419f0cacd0fc6"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/request.json",
+      "bytes": 14275,
+      "sha256": "bfeebc38732f22e6958581293ceb86cf2650eb950e77fbab7e5656475855b773"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/result.json",
+      "bytes": 34709,
+      "sha256": "209209b0e79d27d2b8a7f40652e5915dc3c85094cadbfc3afd649380f0aea5c0"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/lifecycle.json",
+      "bytes": 1557,
+      "sha256": "d1905794df394a9bb613b1b4a2b6750ed6944ebfddda10b352b1275858d523ec"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/launch.json",
+      "bytes": 497,
+      "sha256": "6c694fbcfbd9ba01985274a8d3d9a5f07f79dda75422b187a28be2b1b5fa9884"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/dc/may22-B/dc-003400-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/dc/may22-B/dc-003400-spec-00/phase.json",
+      "bytes": 376,
+      "sha256": "e050c2ec8ce770889c1ef83372d51a1f13ab053c1f65ee63665658df8cf2c7a2"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03/G.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03/G.json",
+      "bytes": 4214,
+      "sha256": "4197c625c54e9801584e43e4dcdd08e41281f86ab80159a8c19423a9a4fd7e03"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03/B.json",
+      "bytes": 4139,
+      "sha256": "7fba85630af518ea9fb8be7131520a1a765584de811cad827b9a7f8fc03f2019"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16/G.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16/G.json",
+      "bytes": 4187,
+      "sha256": "b4227751c7e0248df5189184d6dac4b43ef95c5e03e3d1a8c68479d07d6aefb2"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16/B.json",
+      "bytes": 4147,
+      "sha256": "8e1dd8e8ab70a31448dc893a5594e1223ef79793989e59cc7db05c40fd7427d3"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22/G.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22/G.json",
+      "bytes": 4259,
+      "sha256": "62834cc6eb23fafea070be2ab1bda8e0bd2494069c174fc2e4fb31f61434021c"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22/B.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22/B.json",
+      "bytes": 4139,
+      "sha256": "f88e9171cbd2009b7473ab6b1622f7e78aba1c10a24d6b522c6ee732e087f1c0"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/request.json",
+      "bytes": 14589,
+      "sha256": "941b62da88866cdb331c505f400527bed6fad56e0cd0186066016d4731f9e392"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/result.json",
+      "bytes": 257002,
+      "sha256": "527ea332b6aa1017eab1efe8045a5d3634cd4b7286e752264e79952f7636c58e"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/lifecycle.json",
+      "bytes": 1778,
+      "sha256": "f758388c60a6a5924fe76a3f873779d3e2d0dbd2b21de7a946018a9e7b339377"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/start.json",
+      "bytes": 710578,
+      "sha256": "895ecd47368d2d92abeef0f61237662ec7b513b1cc82af0b06dab05b9c683ef7"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/launch.json",
+      "bytes": 502,
+      "sha256": "08a89b497652651dcb5f1bdee71377058b64cd75312e3b6104770896af4b9fbe"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-B/ac-004000-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-B/ac-004000-spec-00/phase.json",
+      "bytes": 374,
+      "sha256": "adc18fca2d87cea1c82975c319c4887692794516a2efed115bf2861089ed9615"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/request.json",
+      "bytes": 14405,
+      "sha256": "16c6822075789ae1e94027565c337e3ac005eb555e41482f403653a18015cebf"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/result.json",
+      "bytes": 256136,
+      "sha256": "6c3c4f18b7273f02392b67a4f214731547ae97426228500fe8a36d843f0006e7"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/lifecycle.json",
+      "bytes": 1780,
+      "sha256": "875574634f0d915ec40893c1d805f102c2eb12bb3582784d5970944d1fc3f89f"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/start.json",
+      "bytes": 385502,
+      "sha256": "ab028c40706ffc66fc44cb575fcd2c6d1fd56bfe62a1c72dad4bd0041f6e1dce"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/launch.json",
+      "bytes": 502,
+      "sha256": "db67398d795cd1fa64ddbc1b0c2e11958975675684767c8b66fb5645ed1b2b5f"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-G/ac-003400-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-G/ac-003400-spec-00/phase.json",
+      "bytes": 377,
+      "sha256": "0c3d10da4acd5d11a78d0b546b9064da2b901b48ffdc924f569de7c5184970ea"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/request.json",
+      "bytes": 14415,
+      "sha256": "c18425f6d4810f3fea81fbf97d06a76d70193a144a3027700fee1d931f9c9d96"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/result.json",
+      "bytes": 258014,
+      "sha256": "231a4c04f626bdd40f06ba0ed5adb1680c3cf56d539d1a2c0b48764e629ca715"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/lifecycle.json",
+      "bytes": 1779,
+      "sha256": "0dce3dfd8d5d81e61069bf0fdb2bb1ca53399d5705542f9d6a4e63d820fc39d9"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/start.json",
+      "bytes": 385502,
+      "sha256": "ab2c00a00caaf14f876bbf728bc37e8ab60de5a6c6cecff20f00af651b535c7d"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/launch.json",
+      "bytes": 502,
+      "sha256": "d529ad9c6f35bdb6af0842f53c82eb5fc24923762baf7cb7f076c455e242c1aa"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-G/ac-002944-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-G/ac-002944-spec-00/phase.json",
+      "bytes": 375,
+      "sha256": "7e83d71814bebf625f702a1ea4488ef476a970118dc88e039467ada2a3dfedcb"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/request.json",
+      "bytes": 14410,
+      "sha256": "b40935b623bb340c3c61e46c10c02deeadd8401c1914f43f2075501f805c4998"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/result.json",
+      "bytes": 256934,
+      "sha256": "8f6e9edebb9644a4df2fd747b2504cb78e96408804154ba7de2263c6074421c0"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/lifecycle.json",
+      "bytes": 1774,
+      "sha256": "1caa4463e471038a2ac3bb9253db3f415e697eef69d9a262c547649149e8544f"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/start.json",
+      "bytes": 385502,
+      "sha256": "ea0f026b682b803928b7e9e7de525ccb4ca01471cf25b2ae41ef02c6fbe088c1"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/launch.json",
+      "bytes": 500,
+      "sha256": "770997bdecb005a4ac88d668fa577837381eadbef504106184db22c9cd0e33db"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/jun16-G/ac-004000-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/jun16-G/ac-004000-spec-00/phase.json",
+      "bytes": 373,
+      "sha256": "45cb1ec8e7b4785f65f9ae85ea56368b5c9943026614ead6bf02b3a4bbf07869"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/request.json",
+      "bytes": 14594,
+      "sha256": "852509c4aa3e8e78bea33898e645c09423926958895876b443d09fe9c09d4663"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/result.json",
+      "bytes": 258510,
+      "sha256": "beace373695a1dd3ab5e5aacf0fbc546e2cfec9acecd7839d3515c5477383f9e"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/lifecycle.json",
+      "bytes": 1778,
+      "sha256": "792a5f1946846c757522ddd9c6623e6a7189a20b9e2a1bc59bf7596c92e63787"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/start.json",
+      "bytes": 710661,
+      "sha256": "a937330030e34df65156d69fb2f6a513ffd61914146c4c54a7ec560d286f78de"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/launch.json",
+      "bytes": 502,
+      "sha256": "8b68c8a1eb47618b26cb6541914c5e6e07db86fe4beaaf190ef24a85a470c2b7"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may03-B/ac-002944-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may03-B/ac-002944-spec-00/phase.json",
+      "bytes": 374,
+      "sha256": "5fe31eeb852581ac4a1ee6e14058df5832a338ccca9f6d7673964071e1007268"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/request.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/request.json",
+      "bytes": 14584,
+      "sha256": "4b80689b6806286d0f6f323248455a5733da38fdf5e44c9430d4f8e4ded9945d"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/result.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/result.json",
+      "bytes": 255673,
+      "sha256": "d019830d24871d7ff8b245281d5b53bf42b00932e5d291c90490d42eafd01fca"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/worker.log",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/worker.log",
+      "bytes": 559,
+      "sha256": "383c2a4431f584eb398509ac91508a636f7abea52def51a84dfba07a4e15f155"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/lifecycle.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/lifecycle.json",
+      "bytes": 1778,
+      "sha256": "e9a447c7ed907da5acd14d07a245568a0554efedc3ffe44d9888cc5d6e0a5c49"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/start.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/start.json",
+      "bytes": 710464,
+      "sha256": "1bc5430ad4ef5746d416f49401725d010ca81243d2a7d904895d9f49d8ad6179"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/launch.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/launch.json",
+      "bytes": 502,
+      "sha256": "2bb59f955a027b5e0e10974d4519ce27fb13bbdf5272e2932e8edb0b658c32be"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917/ac/may22-B/ac-003400-spec-00/phase.json",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917/ac/may22-B/ac-003400-spec-00/phase.json",
+      "bytes": 375,
+      "sha256": "be507ef8d5508ee6ee2878708be7438fa3164a61fedd88640ade5c3b0f661be7"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/implementation-checkpoint.md",
+      "new": "experiments/case118_counterfactual/battery_operation/implementation-checkpoint.md",
+      "bytes": 3207,
+      "sha256": "72cfe6b2aafd50e36d1964c031f2fbd3990e0a0ab38b62ca819e53c25569abb6"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/check_results.py",
+      "new": "experiments/case118_counterfactual/battery_operation/check_results.py",
+      "bytes": 5370,
+      "sha256": "8336996c663da2a96dec256575edf14619eab2e777e9a9f5348297fb9c51ecd5"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/protocol.json",
+      "new": "experiments/case118_counterfactual/battery_operation/protocol.json",
+      "bytes": 2053,
+      "sha256": "5e357560c971a843e2a3b1639d706caab37d204017e5680d776939f92eca3cd1"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/verification.json",
+      "new": "experiments/case118_counterfactual/battery_operation/verification.json",
+      "bytes": 7057,
+      "sha256": "73edecce50df19ac5f891228e9a1baab9367ae46720e895d844540618e979398"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/phase1-results.md",
+      "new": "experiments/case118_counterfactual/battery_operation/REPORT.md",
+      "bytes": 5179,
+      "sha256": "546ff6c13afe6a5382b56a8dbd673ea0bcc7a3e75928878d6a86fa9dc7489190"
+    },
+    {
+      "old": "outputs/case118-counterfactual-ac-study.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/proposal-20260916.md",
+      "bytes": 16758,
+      "sha256": "23ca47377701832306f6a7892034060ed69b5549c31732081b799de5c0bcb227"
+    }
+  ]
+}

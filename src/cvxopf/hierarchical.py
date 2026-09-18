@@ -32,6 +32,7 @@ InnerTerminalPolicy = Literal["hard_equality", "quadratic_soft"]
 InitializationPolicy = Literal["flat_only", "shifted_with_recovery"]
 AttemptSlotState = Literal[
     "executed",
+    "timeout",
     "construction_error",
     "source_unavailable",
     "not_needed_after_acceptance",
@@ -61,12 +62,11 @@ AttemptOutcome = Literal[
 ]
 
 ACCEPTED_SOLVER_STATUSES = frozenset({"optimal", "optimal_inaccurate"})
-_CERTIFIED_INFEASIBLE_STATUSES = frozenset(
-    {"infeasible", "infeasible_inaccurate"}
-)
+_CERTIFIED_INFEASIBLE_STATUSES = frozenset({"infeasible", "infeasible_inaccurate"})
 _SLOT_STATES = frozenset(
     {
         "executed",
+        "timeout",
         "construction_error",
         "source_unavailable",
         "not_needed_after_acceptance",
@@ -166,10 +166,7 @@ def _readonly_result_value(value: object) -> object:
         return copied
     if isinstance(value, Mapping):
         return MappingProxyType(
-            {
-                deepcopy(key): _readonly_result_value(item)
-                for key, item in value.items()
-            }
+            {deepcopy(key): _readonly_result_value(item) for key, item in value.items()}
         )
     if isinstance(value, (list, tuple)):
         return tuple(_readonly_result_value(item) for item in value)
@@ -235,9 +232,7 @@ class ShiftedRecoveryConfig:
 
     def __post_init__(self) -> None:
         scales = tuple(
-            _finite_real(
-                f"perturbation_scales[{index}]", value, positive=True
-            )
+            _finite_real(f"perturbation_scales[{index}]", value, positive=True)
             for index, value in enumerate(self.perturbation_scales)
         )
         if len(scales) != 3:
@@ -248,9 +243,7 @@ class ShiftedRecoveryConfig:
             raise ValueError("perturbation_scales must be unique")
         if tuple(sorted(scales)) != scales:
             raise ValueError("perturbation_scales must be strictly increasing")
-        if isinstance(self.seed_base, bool) or not isinstance(
-            self.seed_base, Integral
-        ):
+        if isinstance(self.seed_base, bool) or not isinstance(self.seed_base, Integral):
             raise TypeError("seed_base must be an integer")
         if int(self.seed_base) < 0:
             raise ValueError("seed_base must be nonnegative")
@@ -285,22 +278,18 @@ class HierarchicalPolicy:
             "quadratic_soft",
         }:
             raise ValueError(
-                "inner_terminal_policy must be 'hard_equality' or "
-                "'quadratic_soft'"
+                "inner_terminal_policy must be 'hard_equality' or 'quadratic_soft'"
             )
         if self.initialization_policy not in {
             "flat_only",
             "shifted_with_recovery",
         }:
             raise ValueError(
-                "initialization_policy must be 'flat_only' or "
-                "'shifted_with_recovery'"
+                "initialization_policy must be 'flat_only' or 'shifted_with_recovery'"
             )
         if self.inner_terminal_policy == "quadratic_soft":
             if self.quadratic_soft_weight is None:
-                raise ValueError(
-                    "quadratic_soft requires quadratic_soft_weight"
-                )
+                raise ValueError("quadratic_soft requires quadratic_soft_weight")
             object.__setattr__(
                 self,
                 "quadratic_soft_weight",
@@ -311,9 +300,7 @@ class HierarchicalPolicy:
                 ),
             )
         elif self.quadratic_soft_weight is not None:
-            raise ValueError(
-                "quadratic_soft_weight is valid only for quadratic_soft"
-            )
+            raise ValueError("quadratic_soft_weight is valid only for quadratic_soft")
         if self.initialization_policy == "shifted_with_recovery":
             if self.recovery is None:
                 object.__setattr__(self, "recovery", ShiftedRecoveryConfig())
@@ -322,9 +309,7 @@ class HierarchicalPolicy:
         elif self.recovery is not None:
             raise ValueError("flat_only cannot define recovery parameters")
         if not isinstance(self.tolerances, HierarchicalAcceptanceTolerances):
-            raise TypeError(
-                "tolerances must be HierarchicalAcceptanceTolerances"
-            )
+            raise TypeError("tolerances must be HierarchicalAcceptanceTolerances")
         reference = HierarchicalAcceptanceTolerances()
         looser = [
             name
@@ -425,9 +410,7 @@ class LayerSolveConfig:
             if name in {"solver", "nlp"}:
                 raise ValueError(f"solve option {name!r} is layer-owned")
             if name not in schema:
-                raise ValueError(
-                    f"unsupported {solver} solve option {name!r}"
-                )
+                raise ValueError(f"unsupported {solver} solve option {name!r}")
             copied[name] = deepcopy(
                 _validate_solve_option(name, raw_value, schema[name])
             )
@@ -442,9 +425,7 @@ class HierarchicalSolveConfig:
     outer: LayerSolveConfig = field(
         default_factory=lambda: LayerSolveConfig("CLARABEL")
     )
-    ac: LayerSolveConfig = field(
-        default_factory=lambda: LayerSolveConfig("IPOPT")
-    )
+    ac: LayerSolveConfig = field(default_factory=lambda: LayerSolveConfig("IPOPT"))
 
     def __post_init__(self) -> None:
         if not isinstance(self.outer, LayerSolveConfig) or not isinstance(
@@ -491,9 +472,7 @@ def _validate_frame(
             raise ValueError(f"{name} is required")
         return None
     if len(copied) != horizon_steps:
-        raise ValueError(
-            f"{name} must have {horizon_steps} rows, got {len(copied)}"
-        )
+        raise ValueError(f"{name} must have {horizon_steps} rows, got {len(copied)}")
     if expected_columns is not None and tuple(copied.columns) != expected_columns:
         raise ValueError(
             f"{name} columns must exactly match device order "
@@ -589,8 +568,7 @@ class HierarchicalInputs:
         hvdc_ids = _device_ids(
             hvdc,
             family="hvdc",
-            required=self.df_hvdc_min is not None
-            or self.df_hvdc_max is not None,
+            required=self.df_hvdc_min is not None or self.df_hvdc_max is not None,
         )
         df_load_p = _validate_frame(
             self.df_load_p,
@@ -690,9 +668,7 @@ class IPOPTStartEvidence:
         for index, item in enumerate(layout_items):
             required = {"name", "start", "stop", "is_original_variable"}
             if not required.issubset(item):
-                raise ValueError(
-                    f"layout[{index}] must contain {sorted(required)}"
-                )
+                raise ValueError(f"layout[{index}] must contain {sorted(required)}")
             _nonempty_name(f"layout[{index}].name", item["name"])
             start = item["start"]
             stop = item["stop"]
@@ -801,16 +777,12 @@ class HierarchicalSolveAudit:
         object.__setattr__(
             self,
             "residuals",
-            _readonly_float_mapping(
-                self.residuals, name="residuals", nonnegative=True
-            ),
+            _readonly_float_mapping(self.residuals, name="residuals", nonnegative=True),
         )
         object.__setattr__(
             self,
             "wall_time_seconds",
-            _finite_real(
-                "wall_time_seconds", self.wall_time_seconds, nonnegative=True
-            ),
+            _finite_real("wall_time_seconds", self.wall_time_seconds, nonnegative=True),
         )
         for name in ("solver_setup_time_seconds", "solver_solve_time_seconds"):
             value = getattr(self, name)
@@ -855,9 +827,7 @@ class OuterPlanRecord:
         if self.global_interval_stop <= self.global_interval_start:
             raise ValueError("outer plan interval must be nonempty")
         if self.created_iteration != self.global_interval_start:
-            raise ValueError(
-                "created_iteration must equal global_interval_start"
-            )
+            raise ValueError("created_iteration must equal global_interval_start")
         if not isinstance(self.build, OPFBuild):
             raise TypeError("build must be OPFBuild")
         if not isinstance(self.audit, HierarchicalSolveAudit):
@@ -878,9 +848,7 @@ class OuterPlanRecord:
         invalid_modes = sorted(set(terminal_modes.values()) - _OUTER_TERMINAL_MODES)
         if invalid_modes:
             raise ValueError(f"unsupported outer terminal modes {invalid_modes}")
-        object.__setattr__(
-            self, "terminal_modes", MappingProxyType(terminal_modes)
-        )
+        object.__setattr__(self, "terminal_modes", MappingProxyType(terminal_modes))
         local = _readonly_array(
             self.local_boundary_indices, name="local_boundary_indices"
         )
@@ -899,13 +867,10 @@ class OuterPlanRecord:
         object.__setattr__(self, "local_boundary_indices", local)
         object.__setattr__(self, "global_boundary_indices", global_indices)
         if self.boundary_soc_mwh is not None:
-            boundary = _readonly_array(
-                self.boundary_soc_mwh, name="boundary_soc_mwh"
-            )
+            boundary = _readonly_array(self.boundary_soc_mwh, name="boundary_soc_mwh")
             if boundary.shape != (len(local), len(ids)):
                 raise ValueError(
-                    "boundary_soc_mwh must have shape "
-                    f"({len(local)}, {len(ids)})"
+                    f"boundary_soc_mwh must have shape ({len(local)}, {len(ids)})"
                 )
             object.__setattr__(
                 self,
@@ -951,6 +916,7 @@ class ACAttemptRecord:
     supplied_executed_action: bool = False
     scale: float | None = None
     seed: int | None = None
+    timeout_budget_seconds: float | None = None
 
     def __post_init__(self) -> None:
         _nonempty_name("attempt_id", self.attempt_id)
@@ -1007,6 +973,16 @@ class ACAttemptRecord:
         if int(self.ordinal) < 0:
             raise ValueError("ordinal must be nonnegative")
         object.__setattr__(self, "ordinal", int(self.ordinal))
+        if self.timeout_budget_seconds is not None:
+            object.__setattr__(
+                self,
+                "timeout_budget_seconds",
+                _finite_real(
+                    "timeout_budget_seconds",
+                    self.timeout_budget_seconds,
+                    positive=True,
+                ),
+            )
         ids = tuple(
             _nonempty_name("storage_device_id", value)
             for value in self.storage_device_ids
@@ -1032,9 +1008,7 @@ class ACAttemptRecord:
                 name="terminal_deviation_mwh",
             )
             if set(deviation) != set(ids):
-                raise ValueError(
-                    "terminal deviation must match storage_device_ids"
-                )
+                raise ValueError("terminal deviation must match storage_device_ids")
             object.__setattr__(self, "terminal_deviation_mwh", deviation)
         if self.raw_start is not None:
             object.__setattr__(
@@ -1049,9 +1023,7 @@ class ACAttemptRecord:
                 _readonly_array_mapping(self.assigned_start, name="assigned_start"),
             )
         if self.result is not None:
-            object.__setattr__(
-                self, "result", _readonly_result_mapping(self.result)
-            )
+            object.__setattr__(self, "result", _readonly_result_mapping(self.result))
         if self.build is not None and not isinstance(self.build, OPFBuild):
             raise TypeError("build must be OPFBuild or None")
         if self.solver_evidence is not None and not isinstance(
@@ -1073,9 +1045,7 @@ class ACAttemptRecord:
             }
             missing = [name for name, value in required.items() if value is None]
             if missing:
-                raise ValueError(
-                    f"executed attempt requires payload fields {missing}"
-                )
+                raise ValueError(f"executed attempt requires payload fields {missing}")
             if set(self.raw_start) != set(self.assigned_start):
                 raise ValueError("raw and assigned start namespaces must match")
             if any(
@@ -1092,7 +1062,7 @@ class ACAttemptRecord:
                 )
             if self.source_kind is None:
                 raise ValueError("executed attempts require an initialization source")
-        elif self.slot_state == "construction_error":
+        elif self.slot_state in {"construction_error", "timeout"}:
             if any(
                 value is not None
                 for value in (
@@ -1103,8 +1073,34 @@ class ACAttemptRecord:
                 )
             ):
                 raise ValueError(
-                    "construction_error cannot retain solver evidence, result, or audit"
+                    f"{self.slot_state} cannot retain solver evidence, result, or audit"
                 )
+            if self.slot_state == "timeout" and (
+                self.build is None
+                or self.raw_start is None
+                or self.assigned_start is None
+                or self.timeout_budget_seconds is None
+            ):
+                raise ValueError(
+                    "timeout requires the prepared model, named start, and budget"
+                )
+            if self.slot_state == "timeout":
+                if self.role != "primary_controlling" or self.ordinal != 0:
+                    raise ValueError("timeout is valid only for the primary slot")
+                if self.source_kind is None:
+                    raise ValueError("timeout requires its initialization source")
+                if set(self.raw_start) != set(self.assigned_start) or any(
+                    self.raw_start[name].shape != self.assigned_start[name].shape
+                    for name in self.raw_start
+                ):
+                    raise ValueError("timeout raw and assigned starts must agree")
+                model_names = {
+                    variable.name() for variable in self.build.prob.variables()
+                }
+                if set(self.assigned_start) != model_names:
+                    raise ValueError(
+                        "timeout named start must cover every prepared model variable"
+                    )
             _nonempty_name("reason", self.reason)
         else:
             if any(
@@ -1119,10 +1115,10 @@ class ACAttemptRecord:
                     self.terminal_deviation_mwh,
                 )
             ):
-                raise ValueError(
-                    f"{self.slot_state} cannot retain execution payload"
-                )
+                raise ValueError(f"{self.slot_state} cannot retain execution payload")
             _nonempty_name("reason", self.reason)
+        if self.slot_state != "timeout" and self.timeout_budget_seconds is not None:
+            raise ValueError("only timeout attempts may retain a timeout budget")
         if self.supplied_executed_action:
             if (
                 self.slot_state != "executed"
@@ -1151,9 +1147,7 @@ class ACAttemptRecord:
             and self.role != "target_free"
             and self.terminal_deviation_mwh is None
         ):
-            raise ValueError(
-                "accepted controlling attempts require terminal deviation"
-            )
+            raise ValueError("accepted controlling attempts require terminal deviation")
         perturbation_roles = {"perturbed_target_free", "perturbed_causal"}
         if self.role in perturbation_roles:
             if self.scale is None or self.seed is None:
@@ -1190,9 +1184,7 @@ class ExecutedIntervalRecord:
 
     def __post_init__(self) -> None:
         _nonempty_name("controlling_attempt_id", self.controlling_attempt_id)
-        if isinstance(self.iteration, bool) or not isinstance(
-            self.iteration, Integral
-        ):
+        if isinstance(self.iteration, bool) or not isinstance(self.iteration, Integral):
             raise TypeError("iteration must be an integer")
         if int(self.iteration) < 0:
             raise ValueError("iteration must be nonnegative")
@@ -1204,9 +1196,7 @@ class ExecutedIntervalRecord:
             object.__setattr__(
                 self,
                 name,
-                _finite_real(
-                    name, getattr(self, name), nonnegative=nonnegative
-                ),
+                _finite_real(name, getattr(self, name), nonnegative=nonnegative),
             )
 
 
@@ -1229,12 +1219,8 @@ class HierarchicalProvenance:
             )
             for key, value in self.software_versions.items()
         }
-        object.__setattr__(
-            self, "software_versions", MappingProxyType(versions)
-        )
-        object.__setattr__(
-            self, "accepted_solver_statuses", ACCEPTED_SOLVER_STATUSES
-        )
+        object.__setattr__(self, "software_versions", MappingProxyType(versions))
+        object.__setattr__(self, "accepted_solver_statuses", ACCEPTED_SOLVER_STATUSES)
 
 
 _OUTER_COMMON_RESIDUAL_NAMES = frozenset(
@@ -1302,8 +1288,7 @@ def _validate_accepted_residuals(
         )
     if failures:
         raise ValueError(
-            f"accepted {record_name} exceeds policy residual tolerances: "
-            f"{failures}"
+            f"accepted {record_name} exceeds policy residual tolerances: {failures}"
         )
 
 
@@ -1341,12 +1326,9 @@ def _validate_attempt_registries(
                 raise ValueError(
                     "flat_only requires ordinal-zero flat primary_controlling"
                 )
-            if (
-                primary.slot_state == "executed"
-                and (
-                    primary.source_kind != "generated_flat"
-                    or primary.source_attempt_id is not None
-                )
+            if primary.slot_state == "executed" and (
+                primary.source_kind != "generated_flat"
+                or primary.source_attempt_id is not None
             ):
                 raise ValueError(
                     "executed flat_only attempts require generated-flat provenance"
@@ -1366,8 +1348,7 @@ def _validate_attempt_registries(
         )
         if len(window_attempts) != len(expected_roles):
             raise ValueError(
-                "shifted_with_recovery requires exactly nine attempt slots "
-                "per window"
+                "shifted_with_recovery requires exactly nine attempt slots per window"
             )
         if tuple(attempt.ordinal for attempt in window_attempts) != tuple(range(9)):
             raise ValueError(
@@ -1463,9 +1444,7 @@ class HierarchicalResult:
             raise ValueError("AC attempt IDs must be unique")
         _validate_attempt_registries(attempts, self.policy)
         executed = tuple(self.executed_intervals)
-        if any(
-            not isinstance(record, ExecutedIntervalRecord) for record in executed
-        ):
+        if any(not isinstance(record, ExecutedIntervalRecord) for record in executed):
             raise TypeError(
                 "executed_intervals must contain ExecutedIntervalRecord values"
             )
@@ -1491,9 +1470,7 @@ class HierarchicalResult:
                     "frozen policy requires exactly one iteration-zero outer plan"
                 )
             frozen_plan_id = next(iter(plans))
-            if any(
-                attempt.outer_plan_id != frozen_plan_id for attempt in attempts
-            ):
+            if any(attempt.outer_plan_id != frozen_plan_id for attempt in attempts):
                 raise ValueError(
                     "frozen attempts must reference the iteration-zero outer plan"
                 )
@@ -1594,7 +1571,9 @@ class HierarchicalResult:
             if attempt_positions[source_id] >= attempt_positions[attempt.attempt_id]:
                 raise ValueError("AC attempt sources must be causally prior")
             if source.iteration > attempt.iteration:
-                raise ValueError("AC attempt source cannot come from a future iteration")
+                raise ValueError(
+                    "AC attempt source cannot come from a future iteration"
+                )
             if attempt.slot_state == "executed" and (
                 source.slot_state != "executed"
                 or source.audit is None
@@ -1622,10 +1601,14 @@ class HierarchicalResult:
                 raise ValueError(
                     "within-window recovery source must share the attempt iteration"
                 )
-            if attempt.role in {
-                "copied_target_free",
-                "perturbed_target_free",
-            } and source.role != "target_free":
+            if (
+                attempt.role
+                in {
+                    "copied_target_free",
+                    "perturbed_target_free",
+                }
+                and source.role != "target_free"
+            ):
                 raise ValueError(
                     f"AC attempt role {attempt.role!r} requires a target-free source"
                 )
@@ -1666,9 +1649,7 @@ class HierarchicalResult:
                     "incomplete results require an integer termination_iteration"
                 )
             if self.termination_iteration != completed_intervals:
-                raise ValueError(
-                    "termination_iteration must equal completed_intervals"
-                )
+                raise ValueError("termination_iteration must equal completed_intervals")
         unsuccessful_plans = [
             plan for plan in plans.values() if not plan.audit.accepted_primal
         ]
@@ -1698,8 +1679,7 @@ class HierarchicalResult:
             )
         if battery.shape != (completed_intervals, len(ids)):
             raise ValueError(
-                "executed_b_mw must have shape "
-                f"({completed_intervals}, {len(ids)})"
+                f"executed_b_mw must have shape ({completed_intervals}, {len(ids)})"
             )
         for attempt in attempts:
             if attempt.iteration > completed_intervals:
@@ -1714,12 +1694,8 @@ class HierarchicalResult:
             plan = plans[attempt.outer_plan_id]
             if plan.boundary_soc_mwh is None:
                 raise ValueError("referenced outer plan has no SoC signposts")
-            boundary_row = (
-                attempt.global_interval_stop - plan.global_interval_start
-            )
-            target = np.array(
-                [attempt.target_soc_mwh[device_id] for device_id in ids]
-            )
+            boundary_row = attempt.global_interval_stop - plan.global_interval_start
+            target = np.array([attempt.target_soc_mwh[device_id] for device_id in ids])
             if not np.array_equal(target, plan.boundary_soc_mwh[boundary_row]):
                 raise ValueError(
                     "AC attempt target SoC does not match its outer-plan signpost"
@@ -1799,9 +1775,7 @@ class HierarchicalResult:
         object.__setattr__(
             self,
             "trajectory_summary",
-            _readonly_float_mapping(
-                self.trajectory_summary, name="trajectory_summary"
-            ),
+            _readonly_float_mapping(self.trajectory_summary, name="trajectory_summary"),
         )
         object.__setattr__(self, "completed_intervals", completed_intervals)
         object.__setattr__(self, "completion_fraction", fraction)

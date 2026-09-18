@@ -1,0 +1,9 @@
+{
+  "reason": "monitor_error",
+  "returncode": null,
+  "elapsed_seconds": 2.012370499985991,
+  "maximum_sampled_aggregate_rss_bytes": 0,
+  "maximum_sampled_rss_bytes_by_pid": {},
+  "finished_utc": "2026-09-17T21:10:16.039037+00:00",
+  "promoted_result_exists": false
+}
