@@ -8,6 +8,20 @@ The owner approved the estimands and episode-first framework in the
 initializations, and compute budget still require the Stage 0c protocol checkpoint.
 Preserve the original toy run unchanged. Promotion does not authorize new solves.
 
+**Owner scope update, 2026-09-17:** this first AC analysis remains worthwhile
+as a bounded study whose methods will be replicated on Tracy. The separate toy
+look-ahead-horizon study is deferred. The toy's c2 = 1e-4 generator curvature
+and 1.0 battery throughput penalty do not represent the intended temporal
+economics. Interpret economic improvements here as conditional on that
+historical objective; neither small nor large battery value transfers to the
+revised Tracy model without repeating the analysis. Do not expand this study
+into exhaustive toy diagnostics or change its historical costs.
+Separate generation-cost change, absolute-throughput change, its penalty cost,
+and total cost in the matched report. Rescheduling existing throughput does not
+itself increase the cycling penalty. A small observed B-versus-G improvement
+applies to the chosen window, fixed endpoints, and historical economics; it
+does not establish small value for longer energy shifts or revised costs.
+
 ## 1. Question and scope
 
 The observed AC rollout differs from the accepted annual DC realization in two

@@ -1,10 +1,23 @@
 # Case118 toy AC look-ahead study: separate design checkpoint
 
-Prepared 2026-09-17. Owner requested this separate, scoped study and clarified
-that it varies **look-ahead horizon only**, with hourly updates unchanged.
-Plan it before Stage 0b; choose periods and execute after the findings of the
-[AC analysis study](case118-toy-ac-analysis-design.md) in Stage 0c.
-The comparison choices below are proposals, not numerical launch authority.
+**Status: deferred on the current toy model by owner decision, 2026-09-17.**
+Inspection of generator curvature (c2 = 1e-4) and battery throughput weight
+(1.0) showed a mismatch with the intended temporal economics. The owner
+retains the [first AC analysis study](case118-toy-ac-analysis-design.md) as a
+useful method to replicate on Tracy, but does not consider this toy horizon
+study worthwhile under the current model. It is not a Stage 0c closeout gate.
+No toy horizon period selection, implementation, or numerical execution is
+required. Reconsider horizon sensitivity using Tracy's revised economics and
+shorter-study findings, with a new scope decision and reviewed protocol.
+This is a prioritization decision, not evidence that horizon length cannot
+affect network-constrained feasibility, dispatch, terminal-target geometry,
+or local-solver convergence on the toy system.
+
+The design below was prepared and reviewed before this deferral. It preserves
+the earlier **look-ahead-horizon-only** proposal, with hourly updates unchanged,
+as reference material. Its toy period selection, Stage 0c sequence, and runner
+requirements are inactive; they do not authorize work or automatically carry
+over to Tracy.
 
 ## Question and relationship to the first study
 

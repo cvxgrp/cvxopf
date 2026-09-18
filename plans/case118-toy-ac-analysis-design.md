@@ -7,6 +7,14 @@ The separate look-ahead-horizon addition reflects the owner's clarified scope
 and has also received a CLEAN independent scientific design review.
 Planning only.
 
+**Owner scope update, 2026-09-17:** retain this first AC analysis study, with
+the intention to replicate its methods on Tracy results. Defer the separate
+toy AC look-ahead-horizon study. Inspection revealed that toy generator
+curvature (c2 = 1e-4) and battery throughput weight (1.0) do not represent the
+intended temporal economics. Keep this study bounded; its purpose is reusable
+analysis and conditional matched comparisons, not exhaustive investigation
+of an unintended economic regime. Stage 0b is committed as `0ae9d86`.
+
 The owner approved the three questions and episode-first selection workflow
 in the [Tracy study plan](case118-tracy-2021-study-plan.md). This checkpoint
 proposes the concrete scope and choices below. It does not launch solves.
@@ -31,27 +39,18 @@ Deferred: another annual toy rollout; an exhaustive horizon sweep; renewable-fle
 counterfactuals; alternative storage sizing; scheduler redesign; a trained
 difficulty predictor or automatic AC-skipping policy. A longer common-endpoint
 comparison can be proposed if the episode evidence leaves a specific temporal
-question unresolved. The owner subsequently requested a separate scoped,
-non-exhaustive AC step-length study; see the addition below. The other items
-remain deferred, not prerequisites for Tracy.
+question unresolved. The previously requested scoped AC horizon study is now
+also deferred on this toy fixture. These items are not prerequisites for Tracy.
 
-### Owner-requested addition: separate AC look-ahead-horizon study
+### Deferred addition: separate AC look-ahead-horizon study
 
-The owner requested a separate scoped, non-exhaustive study of **look-ahead
-horizon only**, retaining the one-hour update interval. Plan and review it
-before Stage 0b; select periods and execute it after this AC analysis produces
-findings in Stage 0c. The [separate horizon design](case118-toy-ac-horizon-design.md)
-records the comparison, required tooling, and later budget decisions. It does
-not change the stage order or add solves to this study's budget.
-
-Period selection must follow the findings of this study, with an ordinary
-comparison. The separate design proposes a few matched rolling episodes with
-common initial and final states, the same evaluation interval within each
-comparison, and costs of executed actions counted once. It explicitly accounts
-for the interaction between horizon and hard SOC signposts. The proposed
-one-hour limiting case fixes active storage movement between hourly signposts;
-the three-hour baseline is rerun under matched conditions; one longer value is
-selected after inspecting the findings. No exhaustive horizon sweep is planned.
+The [separate horizon design](case118-toy-ac-horizon-design.md) remains a record
+of the earlier proposal, superseded by the scope update above. Do not select
+toy horizon periods, implement horizon-specific tooling, or run horizon
+comparisons as part of Stage 0c. Reconsider the question using Tracy's revised
+economics and shorter-study evidence under a later explicit decision and
+protocol. The horizon-specific recovery notes below are retained design
+context, not active implementation requirements or numerical authorization.
 
 ## 1. Describe episodes before choosing solve windows
 
@@ -155,6 +154,20 @@ The G-then-B ordering assigns interactions to B; it is not a unique causal
 allocation. Retain accepted candidates as feasible incumbents in the nested
 arms so a failed or worse local solve cannot erase known feasible performance.
 
+These economic comparisons retain the historical toy costs, including the
+1.0 throughput penalty. Small battery-flexibility value under that objective
+does not establish small value under Tracy's intended economics. Carry the
+comparison method to Tracy and recompute its results there; do not retune the
+toy objective within this study or transfer its numerical conclusions.
+Report generation-cost change, absolute-throughput change, the associated
+lambda-times-throughput cost change, and total cost change separately. Shifting
+the timing of an existing cycle at unchanged throughput adds no cycling
+penalty. Weak curvature relative to the cost of an additional cycle therefore
+does not prove why storage was idle; changing marginal units, congestion,
+losses, and AC device constraints can still affect its value. A small G-to-B
+improvement is conditional on the selected short window and common endpoints,
+which themselves can exclude valuable longer energy shifts.
+
 These windows start from DC SOC, not the historical realized AC state; this
 keeps fixed DC battery schedules endpoint-compatible. They answer a matched
 local question, not an exact replay of the historical action. Large realized
@@ -230,17 +243,20 @@ runner or repeat unaffected historical qualification.
 
 ## 5. Proposed sequencing, budgets, and stopping points
 
-1. Review this design and the separate horizon-study plan; finish Stage 0b
-   disposition and its separate commit.
+1. Stage 0b disposition and its separate commit are complete (`0ae9d86`).
+   Apply the owner scope update: first analysis retained, toy horizon deferred.
 2. Implement and review read-only episode extraction/reporting in Stage 0c;
    inspect the candidate cards and choose exact matched windows.
 3. Specify the short counterfactual protocol, implement its minimal runner,
    independently review the necessary tests, and commit the implementation.
 4. Launch one selected window as a four-comparison-stage pilot only after numerical
-   approval. Use its evidence to confirm the remaining study budget.
-5. Execute only the approved remaining stages and review the findings. Use
-   them to select periods and finalize the separate horizon study, then record
-   both studies' completed/deferred questions at Stage 0c exit.
+   approval. Use its evidence to confirm the remaining study budget and ask
+   whether additional windows would add distinct scientific information.
+   The proposed six-window scope is not a quota: any reduction or extension is
+   an explicit owner decision, preserving attempts and ordinary comparisons.
+5. Execute only the approved remaining stages and review the findings. Record
+   reusable methods, limitations, and unresolved questions, plus the explicit
+   toy horizon deferral, at Stage 0c exit. No horizon study is required to close.
 
 ### Owner-directed execution setup: two main lanes and one shared helper
 
@@ -371,8 +387,8 @@ choices together with window identities and budgets in one reviewable protocol.
 Completion does not require every restricted solve to succeed. It requires
 an honest comparison record, independently checked feasible candidates,
 explicit unresolved/deferred questions, and a useful standard analysis for
-shorter Tracy runs. The separately planned horizon study follows these
-findings under its own protocol and budget. Renewable-flexibility extensions
+shorter Tracy runs. The separately planned toy horizon study is deferred.
+Renewable-flexibility extensions
 remain separate decisions, not automatic responses to an uninteresting result.
 
 At the end of Stage 0c, finish documentation/regression checks and the toy
@@ -409,3 +425,11 @@ fixed-battery R1/R2/G from free-battery B and all horizon variants, including
 H=1, and identifies the helper-source dependency when target-free is omitted.
 The owner requested this distinction be recorded. The fixed-battery source
 policy remains an explicit protocol decision, not an implemented change.
+
+After the owner deferred the toy horizon study, `cvxopf-discuss` assessed the
+revised scope read-only and agreed with the scientific prioritization. Its
+qualifications are incorporated above: preserve conditional findings from the
+first study, distinguish added cycling from timing rearrangement, use the
+pilot as an information-value checkpoint, and transfer methods rather than toy
+numerical conclusions. This assessment is not an independent implementation
+review or execution authorization.

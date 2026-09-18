@@ -514,15 +514,27 @@ the broader historical `outputs/` inventory and curated promotion remain 0b.
 #### Design checkpoint: approved analysis questions and remaining runner scope
 
 The owner approved the three-question analysis framework below on 2026-09-17.
+After inspecting the toy temporal inputs and economics, the owner retained
+this first study but **deferred the separate AC look-ahead-horizon study on the
+current toy model**. Its generator curvature (c2 = 1e-4) and battery throughput
+weight (1.0) do not represent the intended temporal economics. Keep the first
+study bounded and focused on reusable analysis and matched comparisons, rather
+than an exhaustive explanation of toy behavior. Its economic findings remain
+conditional on the historical objective; replicate the analysis on Tracy's
+revised model before drawing conclusions about the intended storage mechanism.
+Deferral reflects limited relevance and priority, not evidence that look-ahead
+has no effect on network-constrained feasibility, dispatch, or convergence.
 The [next design checkpoint](case118-toy-ac-analysis-design.md) proposes the
 episode sample, matched comparisons, tooling, and bounded execution scope;
-its concrete choices remain proposals until reviewed and approved. The owner
-also requested the [separate AC look-ahead-horizon study](case118-toy-ac-horizon-design.md):
-plan it before Stage 0b, then select periods from the first analysis's findings
-and execute in Stage 0c. Keep hourly updates unchanged; do not reorder stages.
-Both studies reuse the existing two-main/one-helper setup and memory gates.
-Retain the implemented revision-2 slow-solve ladder for free-battery arm B and
-the horizon study, including H=1. In fixed-battery R1/R2/G, the locked schedule
+its concrete choices remain proposals until reviewed and approved. Preserve
+the [separate horizon design](case118-toy-ac-horizon-design.md) as deferred
+planning material. The earlier direction to select toy periods and execute it
+in Stage 0c is superseded. Reconsider horizon sensitivity after the shorter
+Tracy studies establish the revised economics and operating behavior; it is
+not an automatic study or a prerequisite for the Stage 0c closeout.
+The retained first study reuses the existing two-main/one-helper setup and
+memory gates. Retain the implemented revision-2 slow-solve ladder for
+free-battery arm B. In fixed-battery R1/R2/G, the locked schedule
 already determines terminal SOC, so target-free is not a substantive relaxation.
 Specify and qualify an explicit initialization adaptation for those arms;
 the exact choice remains open in the design checkpoint. Do not drop locks or
@@ -588,9 +600,8 @@ its common three-hour horizon does not compare horizon lengths; and it does
 not establish a prospective rule for skipping AC. A horizon comparison,
 renewable-flexibility study, or DC-based difficulty predictor needs its own
 question, comparison conditions, and protocol rather than being inferred
-from these counterfactuals. The separately planned horizon study supplies that
-comparison for a few periods selected after the first analysis, under its own
-implementation review and numerical budget.
+from these counterfactuals. The horizon design is now deferred on the toy
+fixture; this first study does not select or execute toy horizon comparisons.
 
 Complete this design checkpoint with:
 
@@ -610,19 +621,20 @@ experimental results receive separate commits and identities; do not fold
 them into closeout commit 1 or artifact-promotion commit 2. Selecting a study
 does not bypass its protocol, implementation review, or numerical launch gate.
 
-### 0b. Ready for owner approval: separate `outputs/` triage and promotion — commit 2
+### 0b. Completed artifact promotion — commit 2 (`0ae9d86`)
 
 Start after 0a is reviewed and committed and the design checkpoint is recorded,
-including the separate horizon-study plan. Its numerical periods are selected
-later from the first AC analysis; this dependency does not block artifact triage.
+including the separate horizon-study plan, now retained as deferred work.
 Use that decision to prioritize the evidence and tooling needed by selected
 toy follow-ups. This is a distinct work package with its own file disposition,
 review, and commit, not a subsection of commit 1.
 
 The Stage 0b [disposition record](../experiments/case118_annual_hierarchy/S5_ARTIFACT_DISPOSITION.md)
 links the exact promotion manifest and complete inventory. Implementation and
-verification are complete; independent scientific review by `cvxopf-review` is
-CLEAN. Owner approval and commit 2 remain pending.
+verification of the base promotion completed with CLEAN independent scientific
+review by `cvxopf-review`. The owner subsequently evaluated the expanded
+dashboard and committed the package as `0ae9d86`; the disposition/validation
+records distinguish those additions from the original review.
 
 **`outputs/` triage and promotion checklist**
 
@@ -650,14 +662,15 @@ CLEAN. Owner approval and commit 2 remain pending.
   questions: time- and device-aligned dispatch/SOC differences, losses and
   component costs, branch and voltage/reactive diagnostics, storage headroom,
   episode context, and pre-AC period-selection covariates. Identify support
-  already available and any scoped additions needed in 0c. Include the separate
-  horizon study's needs: matched rolling initialization/endpoints, explicit
-  horizon/target timing, and executed-trajectory cost/resource comparison.
+  already available and any scoped additions needed in 0c. The separate
+  horizon study's initialization/endpoints, target timing, and executed-cost
+  needs were inventoried as planning context; they are now archived/deferred
+  needs, not current 0c implementation requirements.
 - [x] Verify promoted copies match the selected originals, references resolve,
   and figures/tables are tied to the completed toy scenario. Include the
   curated artifacts and disposition index in this separately reviewed commit.
   Preserve the originals.
-- [ ] Obtain the owner's approval of the triage/promotion file disposition and
+- [x] Obtain the owner's approval of the triage/promotion file disposition and
   commit it as **commit 2**, separately from the scientific closeout commit.
 
 Exit: the owner has reviewed the triage dispositions, selected artifacts have
@@ -670,10 +683,13 @@ toy-follow-up implementation or work package A.
 Implement the approved three-question framework in sequence: inspect retained
 trajectories and select contextualized episodes; run the separately specified
 matched-window diagnostic; assess which pre-AC selection criteria merit tests
-on shorter Tracy runs. Then use these findings to select periods for the
-separate, non-exhaustive look-ahead-horizon study, keeping hourly updates fixed.
-Review and budget that study separately before its execution. Record unresolved
-questions and explicitly deferred extensions from both studies. This framework is reusable across the toy and Tracy scenarios;
+on shorter Tracy runs. Retain this first study as a limited demonstration of
+the standard analysis to replicate on Tracy. Record the toy horizon study as
+explicitly deferred because the current model's temporal economics do not
+match the intended research question; no horizon-specific implementation,
+period selection, or solves are required in Stage 0c. Record unresolved
+questions and avoid expanding toy work merely to explain consequences of those
+economic assumptions. This framework is reusable across the toy and Tracy scenarios;
 their inputs, numerical results, and scientific claims remain separate.
 
 For each selected study, freeze its protocol, exact source inputs, comparison
@@ -704,7 +720,8 @@ transfer toy-specific numerical conclusions or silently expand the studies.
 
 - [ ] Record each selected toy follow-up as completed and reviewed, explicitly
   deferred, or stopped, with its evidence, remaining questions, and reason.
-  If no toy studies are selected, record that disposition after 0b.
+  Current disposition: the first AC analysis remains selected; the toy AC
+  look-ahead-horizon study is deferred for the economic-model reason above.
 - [ ] Finish documentation and relevant regression checks. Record their
   outcomes, retained limitations, and the methods or capabilities to carry
   into Tracy. Obtain the owner's decision to move on to the new study.
