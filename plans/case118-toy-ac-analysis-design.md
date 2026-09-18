@@ -31,7 +31,10 @@ of saved battery trajectories, the owner selected three three-hour windows for a
 [study of battery operation in AC and DC](case118-toy-battery-mechanism-test.md).
 It compares fixed/free schedules and two prescribed energy transfers: 24
 primary solves proposed across the three windows, with a result checkpoint
-between phases and separately bounded recovery. This is additional scoped
+between phases and separately bounded recovery. The 12 fixed/free comparisons
+are complete and reviewed by the owner; the remaining 12 prescribed-transfer
+solves have not been run and remain pending the owner's decision at the
+results-review checkpoint. This was additional scoped
 mechanism work, not a revival of the deferred horizon study or authorization
 to launch the earlier full six-window R1/R2/G/B proposal.
 

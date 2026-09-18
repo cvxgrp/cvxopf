@@ -14,7 +14,8 @@ Two sets of results are complete and independently reviewed:
 - [Battery operation in AC and DC](battery_operation/REPORT.md): three
   three-hour windows testing whether shifting battery energy across time lowers
   operating cost in each model. The separate proposed 1 and 5 MWh transfer
-  comparisons have not been run.
+  comparisons have not been run and remain pending the owner's decision
+  at the results-review checkpoint.
 
 Reports, launch protocols, context, and analysis scripts live in the two folders
 above. Retained solver artifacts live in this experiment's `results/` directory,
@@ -195,9 +196,9 @@ with the owner before using it. The original counterfactual CLI retains its
 clean-tree gate.
 
 The phase-one entry point **stops for owner result review after fixed/free
-comparisons**. Prescribed-transfer
-execution and cumulative-budget resumption belong to the next checkpoint;
-they are not implemented or launched by this phase-one entry point.
+comparisons**. The owner has reviewed those results; the decision on the
+prescribed-transfer comparisons remains pending. They are not implemented or launched by
+this entry point; the completed results and consumed budgets remain retained.
 
 ### Tests
 

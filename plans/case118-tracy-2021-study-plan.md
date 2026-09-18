@@ -384,17 +384,17 @@ provenance, and reproducible plotting logic with the reviewed material.
 
 ## 5. Starting economics and remaining operating choices
 
-### Approved economic starting point — September 17 update
+### Approved economic starting point and shorter-study parameters
 
 Intertemporal leveling from convex generation costs is an intended mechanism
-of the Tracy study. Use economically meaningful quadratic generator costs and
+of the Tracy study. Start with economically meaningful quadratic generator costs and
 **low battery throughput regularization**. The completed toy fixture used
 fleet-wide generator c2 = 1e-4 and an explicit battery `aging_weight=1.0`
 override. Those historical settings remain part of its record; they are not
 the Tracy starting economics. This replaces the earlier recommendation to
 reuse them for the first comparison.
 
-**Generators — owner-confirmed rule.** Keep the inherited linear coefficients
+**Generators — owner-confirmed starting rule.** Keep the inherited linear coefficients
 unchanged, rescale maximum powers as approved, and set each generator's
 quadratic contribution to exactly one-third of its linear contribution at
 its updated maximum power. Start from the pinned PGLib generator models,
@@ -407,7 +407,7 @@ after the approved 5000/6515 capacity scaling. In the repository convention,
 
 Thus c2_i G_i^2 = (c1_i G_i)/3: the quadratic contribution at maximum power
 is one-third of the linear contribution (approximately 33%, not 33% of their
-sum). This is the confirmed Tracy rule, motivated by the owner's previous
+sum). This is the confirmed Tracy starting point, motivated by the owner's previous
 toy-model prescription while preserving the inherited heterogeneous linear
 costs. For normalized output x = P/G_i, the equivalent
 coefficients are A_i = c1_i G_i and B_i = A_i/3 in C_i = c0_i + A_i x + B_i x^2.
@@ -420,6 +420,23 @@ with their inherited costs; the ratio rule does not apply at G_i = 0. Verify
 positive inherited c1_i for every positive-capacity unit before applying the
 rule, and surface any source mismatch rather than inventing a coefficient.
 
+**Owner review update: generator curvature is a study parameter.** Preserve
+the ability to compare almost-linear and more strongly quadratic costs in the
+shorter Tracy studies. Express the setting as the dimensionless ratio rho of
+quadratic to linear cost at updated maximum output:
+
+    c2_i(rho) = rho * c1_i / G_i,
+    C_i'(P) = c1_i + 2 c2_i(rho) P.
+
+The starting value rho = 1/3 reproduces the approved rule; values near zero
+give almost-linear costs, and rho = 0 is exactly linear if explicitly selected.
+Keep inherited c0/c1 and updated capacities fixed across these comparisons.
+Select the near-zero value and any additional curvature levels in the bounded
+shorter-study protocol, together with the battery-weight settings and solve
+budget. Do not silently add the toy conditioning coefficient or freeze a full
+parameter grid now. Record the chosen ratio and actual per-generator c2 values
+in every configuration, using the same costs in its DC and AC models.
+
 **Batteries.** Begin with `StorageUnitIdeal`'s current default
 `aging_weight=0.01`, in objective units/MWh of absolute, one-way throughput.
 Use the default at initial device construction and record its resolved numeric
@@ -430,11 +447,48 @@ weight. Treat it as low regularization, not a calibrated degradation charge.
 Low numerical magnitude alone does not establish a negligible effect on the
 solution; assess that effect in Stage B before choosing the annual setting.
 
-The bounded shorter-study protocol will specify regularization sensitivities;
-do not freeze a sensitivity grid or final weight now. Explain every proposed
+The bounded shorter-study protocol will specify both generator-curvature and
+battery-regularization comparisons; do not freeze a sensitivity grid or final
+coefficients now. Explain every proposed
 override and show its operational consequences before carrying it into annual
 execution. Keep the selected generator and battery economics consistent
 between the DC planner and AC realization.
+
+### Optional last-resort load shedding
+
+The owner requests an option to shed any load using the existing cvxopf
+cost-based approach. Configure the identified `Load` devices, rather than
+introducing emergency injections or changing the network constraints. With
+the option enabled, all 99 positive-demand load channels are eligible for
+shedding, with `max_shed_fraction=1.0`; retain an explicit disabled setting
+for fixed-load comparisons. The same declared policy applies in DC and AC.
+Positive active demand is eligible; associated reactive demand is reduced
+proportionally in AC, following the existing model. Distributed solar remains
+a separate resource and fixed shunts remain network elements.
+
+Use explicit finite positive `shedding_cost_per_mwh` values to make shedding
+the last economic choice after available generation and storage. Retain the
+single optimization and existing load-cost implementation described in
+[Milestone 19](milestone-19-load-shedding.md). The input review must show the
+penalty, units, eligible devices and fraction limits. No numerical penalty or
+relative priority between load locations is assigned by this plan; specify
+them in the shorter-study protocol and explain their relation to the selected
+generator and storage costs.
+
+Check last-resort behavior on the selected shorter windows for the cost
+settings being studied. A penalty above generator marginal cost alone does
+not establish that behavior in a constrained network with storage. Report
+any shedding and distinguish cost-driven shedding from demand that cannot be
+served under the retained constraints; unresolved local solves do not prove
+the latter. Shedding reduces exposure to demand-driven infeasibility but is
+not a guarantee that every AC solve or constrained problem will succeed.
+
+Retain original and served demand, per-load shed power/fraction, energy not
+served, and shedding cost separately from generation and battery costs.
+Distinguish DC planned shedding from AC implemented shedding, by time and
+location. A feasible trajectory with shedding is an operating result with
+unserved demand, not evidence that all load was served. Include these fields
+in independent audits, retained trajectories and the Tracy dashboard.
 
 ### Remaining choices to close before numerical qualification
 
@@ -450,12 +504,14 @@ year, scale, counts, seed, or storage choices.
 | Renewable inverter ratings | Choose and label a rating rule/headroom factor; an observed availability maximum is not a measured nameplate. Avoid unintended clipping of the approved source. |
 | Battery AC operating set | Resolve apparent MVA rating versus the approved E/3 active-power limit and reactive support. If MVA headroom is larger, do not accidentally enlarge the active limit. |
 | Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
-| Economics | Apply the starting generator rule and default battery regularization above. Select the final battery weight after Stage B sensitivity evidence; explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
+| Economics | Apply the starting generator rule and default battery regularization above. Keep both curvature and battery weight configurable; select annual settings from shorter-study evidence. Explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
+| Load shedding | Provide the approved all-load option through existing `Load` settings. Review its enabled/disabled setting and explicit penalties before solving, and check its intended last-resort behavior alongside the generator/storage cost comparisons. |
 | Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy and recovery machinery. Reconsider the experimental scope and runner requirements at the post-0a design pause and after selected toy follow-ups; confirm the Tracy policy before its execution gates. |
 
-The intended primary study serves all load with rated branches and voltage/
-device constraints. No unapproved shedding, branch-rating inflation, or
-reactive-limit removal is a feasibility fix. A diagnostic relaxation, if
+The intended primary study seeks full load service with rated branches and
+voltage/device constraints, with the explicit shedding option above available
+as a last resort. Do not inflate branch ratings or remove reactive limits to
+obtain a solution. A diagnostic relaxation, if
 separately authorized, is not an accepted operating trajectory. A failed
 nonlinear local solve also does not by itself prove physical infeasibility.
 
@@ -689,9 +745,11 @@ follow-up at closeout; its detailed design, implementation and numerical
 launch checkpoints remain separate. The toy horizon study stays deferred.
 
 The [AC dispatch adjustments](../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md)
-comparison and the first 12 [battery operation comparisons](../experiments/case118_counterfactual/battery_operation/REPORT.md)
-are complete and independently reviewed. The proposed prescribed energy
-transfers have not been run; they remain subject to the owner result checkpoint.
+comparison and the 12 [battery operation comparisons](../experiments/case118_counterfactual/battery_operation/REPORT.md)
+are complete, independently reviewed, and reviewed by the owner. Step 3, the
+proposed 1 and 5 MWh energy-transfer comparisons, has not been run and remains
+pending the owner's decision at the results-review checkpoint. It has not
+been deferred.
 
 Implement the approved three-question framework in sequence: inspect retained
 trajectories and select contextualized episodes; run the separately specified
@@ -729,13 +787,44 @@ methods or runner capabilities to carry into Tracy, which require adaptation
 to its different inputs, and whether further toy work is justified. Do not
 transfer toy-specific numerical conclusions or silently expand the studies.
 
+**Owner review outcome.** The second experiment was selected and authorized
+to test the economic incentive for temporal battery shifts. In the three
+selected windows, the AC model admitted meaningful cost-improving battery
+cycles while the matched DC model showed no resolved benefit. This answers
+the owner's present question about stronger temporal variation in battery
+power value in the implemented AC model. It does not isolate individual
+network effects or certify global value, and the numerical result is not a
+prediction for Tracy. The separate decision on the planned step-3 comparisons
+remains open.
+
+Carry forward the following methods and capabilities:
+
+- Keep episode selection with surrounding context, comparisons with common
+  boundary conditions, separate cost components, physical audits, and saved
+  attempts/results. Bind them to Tracy's inputs and device identities.
+- Reuse the existing supervised execution and recovery machinery. Adapt
+  dimensions, starts, resource estimates, and reporting to the new generators,
+  27 batteries, renewable sites, and load policy. Do not reuse toy solution
+  arrays or assume its performance estimates apply unchanged.
+- Make generator curvature and battery throughput regularization explicit
+  shorter-study parameters as specified in section 5. A changed economic
+  configuration requires its own consistent DC plan and AC inputs/signposts.
+- Add the optional last-resort load-shedding configuration and report unmet
+  demand explicitly. This is a separately requested Tracy capability, not a
+  conclusion inferred from the toy experiments.
+
+The exact sensitivity values, shedding costs, selected shorter windows, and
+their compute budgets remain for the existing Tracy review gates. This
+disposition does not launch Tracy input generation or numerical work.
+
 **End-of-Stage-0c PR closeout checklist**
 
 - [ ] Record each selected toy follow-up as completed and reviewed, explicitly
   deferred, or stopped, with its evidence, remaining questions, and reason.
-  Current disposition: the AC dispatch comparisons and the first 12 battery
-  operation comparisons are complete and independently reviewed. The prescribed
-  energy-transfer comparisons await the owner's decision. The toy AC
+  Current disposition: the AC dispatch comparisons and the 12 battery
+  operation comparisons are complete, independently reviewed, and reviewed by
+  the owner. The prescribed energy-transfer comparisons have not been run;
+  their disposition remains pending the owner's decision. The toy AC
   look-ahead-horizon study is deferred for the economic-model reason above.
 - [ ] Finish documentation and relevant regression checks. Record their
   outcomes, retained limitations, and the methods or capabilities to carry
@@ -773,8 +862,10 @@ merged analytical benchmark as the recorded baseline.
    derived c2, linear/quadratic costs at updated Pmax, their ratio, and marginal
    costs at zero/full output. Record actual battery weights and the complete
    objective with units, defaults, and explicit overrides. Independently check
-   the one-third rule and resolved default against the devices supplied to both
-   formulations; an unexpected override is a discrepancy to resolve.
+   the starting one-third rule, each declared curvature setting, and resolved
+   battery default against the devices supplied to both formulations; an
+   unexpected override is a discrepancy to resolve. Include the load-shedding
+   policy, actual penalties, fraction limits and eligible device identities.
 4. Produce annual/monthly summaries, annual and representative-week plots of
    all four channels and net load, and a network map showing roles and sizes.
    Deliver the full side-by-side final-input heatmap and tabular comparison
@@ -796,7 +887,8 @@ Present one review package containing the comparable input heatmaps/tables,
 source-to-input transformations, realized bus/device map, capacity allocations,
 sanity-check results, and the section 5 choices needed for the proposed DC
 screening. Include the economic table and explain the scale of generation
-curvature versus battery regularization, not just their coefficient values.
+curvature, battery regularization and shedding penalties, not just their
+coefficient values.
 Ask whether these actual inputs and data-generation choices are the
 intended study. Record the owner's approval or requested revisions against a
 specific fixture version/digest; showing the package is not approval. Revise
@@ -829,24 +921,32 @@ results from a not-yet-authorized annual solve to select them.
 
 Run the existing rated lossy-DC formulation on those windows with the same
 full-year-derived capacities, allocation weights, and physical/economic rules.
-Vary only the declared economic parameter in a matched regularization
-sensitivity. Do not resize resources to each window. Predeclare initial/terminal SOC,
+Vary only the declared generator-curvature and battery-weight settings in
+matched comparisons; keep the load-shedding policy explicit and consistent
+unless its penalty is itself being checked. Do not resize resources to each
+window. Predeclare initial/terminal SOC,
 context/padding, solve-count/time/memory limits, tolerances, and stopping rules.
 For potentially consequential finite-window boundary effects, use a bounded,
 declared boundary sensitivity rather than interpreting an arbitrary initial
 SOC or terminal target as a physical property of the year.
 
-Within this bounded shorter-study program, assess battery regularization
-starting from 0.01. Select a small sensitivity set and solve budget in the
-protocol, with matched windows, generator costs, physical constraints, and
-storage endpoints. Compare generation leveling and marginal-cost variation,
+Within this bounded shorter-study program, assess generator curvature starting
+from rho = 1/3 and battery regularization starting from 0.01. Include an
+explicitly specified almost-linear generator setting. Select a small set of
+comparisons and solve budget in the protocol, varying curvature and throughput
+weight separately and, where justified, together to examine their interaction.
+An exhaustive parameter grid is not required. Match windows, inherited linear
+costs, capacities, physical constraints, and storage endpoints. Compare
+generation leveling and marginal-cost variation,
 battery power/throughput and SOC, and generation, regularization, and other
-objective components separately. Changing the penalty changes the objective:
-do not interpret a lower total objective under a lower weight as an operating
+objective components, including shedding, separately. Changing cost
+coefficients changes the objective: do not interpret a lower total objective
+under lower curvature or throughput weight as an operating
 improvement by itself. Inspect congestion and endpoint restrictions alongside
 the incentives when explaining idle or active storage. Use this evidence to
-recommend the annual weight; do not assume either zero or the starting default
-is the final choice.
+recommend annual curvature and battery-weight settings; the starting values
+are not automatically the final choices. Check the intended last-resort
+shedding behavior under the settings proposed for annual use.
 
 Report residuals and load service; branch utilization/binding intervals and
 locations; dispatch, available/used renewables and curtailment; losses;
@@ -856,7 +956,7 @@ predicted difficulty and from untested AC behavior. Successful windows do not
 prove annual feasibility. Diagnose failures without silent siting, seed,
 rating, or source changes.
 
-Exit: the owner receives the targeted-DC findings, the regularization
+Exit: the owner receives the targeted-DC findings, the curvature/regularization
 sensitivity and proposed annual economic settings, and any other revisions,
 plus a full-year DC runtime/resource estimate. Obtain explicit approval for
 the annual DC solve only after the windows are reviewed. A changed fixture
@@ -879,7 +979,8 @@ consequences:
   charging/discharging and SOC as useful, distinctly labeled as outputs.
 - Annual/monthly balance and cost summaries; congestion locations, severity,
   and duration; losses; dispatchable shortfalls and storage response; boundary
-  effects and residual audits; observed computational difficulty.
+  effects and residual audits; observed computational difficulty. Include any
+  planned shedding, its times/locations, energy not served and separate cost.
 - A clear assessment of whether the scaling, siting, renewable allocation,
   and storage design produced the intended regime: useful congestion and
   storage activity with feasible rated-network DC operation. Explain the
@@ -913,6 +1014,11 @@ unaffected correctness evidence.
 
 Check load service, branch terminal MVA, voltage and reactive limits, storage
 SOC and P/Q limits, losses, curtailment, boundary continuity, and residuals.
+When shedding is enabled, audit served demand and shedding bounds/costs and
+compare AC implemented shedding with the DC plan. Report full-service and
+shedding-assisted operation separately, retaining the same declared cost
+configuration. Any additional cost sensitivity requires an explicit bounded
+comparison with consistent DC plans rather than mismatched signposts.
 Track the distinction between physical infeasibility, a restrictive outer
 signpost/controller policy, and local solver failure. Detached diagnostic
 windows cannot be stitched into an accepted annual path.

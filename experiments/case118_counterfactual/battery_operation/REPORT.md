@@ -88,8 +88,7 @@ This selected sample provides no estimate of annual frequency or benefit.
 
 ## Checkpoint
 
-Phase one is complete. No prescribed-transfer solves have been launched.
-The next decision is owner review of these results before implementing and
-executing the already scoped 1 and 5 MWh transfers in these same windows.
-The current observations motivate those directional finite comparisons but
-do not replace them.
+The owner has reviewed these results. Step 3, the proposed 1 and 5 MWh transfer
+comparisons, has not been run and remains pending the owner's decision at
+this results-review checkpoint. The completed comparisons support the reported AC/DC distinction;
+the more detailed question of which network effects produce it remains open.

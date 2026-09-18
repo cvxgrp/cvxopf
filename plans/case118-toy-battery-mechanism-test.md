@@ -3,8 +3,10 @@
 Status: the 12 comparisons of fixed versus rescheduled battery power are
 complete; independent implementation and numerical reviews are CLEAN.
 See [Battery operation in AC and DC](../experiments/case118_counterfactual/battery_operation/REPORT.md).
-The proposed 1 and 5 MWh transfer comparisons have not been run and remain
-behind the owner result checkpoint. The protocol below records the agreed design.
+The owner has reviewed the results. Step 3, the proposed 1 and 5 MWh transfer
+comparisons, has not been run and remains pending the owner's decision at
+the results-review checkpoint. The protocol below records the design,
+including that unexecuted proposal.
 
 ## Question and limits
 
@@ -108,7 +110,8 @@ native-objective improvement from local battery rescheduling. A material DC
 F–B improvement should first trigger numerical/model-match scrutiny, rather
 than immediately be interpreted as a newly discovered economic opportunity.
 
-Checkpoint: review all three step-2 comparisons with the owner before step 3.
+Checkpoint status: the owner reviewed all three step-2 comparisons; the
+decision on step 3 remains pending.
 An unresolved or null comparison is an outcome, not grounds to select another
 window, relax physical checks, or expand the horizon automatically.
 
@@ -232,8 +235,8 @@ results and do not generalize this selected sample to an annual frequency.
 Phase-one entry point: `experiments.case118_counterfactual.mechanism`. It reuses
 the existing AC G/B models (G is F here), runs DC serially first, and records
 cumulative budget consumption. The current implementation ends after step 2;
-prescribed-transfer execution is intentionally deferred until its result
-checkpoint. Proposed launch manifest:
+prescribed-transfer execution remains pending the owner's step-3 decision.
+The completed comparisons used this launch manifest:
 `experiments/case118_counterfactual/battery_operation/protocol.json`.
 
 An optional `--snapshot-reviewed-worktree` execution route has been proposed
