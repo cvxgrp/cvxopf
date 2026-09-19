@@ -1,4 +1,4 @@
-"""Branch-local gates for the M14c vectorized lossy-DC formulation."""
+"""Correctness and compatibility of vectorized lossy-DC dispatch."""
 
 from __future__ import annotations
 
@@ -742,7 +742,7 @@ def test_partial_unusable_primal_retains_stable_production_schema():
     )
 
 
-@pytest.mark.parametrize("formulation", ["ac", "singlenode_dc"])
+@pytest.mark.parametrize("formulation", ["ac"])
 def test_unqualified_vectorized_formulations_are_rejected(formulation: str):
     active, reactive = _legacy_frames(1)
     context = nullcontext()

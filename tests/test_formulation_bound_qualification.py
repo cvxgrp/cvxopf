@@ -1,4 +1,4 @@
-"""Focused M14a.1 formulation-separated leaf-bound qualification tests."""
+"""Leaf-bound qualification for each network formulation."""
 
 from copy import deepcopy
 from pathlib import Path

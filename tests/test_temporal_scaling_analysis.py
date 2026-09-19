@@ -1,4 +1,4 @@
-"""Independent M14a scaling-record reconstruction tests."""
+"""Independent reconstruction of temporal scaling records."""
 
 import json
 import hashlib

@@ -354,8 +354,12 @@ def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
 
 def _get_vectorized_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
     from cvxopf.dc_problem import _build_lossy_dc_vectorized
+    from cvxopf.singlenode_dc_problem import _build_singlenode_dc_vectorized
 
-    return {"lossy_dc": _build_lossy_dc_vectorized}
+    return {
+        "lossy_dc": _build_lossy_dc_vectorized,
+        "singlenode_dc": _build_singlenode_dc_vectorized,
+    }
 
 
 def _validate_temporal_delta(delta: float) -> None:
@@ -616,8 +620,8 @@ def build_opf_multistep(
     temporal_assembly : {"stepwise", "vectorized"}, optional
         Temporal graph representation. ``"stepwise"`` preserves the existing
         per-interval builder and remains the compatibility default.
-        ``"vectorized"`` explicitly selects the M14 time-last lossy-DC path;
-        other formulations reject that pairing until separately qualified.
+        ``"vectorized"`` selects time-last assembly for ``"lossy_dc"`` and
+        ``"singlenode_dc"``. AC rejects that pairing until separately qualified.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).
@@ -655,7 +659,9 @@ def build_opf_multistep(
     Returns
     -------
     OPFBuild
-        build.variables contains lists of length T for each variable type.
+        Stepwise variables are lists of length T. Vectorized variables have
+        time on the last axis; storage SoC includes T+1 boundaries. Extracted
+        results retain their time-first shapes and post-step SoC convention.
     """
     if options is None:
         options = OPFOptions()
@@ -676,10 +682,13 @@ def build_opf_multistep(
         raise ValueError(
             f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
         )
-    if temporal_assembly == "vectorized" and formulation != "lossy_dc":
+    if (
+        temporal_assembly == "vectorized"
+        and formulation not in _get_vectorized_multistep_builders()
+    ):
         raise NotImplementedError(
             "temporal_assembly='vectorized' is currently supported only for "
-            "formulation='lossy_dc'"
+            "formulations 'lossy_dc' and 'singlenode_dc'"
         )
 
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(

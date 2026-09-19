@@ -2,14 +2,15 @@
 
 ## Status
 
-**In progress; M14a–c are complete. M14d single-node DC and AC vectorization
-remain.** The completed Case118 hierarchical study (`big-experiment`) was
+**In progress; M14a–c are complete. M14d single-node DC is implemented for
+owner review; AC vectorization remains.** The completed Case118 hierarchical study (`big-experiment`) was
 merged into `main` at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; the
 `m14-time-vectorization` branch was fast-forwarded to that checkpoint on
 2026-09-18. The accepted annual S4 solve already closes M14c's scaling gate.
-The next work is single-node DC vectorization, followed by AC vectorization
-using the existing initialization helpers as described under M14d. The public default remains
-`stepwise`; only `lossy_dc` currently supports explicit `vectorized` selection.
+The single-node DC slice reuses the qualified vectorized device hooks and
+retains the public result shapes. AC vectorization follows using the existing
+initialization helpers as described under M14d. The public default remains
+`stepwise`; `lossy_dc` and `singlenode_dc` support explicit `vectorized` selection.
 
 The frozen legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
@@ -545,9 +546,17 @@ does not, by itself, complete this stage.
 
 ### M14d — Single-node DC and AC
 
-**Remaining work; implementation has not started.** Apply the same horizon
-contract to single-node DC first, reusing the existing vectorized component
-hooks and formulation-specific qualified bounds, then extend it to AC.
+**Single-node DC implemented; AC remains.** The single-node builder uses the
+existing vectorized component hooks and formulation-specific qualified bounds,
+one horizon-wide copper-plate balance, and typed result projections. Static
+load and renewable inputs retain broadcast provenance; device identities,
+terminal policies, time integration, and time-first public results are retained.
+The default remains stepwise. See
+`experiments/m14_time_vectorization/M14D_SINGLENODE_REPORT.md` and the paired
+JSON record for the initial Tracy comparison. This is a bounded single-node
+checkpoint for owner review; it does not close the DC/AC comparisons below.
+
+Next, extend the horizon contract to AC.
 This is feature implementation with correctness tests and an initial performance
 comparison, not a new solver qualification study or a required speedup contest.
 

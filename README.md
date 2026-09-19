@@ -520,6 +520,19 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
+For convex horizons, opt into vectorized assembly with
+`temporal_assembly="vectorized"` and either `formulation="lossy_dc"` or
+`formulation="singlenode_dc"`. `build.solve()` selects SCIPY canonicalization
+for this representation; the solver remains CLARABEL by default. The default
+assembly is still `"stepwise"`, and AC vectorization is not yet supported.
+
+Vectorized `build.variables` contain time-last CVXPY variables: for example,
+`Pg` has shape `(ng, T)` and storage `soc` has shape `(ns, T+1)`, including the
+initial boundary. Assign initialization through their `.value` attributes.
+`extract_results()` retains time-first arrays, including `Pg: (T, ng)`,
+post-step `soc: (T, ns)`, and single-node `p_net: (T,)`. Single-node assembly
+collapses bus injections while preserving device identity and reporting.
+
 ### Objective units and time discretization
 
 `delta` is the interval duration in hours. cvxopf treats generator, storage
@@ -861,9 +874,9 @@ package environment.
   mismatch and the certificate-backed tight-tolerance disposition are both
   tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual
   realization. A non-promotional default-solver matrix found no accepted
-  alternative annual arm. M14d remains: single-node DC vectorization, followed
-  by AC vectorization using existing initialization helpers and initial
-  Case9 performance comparisons (see
+  alternative annual arm. M14d single-node DC vectorization is implemented,
+  with an initial Case9 Tracy 3/24/168-hour comparison. AC vectorization using
+  existing initialization helpers and the DC/AC closure comparisons remain (see
   `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)

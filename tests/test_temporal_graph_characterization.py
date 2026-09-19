@@ -1,4 +1,4 @@
-"""M14a frozen characterization of the legacy temporal graph."""
+"""Frozen characterization of the stepwise temporal graph."""
 
 from contextlib import nullcontext
 from dataclasses import FrozenInstanceError, asdict

@@ -1,4 +1,4 @@
-"""M14a solved, failure, and scaling-record baselines."""
+"""Temporal scaling baselines for solved and failed problems."""
 
 import hashlib
 import json

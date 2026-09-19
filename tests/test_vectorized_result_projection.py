@@ -1,4 +1,4 @@
-"""Focused result-compatibility gates for M14b time-last horizons."""
+"""Result compatibility for vectorized time-last horizons."""
 
 from types import MappingProxyType
 
