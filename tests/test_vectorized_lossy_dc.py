@@ -224,7 +224,7 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
         )
     ]
     observed_hvdc_box_shapes: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    observed_load_eligible: list[tuple[tuple[int, ...], bool]] = []
+    observed_load_eligible: list[np.ndarray] = []
     observed_load_cost_shapes: list[tuple[int, ...]] = []
     original_coefficients = hvdc_module.loss_branch_coefficients
     original_load_channels = load_module.served_and_shed_expressions
@@ -249,7 +249,7 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
         **kwargs,
     ):
         eligible = np.asarray(p_eligible_mw.value)
-        observed_load_eligible.append((eligible.shape, eligible.flags.owndata))
+        observed_load_eligible.append(eligible)
         return original_load_channels(
             p_load_mw,
             q_load_mvar,
@@ -312,7 +312,11 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
     assert not pd_series.flags.owndata
     assert pd_series.strides[0] == 0
     assert observed_hvdc_box_shapes == [((1,), (1,))]
-    assert observed_load_eligible == [((1, 1), False)]
+    # CVXPY may copy the compact constant. The contract is one static column,
+    # not its NumPy ownership flag: copying (nload, 1) does not scale with T.
+    assert len(observed_load_eligible) == 1
+    assert observed_load_eligible[0].shape == (1, 1)
+    np.testing.assert_array_equal(observed_load_eligible[0], [[90.0]])
     assert observed_load_cost_shapes == [(1, 1)]
     assert {parameter.name() for parameter in build.prob.parameters()}.isdisjoint(
         {
