@@ -2,8 +2,8 @@
 
 ## Status
 
-**Agreed milestone requirements complete and owner-accepted; final closure is
-pending owner review of the completed independent Case118 replay experiment.** All three
+**Complete and owner-accepted; closed on 2026-09-20, including the additional
+independent Case118 replay experiment.** All three
 vectorized formulations are implemented, reviewed and accepted. The 168-hour
 stepwise AC attempts timed out at 180 and 1,800 seconds. Their missing numerical
 results remain a limitation, but the accepted bounded outcomes satisfy the
@@ -662,8 +662,10 @@ single-node and Case118 scaling campaigns; M14c's completed evidence remains
 unchanged.
 
 Annual S4, the downstream Case118 study, and the declared single-node and AC
-requirements are complete. The additional Case118 replay experiment is complete;
-final repository milestone closure awaits owner review and the closeout decision.
+requirements are complete. The additional Case118 replay experiment is complete
+and owner-accepted; the owner closed M14 on 2026-09-20. Runner-policy qualification
+for the future Tracy annual study is recorded in
+`plans/case118-tracy-2021-study-plan.md` and is separate from M14 closure.
 
 ## Verification ladder
 
@@ -796,8 +798,9 @@ M14c is
 complete: the exact 8,760-step Case118 lossy-DC outer problem cleared the annual
 resumption gate. M14d's implementation, validation and bounded comparison
 requirements are also complete and accepted, including disposition of both
-stepwise AC timeouts. The additional Case118 experiment is complete; final closure
-is pending owner review. Unavailable full-week stepwise AC results remain a limitation.
+stepwise AC timeouts. The additional Case118 experiment is complete and
+owner-accepted; M14 is closed. Unavailable full-week stepwise AC results remain
+a limitation.
 Completion retains
 both stepwise and vectorized modes as supported, profiled implementations.
 
@@ -824,7 +827,8 @@ Implementation, protocol, and analysis live in
 `experiments/case118_vectorization_replay/`; raw evidence is retained separately
 under `outputs/case118_vectorization_replay/`. Execution is complete: all 126
 windows passed the original physical audit in 72.08 minutes. Independent
-scientific results review returned clean; final closure awaits owner review.
+scientific results review returned clean; the owner accepted the experiment
+and closed M14 on 2026-09-20.
 
 For the 120 historical-primary cases, 108 replay solves were faster and 12
 slower. Population-weighted mean solve-phase time fell from 55.21 to 43.47

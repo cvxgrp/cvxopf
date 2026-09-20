@@ -890,9 +890,10 @@ package environment.
   their unavailable numerical results remain a limitation. The owner accepted
   these bounded outcomes as satisfying the comparison requirement (see
   `plans/milestone-14-time-vectorization.md`).
-- [ ] Final M14 closure: pending owner review of the completed Case118 replay
-  experiment (126/126 accepted; see `experiments/case118_vectorization_replay/REPORT.md`). The accepted stepwise AC timeouts are not
-  a closure blocker.
+- [x] Final M14 closure: owner-accepted on 2026-09-20, including the completed
+  Case118 replay experiment (126/126 accepted; see
+  `experiments/case118_vectorization_replay/REPORT.md`). The stepwise AC timeouts
+  and nonuniform replay timing gains remain documented limitations.
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)

@@ -67,5 +67,6 @@ Completed results are in [REPORT.md](REPORT.md). The final scientific review by
 coverage, matched timings and numerical outcomes, the final helper winner,
 attempt accounting, artifact hashes, and the telemetry cutoff. The focused
 replay/analysis and original race/attempt/integration suite passed all 123 tests;
-Ruff checks passed. This completes the experiment record for owner review and
-does not automatically close M14.
+Ruff checks passed. The owner accepted the experiment and closed M14 on
+2026-09-20. The report retains the timing and numerical limitations; future
+Tracy runner-policy qualification is scoped in its separate study plan.
