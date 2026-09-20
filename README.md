@@ -875,7 +875,8 @@ package environment.
 - [ ] SOCP network model
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
-- [ ] M14 time-vectorized multistep formulations: M14a–c are complete and
+- [x] M14 agreed implementation, validation and bounded comparison requirements:
+  all three time-vectorized formulations are reviewed and owner-accepted. M14a–c are complete and
   merged into `main` with the completed Case118 study. The vectorized lossy-DC
   path's conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
   accepted. The retained stepwise builder remains the default. The historical
@@ -885,8 +886,13 @@ package environment.
   realization. A non-promotional default-solver matrix found no accepted
   alternative annual arm. Single-node DC and AC vectorization are implemented,
   with Case9 Tracy comparisons and the existing AC initialization helpers.
-  The bounded 168-hour stepwise AC comparison remains incomplete (see
+  The 168-hour stepwise AC attempts timed out at 180 and 1,800 seconds;
+  their unavailable numerical results remain a limitation. The owner accepted
+  these bounded outcomes as satisfying the comparison requirement (see
   `plans/milestone-14-time-vectorization.md`).
+- [ ] Final M14 closure: pending one additional owner-requested experiment,
+  whose scope is not yet specified. The accepted stepwise AC timeouts are not
+  a closure blocker.
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)

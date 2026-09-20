@@ -2,10 +2,14 @@
 
 ## Status
 
-**In progress; all three vectorized formulations are implemented. Single-node DC
-is approved and committed; AC is ready for owner review. The owner accepted the
-168-hour stepwise AC timeout as the bounded comparison outcome on 2026-09-19;
-no longer-budget retry is required for closure.** The completed Case118 hierarchical study (`big-experiment`) was
+**Agreed milestone requirements complete and owner-accepted; final closure is
+pending one additional owner-requested experiment, not yet specified.** All three
+vectorized formulations are implemented, reviewed and accepted. The 168-hour
+stepwise AC attempts timed out at 180 and 1,800 seconds. Their missing numerical
+results remain a limitation, but the accepted bounded outcomes satisfy the
+comparison requirement and are not a closure blocker.
+
+The completed Case118 hierarchical study (`big-experiment`) was
 merged into `main` at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; the
 `m14-time-vectorization` branch was fast-forwarded to that checkpoint on
 2026-09-18. The accepted annual S4 solve already closes M14c's scaling gate.
@@ -558,7 +562,7 @@ does not, by itself, complete this stage.
 
 ### M14d — Single-node DC and AC
 
-**Single-node DC approved; AC implemented for owner review.** The single-node builder uses the
+**Implementation, validation and bounded comparisons complete and owner-accepted.** The single-node builder uses the
 existing vectorized component hooks and formulation-specific qualified bounds,
 one horizon-wide copper-plate balance, and typed result projections. Static
 load and renewable inputs retain broadcast provenance; device identities,
@@ -566,8 +570,8 @@ terminal policies, time integration, and time-first public results are retained.
 The default remains stepwise. See
 `experiments/m14_time_vectorization/M14D_SINGLENODE_REPORT.md` and the paired
 JSON record for the initial Tracy comparison. This is a bounded single-node
-checkpoint approved and committed at `6d02f09`; it does not close the DC/AC
-comparisons below.
+checkpoint approved and committed at `6d02f09`. The subsequent AC implementation
+and comparison checkpoint was owner-accepted and committed at `4b39099`.
 
 AC now extends the horizon contract with reactive device channels, explicit AC
 boxes, inverter circles, branch-terminal physics and time-first result projection.
@@ -602,8 +606,10 @@ trajectory was returned. Original outcomes remain unchanged; see
 `experiments/m14_time_vectorization/AC_STEPWISE_RETRY_RESULTS.json` and the AC
 report for the separate retry record. No further retry was launched.
 
-The implementation and agreed initial comparison are complete; AC remains ready
-for owner code review with the timeout disposition recorded above.
+The implementation and agreed initial comparison are complete and owner-accepted,
+with the timeout disposition recorded above. The owner has requested one further
+experiment before final M14 closure; its scope is pending. This does not reopen
+the accepted implementation or make a successful stepwise AC solve a requirement.
 This is feature implementation with correctness tests and an initial performance
 comparison, not a new solver qualification study or a required speedup contest.
 
@@ -653,10 +659,9 @@ tests. The comparison above replaces the proposed additional M14d annual
 single-node and Case118 scaling campaigns; M14c's completed evidence remains
 unchanged.
 
-Annual S4 and the downstream Case118 study are complete. M14 as a repository
-milestone is complete only after the declared single-node and AC scope also
-passes, or after a reviewed plan
-revision explicitly narrows that scope.
+Annual S4, the downstream Case118 study, and the declared single-node and AC
+requirements are complete. Final repository milestone closure awaits the owner's
+additional experiment and closeout decision.
 
 ## Verification ladder
 
@@ -787,5 +792,9 @@ complete the agreed initial performance comparison. M14c already demonstrates
 the long-horizon lossy-DC scaling benefit; M14d has no required speedup threshold.
 M14c is
 complete: the exact 8,760-step Case118 lossy-DC outer problem cleared the annual
-resumption gate. M14d remains required for milestone closure. Completion retains
+resumption gate. M14d's implementation, validation and bounded comparison
+requirements are also complete and accepted, including disposition of both
+stepwise AC timeouts. Final closure is pending the additional owner-requested
+experiment; unavailable full-week stepwise AC results are a retained limitation.
+Completion retains
 both stepwise and vectorized modes as supported, profiled implementations.

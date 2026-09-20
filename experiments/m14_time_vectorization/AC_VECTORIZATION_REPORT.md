@@ -1,6 +1,7 @@
 # AC vectorization and Case9 Tracy comparison
 
-AC time vectorization is implemented for owner review. Both modes retain
+AC time vectorization is implemented, reviewed and owner-accepted, with the
+implementation and comparison checkpoint committed at `4b39099`. Both modes retain
 `build.solve()` with `nlp=True, solver=cp.IPOPT`; no CPP/SCIPY backend is selected
 for AC. Stepwise remains the default. The single-node checkpoint was approved
 and committed at `6d02f09`. **The owner accepted the 168-hour stepwise AC
@@ -174,12 +175,14 @@ Four additional deterministic comparison tests pass, including reversed-flow
 audit rejection, disjoint phase accounting, and preservation of execution metadata
 when recollecting under a changed collector context. Ruff and configured mypy pass.
 
-The AC feature is ready for owner review after independent public-tool review.
+The AC feature passed independent public-tool review and was owner-accepted.
 The owner accepted the full-week stepwise timeout as satisfying the bounded
 initial comparison requirement on 2026-09-19. No retry was required for closure.
 The owner subsequently requested the single longer-budget retry documented above;
-it also timed out. Both outcomes remain recorded as timeouts. AC code review by
-the owner remains the next step.
+it also timed out. Both outcomes remain recorded as timeouts. The agreed M14
+requirements are complete; final closure awaits one additional owner-requested
+experiment, whose scope has not yet been specified. The missing full-week
+stepwise numerical results remain a limitation, not a closure blocker.
 
 The comparison module preserves existing local outcomes. Use `--collect` to
 rebuild its compact record without solving. Its collector hash is separate from
