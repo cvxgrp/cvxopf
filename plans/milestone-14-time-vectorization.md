@@ -3,7 +3,7 @@
 ## Status
 
 **Agreed milestone requirements complete and owner-accepted; final closure is
-pending one additional owner-requested experiment, not yet specified.** All three
+pending owner review of the completed independent Case118 replay experiment.** All three
 vectorized formulations are implemented, reviewed and accepted. The 168-hour
 stepwise AC attempts timed out at 180 and 1,800 seconds. Their missing numerical
 results remain a limitation, but the accepted bounded outcomes satisfy the
@@ -607,8 +607,10 @@ trajectory was returned. Original outcomes remain unchanged; see
 report for the separate retry record. No further retry was launched.
 
 The implementation and agreed initial comparison are complete and owner-accepted,
-with the timeout disposition recorded above. The owner has requested one further
-experiment before final M14 closure; its scope is pending. This does not reopen
+with the timeout disposition recorded above. The owner requested one further
+experiment before final M14 closure: independent vectorized Case118 three-hour
+replays of 120 historical primary winners and six helper winners. That experiment
+is now complete, with results below. This does not reopen
 the accepted implementation or make a successful stepwise AC solve a requirement.
 This is feature implementation with correctness tests and an initial performance
 comparison, not a new solver qualification study or a required speedup contest.
@@ -660,8 +662,8 @@ single-node and Case118 scaling campaigns; M14c's completed evidence remains
 unchanged.
 
 Annual S4, the downstream Case118 study, and the declared single-node and AC
-requirements are complete. Final repository milestone closure awaits the owner's
-additional experiment and closeout decision.
+requirements are complete. The additional Case118 replay experiment is complete;
+final repository milestone closure awaits owner review and the closeout decision.
 
 ## Verification ladder
 
@@ -794,7 +796,45 @@ M14c is
 complete: the exact 8,760-step Case118 lossy-DC outer problem cleared the annual
 resumption gate. M14d's implementation, validation and bounded comparison
 requirements are also complete and accepted, including disposition of both
-stepwise AC timeouts. Final closure is pending the additional owner-requested
-experiment; unavailable full-week stepwise AC results are a retained limitation.
+stepwise AC timeouts. The additional Case118 experiment is complete; final closure
+is pending owner review. Unavailable full-week stepwise AC results remain a limitation.
 Completion retains
 both stepwise and vectorized modes as supported, profiled implementations.
+
+
+## Additional Case118 replay experiment (2026-09-20)
+
+The owner approved vectorized-only replays of a frozen random sample from the
+completed toy Case118 study, compared with its recorded stepwise timings. Sample
+120 successful primary winners with proportional quantile coverage and modest
+tail oversampling, plus six historical helper winners spanning race latency.
+Each replay preserves the historical problem, initial SoC, terminal target,
+causal initialization, solver settings, and costs. Replays are independent: no
+new solution is fed into another window.
+
+Reuse the unchanged two-primary/one-helper experimental ladder, including helper
+eligibility, bounded attempts, uncapped primary/recovery, and first accepted
+winner. A historical helper win may now finish in the primary before a race
+starts, or elect a different winner. Do not add an alternate timeout policy.
+The frozen seed is 20260920; eligible populations contain 5,154 primary and 55
+helper wins. The sample selects 11 from each lower decile, seven each from
+p90–95/p95–99/p99–100, and one helper winner per latency sextile.
+
+Implementation, protocol, and analysis live in
+`experiments/case118_vectorization_replay/`; raw evidence is retained separately
+under `outputs/case118_vectorization_replay/`. Execution is complete: all 126
+windows passed the original physical audit in 72.08 minutes. Independent
+scientific results review returned clean; final closure awaits owner review.
+
+For the 120 historical-primary cases, 108 replay solves were faster and 12
+slower. Population-weighted mean solve-phase time fell from 55.21 to 43.47
+seconds; median time fell from 36.38 to 23.87 seconds. The estimated 99th
+percentile increased from 328.88 to 499.01 seconds, so the improvement is not
+uniform in the tail. Five historical helper winners now finish through the
+primary; the sixth is won by helper order 3 instead of order 6, with window
+latency falling from 2,338.05 to 958.50 seconds. The maximum absolute relative
+objective change is 0.00079487%, below the 0.1% inspection threshold, while
+individual dispatch trajectories can differ. Cooling changed mid-run and later
+thermal telemetry is retained; timing comparisons are observational. See
+`experiments/case118_vectorization_replay/REPORT.md` for clocks, weights, races,
+limitations, and evidence. The previously accepted M14 requirements remain complete.
