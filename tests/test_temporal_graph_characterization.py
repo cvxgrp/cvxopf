@@ -100,14 +100,6 @@ def test_temporal_selector_is_closed_and_vectorized_scope_is_explicit():
             T=1,
             temporal_assembly="other",  # type: ignore[arg-type]
         )
-    with pytest.raises(NotImplementedError, match="only.*lossy_dc"):
-        build_opf_multistep(
-            case9(),
-            active,
-            reactive,
-            T=1,
-            temporal_assembly="vectorized",
-        )
 
     build = build_opf_multistep(
         case9(),

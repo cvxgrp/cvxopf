@@ -2,15 +2,17 @@
 
 ## Status
 
-**In progress; M14a–c are complete. M14d single-node DC is implemented for
-owner review; AC vectorization remains.** The completed Case118 hierarchical study (`big-experiment`) was
+**In progress; all three vectorized formulations are implemented. Single-node DC
+is approved and committed; AC is ready for owner review. The owner accepted the
+168-hour stepwise AC timeout as the bounded comparison outcome on 2026-09-19;
+no longer-budget retry is required for closure.** The completed Case118 hierarchical study (`big-experiment`) was
 merged into `main` at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; the
 `m14-time-vectorization` branch was fast-forwarded to that checkpoint on
 2026-09-18. The accepted annual S4 solve already closes M14c's scaling gate.
 The single-node DC slice reuses the qualified vectorized device hooks and
-retains the public result shapes. AC vectorization follows using the existing
-initialization helpers as described under M14d. The public default remains
-`stepwise`; `lossy_dc` and `singlenode_dc` support explicit `vectorized` selection.
+retains the public result shapes. AC now uses the shared horizon hooks and existing initialization helpers as
+described under M14d. The public default remains `stepwise`; all three
+formulations support explicit `vectorized` selection.
 
 The frozen legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
@@ -202,6 +204,16 @@ already matrix-shaped. Flattening an intrinsic matrix axis into a two-
 dimensional workaround is not the default design; it requires characterization
 showing a material advantage while preserving explicit, deterministic index
 semantics.
+
+**Characterized AC/DNLP exception:** the installed derivative engine rejects
+variables with more than two dimensions (`build_var_dict` unpacks exactly two
+shape entries). Vectorized AC removes the redundant voltage/angle singleton
+axis to use `(nb, T)`. Sparse P/Q stays `(nnz, T)`; dense P/Q uses `(nb*nb, T)`
+with explicit row-major bus-pair index `i*nb+j`, reconstructable as `(nb, nb, T)`
+in NumPy C order. Both representations pass independent power-flow checks and
+short paired solves. This limited packing exception preserves all spatial
+coordinates and the final time axis; it does not change public result shapes.
+No CVXPY dependency patch or backend change is involved.
 
 The lifting rule does not apply to static network/device data, incidence or
 admittance matrices, integrated horizon-cost scalars, or fixed boundary data.
@@ -546,7 +558,7 @@ does not, by itself, complete this stage.
 
 ### M14d — Single-node DC and AC
 
-**Single-node DC implemented; AC remains.** The single-node builder uses the
+**Single-node DC approved; AC implemented for owner review.** The single-node builder uses the
 existing vectorized component hooks and formulation-specific qualified bounds,
 one horizon-wide copper-plate balance, and typed result projections. Static
 load and renewable inputs retain broadcast provenance; device identities,
@@ -554,9 +566,44 @@ terminal policies, time integration, and time-first public results are retained.
 The default remains stepwise. See
 `experiments/m14_time_vectorization/M14D_SINGLENODE_REPORT.md` and the paired
 JSON record for the initial Tracy comparison. This is a bounded single-node
-checkpoint for owner review; it does not close the DC/AC comparisons below.
+checkpoint approved and committed at `6d02f09`; it does not close the DC/AC
+comparisons below.
 
-Next, extend the horizon contract to AC.
+AC now extends the horizon contract with reactive device channels, explicit AC
+boxes, inverter circles, branch-terminal physics and time-first result projection.
+See `experiments/m14_time_vectorization/AC_VECTORIZATION_REPORT.md`,
+`AC_DC_COMPARISON_RESULTS.json`, and `NETWORK_TRAJECTORY_CHECKS.json` in that
+directory. The full suite passed (2,858 tests plus six subtests); the existing
+hierarchy initialization and regression checks remain clean.
+
+The selected week’s first 3 and 24 hours completed for both DC and AC modes.
+Lossy DC completed both 168-hour modes. Vectorized AC completed 168 hours in
+116.77 seconds with 830.5 MiB peak RSS and passed independent physical audits.
+Stepwise AC hit the 180-second worker-wall bound; its solver status and peak RSS
+are unavailable. A 91-second snapshot showed about 10.2 GiB RSS. This is a
+censored outcome, not infeasibility or a completed long-horizon numerical pair.
+All completed objective comparisons were below the 0.1% expectation. Larger
+primal differences were investigated by assigning the solutions into both actual
+model graphs, including the vectorized full-week AC solution in the stepwise
+graph. This does not establish a completed paired solve. On 2026-09-19, the
+owner accepted the bounded timeout as the full-week stepwise comparison outcome;
+the initial performance comparison requirement is satisfied without a retry.
+The missing full-week stepwise objective and trajectory remain unavailable.
+The owner also accepted the unpriced reactive allocation differences with the
+feasibility and objective checks passing; reactive regularization remains future
+work under M20, not an M14 closure requirement.
+
+On 2026-09-20, the owner requested one optional longer-budget AC stepwise T=168
+retry. It also timed out at the 1,800-second worker-wall limit (1,800.41 seconds
+including termination overhead), with IPOPT's CPU limit raised to 1,800 seconds
+and all other solve settings retained. The maximum sampled RSS was 11,098.1 MiB
+(10.84 GiB), not a measured process peak. No final solver status, objective or
+trajectory was returned. Original outcomes remain unchanged; see
+`experiments/m14_time_vectorization/AC_STEPWISE_RETRY_RESULTS.json` and the AC
+report for the separate retry record. No further retry was launched.
+
+The implementation and agreed initial comparison are complete; AC remains ready
+for owner code review with the timeout disposition recorded above.
 This is feature implementation with correctness tests and an initial performance
 comparison, not a new solver qualification study or a required speedup contest.
 
@@ -575,7 +622,7 @@ comparison, not a new solver qualification study or a required speedup contest.
   peak net load is 1,765.9732 MW, minimum net load is −5,426.0595 MW, and
   108 of 168 hours have positive net load. These are source-scale input
   statistics, before Case9 scaling, curtailment, losses, or storage dispatch.
-  The T=3 slice and intermediate horizon steps remain to be selected.
+  The execution uses its first 3 hours and a 24-hour intermediate prefix.
 - Inherit the AC initialization helper method developed for the Case118
   hierarchical study. CVXPY variable `.value` is the initialization interface
   for scalar and array variables alike. Adapt the existing helpers' shapes and

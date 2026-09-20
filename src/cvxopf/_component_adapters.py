@@ -324,6 +324,8 @@ def _load_vectorized_variable_specs(
     nsheddable = cast(int, prepared["nsheddable"])
     if nsheddable == 0:
         return ()
+    if context.formulation == "ac":
+        return (HorizonVariableSpec("load_shed_fraction", (nsheddable,)),)
     indices = _array(prepared, "sheddable_load_indices")
     maximum = _array(prepared, "load_max_shed_fraction")[indices]
     p_temporal_class = cast(TemporalClass, prepared["_load_p_temporal_class"])
@@ -370,9 +372,13 @@ def _load_vectorized_assembly(
     fraction = variables.get("load_shed_fraction")
     stage_cost_rate: cp.Expression | None = None
     horizon = HorizonContribution()
+    constraints: tuple[cp.Constraint, ...] = ()
     if fraction is None:
         p_served = p_load
+        q_served = q_load
         expressions["p_load_served"] = p_served
+        if context.formulation == "ac":
+            expressions["q_load_served"] = q_served
     else:
         indices = _array(prepared, "sheddable_load_indices")
         p_temporal_class = cast(TemporalClass, prepared["_load_p_temporal_class"])
@@ -390,8 +396,16 @@ def _load_vectorized_assembly(
             cast(int, prepared["nload"]),
             interval_axis=1,
         )
-        channels.pop("q_load_served", None)
-        channels.pop("q_load_shed", None)
+        q_served = channels["q_load_served"]
+        if context.formulation != "ac":
+            channels.pop("q_load_served", None)
+            channels.pop("q_load_shed", None)
+        else:
+            constraints = tuple(load.shedding_constraints(
+                fraction,
+                _array(prepared, "load_max_shed_fraction")[indices, np.newaxis],
+                cp.Constant((p_values[indices] > 0).astype(float)),
+            ))
         p_shed = channels["p_load_shed"]
         p_served = channels["p_load_served"]
         costs = _array(prepared, "load_shedding_cost_per_mwh")[indices]
@@ -408,9 +422,13 @@ def _load_vectorized_assembly(
                 "energy_not_served": cp.sum(ens_by_load),
             }
         )
-    p_pu, q_pu, scale = load.dc_injections(p_served, _array(prepared, "Cload"))
+    if context.formulation == "ac":
+        p_pu, q_pu, scale = load.ac_injections(p_served, q_served, _array(prepared, "Cload"))
+    else:
+        p_pu, q_pu, scale = load.dc_injections(p_served, _array(prepared, "Cload"))
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
+        operating_constraints=constraints,
         stage_cost_rate=stage_cost_rate,
         expressions=expressions,
         horizon=horizon,
@@ -425,6 +443,8 @@ LOAD_AC = FormulationAdapter[Load](
     step_cost=_load_step_cost,
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
+    vectorized_variable_specs=_load_vectorized_variable_specs,
+    vectorized_assembly=_load_vectorized_assembly,
 )
 LOAD_DC = FormulationAdapter[Load](
     capability=FormulationCapability.ACTIVE,
@@ -622,6 +642,8 @@ def _generator_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     ng = cast(int, prepared["ng"])
+    if context.formulation == "ac":
+        return (HorizonVariableSpec("Pg", (ng,)), HorizonVariableSpec("Qg", (ng,)))
     attributes = _leaf_bounds(
         _array(prepared, "Pgmin"),
         _array(prepared, "Pgmax"),
@@ -638,12 +660,29 @@ def _generator_vectorized_assembly(
     variables: Mapping[str, cp.Variable],
     context: VectorizedContext,
 ) -> VectorizedModelContribution:
-    p_pu, q_pu, scale = generator.dc_injections(
-        list(units),
-        variables["Pg"],
-        dict(context.ext_to_int),
-        incidence=_array(prepared, "Cg"),
-    )
+    constraints: tuple[cp.Constraint, ...] = ()
+    network: tuple[cp.Constraint, ...] = ()
+    if context.formulation == "ac":
+        p_pu, q_pu, scale = generator.ac_injections(
+            list(units), variables["Pg"], variables["Qg"],
+            dict(context.ext_to_int), incidence=_array(prepared, "Cg"),
+        )
+        constraints = tuple(generator.ac_operating_constraints(
+            variables["Pg"], variables["Qg"],
+            *[_array(prepared, key)[:, np.newaxis]
+              for key in ("Pgmin", "Pgmax", "Qgmin", "Qgmax")],
+        ))
+        state = context.network_state
+        assert isinstance(state, ACNetworkState)
+        network = tuple(generator.ac_network_constraints(
+            list(units), state.voltage, dict(context.ext_to_int), state.controlled_buses,
+            enforce_vset=state.enforce_vset,
+        ))
+    else:
+        p_pu, q_pu, scale = generator.dc_injections(
+            list(units), variables["Pg"], dict(context.ext_to_int),
+            incidence=_array(prepared, "Cg"),
+        )
     cost_rate = generator.horizon_cost_rate(
         _array(prepared, "gencost"),
         context.base_mva * variables["Pg"],
@@ -651,6 +690,8 @@ def _generator_vectorized_assembly(
     )
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
+        operating_constraints=constraints,
+        network_constraints=network,
         stage_cost_rate=cost_rate,
     )
 
@@ -663,6 +704,8 @@ GENERATOR_AC = FormulationAdapter[DispatchableGenerator](
     network_constraints=_generator_network_constraints,
     step_cost=_generator_step_cost,
     horizon=_generator_horizon,
+    vectorized_variable_specs=_generator_vectorized_variable_specs,
+    vectorized_assembly=_generator_vectorized_assembly,
 )
 GENERATOR_DC = FormulationAdapter[DispatchableGenerator](
     capability=FormulationCapability.ACTIVE,
@@ -838,6 +881,8 @@ def _nd_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     nnd = cast(int, prepared["nnd"])
+    if context.formulation == "ac":
+        return (HorizonVariableSpec("p_nd", (nnd,)), HorizonVariableSpec("q_nd", (nnd,)))
     temporal_class = cast(TemporalClass, prepared["nd_available_temporal_class"])
     available = (
         _array(prepared, "nd_available_source_mw")
@@ -867,14 +912,24 @@ def _nd_vectorized_assembly(
     variables: Mapping[str, cp.Variable],
     context: VectorizedContext,
 ) -> VectorizedModelContribution:
-    p_pu, q_pu, scale = nondispatchable.dc_injections(
-        list(units),
-        variables["p_nd"],
-        dict(context.ext_to_int),
-        incidence=_array(prepared, "Cnd"),
-    )
+    constraints: tuple[cp.Constraint, ...] = ()
+    if context.formulation == "ac":
+        p_pu, q_pu, scale = nondispatchable.ac_injections(
+            list(units), variables["p_nd"], variables["q_nd"],
+            dict(context.ext_to_int), incidence=_array(prepared, "Cnd"),
+        )
+        constraints = tuple(nondispatchable.vectorized_ac_operating_constraints(
+            list(units), variables["p_nd"], variables["q_nd"],
+            _array(prepared, "nd_available_mw").T,
+        ))
+    else:
+        p_pu, q_pu, scale = nondispatchable.dc_injections(
+            list(units), variables["p_nd"], dict(context.ext_to_int),
+            incidence=_array(prepared, "Cnd"),
+        )
     return VectorizedModelContribution(
-        injection=InjectionContribution(p_pu, q_pu, scale)
+        injection=InjectionContribution(p_pu, q_pu, scale),
+        operating_constraints=constraints,
     )
 
 
@@ -884,6 +939,8 @@ ND_AC = FormulationAdapter[NondispatchableUnit](
     injections=_nd_injections,
     operating_constraints=_nd_operating_constraints,
     horizon=_nd_horizon,
+    vectorized_variable_specs=_nd_vectorized_variable_specs,
+    vectorized_assembly=_nd_vectorized_assembly,
 )
 ND_DC = FormulationAdapter[NondispatchableUnit](
     capability=FormulationCapability.ACTIVE,
@@ -1020,6 +1077,12 @@ def _storage_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     ns = cast(int, prepared["ns"])
+    if context.formulation == "ac":
+        return (
+            HorizonVariableSpec("b", (ns,)), HorizonVariableSpec("b_q", (ns,)),
+            HorizonVariableSpec("soc", (ns,), temporal_class="boundary",
+                                result_view="post_step_boundaries"),
+        )
     rating = _array(prepared, "storage_apparent_power_rating")
     capacity = _array(prepared, "storage_capacity")
     power_attributes = _leaf_bounds(
@@ -1057,12 +1120,19 @@ def _storage_vectorized_assembly(
 ) -> VectorizedModelContribution:
     power = variables["b"]
     soc = variables["soc"]
-    p_pu, q_pu, scale = storage.dc_injections(
-        list(units),
-        power,
-        dict(context.ext_to_int),
-        incidence=_array(prepared, "Cs"),
-    )
+    operating: tuple[cp.Constraint, ...] = ()
+    if context.formulation == "ac":
+        p_pu, q_pu, scale = storage.ac_injections(
+            list(units), power, variables["b_q"], dict(context.ext_to_int),
+            incidence=_array(prepared, "Cs"),
+        )
+        operating = tuple(storage.vectorized_ac_operating_constraints(
+            list(units), power, variables["b_q"], soc,
+        ))
+    else:
+        p_pu, q_pu, scale = storage.dc_injections(
+            list(units), power, dict(context.ext_to_int), incidence=_array(prepared, "Cs"),
+        )
     constraints = storage.vectorized_coupling_constraints(
         list(units), power, soc, context.delta
     )
@@ -1073,6 +1143,7 @@ def _storage_vectorized_assembly(
     )
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
+        operating_constraints=operating,
         stage_cost_rate=stage_cost_rate,
         horizon=HorizonContribution(
             constraints=tuple(constraints),
@@ -1089,6 +1160,8 @@ STORAGE_AC = FormulationAdapter[StorageUnitIdeal](
     operating_constraints=_storage_operating_constraints,
     step_cost=_storage_step_cost,
     horizon=_storage_horizon,
+    vectorized_variable_specs=_storage_vectorized_variable_specs,
+    vectorized_assembly=_storage_vectorized_assembly,
 )
 STORAGE_DC = FormulationAdapter[StorageUnitIdeal](
     capability=FormulationCapability.ACTIVE,
@@ -1289,6 +1362,9 @@ def _hvdc_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     count = cast(int, prepared["n_hvdc"])
+    if context.formulation == "ac":
+        return (HorizonVariableSpec("p_hvdc_in", (count,)),
+                HorizonVariableSpec("p_hvdc_out", (count,)))
     temporal_class = cast(TemporalClass, prepared["hvdc_temporal_class"])
     lower = (
         _array(prepared, "hvdc_p_min_source_mw")
@@ -1355,9 +1431,13 @@ def _hvdc_vectorized_assembly(
     )
     coefficients = _hvdc_vectorized_coefficients(units, prepared)
     cost_rate = hvdc.hvdc_cost_expr(list(units), p_in)
+    bounds = () if context.formulation != "ac" else (
+        p_in >= _array(prepared, "hvdc_p_min_mw").T,
+        p_in <= _array(prepared, "hvdc_p_max_mw").T,
+    )
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
-        operating_constraints=(p_out == cp.multiply(coefficients, p_in),),
+        operating_constraints=(p_out == cp.multiply(coefficients, p_in), *bounds),
         stage_cost_rate=cost_rate,
     )
 
@@ -1369,6 +1449,8 @@ HVDC_AC = FormulationAdapter[HVDCLink](
     operating_constraints=_hvdc_operating_constraints,
     step_cost=_hvdc_step_cost,
     horizon=_hvdc_horizon,
+    vectorized_variable_specs=_hvdc_vectorized_variable_specs,
+    vectorized_assembly=_hvdc_vectorized_assembly,
 )
 HVDC_DC = FormulationAdapter[HVDCLink](
     capability=FormulationCapability.ACTIVE,

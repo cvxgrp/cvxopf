@@ -520,11 +520,11 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
-For convex horizons, opt into vectorized assembly with
-`temporal_assembly="vectorized"` and either `formulation="lossy_dc"` or
-`formulation="singlenode_dc"`. `build.solve()` selects SCIPY canonicalization
-for this representation; the solver remains CLARABEL by default. The default
-assembly is still `"stepwise"`, and AC vectorization is not yet supported.
+Opt into vectorized assembly with `temporal_assembly="vectorized"` for
+`"ac"`, `"lossy_dc"`, or `"singlenode_dc"`. `build.solve()` selects SCIPY
+canonicalization and CLARABEL for convex formulations; AC uses the same
+DNLP/IPOPT path as stepwise AC, with no CPP/SCIPY backend selection.
+The default assembly is still `"stepwise"`.
 
 Vectorized `build.variables` contain time-last CVXPY variables: for example,
 `Pg` has shape `(ng, T)` and storage `soc` has shape `(ns, T+1)`, including the
@@ -532,6 +532,15 @@ initial boundary. Assign initialization through their `.value` attributes.
 `extract_results()` retains time-first arrays, including `Pg: (T, ng)`,
 post-step `soc: (T, ns)`, and single-node `p_net: (T,)`. Single-node assembly
 collapses bus injections while preserving device identity and reporting.
+
+Vectorized AC voltage and angle variables have shape `(nb, T)`, and sparse
+`P_vec`/`Q_vec` have shape `(nnz, T)`. CVXPY's current DNLP derivative engine
+supports at most two variable dimensions. For `sparse_pq=False`, dense `P`/`Q`
+therefore use `(nb*nb, T)`, with bus pair `(i, j)` stored at row `i*nb+j`.
+For example, reshape a solved `P.value` to `(nb, nb, T)` with NumPy's default
+C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
+shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
+explicit constraints.
 
 ### Objective units and time discretization
 
@@ -874,9 +883,9 @@ package environment.
   mismatch and the certificate-backed tight-tolerance disposition are both
   tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual
   realization. A non-promotional default-solver matrix found no accepted
-  alternative annual arm. M14d single-node DC vectorization is implemented,
-  with an initial Case9 Tracy 3/24/168-hour comparison. AC vectorization using
-  existing initialization helpers and the DC/AC closure comparisons remain (see
+  alternative annual arm. Single-node DC and AC vectorization are implemented,
+  with Case9 Tracy comparisons and the existing AC initialization helpers.
+  The bounded 168-hour stepwise AC comparison remains incomplete (see
   `plans/milestone-14-time-vectorization.md`).
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)

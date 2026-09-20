@@ -228,6 +228,13 @@ def ac_operating_constraints(
     return constraints
 
 
+def vectorized_ac_operating_constraints(units, p_nd, q_nd, p_available) -> list:
+    """Time-last availability bounds and per-interval inverter circles."""
+    rating = _nd_static_data(units)["nd_apparent_power_rating"]
+    return [p_nd >= 0, p_nd <= p_available,
+            cp.square(p_nd) + cp.square(q_nd) <= rating[:, None] ** 2]
+
+
 def dc_operating_constraints(
     units: list,
     p_nd: cp.Variable,

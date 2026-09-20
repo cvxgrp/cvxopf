@@ -353,10 +353,12 @@ def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
 
 
 def _get_vectorized_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.ac_problem import _build_ac_vectorized
     from cvxopf.dc_problem import _build_lossy_dc_vectorized
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_vectorized
 
     return {
+        "ac": _build_ac_vectorized,
         "lossy_dc": _build_lossy_dc_vectorized,
         "singlenode_dc": _build_singlenode_dc_vectorized,
     }
@@ -620,8 +622,8 @@ def build_opf_multistep(
     temporal_assembly : {"stepwise", "vectorized"}, optional
         Temporal graph representation. ``"stepwise"`` preserves the existing
         per-interval builder and remains the compatibility default.
-        ``"vectorized"`` selects time-last assembly for ``"lossy_dc"`` and
-        ``"singlenode_dc"``. AC rejects that pairing until separately qualified.
+        ``"vectorized"`` selects time-last assembly for all three formulations.
+        AC retains the DNLP/IPOPT solve path.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).
@@ -688,7 +690,7 @@ def build_opf_multistep(
     ):
         raise NotImplementedError(
             "temporal_assembly='vectorized' is currently supported only for "
-            "formulations 'lossy_dc' and 'singlenode_dc'"
+            "registered vectorized formulations"
         )
 
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(

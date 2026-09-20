@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from typing import Any
 import warnings
 
@@ -740,22 +739,6 @@ def test_partial_unusable_primal_retains_stable_production_schema():
     assert step_results["objective"] == pytest.approx(
         vector_results["objective"], abs=ATOL
     )
-
-
-@pytest.mark.parametrize("formulation", ["ac"])
-def test_unqualified_vectorized_formulations_are_rejected(formulation: str):
-    active, reactive = _legacy_frames(1)
-    context = nullcontext()
-    with context:
-        with pytest.raises(NotImplementedError, match="only.*lossy_dc"):
-            build_opf_multistep(
-                case9(),
-                active,
-                reactive,
-                T=1,
-                formulation=formulation,
-                temporal_assembly="vectorized",
-            )
 
 
 def test_vectorized_solve_rejects_conflicting_canonicalization_backend():
