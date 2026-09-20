@@ -193,7 +193,21 @@ def test_constant_only_generator_cost_is_broadcast_over_horizon():
     )
 
 
-def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypatch):
+@pytest.mark.parametrize("copy_constants", [False, True])
+def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(
+    monkeypatch, copy_constants,
+):
+    if copy_constants:
+        # Exercise dependency stacks that copy arrays at the Constant boundary.
+        from cvxpy.interface.numpy_interface.ndarray_interface import NDArrayInterface
+
+        original_conversion = NDArrayInterface.const_to_matrix
+
+        def copy_constant(self, value, convert_scalars=False):
+            return original_conversion(self, value, convert_scalars).copy()
+
+        monkeypatch.setattr(NDArrayInterface, "const_to_matrix", copy_constant)
+
     steps = 100
     loads = [
         Load(
@@ -326,14 +340,19 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
             "load_q_mvar",
         }
     )
-    assert np.shares_memory(
-        np.asarray(build.expressions["p_load"].value),
-        np.asarray(build.data["load_p_source_mw"]),
-    )
-    assert np.shares_memory(
-        np.asarray(build.expressions["q_load"].value),
-        np.asarray(build.data["load_q_source_mvar"]),
-    )
+    for expression_name, source_name in (
+        ("p_load", "load_p_source_mw"),
+        ("q_load", "load_q_source_mvar"),
+    ):
+        expression = build.expressions[expression_name]
+        source = np.asarray(build.data[source_name])
+        # A compact leaf may be copied, but must never store a full horizon.
+        assert [constant.shape for constant in expression.constants()] == [(1, 1)]
+        values = np.asarray(expression.value)
+        np.testing.assert_array_equal(
+            values, np.broadcast_to(source[:, None], (1, steps)),
+        )
+        assert values.strides[-1] == 0
     for name in ("load_shed_fraction", "p_nd", "p_hvdc_in"):
         bounds = build.variables[name].attributes["bounds"]
         assert bounds is not None

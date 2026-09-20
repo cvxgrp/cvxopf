@@ -362,9 +362,23 @@ def _load_vectorized_assembly(
     context: VectorizedContext,
 ) -> VectorizedModelContribution:
     p_values = _array(prepared, "_load_p_mw_by_step").T
-    q_values = _array(prepared, "_load_q_mvar_by_step").T
-    p_load = cp.Constant(p_values)
-    q_load = cp.Constant(q_values)
+
+    def load_constant(channel: str, unit: str) -> cp.Expression:
+        source = _array(prepared, f"_load_{channel}_{unit}_source")
+        if source.size == 0:
+            # Empty affine expressions lose their axes on value evaluation.
+            return cp.Constant(np.empty((0, context.horizon_steps)))
+        if prepared[f"_load_{channel}_temporal_class"] == "static":
+            # Copying a broadcast NumPy view inside Constant can materialize T
+            # columns. Keep the leaf compact and broadcast in the graph instead.
+            return cp.broadcast_to(
+                cp.Constant(source[:, np.newaxis]),
+                (source.size, context.horizon_steps),
+            )
+        return cp.Constant(source.T)
+
+    p_load = load_constant("p", "mw")
+    q_load = load_constant("q", "mvar")
     expressions: dict[str, cp.Expression] = {
         "p_load": p_load,
         "q_load": q_load,
