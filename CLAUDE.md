@@ -850,6 +850,12 @@ docstring.
 
 ## Fresh coding sessions
 
+Before launching a long-running local computation, check that process monitoring
+(`ps`) and the intended thermal telemetry work with the execution permissions
+that will be used for the run. Obtain any required permissions before launching
+workers; a successful shell launch does not establish that its child processes
+can monitor the run. Do not edit tracked files while a source-bound run is active.
+
 1. Read `CLAUDE.md` before touching code.
 2. Inspect `git status --short` and preserve unrelated user changes.
 3. Check `git log --oneline -10` and the relevant milestone or experiment

@@ -55,3 +55,8 @@ The paired historical comparison also includes a dependency upgrade and changing
 machine conditions. It does not isolate a causal vectorization speedup. Inspect
 objective differences above 0.1%, numerical audits, and changed winners before
 interpreting timing differences.
+
+For the separately authorized two-solve investigation of the failed primary at
+hour 6047, see [PRIMARY_DIAGNOSTIC.md](PRIMARY_DIAGNOSTIC.md). That diagnostic
+compares stepwise with time-vectorized assembly, with spatial P/Q vectorization
+enabled in both, and does not resume or modify the 120+6 replay.
