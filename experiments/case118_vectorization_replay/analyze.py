@@ -33,10 +33,12 @@ def wrapped_angle_delta(new, old):
     return (np.asarray(new) - np.asarray(old) + 180) % 360 - 180
 
 
-def temperature_snapshot(end):
+def temperature_snapshot(end, *, output=None, folder=None):
     """Freeze complete collector records received no later than solve completion."""
-    folder = OUT / "temperature_telemetry" / "20260920T203816Z"
-    if not folder.exists():
+    output = OUT if output is None else output
+    folder = (output / "temperature_telemetry" / "20260920T203816Z"
+              if folder is None else folder)
+    if not (folder / "samples.jsonl").exists():
         return None
     metadata = read(folder / "metadata.json")
     lines = [
@@ -48,7 +50,7 @@ def temperature_snapshot(end):
     samples = [json.loads(line) for line in lines]
     if not samples:
         return None
-    snapshot = OUT / "temperature_samples.jsonl"
+    snapshot = output / "temperature_samples.jsonl"
     snapshot.write_bytes(b"".join(lines))
     return dict(
         metadata=metadata,
@@ -68,9 +70,10 @@ def temperature_snapshot(end):
     )
 
 
-def analyze():
-    root = OUT / "run"
-    manifest = read(OUT / "sample.json")
+def analyze(output=None, *, telemetry_folder=None):
+    output = OUT if output is None else output
+    root = output / "run"
+    manifest = read(output / "sample.json")
     completed_path = root / "completed.json"
     completed = (
         set(read(completed_path)["iterations"]) if completed_path.exists() else set()
@@ -204,7 +207,7 @@ def analyze():
         )
     if not rows:
         raise ValueError("No completed replay windows")
-    with (OUT / "comparison.csv").open("w", newline="") as stream:
+    with (output / "comparison.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
@@ -271,10 +274,10 @@ def analyze():
             r["iteration"] for r in rows if not r["primary_auxiliary_values_match"]
         ],
         evidence=dict(
-            sample=ref(OUT / "sample.json"),
+            sample=ref(output / "sample.json"),
             environment=ref(root / "environment.json"),
             analysis=ref(Path(__file__)),
-            comparison=ref(OUT / "comparison.csv"),
+            comparison=ref(output / "comparison.csv"),
         ),
         sampling={
             key: manifest[key]
@@ -306,8 +309,10 @@ def analyze():
         summary["windows_per_minute"] = (
             len(rows) * 60 / summary["experiment_wall_seconds"]
         )
-        summary["temperature_telemetry"] = temperature_snapshot(end)
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        summary["temperature_telemetry"] = temperature_snapshot(
+            end, output=output, folder=telemetry_folder,
+        )
+    (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps({k: v for k, v in summary.items() if k != "attempts"}, indent=2))
     return rows, summary
 
