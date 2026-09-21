@@ -1,5 +1,6 @@
 """Public-contract and independent physical checks for single-node vectorization."""
 
+from dataclasses import replace
 import warnings
 
 import cvxpy as cp
@@ -14,6 +15,7 @@ from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.testcases import case9, make_singlenode_case
+import cvxopf.singlenode_dc_problem as singlenode_module
 
 
 def build_pair(T=3, case=None, **kwargs):
@@ -223,3 +225,38 @@ def test_unavailable_primal_results_match(infeasible):
     assert_results_equal(extract_results(step), extract_results(vector))
     assert extract_results(vector)['Pg'] is None
     assert extract_results(vector)['p_net'] is None
+
+
+@pytest.mark.parametrize('missing', ['injection', 'cost'])
+def test_incomplete_component_assembly_is_rejected(monkeypatch, missing):
+    original = singlenode_module.aggregate_vectorized_contributions
+
+    def incomplete(contributions):
+        aggregate = original(contributions)
+        model = aggregate.model
+        if missing == 'injection':
+            model = replace(model, injection=replace(model.injection, p_pu=None))
+        else:
+            model = replace(model, stage_cost_rate=None)
+        return replace(aggregate, model=model)
+
+    monkeypatch.setattr(singlenode_module, 'aggregate_vectorized_contributions', incomplete)
+    with pytest.raises(RuntimeError, match='requires active injection and cost'):
+        build_pair()
+
+
+def test_invalid_load_time_metadata_is_rejected(monkeypatch):
+    original = singlenode_module._parse_singlenode_dc_case
+
+    def invalid_metadata(*args, **kwargs):
+        data = original(*args, **kwargs)
+        components = data['_components']
+        data['_components'] = replace(components, flat_data={
+            **components.flat_data, '_load_p_temporal_class': 'boundary',
+        })
+        return data
+
+    monkeypatch.setattr(singlenode_module, '_parse_singlenode_dc_case', invalid_metadata)
+    with pytest.raises(RuntimeError, match='provenance must be static or interval'):
+        build_opf_multistep(case9(), T=3, loads=[Load(bus=5, p_load_mw=100, device_id='load')],
+                            formulation='singlenode_dc', temporal_assembly='vectorized')

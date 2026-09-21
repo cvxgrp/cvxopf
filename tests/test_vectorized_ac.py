@@ -182,6 +182,18 @@ def test_static_inputs_voltage_setpoints_and_hierarchy_initialization():
     assert vector.data['nd_available'].strides[0] == 0
 
 
+def test_disabled_flat_initialization_accepts_explicit_hierarchy_start():
+    _, vector = pair(options=OPFOptions(init_flat=False))
+    assert vector.variables['theta'].value is None
+    assert vector.variables['v'].value is None
+    _assign_start(vector, _complete_start(vector))
+    assert all(variable.value is not None for variable in vector.prob.variables())
+    vector.solve(max_iter=400)
+    result = extract_results(vector)
+    assert result['status'] == cp.OPTIMAL
+    audit(vector, result)
+
+
 def test_graph_object_counts_do_not_grow_with_horizon():
     _, short = pair(3)
     _, long = pair(168)
