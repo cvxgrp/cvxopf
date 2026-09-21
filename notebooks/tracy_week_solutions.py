@@ -29,7 +29,7 @@ def load_results(Path, importlib, json, mo):
     module_spec = importlib.util.spec_from_file_location("tracy_week_analysis", analysis_path)
     analysis = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(analysis)
-    bundle_path = repository / "outputs/tracy_week_comparison/comparison.json"
+    bundle_path = repository / "experiments/m14_time_vectorization/results/tracy_week_comparison/comparison.json"
     comparison_record = json.loads((repository / "experiments/m14_time_vectorization/TRACY_WEEK_COMPARISON_RESULTS.json").read_text())
     assert analysis.sha(bundle_path) == comparison_record["bundle_sha256"], "Comparison bundle differs from its summary record."
     bundle = json.loads(bundle_path.read_text())

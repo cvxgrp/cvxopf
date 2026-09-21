@@ -10,22 +10,24 @@ import json
 from pathlib import Path
 import random
 
+from experiments.retained_paths import retained_operation, retained_path
+
 ROOT = Path(__file__).resolve().parents[2]
 ANNUAL = ROOT / "experiments/case118_annual_hierarchy"
-OUT = ROOT / "outputs/case118_vectorization_replay"
+OUT = ROOT / "experiments/case118_vectorization_replay/results/case118_vectorization_replay"
 SEED = 20260920
 
 
 def read(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(retained_path(path).read_text())
 
 
 def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(retained_path(path).read_bytes()).hexdigest()
 
 
 def ref(path):
-    return dict(path=str(Path(path).resolve()), sha256=sha(path))
+    return dict(path=str(retained_path(path).resolve()), sha256=sha(path))
 
 
 def checked(reference):
@@ -67,8 +69,9 @@ def stratify(rows, allocations, rng, field):
     return selected, strata
 
 
+@retained_operation()
 def prepare():
-    OUT.mkdir(exist_ok=False)
+    OUT.mkdir(parents=True, exist_ok=False)
     dispatch_path = ANNUAL / "analysis/artifacts/final_snapshot/dispatch/intervals.csv"
     times_path = ANNUAL / "analysis/artifacts/final_snapshot/solves/solve_times.csv"
     dispatch = list(csv.DictReader(dispatch_path.open()))

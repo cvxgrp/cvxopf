@@ -498,7 +498,8 @@ two-worker analysis started with a 45-minute wall limit and 12 GiB sampled
 aggregate RSS limit. A detached monitor includes the analyzer, descendants,
 and its own memory, samples once per second, stops the analysis process group
 on a bound, and retains stdout, stderr, measurements, and completion status in
-`outputs/s5_analysis/closeout-analysis-20260917T211119Z/`. No automatic retry,
+`outputs/s5_analysis/closeout-analysis-20260917T211119Z/` (historical launch path;
+current archive: `results/s5_analysis/closeout-analysis-20260917T211119Z/`). No automatic retry,
 OPF solve, commit, or Stage 0b execution is authorized by this launch.
 
 The first monitor startup (`closeout-analysis-20260917T211006Z/`) failed

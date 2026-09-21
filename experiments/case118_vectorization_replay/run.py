@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from experiments.retained_paths import MANIFESTS, retained_operation
+
 from dataclasses import asdict
 from datetime import datetime, timezone
 from importlib.metadata import version
@@ -41,6 +43,7 @@ def validate_versions(current, historical, allowed_changes=None):
             raise ValueError(f"Software versions differ from the historical study: {name}")
 
 
+@retained_operation()
 def run(output=None, *, allowed_version_changes=None, provenance=None,
         additional_sources=()):
     output = OUT if output is None else output
@@ -55,6 +58,8 @@ def run(output=None, *, allowed_version_changes=None, provenance=None,
         ROOT / "experiments/case118_vectorization_replay" / name
         for name in ("__init__.py", "sample.py", "worker.py", "run.py")
     )
+    source_paths.append(ROOT / "experiments/retained_paths.py")
+    source_paths.extend(ROOT / manifest for manifest in MANIFESTS)
     source_paths.extend(additional_sources)
     sources = {str(p): sha(p) for p in source_paths}
     versions = _software_versions()

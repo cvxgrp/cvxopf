@@ -9,6 +9,8 @@ import time
 
 import numpy as np
 
+from experiments.retained_paths import retained_operation, retained_path
+
 from experiments.case118_annual_hierarchy import streaming_runner as streaming
 from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
 from experiments.case118_annual_hierarchy.run_s4b import _outer
@@ -65,18 +67,19 @@ def unpack_values(values, template):
     return result
 
 
+@retained_operation()
 def prepare(directory, fixture, outer, request):
     selected = request["selected"]
     spec = invocation(request["invocation"])
     historical = checked(selected["references"]["primary_request.json"])
     retained = load_retained_start(
-        Path(selected["references"]["primary_start.json"]["path"])
+        retained_path(selected["references"]["primary_start.json"]["path"])
     )
     checked(selected["references"]["primary_start.json"])
     replay = (
         None
         if request["replay_start"] is None
-        else load_retained_start(Path(request["replay_start"]))
+        else load_retained_start(retained_path(request["replay_start"]))
     )
     initial = selected["initial_soc_mwh"]
     initial_array = [initial[k] for k in fixture.inputs.storage_device_ids]
@@ -181,6 +184,7 @@ def prepare(directory, fixture, outer, request):
     )
 
 
+@retained_operation()
 def execute(directory):
     request = read(directory / "request.json")
     for path, expected in request["execution_sources"].items():

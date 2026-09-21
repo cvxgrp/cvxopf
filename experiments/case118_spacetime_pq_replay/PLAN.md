@@ -27,7 +27,7 @@ The primary comparison is new combined vectorization versus the previous time-on
 
 Reuse the existing sample file byte for byte:
 
-`outputs/case118_vectorization_replay/sample.json`
+`experiments/case118_vectorization_replay/results/case118_vectorization_replay/sample.json`
 
 SHA256: `f950b14b061b60a582526d5a4d30ac02124ef2f1a62ddc41e6c74343f8750ddb`.
 
@@ -39,7 +39,7 @@ Use the original `SpeculativeSupervisor`, `SubprocessBackend`, and `WindowRace`:
 
 ## Required runner adjustments after plan approval
 
-1. Add an explicit destination and frozen-sample input so the new run cannot overwrite the completed replay or invoke the sample generator. Proposed destination: `outputs/case118_spacetime_pq_replay` (must not already exist).
+1. Add an explicit destination and frozen-sample input so the new run cannot overwrite the completed replay or invoke the sample generator. Proposed destination: `experiments/case118_spacetime_pq_replay/results/case118_spacetime_pq_replay` (must not already exist).
 2. Replace the current historical exact-version rejection with an explicit, recorded exception for CVXPY 1.9.2 -> 1.9.3 and sparsediffpy 0.3.0 -> 0.6.1. Retain checks on all other recorded software versions and all physical request identities. Add sparsediffpy to new environment provenance. Record Python, dependencies, source hashes, and the owner-reviewed commit. Execution must use the owner-reviewed and committed changes; an uncommitted patch is not a substitute for this gate.
 3. Keep original runner policy and initialization logic. Test output isolation, version-transition validation, frozen input/start identity, and three-way analysis using fixtures before launch.
 4. Give the new analysis explicit inputs for both retained timing sets and its own destination. Do not overwrite the prior experiment's report or `artifacts/` directory. Parameterize temperature telemetry paths and run annotations; do not inherit the prior run's hard-coded telemetry timestamp or fan-start narrative.
@@ -57,6 +57,6 @@ The previous replay took about 72 minutes; that is a planning reference, not a c
 
 ## Deliverables and review
 
-Keep the reviewed plan, runner/analysis code, and final human-readable report under version control. Keep raw generated run artifacts under the ignored `outputs/case118_spacetime_pq_replay/` directory. Any compact evidence tables or figures selected for the experiment directory must be explicit reviewable additions; do not add raw output trees.
+Keep the reviewed plan, runner/analysis code, and final human-readable report under version control. Keep raw generated run artifacts under the ignored `experiments/case118_spacetime_pq_replay/results/case118_spacetime_pq_replay/` directory. Any compact evidence tables or figures selected for the experiment directory must be explicit reviewable additions; do not add raw output trees.
 
 Before execution, `cvxopf-review` must return a clean scientific review of runner changes and preflight evidence. After completion, it must review the three-way comparison and its supporting evidence before owner handoff. This plan alone does not authorize implementation, execution, commits, pushes, or PR closure.

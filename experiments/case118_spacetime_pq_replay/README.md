@@ -38,7 +38,7 @@ explicitly recorded. Primary solves receive no new timeout. Interruptions
 preserve partial evidence and stop/reap the supervisor's workers.
 
 All generated data stays under the ignored
-`outputs/case118_spacetime_pq_replay/`. The previous replay and its report remain
+`experiments/case118_spacetime_pq_replay/results/case118_spacetime_pq_replay/`. The previous replay and its report remain
 unchanged. Analyze complete or partial results without launching more solves:
 
 ```sh
@@ -65,3 +65,20 @@ The subsequent [four-way diagnostic](FOUR_WAY_DIAGNOSTIC.md) repeats hour 6047's
 isolated primary under all four time/spatial combinations in the current
 environment. Select it explicitly with `diagnose_primary --four-way`; it has
 its own reviewed source transition and fresh output directory.
+
+
+The completed four-way results are in [FOUR_WAY_REPORT.md](FOUR_WAY_REPORT.md)
+and `artifacts/four_way/summary.json`. Reconstruct and verify them without a solve:
+
+```sh
+uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.analyze_primary
+```
+
+Add `--write` to regenerate those two reviewable files. Original run records in
+`results/` are never rewritten. See [RESULT_LOCATIONS.md](RESULT_LOCATIONS.md)
+for the checked relocation from the retired root scratch directory.
+
+The maintained analyzers use exact historical-file mappings from this study's
+relocation manifest and the earlier time-only replay's manifest, loaded once per
+analysis operation. Result-location/hash verification checks preservation; it
+does not replace scientific review of the four-way report or its conclusions.

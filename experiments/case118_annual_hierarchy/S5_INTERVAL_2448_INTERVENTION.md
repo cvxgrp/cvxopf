@@ -23,7 +23,7 @@ and complete IPOPT starts. Causal slots 6 and 7 timed out at 300 seconds. Slot
 225.14 solver-path seconds (233.71 seconds end to end). Its full production
 result, 9,120-coordinate IPOPT start, structural signature, causal source, and
 unchanged M17 acceptance audit are retained at
-`outputs/diagnostics/interval2448-YBoD5T/`.
+`experiments/case118_annual_hierarchy/results/diagnostics/interval2448-YBoD5T/`.
 
 The three sequential diagnostic processes consumed 847.66 seconds of process
 wall time across 848.40 seconds of observed diagnostic latency. This diagnostic

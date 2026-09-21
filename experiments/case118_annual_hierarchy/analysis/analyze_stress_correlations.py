@@ -118,7 +118,7 @@ def main():
                 rec[target + "_p90"] = float(part[target].quantile(.9))
             bands.append(rec)
 
-    dest = ROOT / "outputs/s5_analysis" / ("stress_correlations_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
+    dest = ROOT / "experiments/case118_annual_hierarchy/results/reproductions" / ("stress_correlations_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
     dest.mkdir(parents=True, exist_ok=False)
     df.to_csv(dest / "joined_intervals.csv")
     raw.to_csv(dest / "spearman.csv")

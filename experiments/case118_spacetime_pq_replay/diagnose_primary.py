@@ -16,6 +16,8 @@ import time
 
 import numpy as np
 
+from experiments.retained_paths import retained_operation, retained_path
+
 from experiments.case118_annual_hierarchy import streaming_runner as streaming
 from experiments.case118_annual_hierarchy.run_s0 import _software_versions
 from experiments.case118_annual_hierarchy.run_s4b import _outer
@@ -107,10 +109,11 @@ def bind_sources(historical, *, four_way):
     return sources, changes
 
 
+@retained_operation()
 def preflight(output, *, commit=None, prepare_only=False, four_way=False):
     for previous in (STUDY, PREVIOUS,
-                     ROOT / "outputs/case118_6047_primary_diagnostic",
-                     ROOT / "outputs/case118_6047_primary_diagnostic_retry"):
+                     ROOT / "experiments/case118_spacetime_pq_replay/results/case118_6047_primary_diagnostic",
+                     ROOT / "experiments/case118_spacetime_pq_replay/results/case118_6047_primary_diagnostic_retry"):
         validate_destination(output, previous)
     head = git("rev-parse", "HEAD")
     dirty = git("status", "--porcelain", "--untracked-files=normal")
@@ -147,6 +150,7 @@ def preflight(output, *, commit=None, prepare_only=False, four_way=False):
     )
 
 
+@retained_operation()
 def prepare(directory, mode, fixture, outer, request, *, vectorize_pq=True):
     """Build without solving, and verify the physical start in either layout."""
     if mode not in MODES:
@@ -156,7 +160,7 @@ def prepare(directory, mode, fixture, outer, request, *, vectorize_pq=True):
     selected = request["selected"]
     historical = checked(selected["references"]["primary_request.json"])
     retained = load_retained_start(
-        Path(selected["references"]["primary_start.json"]["path"])
+        retained_path(selected["references"]["primary_start.json"]["path"])
     )
     # Reconstruct the same historical request/start before changing representation.
     prepared = prepare_attempt(
@@ -205,6 +209,7 @@ def prepare(directory, mode, fixture, outer, request, *, vectorize_pq=True):
     return prepared
 
 
+@retained_operation()
 def worker(directory):
     binding = read(directory.parent / "binding.json")
     if not binding["prepare_only"] and (
@@ -250,6 +255,7 @@ def worker(directory):
     check_sources(binding["execution_sources"])
 
 
+@retained_operation()
 def run_pair(output, *, commit=None, prepare_only=False, fan_on=False, four_way=False):
     if not prepare_only and not fan_on:
         raise ValueError("Confirm the external fan is on before launch")

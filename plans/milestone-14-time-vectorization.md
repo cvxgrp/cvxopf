@@ -825,7 +825,7 @@ p90–95/p95–99/p99–100, and one helper winner per latency sextile.
 
 Implementation, protocol, and analysis live in
 `experiments/case118_vectorization_replay/`; raw evidence is retained separately
-under `outputs/case118_vectorization_replay/`. Execution is complete: all 126
+under `experiments/case118_vectorization_replay/results/case118_vectorization_replay/`. Execution is complete: all 126
 windows passed the original physical audit in 72.08 minutes. Independent
 scientific results review returned clean; the owner accepted the experiment
 and closed M14 on 2026-09-20.

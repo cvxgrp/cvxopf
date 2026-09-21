@@ -21,7 +21,7 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 DEFAULT_PACKAGE = HERE / "s5_closeout"
-DEFAULT_SNAPSHOT = ROOT / "outputs/s5_analysis/dashboard_snapshots/20260917T152634.819559Z"
+DEFAULT_SNAPSHOT = ROOT / "experiments/case118_annual_hierarchy/results/s5_analysis/dashboard_snapshots/20260917T152634.819559Z"
 RUN = HERE / "results/s4b_annual_ac"
 SIGNALS = {
     "load_mw": "Gross active load",
@@ -279,7 +279,7 @@ def prepare(destination, snapshot):
     # These few retained records directly support this report; broader triage remains Stage 0b.
     for source, name in [(snapshot / "dispatch/report.json", "dispatch_source.json"),
                          (RUN / "merged-result.json", "retained_merge.json"),
-                         (ROOT / "outputs/s5_analysis/completed-analysis-summary.json", "prior_analysis_summary.json")]:
+                         (ROOT / "experiments/case118_annual_hierarchy/results/s5_analysis/completed-analysis-summary.json", "prior_analysis_summary.json")]:
         shutil.copyfile(source, destination / name)
     sources = [S4_OUTER_ARCHIVE_PATH, RUN / "merged-result.json", snapshot / "dispatch/report.json",
                snapshot / "dispatch/intervals.csv", Path(__file__), HERE / "scenario.py", HERE / "s4_fixture.py"]

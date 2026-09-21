@@ -13,6 +13,7 @@ from experiments.case118_vectorization_replay.analyze import (
     analyze, weighted_quantile, wrapped_angle_delta,
 )
 from experiments.case118_vectorization_replay.sample import read, ref, sha
+from experiments.retained_paths import retained_operation, retained_path
 from .run import OUTPUT
 
 
@@ -114,6 +115,7 @@ def dispatch_deltas(previous, current):
     return result
 
 
+@retained_operation()
 def run_analysis():
     binding = read(OUTPUT / "binding.json")
     for reference in binding["previous_replay"].values():
@@ -121,7 +123,7 @@ def run_analysis():
             raise ValueError(f"Retained previous replay changed: {reference['path']}")
     if sha(OUTPUT / "sample.json") != binding["sample"]["sha256"]:
         raise ValueError("Replay sample changed since launch")
-    previous_path = binding["previous_replay"]["comparison.csv"]["path"]
+    previous_path = retained_path(binding["previous_replay"]["comparison.csv"]["path"])
     with open(previous_path, newline="") as stream:
         previous = list(csv.DictReader(stream))
     if {int(r["iteration"]) for r in previous} != {

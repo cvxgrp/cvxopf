@@ -1,8 +1,9 @@
 # Experiment filesystem repair: file-by-file disposition
 
-Status: for owner review before implementation. The four design decisions in
+Status: owner-approved for implementation. The four design decisions in
 [the repair plan](experiment-filesystem-repair.md) are approved. This document
-specifies their proposed application; no implementation has begun.
+specifies their approved application. Implementation and verification are complete;
+changes are unstaged for owner review.
 
 ## Reading this disposition
 
@@ -161,7 +162,7 @@ The following authorities and maintained files also remain unchanged:
 | Annual `analysis/s5_dashboard.py`, `dashboard_support.py`, `dashboard_stress.py` | Keep as maintained entry points; no changes proposed. |
 | Annual `analysis/extract_dc_operating_totals.py` | No change; only its documented explicit output destination changes. |
 | Annual `analysis/VALIDATION.md` | Preserve historical validation record; do not rewrite it as validation of this repair. |
-| `tests/test_case118_s5_coverage.py` | No change proposed; run affected existing checks as appropriate. |
+| `tests/test_case118_s5_coverage.py` | Initially unchanged; the owner subsequently requested the default-output regression tests described below. |
 | Counterfactual `RESULT_LOCATIONS.json`, `retained_files.py`, and current callers | Preserve existing mapping and verification implementation. |
 | Annual and M14 `.gitignore` files | No change; already ignore `results/`. |
 | `src/cvxopf/`, solver settings, frozen samples, execution/source bindings | No changes. |
@@ -169,8 +170,9 @@ The following authorities and maintained files also remain unchanged:
 
 ## Implementation boundary and review handoff
 
-Only the two planning documents are changed in preparing this disposition.
-All table entries describing code/document changes are future actions.
+Only the two planning documents were changed before the owner approved this
+disposition. The tables above retain the reviewed scope; the implementation
+record below describes completion.
 
 After owner review, implementation will verify the baseline, apply only the
 listed changes, and perform the repair plan's proportionate checks. Verification
@@ -178,3 +180,101 @@ will not launch solves or regenerate accepted artifacts. Report actual changed
 files and verification outcomes here or in the repair plan; do not create a new
 reporting framework. If an additional source file, evidence mutation, or broader
 path abstraction proves necessary, explain it and ask before extending scope.
+
+### Approved operation-wrapper amendment
+
+The owner additionally approved operation-scoped wrappers on both replay
+analyzers, the four-way analyzer, and their existing runner/preparation entry
+points. This changes the Keep/Preserve treatment of those files only to add
+imports and wrappers. Nested calls reuse the index, and exit discards it.
+`sample.py`, `worker.py`, both replay `run.py` files, and `diagnose_primary.py`
+receive the same bounded change where needed. Numerical behavior is unchanged.
+
+### Implementation record — 2026-09-21
+
+All Revise/Add actions above are implemented. Keep/Preserve entries were left
+as found at implementation start, except for the explicitly approved operation
+wrappers. The repair itself moved or deleted no files and changed no archived
+evidence bytes. The existing counterfactual resolver remains unchanged.
+
+The actual edited files correspond to these table entries:
+
+- Repository: `CLAUDE.md`, `experiments/retained_paths.py`,
+  `tests/test_retained_paths.py`, and both repair planning documents.
+- Annual study: `S5_ARTIFACT_DISPOSITION.md`, `S5_CLOSEOUT_CHECKPOINT.md`,
+  `S5_REPORT.md`, `experiment_log.md`, `analysis/README.md`,
+  `analysis/analyze_dispatch_changes.py`, `analysis/analyze_stress_correlations.py`,
+  `analysis/collectors/refresh_completion_band.py`, `analysis/coverage_report.py`,
+  `analysis/render_saved_timing.py`, and new `RESULT_LOCATIONS.md`.
+  Also `tests/test_case118_s5_dashboard.py`.
+- P/Q study: `README.md`, `RESULT_LOCATIONS.md`, `analyze.py`,
+  `analyze_primary.py`, `diagnose_primary.py`, and `run.py`.
+- Time-only replay: `README.md`, `sample.py`, `worker.py`, `analyze.py`,
+  `run.py`, and new `RESULT_LOCATIONS.md`.
+- M14 comparisons: new `RESULT_LOCATIONS.md` only.
+
+The wrapper is a small context-manager decorator in `retained_paths.py`.
+It reads the two manifests into an exact-file dictionary on operation entry,
+reuses it for nested operations, and releases it on normal or exceptional exit.
+A standalone historical lookup is a single-lookup operation. Analysis and
+runner/preparation entry points explicitly delimit their operations. The replay
+runner now fingerprints the two manifests alongside the helper source.
+
+Verification completed:
+
+- Before and after: all 3,001 relocation sizes/hashes matched, all 22 removed-link
+  targets existed, and all 726 hashed entries in the original S5 inventory
+  matched at their current locations. The other 11 inventory entries have no
+  scientific hash authority.
+- All 74 snapshotted protected files were unchanged, including annual promoted
+  artifacts, the closeout package, scientific result, inventory/promotion and
+  relocation manifests, and the four-way report/summary.
+- All 3,001 relocated raw files remain ignored. All 65 local Markdown links
+  checked across the modified/new documentation resolved.
+- All 1,255 references in the frozen time-only replay sample resolved and
+  matched their recorded hashes using the narrowed mapping.
+- Targeted test suite: **73 passed, 6 subtests passed**. It covers retained paths,
+  S5 dashboard/coverage, time-only replay, P/Q replay, and primary diagnostics.
+  The path tests verify once-per-operation loading, nested reuse, refresh on a
+  later operation, cleanup after failure, unmapped paths, and hash rejection.
+  Dashboard checks load the promoted saved snapshot/features and reproduce
+  stress output in a temporary tree without using archived dashboard code.
+- The four-way analyzer completed without `--write`; published report and
+  summary bytes were unchanged. This is a reader/reconstruction compatibility
+  check, not a new scientific review of its conclusions.
+- `git diff --check` passed. No OPF solve or experiment rerun was launched.
+
+Test command (the temporary cache avoids restricted access to the default cache):
+
+```sh
+UV_CACHE_DIR=/tmp/cvxopf-uv-cache uv run --locked --extra dev --extra notebook pytest \
+  tests/test_retained_paths.py tests/test_case118_s5_dashboard.py \
+  tests/test_case118_s5_coverage.py tests/test_case118_vectorization_replay.py \
+  tests/test_case118_spacetime_pq_replay.py tests/test_case118_primary_diagnostic.py -q
+```
+
+Tests emitted dependency OpenMP and matplotlib deprecation warnings, with no
+failures. Full annual re-extraction and solver runs were intentionally outside
+this repair's verification. Historical launch bindings remain historical;
+existing source/clean-checkout checks still govern any future run.
+
+At the owner's separate request, the closed marimo dashboard and its descendants,
+and orphaned marimo language-server trees, were terminated and their exit checked.
+No Git staging, commits, pushes, branch changes, or worktrees were performed.
+
+### Final-review correction: coverage output guard
+
+The reviewer found that the coverage reporter's blanket `experiments/` guard
+rejected its new default. The owner requested this correction and a regression
+test. `analysis/coverage_report.py` now permits the designated
+`results/reproductions/s5_coverage` subtree while retaining the exclusion of
+other experiment destinations, both directions of run/archive overlap, and
+existing output directories. Output paths are resolved before these checks.
+
+`tests/test_case118_s5_coverage.py` now exercises the actual CLI destination
+checks, stopping at a mocked fixture loader before any archive load or analysis.
+It covers the default, existing output preservation, ancestor/equal/descendant
+run overlap, other protected experiment paths, explicit external outputs, and
+a reproduction symlink into the run archive. All **28 coverage tests passed**;
+no archives were loaded and no scientific analysis or solves were run for this
+correction. The same dependency OpenMP warning was emitted.

@@ -830,6 +830,21 @@ docstring.
 
 ---
 
+## Experiment files
+
+- Keep everything related to a new experiment inside `experiments/<experiment>/`.
+- Migrating historical material requires explicit owner approval. The procedure
+  for new experiments is not permission to reorganize earlier studies.
+- Put raw solver records, logs, temporary checks, and other uncommitted run data
+  in that experiment's `results/`, excluded by its local `.gitignore`.
+- Keep plans, analysis code, reports, and selected compact evidence alongside
+  the experiment for owner review and commit. Raw runs are never committed.
+- Root `not-tracked/` is only for unrelated local material such as one-off
+  document exports. Do not use it for experiments or create a root `outputs/`
+  directory. Do not link experiment directories through either root folder.
+- Preserve historical evidence bytes/hashes when relocating data. Resolve old
+  paths in readers; do not rewrite hashed records or create compatibility links.
+
 ## Owner's Git workflow
 
 - Work in the owner's existing checkout and current branch. Do not create a
@@ -846,7 +861,7 @@ docstring.
   worktree or a remote branch. Report the resulting local state clearly.
 - Preserve existing untracked and ignored files, including research data,
   presentations, and generated outputs. Their presence is not permission to
-  delete or stage them. Keep generated `outputs/` ignored.
+  delete or stage them. Keep unrelated local material in ignored `not-tracked/`.
 - Put reviewable plans and experiment code in the appropriate repository
   directory, not only in ignored outputs or conversation context. State which
   files changed and what the owner will see in the current diff.

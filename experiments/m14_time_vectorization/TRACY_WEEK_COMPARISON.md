@@ -52,9 +52,9 @@ both boundaries; power statistics use the half-open interval [start, end).
 ## Artifacts and rebuilding
 
 - `TRACY_WEEK_COMPARISON_RESULTS.json`: compact summary, checks and provenance.
-- `outputs/tracy_week_comparison/comparison.json`: full input/trajectory bundle.
-- `outputs/tracy_week_comparison/summary.csv`: exportable summary.
-- `outputs/tracy_week_comparison/lossy_dc_run/`: fresh worker results, logs and
+- `experiments/m14_time_vectorization/results/tracy_week_comparison/comparison.json`: full input/trajectory bundle.
+- `experiments/m14_time_vectorization/results/tracy_week_comparison/summary.csv`: exportable summary.
+- `experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/`: fresh worker results, logs and
   execution metadata captured before the workers launched.
 
 Rebuild from retained local artifacts without solving:

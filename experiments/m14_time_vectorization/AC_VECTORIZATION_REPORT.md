@@ -123,7 +123,7 @@ The original timeout and all original numerical artifacts are preserved
 unchanged. `AC_STEPWISE_RETRY_RESULTS.json` records the retry, pre-execution
 metadata, source/artifact hashes, memory-sampling summary and retained vectorized
 result. The local runner snapshot, supervisor, logs and process samples are in
-`outputs/network_vectorization/stepwise_retry_2026-09-20/` and its parent.
+`experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/` and its parent.
 There is still no full-week paired objective or trajectory comparison. The
 vectorized result remains 116.77 seconds and 830.5 MiB measured peak RSS;
 these are separate single-run observations, not a controlled speedup estimate.
@@ -187,7 +187,7 @@ stepwise numerical results remain a limitation, not a closure blocker.
 The comparison module preserves existing local outcomes. Use `--collect` to
 rebuild its compact record without solving. Its collector hash is separate from
 the exact runner hash used for the retained solves. Raw trajectories, warnings,
-and the executed runner snapshot remain in ignored `outputs/network_vectorization/`.
+and the executed runner snapshot remain in ignored `experiments/m14_time_vectorization/results/network_vectorization/`.
 `check_network_trajectories.py` rebuilds source graphs for the assignment checks.
 
 Collection reuses retained execution settings and environment metadata rather

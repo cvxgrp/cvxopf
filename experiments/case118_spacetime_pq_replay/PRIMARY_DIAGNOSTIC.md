@@ -33,7 +33,7 @@ not call the solver:
 
 ```sh
 uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.diagnose_primary \
-  --prepare-only --output outputs/case118_6047_primary_preparation
+  --prepare-only --output experiments/case118_spacetime_pq_replay/results/case118_6047_primary_preparation
 ```
 
 After the owner commits, bind the full commit SHA to execute the pair:
@@ -41,7 +41,7 @@ After the owner commits, bind the full commit SHA to execute the pair:
 ```sh
 uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.diagnose_primary \
   --commit <full-reviewed-commit-sha> --fan-on \
-  --output outputs/case118_6047_primary_diagnostic_retry
+  --output experiments/case118_spacetime_pq_replay/results/case118_6047_primary_diagnostic_retry
 ```
 
 Use process-monitoring and thermal-telemetry permissions from the outset. The
@@ -67,7 +67,7 @@ isolate spatial vectorization or dependency changes. Keep the failed study's
 original primary and prior historical results as separate reference evidence.
 
 The first launch at commit `2a3dde18448fd0054e7601a1ed50512ec0c086c8` is
-preserved in `outputs/case118_6047_primary_diagnostic/`. It stopped on the
+preserved in `experiments/case118_spacetime_pq_replay/results/case118_6047_primary_diagnostic/`. It stopped on the
 stepwise primary before IPOPT entry because the initial implementation put the
 logging option into the hash-locked solver configuration. It ran zero native
 solves and never launched the vectorized condition. The corrected diagnostic

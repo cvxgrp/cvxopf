@@ -49,7 +49,7 @@ calling IPOPT:
 
 ```sh
 uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.diagnose_primary \
-  --four-way --prepare-only --output outputs/case118_6047_four_way_preparation
+  --four-way --prepare-only --output experiments/case118_spacetime_pq_replay/results/case118_6047_four_way_preparation
 ```
 
 Check all four real models through canonicalization and verified x0 capture
@@ -60,7 +60,7 @@ and commit. Once committed and authorized, bind that exact commit:
 ```sh
 uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.diagnose_primary \
   --four-way --commit <full-reviewed-commit-sha> --fan-on \
-  --output outputs/case118_6047_four_way
+  --output experiments/case118_spacetime_pq_replay/results/case118_6047_four_way
 ```
 
 Check process-monitoring and thermal permissions before launch, confirm no

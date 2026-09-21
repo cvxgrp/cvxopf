@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from experiments.retained_paths import retained_operation
+
 import csv
 from collections import Counter
 from datetime import datetime, timedelta
@@ -70,6 +72,7 @@ def temperature_snapshot(end, *, output=None, folder=None):
     )
 
 
+@retained_operation()
 def analyze(output=None, *, telemetry_folder=None):
     output = OUT if output is None else output
     root = output / "run"
@@ -562,7 +565,7 @@ def report(rows, summary, destination):
             "",
             "The frozen selection, row-level comparison, and summary are in `artifacts/`. "
             "Raw phases, starts, results, lifecycle records, and source hashes are retained under "
-            "`outputs/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` "
+            "`experiments/case118_vectorization_replay/results/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` "
             "in the project environment. The sample seed is 20260920; see README.md for population definitions, allocation, and execution commands.",
             "",
         ]

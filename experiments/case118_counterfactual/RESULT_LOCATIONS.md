@@ -24,8 +24,8 @@ contexts, and numerical verification outputs are unchanged.
 Some unchanged records contain the former paths and the incorrect historical
 label. Rewriting them would invalidate the recorded hashes, so they retain the
 original text. Current documentation calls the experiments by their scientific
-questions. Links at the old local paths preserve references in the execution
-records and earlier conversation; the actual files are here. The verification
+questions. The old local compatibility links were removed on 2026-09-21 when the root
+scratch directory was retired; the actual files remain here. The verification
 scripts also resolve these recorded paths through `retained_files.py`, so they
 do not depend on those compatibility links.
 

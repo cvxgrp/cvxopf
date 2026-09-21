@@ -286,5 +286,5 @@ experiments/dnlp_vs_pypower/*.synctex.gz
 .agents/
 skills-lock.json
 
-# Generated outputs
-/outputs/
+# Unrelated local material; experiment data belongs in its own ignored results/.
+/not-tracked/

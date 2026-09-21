@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / 'outputs/tracy_week_comparison'
+OUT = ROOT / 'experiments/m14_time_vectorization/results/tracy_week_comparison'
 HERE = Path(__file__).parent
 LABELS = {
     'singlenode_dc_stepwise': 'Single-node · stepwise',
@@ -132,10 +132,10 @@ def assemble():
     scenario, kwargs = prepare_inputs(168)
     network_record = read(HERE/'AC_DC_COMPARISON_RESULTS.json')
     for name, expected in network_record['source_hashes'].items():
-        source = ROOT/'outputs/network_vectorization/runner_at_initial_execution.py' if name.endswith('/compare_network_vectorization.py') else ROOT/name
+        source = ROOT/'experiments/m14_time_vectorization/results/network_vectorization/runner_at_initial_execution.py' if name.endswith('/compare_network_vectorization.py') else ROOT/name
         if sha(source) != expected:
             raise ValueError(f'AC source mismatch: {name}')
-    single_path = ROOT/'outputs/singlenode_vectorization/trajectory_capture.json'
+    single_path = ROOT/'experiments/m14_time_vectorization/results/singlenode_vectorization/trajectory_capture.json'
     single = read(single_path)
     single_record = read(HERE/'M14D_SINGLENODE_RESULTS.json')
     assert sha(HERE/'M14D_SINGLENODE_RESULTS.json') == single['original_record_sha256']
@@ -145,7 +145,7 @@ def assemble():
     assert network_record['source_sha256'] == single_record['source_sha256'] == SOURCE_SHA256
     assert network_record['start'] == single_record['start'] == START
     assert network_record['end'] == single_record['end'] == END
-    with np.load(ROOT/'outputs/singlenode_vectorization/inputs.npz') as saved:
+    with np.load(ROOT/'experiments/m14_time_vectorization/results/singlenode_vectorization/inputs.npz') as saved:
         np.testing.assert_array_equal(saved['load'], scenario.df_P.sum(axis=1).to_numpy())
         np.testing.assert_array_equal(saved['renewable_availability'], scenario.df_nd.to_numpy())
         np.testing.assert_array_equal(saved['renewable_ids'], scenario.df_nd.columns)
@@ -164,7 +164,7 @@ def assemble():
     solutions = {}
     artifacts = [single_path, HERE/'M14D_SINGLENODE_RESULTS.json', HERE/'AC_DC_COMPARISON_RESULTS.json',
                  HERE/'AC_STEPWISE_RETRY_RESULTS.json', fresh/'execution_metadata.json',
-                 ROOT/'outputs/singlenode_vectorization/inputs.npz']
+                 ROOT/'experiments/m14_time_vectorization/results/singlenode_vectorization/inputs.npz']
     for raw in single['runs']:
         key = 'singlenode_dc_'+raw['assembly']
         solutions[key] = dict(raw, formulation='singlenode_dc', provenance='Retained single-node trajectory capture; timings from that capture',
@@ -175,7 +175,7 @@ def assemble():
         solutions['lossy_dc_'+mode] = dict(raw, provenance='Fresh lossy-DC run for this comparison',
             costs=dict(generation=raw['audit']['generation_cost'], cycling=raw['audit']['cycling_cost'], dc_loss_penalty=raw['audit']['loss_cost']))
         artifacts.append(path)
-    ac_path = ROOT/'outputs/network_vectorization/ac_vectorized_168.json'
+    ac_path = ROOT/'experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_168.json'
     assert sha(ac_path) == network_record['raw_artifact_hashes'][ac_path.name]
     ac = read(ac_path)
     solutions['ac_vectorized'] = dict(ac, provenance='Retained original vectorized AC solve',

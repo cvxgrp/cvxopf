@@ -95,7 +95,7 @@ load and net load with a 0.5-alpha fill between them, and available renewables
 stacked with DG solar at the bottom. Net load uses available renewable power,
 before curtailment.
 
-![Tracy weekly inputs at Case9 scale](../../outputs/singlenode_vectorization/tracy_week_inputs.png)
+![Tracy weekly inputs at Case9 scale](../../experiments/m14_time_vectorization/results/singlenode_vectorization/tracy_week_inputs.png)
 
 Output plots compare stepwise (solid) and vectorized (dashed) solutions, with
 signed differences **vectorized minus stepwise** in the right column. Battery
@@ -103,7 +103,7 @@ power is positive when discharging. Power values are timestamped at interval
 start; SoC is shown at all 169 boundaries, including the initial and terminal
 500 MWh values. The maximum SoC difference is inside the week.
 
-![Battery power and state of charge, with differences](../../outputs/singlenode_vectorization/battery_trajectories.png)
+![Battery power and state of charge, with differences](../../experiments/m14_time_vectorization/results/singlenode_vectorization/battery_trajectories.png)
 
 Renewable curtailment is available power minus renewable output. The plot shows
 the total and all seven individual sites, grouped by resource. Since both runs
@@ -111,13 +111,13 @@ use identical availability, the difference in curtailment is the negative of
 the difference in renewable output. Individual allocations differ more than
 aggregate curtailment, whose maximum difference is 2.594 MW.
 
-![Total and individual renewable curtailment, with differences](../../outputs/singlenode_vectorization/renewable_curtailment_trajectories.png)
+![Total and individual renewable curtailment, with differences](../../experiments/m14_time_vectorization/results/singlenode_vectorization/renewable_curtailment_trajectories.png)
 
 The three dispatchable generators nearly coincide between representations.
 Their differences are shown on separate scales: the largest individual
 difference is approximately `2.02e-5` MW.
 
-![Total and individual generator dispatch, with differences](../../outputs/singlenode_vectorization/generator_dispatch_trajectories.png)
+![Total and individual generator dispatch, with differences](../../experiments/m14_time_vectorization/results/singlenode_vectorization/generator_dispatch_trajectories.png)
 
 The original timing record retained summary metrics but omitted hourly arrays.
 These figures use a separate fresh-process capture of the two 168-hour solves,
@@ -125,7 +125,7 @@ with the same source hashes, inputs, and settings. Objectives and all four
 maximum trajectory differences reproduce the original record. The timing table
 and its JSON record are unchanged. Complete captured trajectories and inputs
 are saved alongside the figures in the ignored local directory
-`outputs/singlenode_vectorization/`; the images are local report attachments.
+`experiments/m14_time_vectorization/results/singlenode_vectorization/`; the images are local report attachments.
 Regenerate them from the repository root with:
 
 ```sh

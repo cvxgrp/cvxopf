@@ -1,9 +1,9 @@
 # Experiment filesystem repair
 
-Status: the owner approved decisions 1–4 on 2026-09-21, including retaining
-historical material at its current locations. Implementation is paused pending
-review of the [file-by-file disposition](experiment-filesystem-disposition.md),
-as requested by the owner. Only planning documents have been changed in this task.
+Status: implemented and verified on 2026-09-21 after the owner approved the four
+choices, the [file-by-file disposition](experiment-filesystem-disposition.md),
+and the operation-wrapper amendment. Changes remain unstaged for owner review.
+See the disposition's implementation record for checks and limitations.
 
 ## Purpose
 
@@ -218,5 +218,5 @@ Approval of this plan would specifically approve:
 
 The owner has approved these four choices. This approval does not erase the
 distinction between the original authorized scope and the broader moves that
-were performed without asking. The owner subsequently requested a file-by-file
-disposition before implementation; that review is the next gate.
+were performed without asking. The owner subsequently reviewed and approved the file-by-file disposition
+before implementation, then approved the small operation-wrapper amendment.

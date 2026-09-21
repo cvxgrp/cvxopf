@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from experiments.retained_paths import retained_operation
+
 import argparse
 from collections import Counter
 import csv
@@ -17,8 +19,8 @@ from experiments.case118_annual_hierarchy.streaming_schema import atomic_immutab
 from experiments.case118_vectorization_replay import run as replay
 from experiments.case118_vectorization_replay.sample import ROOT, checked, read, ref, sha
 
-PREVIOUS = ROOT / "outputs/case118_vectorization_replay"
-OUTPUT = ROOT / "outputs/case118_spacetime_pq_replay"
+PREVIOUS = ROOT / "experiments/case118_vectorization_replay/results/case118_vectorization_replay"
+OUTPUT = ROOT / "experiments/case118_spacetime_pq_replay/results/case118_spacetime_pq_replay"
 SAMPLE_SHA256 = "f950b14b061b60a582526d5a4d30ac02124ef2f1a62ddc41e6c74343f8750ddb"
 VERSION_CHANGES = {"cvxpy": ("1.9.2", "1.9.3")}
 
@@ -35,6 +37,7 @@ def validate_destination(output, previous):
         raise FileExistsError(f"Replay output already exists: {output}")
 
 
+@retained_operation()
 def preflight(*, commit=None, require_clean=False):
     """Read-only checks; no output creation, model solves, or subprocess workers."""
     validate_destination(OUTPUT, PREVIOUS)
@@ -92,13 +95,14 @@ def preflight(*, commit=None, require_clean=False):
     )
 
 
+@retained_operation()
 def launch(commit, *, fan_on):
     if not fan_on:
         raise ValueError("Confirm the fan is on before this replay")
     binding = preflight(commit=commit, require_clean=True)
     binding["cooling"] = "Owner confirmed external fan on before launch; keep on throughout."
     # Creating the destination is the start boundary. Never reuse a partial run.
-    OUTPUT.mkdir()
+    OUTPUT.mkdir(parents=True)
     (OUTPUT / "sample.json").write_bytes(Path(binding["sample"]["path"]).read_bytes())
     atomic_immutable_json(OUTPUT / "binding.json", binding)
     from .telemetry import TemperatureCollector

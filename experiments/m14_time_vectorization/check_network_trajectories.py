@@ -62,7 +62,7 @@ def main():
     record_path = ROOT/'experiments/m14_time_vectorization/AC_DC_COMPARISON_RESULTS.json'
     record = json.loads(record_path.read_text())
     for path, expected in record['source_hashes'].items():
-        source = (ROOT/'outputs/network_vectorization/runner_at_initial_execution.py'
+        source = (ROOT/'experiments/m14_time_vectorization/results/network_vectorization/runner_at_initial_execution.py'
                   if path.endswith('/compare_network_vectorization.py') else ROOT/path)
         assert sha(source) == expected, path
     observations = []
@@ -76,7 +76,7 @@ def main():
             build = build_opf_multistep(case9(), temporal_assembly=mode, **kwargs)
             for source in ('stepwise','vectorized'):
                 filename = f'{formulation}_{source}_{horizon}.json'
-                path = ROOT/'outputs/network_vectorization'/filename
+                path = ROOT/'experiments/m14_time_vectorization/results/network_vectorization'/filename
                 assert sha(path) == record['raw_artifact_hashes'][filename]
                 raw = json.loads(path.read_text())
                 if raw['status'] != 'optimal':

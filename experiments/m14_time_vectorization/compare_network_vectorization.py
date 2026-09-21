@@ -211,7 +211,7 @@ def main():
             parser.error('--worker requires --assembly and --horizon')
         print(json.dumps(run_one(args.worker,args.assembly,args.horizon),allow_nan=False))
         return
-    raw = ROOT/'outputs/network_vectorization'
+    raw = ROOT/'experiments/m14_time_vectorization/results/network_vectorization'
     raw.mkdir(parents=True,exist_ok=True)
     if args.collect:
         collect(raw, args.output)
