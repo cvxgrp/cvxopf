@@ -542,11 +542,30 @@ C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
 shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
 explicit constraints.
 
-P/Q flow definitions are vectorized across Ybus entries in both temporal
+By default, P/Q flow definitions are vectorized across Ybus entries in both temporal
 representations, for sparse and dense P/Q storage. Stepwise assembly uses two
 defining vector equalities per step; time-vectorized assembly uses two matrix
 equalities over all entries and time steps. Dense off-pattern zeros are also
 constrained in batches.
+
+Set `OPFOptions(vectorize_pq=False)` to build each spatial P/Q entry separately,
+including dense off-pattern zeros. This switch is independent of
+`sparse_pq` (variable storage) and `temporal_assembly` (time representation):
+
+```python
+build = build_opf_multistep(
+    case, df_P, df_Q, T=T,
+    temporal_assembly="vectorized",
+    options=OPFOptions(vectorize_pq=False),
+)
+```
+
+This example retains vectorization across time while disabling it across Ybus
+entries. Use `temporal_assembly="stepwise"` to disable time vectorization too.
+The spatial switch also applies to `build_opf` and dense P/Q storage, and does
+not affect DC formulations. Variable layouts, initializations, network physics,
+branch-terminal constraints, and result schemas stay the same. Neither setting
+guarantees convergence of the nonconvex AC solve.
 
 ### Objective units and time discretization
 

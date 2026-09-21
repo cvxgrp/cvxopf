@@ -105,6 +105,13 @@ class OPFOptions:
         explicit zero-fixing constraints. Use False for research comparison
         and timing measurements against the sparse path.
         AC only. Default True.
+    vectorize_pq : bool
+        If True (default), batch P/Q flow definitions across Ybus entries.
+        If False, build each entry's expression and equality separately,
+        including dense off-pattern zero constraints. Independent of sparse_pq
+        and temporal_assembly: time-vectorized builds still batch across time.
+        Does not change variable layouts, network physics, or branch-terminal
+        constraints. AC only.
 
     Notes
     -----
@@ -120,6 +127,7 @@ class OPFOptions:
     loss_weight: float = 1.0
     branch_limit_sentinel: float = 1e6
     sparse_pq: bool = True
+    vectorize_pq: bool = True
 
 
 # ---------------------------------------------------------------------------

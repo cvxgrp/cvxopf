@@ -57,14 +57,15 @@ ASSEMBLY_HORIZONS = [
 ]
 
 
-def _build_pq_case(case_fn, sparse, assembly, horizon):
+def _build_pq_case(case_fn, sparse, assembly, horizon, vectorize_pq=True):
+    options = OPFOptions(sparse_pq=sparse, vectorize_pq=vectorize_pq)
     if assembly == "single":
-        return _build_ac(case_fn, sparse_pq=sparse)
+        return build_opf(case_fn(), options=options)
     df_P, df_Q = _flat_load_dfs(case_fn, horizon)
     scales = np.linspace(0.8, 1.2, horizon)
     return build_opf_multistep(
         case_fn(), df_P.mul(scales, axis=0), df_Q.mul(scales, axis=0),
-        T=horizon, options=OPFOptions(sparse_pq=sparse),
+        T=horizon, options=options,
         temporal_assembly=assembly,
     )
 
@@ -118,13 +119,14 @@ def test_pq_definitions_are_batched_over_all_spatial_entries(
     (case118, True),
 ])
 @pytest.mark.parametrize("assembly,horizon", ASSEMBLY_HORIZONS)
-def test_gather_flows_match_complex_power(case_fn, sparse, assembly, horizon):
+@pytest.mark.parametrize("vectorize_pq", [True, False])
+def test_gather_flows_match_complex_power(case_fn, sparse, assembly, horizon, vectorize_pq):
     """Audit repeated-index gathers against complex Ybus power, including shunts.
 
     This exercises the DNLP derivative path behind CVXPY issue #3442 and
     checks the solved P/Q entries independently of the trigonometric model.
     """
-    build = _build_pq_case(case_fn, sparse, assembly, horizon)
+    build = _build_pq_case(case_fn, sparse, assembly, horizon, vectorize_pq)
     build.solve(max_iter=400)
     assert build.prob.status == "optimal"
     rows, cols = build.data["rows"], build.data["cols"]

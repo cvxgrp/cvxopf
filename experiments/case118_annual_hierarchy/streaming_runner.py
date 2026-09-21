@@ -289,6 +289,11 @@ def _fingerprint_value(value: object) -> object:
 
 def execution_input_sha256(inputs: HierarchicalInputs) -> str:
     """Fingerprint the complete owned physical/model input snapshot."""
+    options = asdict(inputs.options)
+    # Preserve frozen snapshots made before the spatial assembly switch existed.
+    # A nondefault representation remains explicit in new fingerprints.
+    if options["vectorize_pq"] is True:
+        del options["vectorize_pq"]
     payload = {
         "case": inputs.case,
         "horizon_steps": inputs.horizon_steps,
@@ -303,7 +308,7 @@ def execution_input_sha256(inputs: HierarchicalInputs) -> str:
         "df_nd": inputs.df_nd,
         "df_hvdc_min": inputs.df_hvdc_min,
         "df_hvdc_max": inputs.df_hvdc_max,
-        "options": inputs.options,
+        "options": options,
     }
     encoded = json.dumps(
         _fingerprint_value(payload),

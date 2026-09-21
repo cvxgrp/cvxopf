@@ -344,6 +344,7 @@ Both emit `DeprecationWarning` when called.
 | `loss_weight` | float | 1.0 | DC only |
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
+| `vectorize_pq` | bool | True | AC only; spatial P/Q expression/constraint batching |
 
 `delta` is not an `OPFOptions` field. It is a separate parameter on
 `build_opf` and `build_opf_multistep`. It must always be a finite, strictly
@@ -777,11 +778,17 @@ or `cyipopt` will fail to build with a linker error.
 
 ### Sparse P/Q vectorization
 
-All AC builds share P/Q flow expressions formed by array gathers over the
+By default, AC builds share P/Q flow expressions formed by array gathers over the
 Ybus pattern. Stepwise assembly uses two vector equalities per step;
 time-vectorized assembly uses two matrix equalities over all entries and
 times. Both sparse and dense P/Q storage use these expressions, and dense
 off-pattern zeros are constrained in batches.
+Set `OPFOptions(vectorize_pq=False)` to construct each Ybus entry separately
+in either temporal representation and either storage layout. This includes
+per-entry dense zero constraints. Time-vectorized builds retain vectorization
+across time; stepwise builds use scalar P/Q equalities. The option changes
+expression/constraint assembly, not variables, physics, branch-terminal
+constraints, or result schemas. It has no effect on DC formulations.
 CVXPY issue #3442 required a scalar-loop workaround until the derivative
 fix in `sparsediffpy >= 0.6.0` became available in CVXPY **1.9.3**.
 CVXPY 1.9.2 still requires `sparsediffpy < 0.4.0` and is insufficient.
