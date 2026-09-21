@@ -1,0 +1,692 @@
+[
+  {
+    "representation": "explicit",
+    "multistep": false,
+    "repeat": 0,
+    "construction_seconds": 0.014662915957160294,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.027092957985587418,
+      "solver_seconds": 0.02777595806401223,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466722
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.02701754099689424,
+      "solver_seconds": 0.0062803750624880195,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.9537351255
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 32,
+    "updated_shed_fraction": [
+      0.4550455474205729
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": false,
+    "repeat": 1,
+    "construction_seconds": 0.0105413330020383,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.040038166916929185,
+      "solver_seconds": 0.014047292061150074,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466722
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.026505499961785972,
+      "solver_seconds": 0.006325957947410643,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.9537351255
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 32,
+    "updated_shed_fraction": [
+      0.4550455474205729
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": false,
+    "repeat": 2,
+    "construction_seconds": 0.010465083993040025,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.02689762506633997,
+      "solver_seconds": 0.013837583013810217,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466722
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.02636391599662602,
+      "solver_seconds": 0.005984875024296343,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.9537351255
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 32,
+    "updated_shed_fraction": [
+      0.4550455474205729
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": false,
+    "repeat": 3,
+    "construction_seconds": 0.01049387501552701,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.027255999972112477,
+      "solver_seconds": 0.014020666014403105,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466722
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.025569792021997273,
+      "solver_seconds": 0.005994791979901493,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.9537351255
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 32,
+    "updated_shed_fraction": [
+      0.4550455474205729
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": false,
+    "repeat": 4,
+    "construction_seconds": 0.010534083005040884,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.02627304196357727,
+      "solver_seconds": 0.013907209038734436,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466722
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.02619449992198497,
+      "solver_seconds": 0.006021166918799281,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.9537351255
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 32,
+    "updated_shed_fraction": [
+      0.4550455474205729
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": false,
+    "repeat": 0,
+    "construction_seconds": 0.010461792000569403,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.026853583985939622,
+      "solver_seconds": 0.014695457997731864,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466729
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.0270736669190228,
+      "solver_seconds": 0.006248500081710517,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.953735126
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 31,
+    "updated_shed_fraction": [
+      0.45504554742057307
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": false,
+    "repeat": 1,
+    "construction_seconds": 0.010430917027406394,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.027401666971854866,
+      "solver_seconds": 0.014649583026766777,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466729
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.026425792020745575,
+      "solver_seconds": 0.006214458961039782,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.953735126
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 31,
+    "updated_shed_fraction": [
+      0.45504554742057307
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": false,
+    "repeat": 2,
+    "construction_seconds": 0.010473166010342538,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.04061274998821318,
+      "solver_seconds": 0.014487000065855682,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466729
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.026017500087618828,
+      "solver_seconds": 0.006233292049728334,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.953735126
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 31,
+    "updated_shed_fraction": [
+      0.45504554742057307
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": false,
+    "repeat": 3,
+    "construction_seconds": 0.010699542006477714,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.026039874996058643,
+      "solver_seconds": 0.013976957998238504,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466729
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.02627437503542751,
+      "solver_seconds": 0.006217458983883262,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.953735126
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 31,
+    "updated_shed_fraction": [
+      0.45504554742057307
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": false,
+    "repeat": 4,
+    "construction_seconds": 0.010534959030337632,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.026591542060486972,
+      "solver_seconds": 0.01389895798638463,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1724274.4062466729
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.02635425003245473,
+      "solver_seconds": 0.006079125101678073,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 1489469.953735126
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 133,
+    "scalar_equalities": 127,
+    "scalar_inequalities": 31,
+    "updated_shed_fraction": [
+      0.45504554742057307
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": true,
+    "repeat": 0,
+    "construction_seconds": 0.04235591599717736,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10773937508929521,
+      "solver_seconds": 0.10238966695033014,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266297
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.12426441698335111,
+      "solver_seconds": 0.0667546249460429,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965743
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 128,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057274
+      ],
+      [
+        1.3024784217883874e-11
+      ],
+      [
+        4.213735576444187e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": true,
+    "repeat": 1,
+    "construction_seconds": 0.041362499934621155,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10646375000942498,
+      "solver_seconds": 0.10749812505673617,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266297
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.10751820798031986,
+      "solver_seconds": 0.0667922078864649,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965743
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 128,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057274
+      ],
+      [
+        1.3024784217883874e-11
+      ],
+      [
+        4.213735576444187e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": true,
+    "repeat": 2,
+    "construction_seconds": 0.04179399996064603,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.1262187500251457,
+      "solver_seconds": 0.10719195799902081,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266297
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.10564833297394216,
+      "solver_seconds": 0.06650999991688877,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965743
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 128,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057274
+      ],
+      [
+        1.3024784217883874e-11
+      ],
+      [
+        4.213735576444187e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": true,
+    "repeat": 3,
+    "construction_seconds": 0.04159575002267957,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10630133305676281,
+      "solver_seconds": 0.1045598330674693,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266297
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.12479883397463709,
+      "solver_seconds": 0.06867262499872595,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965743
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 128,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057274
+      ],
+      [
+        1.3024784217883874e-11
+      ],
+      [
+        4.213735576444187e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "explicit",
+    "multistep": true,
+    "repeat": 4,
+    "construction_seconds": 0.041281625046394765,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10688595799729228,
+      "solver_seconds": 0.12923837499693036,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266297
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.11717154190409929,
+      "solver_seconds": 0.09011516708415002,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965743
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 128,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057274
+      ],
+      [
+        1.3024784217883874e-11
+      ],
+      [
+        4.213735576444187e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": true,
+    "repeat": 0,
+    "construction_seconds": 0.04381016700062901,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.14093995792791247,
+      "solver_seconds": 0.1179569170344621,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266283
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.11126191599760205,
+      "solver_seconds": 0.07283845893107355,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965742
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 124,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057246
+      ],
+      [
+        1.3024784217695382e-11
+      ],
+      [
+        3.8170325534575995e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": true,
+    "repeat": 1,
+    "construction_seconds": 0.04228412499651313,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10693595802877098,
+      "solver_seconds": 0.10686183290090412,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266283
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.12706637498922646,
+      "solver_seconds": 0.06749954202678055,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965742
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 124,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057246
+      ],
+      [
+        1.3024784217695382e-11
+      ],
+      [
+        3.8170325534575995e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": true,
+    "repeat": 2,
+    "construction_seconds": 0.04193937499076128,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.10545329202432185,
+      "solver_seconds": 0.10843595792539418,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266283
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.10618250002153218,
+      "solver_seconds": 0.0668635000474751,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965742
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 124,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057246
+      ],
+      [
+        1.3024784217695382e-11
+      ],
+      [
+        3.8170325534575995e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": true,
+    "repeat": 3,
+    "construction_seconds": 0.04218658397439867,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.12919925001915544,
+      "solver_seconds": 0.10758066701237112,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266283
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.10724679101258516,
+      "solver_seconds": 0.06779070803895593,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965742
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 124,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057246
+      ],
+      [
+        1.3024784217695382e-11
+      ],
+      [
+        3.8170325534575995e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "multistep": true,
+    "repeat": 4,
+    "construction_seconds": 0.041197541053406894,
+    "is_dcp": false,
+    "is_dpp": false,
+    "first_solve": {
+      "canonicalization_and_setup_seconds": 0.1072254590690136,
+      "solver_seconds": 0.10565966693684459,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 3195773.3090266283
+    },
+    "updated_solve": {
+      "canonicalization_and_setup_seconds": 0.12426833296194673,
+      "solver_seconds": 0.06659458298236132,
+      "iterations": "Not available",
+      "status": "optimal",
+      "objective": 2726785.254965742
+    },
+    "identities_unchanged": true,
+    "scalar_variables": 532,
+    "scalar_equalities": 508,
+    "scalar_inequalities": 124,
+    "updated_shed_fraction": [
+      [
+        0.45504554742057246
+      ],
+      [
+        1.3024784217695382e-11
+      ],
+      [
+        3.8170325534575995e-17
+      ],
+      [
+        0.4078198449215589
+      ]
+    ]
+  }
+]

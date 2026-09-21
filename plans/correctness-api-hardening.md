@@ -1,6 +1,6 @@
 # Correctness and API hardening after Milestones 12 and 16
 
-**Status:** planned
+**Status:** complete — Tracks A, B, and C implemented and verified
 **Relationship to M16+:** independent except where noted
 **Nature of work:** small correctness fixes, one result-contract decision, and
 one package-wide scientific-units decision
@@ -28,7 +28,7 @@ Every moderate-to-low finding from the M12/M16 review has an explicit owner:
 |---|---:|---|---|
 | Non-finite `delta` accepted | Moderate | Fix and add boundary tests | Hardening Track A |
 | Single-node silently drops HVDC | Moderate in review | Confirmed as the correct null model; make the null capability explicit and test it | M16+ §4 and Gate 4 |
-| Stage objectives are not time-scaled | Moderate scientific debt | Resolution experiment complete; lock the units convention, then implement it | Hardening Track C |
+| Stage objectives are not time-scaled | Moderate scientific debt | Implemented and verified: all stage-cost rates are integrated by `delta` | Hardening Track C |
 | Infeasible results omit configured-device keys | Low–moderate | Adopt and test a stable build-dependent schema | Hardening Track B |
 | Component interface is conventional rather than substitutable | Low–moderate architecture debt | Add typed adapters/protocols and a shared assembler | M16+ §§3–6 |
 | Single-step builders skip memoryless coupling hooks | Low | Invoke every applicable horizon hook through the common one-element horizon path | M16+ §3.4 and Gate 2 |
@@ -37,6 +37,8 @@ No review finding is deferred without either a planned implementation or an
 explicitly accepted model decision.
 
 ## 3. Track A — finite temporal-input validation
+
+**Status:** implemented and verified on `critical-path`
 
 ### Problem
 
@@ -81,10 +83,19 @@ but the public boundary is authoritative.
   coefficient through the public API.
 - Single- and multistep paths use the same validator.
 
+All Track A acceptance gates are covered by public-entry-point tests,
+including non-finite and nonnumeric inputs, booleans, NumPy real scalars,
+storage-free builds across all formulations, and explicit pre-dispatch
+failure checks.
+
 This track should land before M16+ so the refactor inherits the corrected
 boundary.
 
 ## 4. Track B — unsuccessful-solve result schema
+
+**Status:** complete — result schemas are initialized from the built model;
+unavailable primal and derived arrays use `None`, scalar objective and cost
+quantities use `NaN`, and successful result schemas remain unchanged
 
 ### Problem
 
@@ -141,35 +152,41 @@ all operands exist.
 - All formulations follow the same missing-value conventions.
 - Tests assert exact keys, shapes, `None`, and `NaN` policy.
 
+All gates are covered by formulation × horizon × component schema tests,
+reproducible convex infeasibility fixtures, partial-primal derived-value
+tests, and AC hard-terminal status characterization.
+
 This track may proceed in parallel with early M16+ adapter work, but its result
 changes should land before M16+ deletes old orchestration so equivalence tests
 can distinguish intentional schema changes from refactor regressions.
 
 ## 5. Track C — objective time discretization and scientific units
 
-### Problem
+**Status:** implemented and verified on `critical-path`
 
-Storage dynamics multiply power by `delta`, but multistep generation, line
-loss, storage cycling, and HVDC stage costs are summed without `delta`.
-Terminal penalties correctly occur once at the horizon boundary. Therefore a
-fixed physical horizon represented at a finer resolution receives more stage
-cost weight relative to its terminal cost.
+### Pre-implementation problem
 
-This is documented behavior, not an accidental M12 regression. It nonetheless
-must be resolved before cross-resolution or hierarchical economic comparisons
-are presented as physically invariant.
+Before Track C, storage dynamics multiplied power by `delta`, but multistep
+generation, line loss, storage cycling, and HVDC stage costs were summed
+without `delta`. Terminal penalties correctly occurred once at the horizon
+boundary. Therefore a fixed physical horizon represented at a finer
+resolution received more stage-cost weight relative to its terminal cost.
+
+This was documented behavior, not an accidental M12 regression. Track C
+resolved it before cross-resolution or hierarchical economic comparisons are
+presented as physically invariant.
 
 ### Decision study
 
 Before implementation, classify every objective coefficient by units:
 
-| Term | Current expression | Likely physical interpretation |
+| Term | Former expression | Likely physical interpretation |
 |---|---|---|
 | Generator cost | `g(P_t)` | currency/hour at dispatch `P_t` |
 | DC line loss term | `loss_weight * r*p_t^2` | weighted power loss, not inherently currency/hour |
-| Storage cycling | `aging_weight * abs(b_t)` | currently objective units/MW per interval |
+| Storage cycling | `aging_weight * abs(b_t)` | formerly objective units/MW per interval |
 | HVDC cost | polynomial in `abs(p_in_t)` | coefficient-dependent, conventionally currency/hour |
-| Future load shedding (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
+| Future sheddable loads (M19) | `value_of_lost_load * p_shed_t` | currency/hour; integrates to currency |
 | Terminal linear | `rho * abs(q_T-target)` | objective units |
 | Terminal quadratic | `rho * square(q_T-target)` | objective units |
 
@@ -190,7 +207,7 @@ total objective
     + horizon_boundary_terms.
 ```
 
-This is an immediate correction when Track C implementation begins:
+This was implemented as an immediate correction:
 
 - do not add a compatibility option;
 - do not preserve the old unscaled behavior for `delta != 1`;
@@ -218,7 +235,7 @@ device is active, and must always be finite and strictly positive.
 | Storage cycling | `aging_weight * abs(b_MW)` | `aging_weight`: `U/MWh` of one-way throughput | `delta * aging_weight * abs(b_MW)` in `U` |
 | HVDC polynomial cost | `h(abs(p_in_MW))` | polynomial coefficients chosen so `h` is `U/hour` | `delta * h(abs(p_in_MW))` in `U` |
 | DC flow-loss regularizer | `loss_weight * sum(r_pu * p_flow_pu^2)` | `loss_weight`: `(U/hour)` per numerical unit of the per-unit loss proxy | `delta * loss_weight * L` in `U` |
-| Future load shedding | `value_of_lost_load * p_shed_MW` | `value_of_lost_load`: `U/MWh` | `delta * VOLL * p_shed_MW` in `U` |
+| Future sheddable loads | `value_of_lost_load * p_shed_MW` | `value_of_lost_load`: `U/MWh` | `delta * VOLL * p_shed_MW` in `U` |
 | Terminal linear | `rho_1 * abs(q_T-target)` | `rho_1`: `U/MWh` | once-per-horizon `U` |
 | Terminal quadratic | `rho_2 * square(q_T-target)` | `rho_2`: `U/MWh^2` | once-per-horizon `U` |
 
@@ -254,7 +271,7 @@ The following are resolved:
 - `delta` scales every stage contribution automatically.
 - storage cycling is charged on energy throughput,
   `aging_weight * delta * abs(b_t)`;
-- future M19 load shedding uses
+- future M19 sheddable loads use
   `delta * value_of_lost_load * p_shed_t`;
 - MATPOWER `gencost` output is treated as a stage cost rate;
 - single- and multistep objectives both report total objective units over
@@ -354,6 +371,37 @@ Reproducible implementation, tests, tables, and interpretation are in
 `tests/test_battery_terminal_resolution_study.py`, and the executable
 `experiments/battery_terminal/report.py`.
 
+### Implementation result (2026-07-30)
+
+Shared component assembly now owns the equal-step integration operation:
+
+```text
+delta * sum_t stage_cost_rate_t.
+```
+
+All six formulation/horizon builders pass their complete stage-cost rates
+through that operation. AC and single-node DC include component rates; lossy
+DC includes the component rates and its network-loss regularizer. Aggregated
+horizon terminal cost is added afterward and is not scaled.
+
+`OPFBuild.expressions` retains integrated `generator_cost`, conditional
+`storage_cost` and `hvdc_cost`, and `dc_loss_cost` for lossy DC. These named
+expressions reconstruct the operating objective and preserve the existing
+`storage_cost` result field with corrected energy-throughput units.
+
+The high-window resolution experiment was rerun under the implemented
+convention. The quadratic policy now terminates at 350.122 MWh at
+`delta = 1`, `0.5`, and `0.25` hours; its objective is 83,500.145 objective
+units at all three resolutions to solver tolerance. The maximum
+common-boundary SoC discrepancy is `1.55e-5` MWh. The earlier results above
+remain the diagnostic record of the former unscaled convention.
+
+Public regression tests cover all three formulations in single- and
+multistep modes, single-step `delta != 1`, named-cost reconstruction,
+terminal-cost separation, and source-independent zero-order-hold refinement.
+The README and objective docstrings record the intentional behavior change;
+`delta = 1` numerical baselines remain unchanged.
+
 ### Implementation stages after decision
 
 1. Retain separate named expressions for each objective contribution.
@@ -369,7 +417,7 @@ Reproducible implementation, tests, tables, and interpretation are in
    `base_time_step_hours`, while retaining the explicit resolution grid.
 9. Add a source-independent synthetic regression test for effective terminal
    weight equivalence under the old convention, then update its expected
-   result to resolution invariance when Track C lands.
+   result to resolution invariance with Track C.
 10. Keep the value-function refinement argument explicitly scoped to
     stage-separable models with ideal storage and zero-order-held inputs.
 
@@ -384,27 +432,32 @@ Reproducible implementation, tests, tables, and interpretation are in
 - Invalid `delta` is rejected even without storage.
 - No compatibility mode preserves the unscaled convention.
 
-### Future application: Milestone 19 load shedding
+All acceptance gates are covered by unit, formulation-level, and
+cross-resolution regression tests.
+
+### Future application: Milestone 19 first-class loads and load shedding
 
 The objective-units decision is a prerequisite for
-`milestone-19-load-shedding.md`. Load shedding will be an explicit
-generator-like positive injection with a high linear value-of-lost-load cost
-and a per-step cap derived from nodal load. Its coefficient should have a
-stable physical interpretation across time resolutions.
+`milestone-19-load-shedding.md`. Loads will become first-class components;
+selected loads will expose an affine served-fraction feasible set with a high
+linear value-of-lost-load cost. Each shedding bound is derived from that
+load's active input at the current step, and its coefficient has a stable
+physical interpretation across time resolutions.
 
 The hardening work should keep the following future requirements possible
 without implementing M19 here:
 
-- component-owned positive active and reactive balance contributions;
+- component-owned fixed and served active/reactive load contributions;
 - a named, typed per-stage load-shedding cost contribution;
-- conditional result keys for configured shedding devices in both successful
+- conditional result keys for configured sheddable loads in both successful
   and no-primal outcomes;
 - energy-not-served accounting using `delta`; and
 - exact-penalty studies in which the finite shedding coefficient crosses the
   relevant marginal service-cost threshold.
 
-Do not add an anonymous feasibility slack during hardening. Absence of an
-explicit M19 device must continue to mean that load shedding is unavailable.
+Do not add an anonymous feasibility slack during hardening. A load without an
+explicit shedding policy must remain fixed and fully served whenever the
+problem is feasible.
 
 This track is decided and must be implemented before Milestone 17.
 Implementation may follow M16+ because central stage-cost assembly makes the
@@ -414,9 +467,10 @@ change smaller and gives `delta` one authoritative insertion point.
 
 ### Integration policy
 
-The hardening tracks and M16+ should be **interleaved at deliberate dependency
-boundaries, but not combined into one branch or pull request**. Each change
-must remain independently reviewable:
+The hardening tracks and M16+ are **interleaved at deliberate dependency
+boundaries**. By project-owner decision on 2026-07-28, the work may remain on
+the shared `critical-path` branch rather than using a separate branch and pull
+request for each scope. Clean commit boundaries preserve independent review:
 
 ```text
 finite-delta fix

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "study": "M14c post-hoc default-solver characterization",
+  "classification": "non_promotional",
+  "executed_protocol_sha256": "c80d3b9a9374166fab4b073ae1e72735419fc653f3abfb39a24fe47df4efcda7",
+  "executed_runner_sha256": "2dd7cd1348b0eb8b31a769217207a6ebfafe741785940b065f805397362966cb",
+  "temporal_assembly": "vectorized",
+  "canonicalization_backend": "SCIPY",
+  "solvers": ["OSQP", "SCS", "HIGHS"],
+  "horizons": [24, 168, 720, 8760],
+  "solver_configuration": "defaults",
+  "verbose": true,
+  "serial_order": "horizon_then_solver",
+  "automatic_retry": false,
+  "rss_limit_mib": 16384.0,
+  "wall_limit_seconds_per_arm": 300.0,
+  "solver_versions": {
+    "clarabel": "0.11.1",
+    "osqp_package": "1.1.3",
+    "osqp_native_banner": "1.0.0",
+    "scs": "3.2.11",
+    "highs": "1.15.1",
+    "highs_commit": "04024d7",
+    "mosek": "11.2.3"
+  },
+  "version_evidence_status": "backfilled after execution from retained package metadata and native solver logs",
+  "interpretation": "Solver behavior is version-specific; this protocol companion does not alter the executed configuration, artifacts, or non-promotional status."
+}

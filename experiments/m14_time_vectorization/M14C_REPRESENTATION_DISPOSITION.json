@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "classification": "equivalent_representations_for_case118_annual_study",
+  "decision_date": "2026-09-01",
+  "historical_profile": {
+    "classification": "mismatch_under_original_coordinate_gate",
+    "result_sha256": "49cf9270ddaaf07a0c1529bf23440b0e6bf68fabc918a36e5f65b6420514b16a",
+    "analysis_sha256": "e0d7ef556c6b1ad698764d3f0ccc565fdaaf1d4ee52411b4c8ddf22d8f3df458",
+    "retrospective_reclassification": false,
+    "mismatch_disposition": {
+      "Pg": "solver_resolution_certificate_limited_not_mathematically_nonunique",
+      "b": "weakly_identified_storage_trajectory",
+      "soc": "weakly_identified_storage_trajectory",
+      "boundary_soc_mwh": "weakly_identified_intermediate_signposts",
+      "p_net": "derived_from_alternative_storage_trajectory",
+      "storage_cost": "derived_from_alternative_storage_trajectory",
+      "component_costs": "derived_from_alternative_dispatch_and_storage_trajectory"
+    },
+    "observed_mismatches": [
+      {
+        "horizon_steps": 24,
+        "maximum_pg_difference_mw": 0.02298733018034227,
+        "maximum_storage_power_difference_mw": 0.9222482306361997,
+        "maximum_p_net_difference_mw": 0.9222482599292334,
+        "maximum_storage_soc_difference_mwh": 0.9429651609671055,
+        "maximum_boundary_soc_difference_mwh": 0.9429651609671055,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.0002040378749370575,
+          "dc_loss_cost": 0.0002258704535975653,
+          "storage_cost": 0.000038150556065374985
+        }
+      },
+      {
+        "horizon_steps": 168,
+        "maximum_pg_difference_mw": 0.2320286542567942,
+        "maximum_storage_power_difference_mw": 0.546269232222329,
+        "maximum_p_net_difference_mw": 0.5462691737327532,
+        "maximum_storage_soc_difference_mwh": 0.7134536685533535,
+        "maximum_boundary_soc_difference_mwh": 0.7134536685533535,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.003110485151410103,
+          "dc_loss_cost": 0.00040275975607073633,
+          "storage_cost": 0.000137159609948867
+        }
+      },
+      {
+        "horizon_steps": 720,
+        "maximum_pg_difference_mw": 0.5758110961889997,
+        "maximum_storage_power_difference_mw": 3.945636904795464,
+        "maximum_p_net_difference_mw": 3.9456367262757794,
+        "maximum_storage_soc_difference_mwh": 5.74642944832874,
+        "maximum_boundary_soc_difference_mwh": 5.74642944832874,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.02342621237039566,
+          "dc_loss_cost": 0.008759922736771841,
+          "storage_cost": 0.0016718631304684095
+        }
+      }
+    ]
+  },
+  "tight_tolerance_diagnostic": {
+    "execution_commit": "1ed6735070c6ac2c7fd17764f0e04ddff43cf7f9",
+    "result_path": "experiments/m14_time_vectorization/results/m14c_case118_tight_tolerance_conditioned/diagnostic-result.json",
+    "result_sha256": "cf51b169ffb35d5ca519462a4a38b31713538ce0e66f245d41f72be16c753a36",
+    "result_bytes": 10194,
+    "classification": "accepted",
+    "annual_execution_authorized": false,
+    "clarabel_options": {
+      "tol_gap_abs": 1e-10,
+      "tol_gap_rel": 1e-10,
+      "tol_feas": 1e-10
+    },
+    "comparisons": [
+      {
+        "horizon_steps": 24,
+        "objective_absolute_difference": 0.00007817614823579788,
+        "combined_native_absolute_gap": 0.00013685552403330803,
+        "objective_difference_within_combined_native_gap": true,
+        "maximum_pg_difference_mw": 0.016372760336309966,
+        "maximum_storage_power_difference_mw": 0.7120557691071951,
+        "maximum_p_net_difference_mw": 0.7120557694724994,
+        "maximum_storage_soc_difference_mwh": 0.7183984908076582,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.000002057291567325592,
+          "dc_loss_cost": 0.00007563902984486504,
+          "storage_cost": 4.826205213248613e-7
+        }
+      },
+      {
+        "horizon_steps": 168,
+        "objective_absolute_difference": 0.00000792182981967926,
+        "combined_native_absolute_gap": 0.001391308382153511,
+        "objective_difference_within_combined_native_gap": true,
+        "maximum_pg_difference_mw": 0.049255793479431986,
+        "maximum_storage_power_difference_mw": 0.6158651479058506,
+        "maximum_p_net_difference_mw": 0.6158651482483606,
+        "maximum_storage_soc_difference_mwh": 0.41305527892575356,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.00002070888876914978,
+          "dc_loss_cost": 0.000030082277987730777,
+          "storage_cost": 0.0000015177820387179963
+        }
+      },
+      {
+        "horizon_steps": 720,
+        "objective_absolute_difference": 0.0012960359454154968,
+        "combined_native_absolute_gap": 0.008702322840690613,
+        "objective_difference_within_combined_native_gap": true,
+        "maximum_pg_difference_mw": 0.12069648604455097,
+        "maximum_storage_power_difference_mw": 5.013907635330739,
+        "maximum_p_net_difference_mw": 5.013907636004536,
+        "maximum_storage_soc_difference_mwh": 4.3867182898177575,
+        "component_cost_absolute_differences": {
+          "generation_cost": 0.0003922581672668457,
+          "dc_loss_cost": 0.0009016004066779715,
+          "storage_cost": 0.000004594970960170031
+        }
+      }
+    ]
+  },
+  "scientific_disposition": {
+    "representations": [
+      "stepwise_cpp",
+      "vectorized_scipy"
+    ],
+    "equivalent_for_this_study": true,
+    "authoritative_annual_policy_realization": "vectorized_scipy",
+    "weakly_identified_coordinates": [
+      "intermediate_storage_power",
+      "intermediate_storage_soc",
+      "branch_flow"
+    ],
+    "certificate_limited_coordinates": [
+      "dispatchable_generation"
+    ],
+    "derived_differences": [
+      "p_net",
+      "generation_cost",
+      "dc_loss_cost",
+      "storage_cost"
+    ],
+    "retained_gates": [
+      "native_solver_status",
+      "objective_certificate_coverage",
+      "complete_physical_audit",
+      "complete_bound_audit",
+      "terminal_storage_obligation",
+      "nondispatchable_output",
+      "device_and_network_identity",
+      "public_result_schema"
+    ],
+    "downstream_limitation": "Several-MWh outer signpost sensitivity must be carried when interpreting hierarchical AC results."
+  },
+  "prefix_ladder_results_sha256": "8c5e5cee101489fe708f7a8c501268c98515bf71583e3bda76fa8073f38cb779",
+  "prefix_ladder_executed": true,
+  "annual_execution_authorized": true
+}

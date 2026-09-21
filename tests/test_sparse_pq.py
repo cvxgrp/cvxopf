@@ -50,6 +50,46 @@ def _flat_load_dfs(case_fn, T):
     return df_P, df_Q
 
 
+@pytest.mark.parametrize("case_fn", [case9, case14])
+@pytest.mark.parametrize("horizon", [None, 3])
+def test_sparse_gather_flows_match_complex_power(case_fn, horizon):
+    """Audit repeated-index gathers against complex Ybus power, including shunts.
+
+    This exercises the DNLP derivative path behind CVXPY issue #3442 and
+    checks the solved P/Q entries independently of the trigonometric model.
+    """
+    if horizon is None:
+        build = _build_ac(case_fn, sparse_pq=True)
+    else:
+        df_P, df_Q = _flat_load_dfs(case_fn, horizon)
+        scales = np.array([0.8, 1.0, 1.2])
+        build = build_opf_multistep(
+            case_fn(), df_P.mul(scales, axis=0), df_Q.mul(scales, axis=0),
+            T=horizon, options=OPFOptions(sparse_pq=True),
+        )
+    build.solve(max_iter=400)
+    assert build.prob.status == "optimal"
+    rows, cols = build.data["rows"], build.data["cols"]
+    assert len(np.unique(rows)) < len(rows)
+    assert np.any(rows == cols)
+    result = extract_results(build)
+    voltage = np.atleast_2d(result["Vm"]) * np.exp(
+        1j * np.deg2rad(np.atleast_2d(result["Va_deg"]))
+    )
+    for t, phasor in enumerate(voltage):
+        power = phasor[:, None] * np.conj(build.data["Ybus"] * phasor[None, :])
+        for key, expected in (("P_vec", power.real), ("Q_vec", power.imag)):
+            variable = build.variables[key]
+            if horizon is not None:
+                variable = variable[t]
+            np.testing.assert_allclose(variable.value, expected[rows, cols], atol=1e-6)
+        for key, expected in (("p_net", power.real), ("q_net", power.imag)):
+            np.testing.assert_allclose(
+                np.atleast_2d(result[key])[t],
+                build.data["baseMVA"] * expected.sum(axis=1), atol=1e-4,
+            )
+
+
 # ---------------------------------------------------------------------------
 # Default option value
 # ---------------------------------------------------------------------------

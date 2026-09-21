@@ -2,9 +2,11 @@
 
 ## Status and scope
 
-**Completed on 2026-07-27.** The Convention A experiment satisfies the stop
-condition below. Convention B remains a separate package-level design
-decision.
+**Completed on 2026-07-27; superseded on 2026-07-30.** The Convention A
+experiment below diagnosed the former package behavior. Convention B was
+subsequently adopted by Track C of `plans/correctness-api-hardening.md`, and
+the resolution study was rerun to verify invariance. The body below is
+retained as the design record for the original diagnostic.
 
 This is an optional, small extension to the battery terminal-policy
 experiment. It is **not** the main purpose of the study.

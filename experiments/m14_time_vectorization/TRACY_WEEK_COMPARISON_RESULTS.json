@@ -1,0 +1,216 @@
+{
+  "created_utc": "2026-09-20T18:47:56.759010+00:00",
+  "failed_mode": {
+    "label": "AC \u00b7 stepwise",
+    "attempts": [
+      {
+        "formulation": "ac",
+        "assembly": "stepwise",
+        "horizon": 168,
+        "status": "wall_timeout",
+        "wall_limit_seconds": 180,
+        "solver_status": null,
+        "snapshot_rss_mib": 10473.046875,
+        "snapshot_elapsed_seconds": 91,
+        "snapshot_is_peak": false,
+        "paired_numerical_comparison_available": false
+      },
+      {
+        "formulation": "ac",
+        "assembly": "stepwise",
+        "horizon": 168,
+        "status": "wall_timeout",
+        "wall_limit_seconds": 1800,
+        "solver_status": null,
+        "supervised_wall_seconds": 1800.407509333978
+      }
+    ]
+  },
+  "checks": [
+    {
+      "mode": "singlenode_dc_stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.2737367544323206e-13,
+      "objective_relative_error": 0.0
+    },
+    {
+      "mode": "singlenode_dc_vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.2737367544323206e-13,
+      "objective_relative_error": 0.0
+    },
+    {
+      "mode": "lossy_dc_stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.0893064228412186e-11,
+      "objective_relative_error": 0.0
+    },
+    {
+      "mode": "lossy_dc_vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.8014700842172715e-11,
+      "objective_relative_error": 0.0
+    },
+    {
+      "mode": "ac_vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 9.317715932155579e-09,
+      "objective_relative_error": 0.0
+    }
+  ],
+  "provenance": {
+    "source_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+    "fresh_execution": {
+      "source_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+      "start": "2021-12-22 00:00:00-08:00",
+      "end": "2021-12-28 23:00:00-08:00",
+      "horizons": [
+        168
+      ],
+      "initialization": "Case118 complete_flat_start + assign_start, using variable.value; no shifted start needed for independent full-horizon comparisons.",
+      "solver_options": {
+        "lossy_dc": "CLARABEL defaults"
+      },
+      "worker_wall_limit_seconds": 180,
+      "versions": {
+        "cvxpy": "1.9.2",
+        "numpy": "2.4.6",
+        "pandas": "3.0.3",
+        "cyipopt": "1.7.0",
+        "clarabel": "0.11.1"
+      },
+      "metadata_capture": {
+        "timing": "before_execution",
+        "created_utc": "2026-09-20T18:44:27.505702+00:00"
+      },
+      "formulations": [
+        "lossy_dc"
+      ],
+      "source_hashes": {
+        "src/cvxopf/_component_assembly.py": "0b9e6a07431c8244e7de4b9646d4852d59132413f4ed2c9cc59cc35a359af39f",
+        "src/cvxopf/hvdc.py": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+        "src/cvxopf/results.py": "26b830cd7fb480755e25099b4ea0e857a75958e187e2a449c5f1c51d98e1c7dd",
+        "src/cvxopf/hierarchical.py": "cda0828a2f6f6f237aae04e8c38b8062da97ad00ac0e00efbb96aeab7178bf18",
+        "src/cvxopf/__init__.py": "ea80f0c9aa1dc636472e4ea6a6c8b5e43ef7ce591509acbf06ae07e80473a3d7",
+        "src/cvxopf/_component_adapters.py": "bd4e934df73d6cf82c9d460b40d57dc82924a6437f6f317752908ab68650a432",
+        "src/cvxopf/_component_adapter.py": "f9edb5062c0fecaef1483bb60df9ba192685e9c3eb03f8b190da6e94d68f3aff",
+        "src/cvxopf/generator.py": "0ec996c2f3ec8c772b097bac303c650103281bbcc18261b702dcfd2ad16de8ab",
+        "src/cvxopf/characterization.py": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+        "src/cvxopf/problem.py": "835bf03bdf854dfa11089b4b36c9a07aef88234b8f13fe53400c0ad122e1b413",
+        "src/cvxopf/singlenode_dc_problem.py": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+        "src/cvxopf/storage.py": "6964dbe9168926128b605575566ec3fd99217271350a96de19fef66acabca871",
+        "src/cvxopf/network.py": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+        "src/cvxopf/cost.py": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+        "src/cvxopf/load.py": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+        "src/cvxopf/dc_problem.py": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+        "src/cvxopf/_temporal_assembly.py": "1d918ddbc4c6d623283c210fbbfe9f87cbfff183aa829c3db81d40955e8be388",
+        "src/cvxopf/_hierarchical_solver.py": "7337a22091e733afe4ccf4c234b3ea1e86e5562f474a16c3e803aea1920d88ea",
+        "src/cvxopf/ac_problem.py": "8b821436529c5e8e3be7b17962e0650e9066cd3cf6ea9de5343b2e38b790fe3c",
+        "src/cvxopf/data.py": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+        "src/cvxopf/nondispatchable.py": "8d7e0d503df5d1cc7864354e73b01370d0903d23dbbbf6faffbe73dfc74aaa1b",
+        "experiments/m14_time_vectorization/compare_network_vectorization.py": "ef10e11070940beb3a8e0ca4e78ac03bebb973dd0de689b7c12183f3e221b166",
+        "experiments/m14_time_vectorization/run_m14d_singlenode.py": "642b68984b8d8cd86f702ec499317d2b8137a13ec7c04c4a2cff8d678455e688",
+        "experiments/battery_terminal/scenario.py": "7a39161877892169c393736854e04fed0b592e1c90f4ecc8ae8bda67e449b702",
+        "experiments/battery_terminal/devices.py": "1b6536199765af25a8e1e036a9d26d3193a07dcc36fcba364eb5aa925262e52e"
+      }
+    },
+    "artifacts": {
+      "outputs/singlenode_vectorization/trajectory_capture.json": "8da3d2e80f1a587ad954d47556b26232b9b05fd50286eb81282b98e90f2389df",
+      "experiments/m14_time_vectorization/M14D_SINGLENODE_RESULTS.json": "c69a180513dad98197422657bc3d2b686b93a8265fb820af148e779e69ccabcc",
+      "experiments/m14_time_vectorization/AC_DC_COMPARISON_RESULTS.json": "963e758c19ce9e0b1d6d6c7bdce4628e2647266c4998ba7f6f12db58477e95dd",
+      "experiments/m14_time_vectorization/AC_STEPWISE_RETRY_RESULTS.json": "3125b5909510e2413142624d3b2dc43b837c539be86c9a665601fb18cf8f9e36",
+      "outputs/tracy_week_comparison/lossy_dc_run/execution_metadata.json": "4e951259c9b75002a8c9a45fec733c3e803abdec1c0aa976587cb11916b5b10a",
+      "outputs/singlenode_vectorization/inputs.npz": "7ae0b74c7b41148bda7ef96fea8764aa66594ebc26d4869c05a38a00f413767e",
+      "outputs/tracy_week_comparison/lossy_dc_run/stepwise.json": "c9616c36aaf725218d396499d9b5a639cb3f78327f4c8680d1e3ba5407904166",
+      "outputs/tracy_week_comparison/lossy_dc_run/vectorized.json": "118e8514be050b1f5fe93e9a4ec295512b644c5f66b4acb6bde563aa2655c5b5",
+      "outputs/network_vectorization/ac_vectorized_168.json": "3832cf3f9512468267a2936aec54c1d896dc7a8c27a036484f7e1401a01282a1"
+    }
+  },
+  "timing_note": "Separate single runs on different dates; no controlled speedup estimate. Single-node times are from its trajectory capture, not the earlier timing-only report.",
+  "summary": [
+    {
+      "mode": "Single-node \u00b7 stepwise",
+      "status": "optimal",
+      "objective": 316499.1523371125,
+      "generation_cost": 316341.5265204351,
+      "cycling_cost": 157.6258166766978,
+      "dc_loss_penalty": 0.0,
+      "generation_mwh": 17410.727819107688,
+      "curtailed_mwh": 17524.50362722884,
+      "battery_throughput_mwh": 15762.581667669781,
+      "ac_real_losses_mwh": null,
+      "total_seconds": 0.9599886250216514,
+      "peak_rss_mib": 246.3125,
+      "wall_limit_seconds": null
+    },
+    {
+      "mode": "Single-node \u00b7 vectorized",
+      "status": "optimal",
+      "objective": 316499.1525595894,
+      "generation_cost": 316341.5267338561,
+      "cycling_cost": 157.62582573329624,
+      "dc_loss_penalty": 0.0,
+      "generation_mwh": 17410.727849214018,
+      "curtailed_mwh": 17524.503657335168,
+      "battery_throughput_mwh": 15762.582573329624,
+      "ac_real_losses_mwh": null,
+      "total_seconds": 0.03852141596144065,
+      "peak_rss_mib": 161.5625,
+      "wall_limit_seconds": null
+    },
+    {
+      "mode": "Lossy DC \u00b7 stepwise",
+      "status": "optimal",
+      "objective": 326369.68285798974,
+      "generation_cost": 326210.95437050774,
+      "cycling_cost": 145.2600094900452,
+      "dc_loss_penalty": 13.46847799119016,
+      "generation_mwh": 18639.10552862592,
+      "curtailed_mwh": 18752.88133674672,
+      "battery_throughput_mwh": 14526.000949004521,
+      "ac_real_losses_mwh": null,
+      "total_seconds": 1.1202366669895127,
+      "peak_rss_mib": 268.578125,
+      "wall_limit_seconds": null
+    },
+    {
+      "mode": "Lossy DC \u00b7 vectorized",
+      "status": "optimal",
+      "objective": 326369.68286599976,
+      "generation_cost": 326210.95436629106,
+      "cycling_cost": 145.2600094236452,
+      "dc_loss_penalty": 13.468490285017756,
+      "generation_mwh": 18639.105528135413,
+      "curtailed_mwh": 18752.8813362552,
+      "battery_throughput_mwh": 14526.000942364517,
+      "ac_real_losses_mwh": null,
+      "total_seconds": 0.0650241250405088,
+      "peak_rss_mib": 166.265625,
+      "wall_limit_seconds": null
+    },
+    {
+      "mode": "AC \u00b7 vectorized",
+      "status": "optimal",
+      "objective": 341477.7114444267,
+      "generation_cost": 341335.2964155456,
+      "cycling_cost": 142.41502888101527,
+      "dc_loss_penalty": 0.0,
+      "generation_mwh": 19715.739852432394,
+      "curtailed_mwh": 18642.783091291643,
+      "battery_throughput_mwh": 14241.502888101526,
+      "ac_real_losses_mwh": 1186.7325692618922,
+      "total_seconds": 116.76768291695043,
+      "peak_rss_mib": 830.5,
+      "wall_limit_seconds": null
+    },
+    {
+      "mode": "AC \u00b7 stepwise",
+      "status": "wall_timeout (two attempts)",
+      "objective": null,
+      "total_seconds": null,
+      "peak_rss_mib": null,
+      "wall_limit_seconds": 1800
+    }
+  ],
+  "bundle_sha256": "690b453b844c94e9a7c374bf8b96f90de759b71ec445cb1f2f4aeb11bbd37a4f"
+}

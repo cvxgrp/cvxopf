@@ -1,0 +1,5 @@
+{
+  "path": "experiments/case118_annual_hierarchy/analysis/artifacts/final_snapshot/dispatch/intervals.csv",
+  "sha256": "9297a45485a8bee3caf035f1efc0dc1966f8ffd561e0863528ad39915b05b76e",
+  "definition": "trailing six complete hours within one shard; average percentile ranks; no selected episodes"
+}

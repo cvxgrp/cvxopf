@@ -124,9 +124,9 @@ class TestSinglenodeDcMultistepInputValidation:
                 build_opf_multistep(case9(), df_P, df_Q, T=3,
                                     formulation="singlenode_dc")
 
-    def test_df_Q_ignored_emits_warning(self):
+    def test_df_Q_retained_for_reporting_with_warning(self):
         df_P, df_Q = _flat_load_dfs(case9, 2)
-        with pytest.warns(UserWarning, match="df_Q is ignored"):
+        with pytest.warns(UserWarning, match="retained as reactive load"):
             build_opf_multistep(case9(), df_P, df_Q, T=2,
                                 formulation="singlenode_dc")
 

@@ -1,0 +1,42 @@
+{
+  "snapshot_started_utc": "2026-09-17T15:28:03.095163+00:00",
+  "snapshot_finished_utc": "2026-09-17T15:28:04.057572+00:00",
+  "completed": 8760,
+  "total": 8760,
+  "percent": 100.0,
+  "timestamp_sources": {
+    "anchored_checkpoint_event": 5225,
+    "archive_mtime_proxy": 3535
+  },
+  "source_json_sha256": {
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-000/checkpoint.json": "0598a454a1f86125dfde5b7f34dedace77149532e53490c2398f2cb91f087736",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-001/checkpoint.json": "7a95ab4e207ec6f5d90701675552a27bbee2acfad9f048723c291b02599cd455",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-002/checkpoint.json": "f3191b3086526afffd2d73f9520e6b98e9dae0fd9b7f691c354f34468430bcf2",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-003/checkpoint.json": "075d92a2c288b9ff596c0986d09f84d48bca5acba09dd2ac8a741a6607163054",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-004/checkpoint.json": "3167ad5ac2f12bbfd7bb70066fb9c9535b3eaecf1195f0a0984cefe9cce462e7",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-005/checkpoint.json": "9f24e240d4901eaf86e5bc35d74b08181759907915621d19c1fcd2b1f4db7d65",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-006/checkpoint.json": "a4144c11a29a39f4a2dfdda05239c25aaef415f8ee78ff4f515f1e612076be24",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-007/checkpoint.json": "95ec1e785f71c938b972190bc935eeb16769c95e33a0ea61a97fc92d249f7cbb",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-008/checkpoint.json": "7820b83b1ace30b4dac584c31f53982c0b139fe9fb0388b12f5b7c0da4297576",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-009/checkpoint.json": "99f3023544d59e3afafb3223f36c0107aac5e2318dfecacd175dd0b4b91822aa",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-010/checkpoint.json": "ce06a68938399c04ddd544fc3bb4ea8acf87e0874fddae7aff32af0f4156210a",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/shard-011/checkpoint.json": "94ab5fe004f4e471bb91963e57adda2fefc11ff749d09d8ee1d6cf26d48dc0d1",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-002-001/supervisor-progress.json": "53c2e7b35cf2f5f28e048397286a840e3ae9e0907e458381e20f1de45db20035",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-002-002/supervisor-progress.json": "0de250332e3defb0cbe73f547d40f4dd40e5cd56f61abb1d9948ae2bf0a11ffb",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-002-003/supervisor-progress.json": "7d312061f1e4388b884aed9f0ef498dc61c576da4afa30723122815abf52071c",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-003-000/supervisor-progress.json": "20fb04a927b29abecd7fb995b58e233b6f8c5ac4665cca064b436b895e37ed8d",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-004-000/supervisor-progress.json": "7fb189c3ed8430a89d9ea813e3e849c8ca270f282fd6c39651e8272d51a52e44",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-004-001/supervisor-progress.json": "def26a89d080dd6f1e06b8effd8483e8a6ba542cea8bc1b49f92b253f594aa2c",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-005-000/supervisor-progress.json": "1b424854bd5c68c2fb50f6cf5f243fbda88242c1e2b2d3c0bdfa2ea6c45b643b",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-005-001/supervisor-progress.json": "3a1528145fe03297a0175e8eefdf1eceac607764a0c6b144b762caedd0140a20",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/speculative-wave-005-002/supervisor-progress.json": "285952a8ec855730b55f85242ccdd59d22b3103adac6d2d701cf4da9ee036647",
+    "experiments/case118_annual_hierarchy/results/s4b_annual_ac/supervision-wave-000-000.json": "b66e46096db290ecc914a86d6686460a30d3bcce9916d68c1cb6448a7c968dca"
+  },
+  "caveats": [
+    "Checkpoint reads are a short non-simultaneous live snapshot.",
+    "Legacy archive mtime approximates completion; it precedes checkpoint publication slightly and is not a portable historical clock if files are copied without timestamp preservation.",
+    "New event timestamps are supervisor tick times associated with advancement, not nanosecond-precise checkpoint write times.",
+    "Initial zero timestamp is estimated from first wave creation UTC minus retained elapsed duration.",
+    "Failed attempts do not increase completion; accepted operator-inserted intervals do. No rate extrapolation or policy causal-effect claim."
+  ]
+}

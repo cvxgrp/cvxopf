@@ -151,7 +151,7 @@ def _metadata(source_path: Path, solver_names: set[str]) -> dict:
         "resolution_hours": list(RESOLUTIONS_HOURS),
         "formulation": "lossy_dc",
         "solvers": sorted(solver_names),
-        "time_step_hours": 1.0,
+        "base_time_step_hours": 1.0,
     }
 
 

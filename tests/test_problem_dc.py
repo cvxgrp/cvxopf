@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 import pytest
 
+from cvxopf.network import reindex_case_to_consecutive
 from cvxopf.testcases import case9, case14
 from cvxopf.problem import build_opf, build_opf_multistep, OPFBuild, OPFOptions
 from cvxopf.results import extract_results
@@ -70,6 +71,14 @@ class TestReturnType:
             "Pgmin", "Pgmax", "loss_weight",
         }
         assert expected.issubset(set(build.data.keys()))
+
+    def test_already_zero_based_case_uses_internal_identity_mapping(self):
+        reindexed, _ = reindex_case_to_consecutive(case9())
+
+        build = build_opf(reindexed, formulation="lossy_dc")
+
+        assert build.data["ext_to_int"] is None
+        assert build.formulation == "lossy_dc"
 
 
 # ---------------------------------------------------------------------------

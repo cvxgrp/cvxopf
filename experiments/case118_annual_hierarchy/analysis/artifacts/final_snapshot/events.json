@@ -1,0 +1,5 @@
+[
+  {"utc":"2026-09-14T21:32:06.367944+00:00", "label":"Policy: Sep 14, 14:32", "color":"#D55E00", "linestyle":"--", "source":"Successful speculative worker launch anchor"},
+  {"utc":"2026-09-14T22:43:21.047126+00:00", "label":"Reboot: Sep 14, 15:43", "color":"#009E73", "linestyle":":", "source":"Recorded macOS kern.boottime"},
+  {"utc":"2026-09-14T23:30:00+00:00", "label":"Fan: Sep 14, ~16:30*", "color":"#CC79A7", "linestyle":"-.", "source":"Operator-reported, approximate"}
+]

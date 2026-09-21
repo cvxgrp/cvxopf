@@ -1,0 +1,507 @@
+{
+  "created_utc": "2026-09-18T23:03:33.357033+00:00",
+  "scope": "single-node DC only; one fresh-process observation per representation and horizon",
+  "timing": "Total is construction through extraction, excluding imports and input preparation. Canonicalization is timed explicitly before build.solve; solve wall includes cached compilation/interface overhead, solver_reported is solver-native. Peak RSS includes imports and input preparation through extraction. Solver uses CLARABEL defaults.",
+  "source_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+  "start": "2021-12-22 00:00:00-08:00",
+  "end": "2021-12-28 23:00:00-08:00",
+  "scenario_config": {
+    "source_to_case_scale": 0.2766160762753476,
+    "load_scale": 1.0,
+    "load_shift_mw": 0.0,
+    "solar_scale": 1.0,
+    "wind_scale": 1.0,
+    "dist_solar_scale": 1.0,
+    "spatial_noise_std": 0.0,
+    "random_seed": 0
+  },
+  "fleet": "Prior Case9 generator costs and limits; 150 MW/1000 MWh battery, 500 MWh initial and hard terminal SoC, aging weight .01; renewable ratings 1.1 times full-week site maxima; delta=1 hour.",
+  "versions": {
+    "cvxpy": "1.9.2",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "clarabel": "0.11.1"
+  },
+  "python": "3.11.15",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "source_hashes": {
+    "src/cvxopf/__init__.py": "ea80f0c9aa1dc636472e4ea6a6c8b5e43ef7ce591509acbf06ae07e80473a3d7",
+    "src/cvxopf/_component_adapter.py": "f9edb5062c0fecaef1483bb60df9ba192685e9c3eb03f8b190da6e94d68f3aff",
+    "src/cvxopf/_component_adapters.py": "d9116e505c1d3a620d17b29dc16d3001ea85fa6deacb292c47d33b37bdcefaa3",
+    "src/cvxopf/_component_assembly.py": "0b9e6a07431c8244e7de4b9646d4852d59132413f4ed2c9cc59cc35a359af39f",
+    "src/cvxopf/_hierarchical_solver.py": "7337a22091e733afe4ccf4c234b3ea1e86e5562f474a16c3e803aea1920d88ea",
+    "src/cvxopf/_temporal_assembly.py": "1d918ddbc4c6d623283c210fbbfe9f87cbfff183aa829c3db81d40955e8be388",
+    "src/cvxopf/ac_problem.py": "d81a7ba11924ed2dd696d0191bf1de13aff37019ceeb9d0f7a2635448b6f6160",
+    "src/cvxopf/characterization.py": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+    "src/cvxopf/cost.py": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+    "src/cvxopf/data.py": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+    "src/cvxopf/dc_problem.py": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+    "src/cvxopf/generator.py": "0ec996c2f3ec8c772b097bac303c650103281bbcc18261b702dcfd2ad16de8ab",
+    "src/cvxopf/hierarchical.py": "cda0828a2f6f6f237aae04e8c38b8062da97ad00ac0e00efbb96aeab7178bf18",
+    "src/cvxopf/hvdc.py": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+    "src/cvxopf/load.py": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+    "src/cvxopf/network.py": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+    "src/cvxopf/nondispatchable.py": "52fd23522a43716a8cf7c68822e8f286451a16af3c289a4d8c2b0c2553d9890d",
+    "src/cvxopf/problem.py": "793489457086d8b5f8bf3c7cc4f37acbf5223253fd6ec930917cf907697db582",
+    "src/cvxopf/results.py": "26b830cd7fb480755e25099b4ea0e857a75958e187e2a449c5f1c51d98e1c7dd",
+    "src/cvxopf/singlenode_dc_problem.py": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+    "src/cvxopf/storage.py": "23469c4db7cf37be244c821ab74ee5fb84c0b76d9ed75ac9426e7e1e7cbaa7b7",
+    "experiments/m14_time_vectorization/run_m14d_singlenode.py": "642b68984b8d8cd86f702ec499317d2b8137a13ec7c04c4a2cff8d678455e688",
+    "experiments/battery_terminal/scenario.py": "7a39161877892169c393736854e04fed0b592e1c90f4ecc8ae8bda67e449b702",
+    "experiments/battery_terminal/devices.py": "1b6536199765af25a8e1e036a9d26d3193a07dcc36fcba364eb5aa925262e52e"
+  },
+  "runs": [
+    {
+      "horizon": 3,
+      "assembly": "stepwise",
+      "backend": "CPP",
+      "seconds": {
+        "construction": 0.006886958028189838,
+        "canonicalization": 0.01531041698763147,
+        "solve_wall_after_canonicalization": 0.0012335830251686275,
+        "solver_reported": 0.000304583,
+        "extraction": 0.00011549994815140963,
+        "total": 0.023546457989141345
+      },
+      "peak_process_rss_mib": 161.734375,
+      "graph": {
+        "variable_object_count": 12,
+        "constraint_object_count": 34,
+        "parameter_object_count": 9,
+        "scalar_variables": 36,
+        "scalar_equalities": 7,
+        "scalar_inequalities": 93
+      },
+      "status": "optimal",
+      "objective": 9353.211866540974,
+      "generation_cost": 9350.954709111451,
+      "cycling_cost": 2.257157429521328,
+      "curtailed_energy_mwh": 2.725449260183211e-09,
+      "audits": {
+        "balance_max_abs_mw": 1.1368683772161603e-13,
+        "soc_recurrence_max_abs_mwh": 0.0,
+        "terminal_soc_error_mwh": 0.0,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 5.2630826865308174e-14,
+        "objective_reconstruction_abs": 2.1032064978498966e-12
+      }
+    },
+    {
+      "horizon": 3,
+      "assembly": "vectorized",
+      "backend": "SCIPY",
+      "seconds": {
+        "construction": 0.004346165980678052,
+        "canonicalization": 0.014312708983197808,
+        "solve_wall_after_canonicalization": 0.0012344580027274787,
+        "solver_reported": 0.000241126,
+        "extraction": 0.0001550830202177167,
+        "total": 0.020048415986821055
+      },
+      "peak_process_rss_mib": 161.15625,
+      "graph": {
+        "variable_object_count": 4,
+        "constraint_object_count": 4,
+        "parameter_object_count": 3,
+        "scalar_variables": 37,
+        "scalar_equalities": 8,
+        "scalar_inequalities": 0
+      },
+      "status": "optimal",
+      "objective": 9353.211867619942,
+      "generation_cost": 9350.95471019015,
+      "cycling_cost": 2.257157429795384,
+      "curtailed_energy_mwh": 6.621237957915582e-08,
+      "audits": {
+        "balance_max_abs_mw": 1.1368683772161603e-13,
+        "soc_recurrence_max_abs_mwh": 9.947598300641403e-14,
+        "terminal_soc_error_mwh": 0.0,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 0.0,
+        "objective_reconstruction_abs": 2.7422508708241367e-12
+      }
+    },
+    {
+      "horizon": 24,
+      "assembly": "stepwise",
+      "backend": "CPP",
+      "seconds": {
+        "construction": 0.024219000013545156,
+        "canonicalization": 0.10785449994727969,
+        "solve_wall_after_canonicalization": 0.005804084008559585,
+        "solver_reported": 0.002383667,
+        "extraction": 0.000595458026509732,
+        "total": 0.13847304199589416
+      },
+      "peak_process_rss_mib": 171.5625,
+      "graph": {
+        "variable_object_count": 96,
+        "constraint_object_count": 265,
+        "parameter_object_count": 72,
+        "scalar_variables": 288,
+        "scalar_equalities": 49,
+        "scalar_inequalities": 744
+      },
+      "status": "optimal",
+      "objective": 36430.01535746341,
+      "generation_cost": 36404.02857056887,
+      "cycling_cost": 25.986786894537115,
+      "curtailed_energy_mwh": 2718.420055124073,
+      "audits": {
+        "balance_max_abs_mw": 1.7053025658242404e-12,
+        "soc_recurrence_max_abs_mwh": 1.8474111129762605e-13,
+        "terminal_soc_error_mwh": 5.684341886080802e-14,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 1.1222512591078926e-14,
+        "objective_reconstruction_abs": 4.796163466380676e-13
+      }
+    },
+    {
+      "horizon": 24,
+      "assembly": "vectorized",
+      "backend": "SCIPY",
+      "seconds": {
+        "construction": 0.004215915978420526,
+        "canonicalization": 0.014581166964489967,
+        "solve_wall_after_canonicalization": 0.0030946670449338853,
+        "solver_reported": 0.002121791,
+        "extraction": 0.00013262499123811722,
+        "total": 0.022024374979082495
+      },
+      "peak_process_rss_mib": 161.0,
+      "graph": {
+        "variable_object_count": 4,
+        "constraint_object_count": 4,
+        "parameter_object_count": 3,
+        "scalar_variables": 289,
+        "scalar_equalities": 50,
+        "scalar_inequalities": 0
+      },
+      "status": "optimal",
+      "objective": 36430.01536024657,
+      "generation_cost": 36404.02857290112,
+      "cycling_cost": 25.986787345445702,
+      "curtailed_energy_mwh": 2718.4200555338857,
+      "audits": {
+        "balance_max_abs_mw": 4.945377440890297e-12,
+        "soc_recurrence_max_abs_mwh": 2.0605739337042905e-13,
+        "terminal_soc_error_mwh": 0.0,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 0.0,
+        "objective_reconstruction_abs": 3.8546943414985435e-12
+      }
+    },
+    {
+      "horizon": 168,
+      "assembly": "stepwise",
+      "backend": "CPP",
+      "seconds": {
+        "construction": 0.1716085830121301,
+        "canonicalization": 0.8148237919667736,
+        "solve_wall_after_canonicalization": 0.03956654103239998,
+        "solver_reported": 0.01769429,
+        "extraction": 0.004173333989456296,
+        "total": 1.03017225000076
+      },
+      "peak_process_rss_mib": 247.015625,
+      "graph": {
+        "variable_object_count": 672,
+        "constraint_object_count": 1849,
+        "parameter_object_count": 504,
+        "scalar_variables": 2016,
+        "scalar_equalities": 337,
+        "scalar_inequalities": 5208
+      },
+      "status": "optimal",
+      "objective": 316499.1523371125,
+      "generation_cost": 316341.5265204351,
+      "cycling_cost": 157.6258166766978,
+      "curtailed_energy_mwh": 17524.503627228845,
+      "audits": {
+        "balance_max_abs_mw": 3.979039320256561e-13,
+        "soc_recurrence_max_abs_mwh": 2.5579538487363607e-13,
+        "terminal_soc_error_mwh": 0.0,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 5.969691461200424e-14,
+        "objective_reconstruction_abs": 7.081553121679462e-10
+      }
+    },
+    {
+      "horizon": 168,
+      "assembly": "vectorized",
+      "backend": "SCIPY",
+      "seconds": {
+        "construction": 0.004811999970115721,
+        "canonicalization": 0.01599774998612702,
+        "solve_wall_after_canonicalization": 0.02148304204456508,
+        "solver_reported": 0.01930154,
+        "extraction": 0.00017391698202118278,
+        "total": 0.042466708982829005
+      },
+      "peak_process_rss_mib": 162.84375,
+      "graph": {
+        "variable_object_count": 4,
+        "constraint_object_count": 4,
+        "parameter_object_count": 3,
+        "scalar_variables": 2017,
+        "scalar_equalities": 338,
+        "scalar_inequalities": 0
+      },
+      "status": "optimal",
+      "objective": 316499.1525595894,
+      "generation_cost": 316341.5267338561,
+      "cycling_cost": 157.62582573329624,
+      "curtailed_energy_mwh": 17524.503657335168,
+      "audits": {
+        "balance_max_abs_mw": 5.684341886080801e-13,
+        "soc_recurrence_max_abs_mwh": 2.4868995751603507e-13,
+        "terminal_soc_error_mwh": 5.684341886080802e-14,
+        "generator_bound_violation_mw": 0.0,
+        "storage_power_violation_mw": 0.0,
+        "storage_energy_violation_mwh": 0.0,
+        "renewable_bound_violation_mw": 0.0,
+        "objective_reconstruction_abs": 5.968558980384842e-13
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "horizon": 3,
+      "objective_relative_difference": 1.1535803325183507e-10,
+      "trajectory_differences": {
+        "Pg": {
+          "max_absolute": 2.1377445591497235e-08,
+          "max_absolute_over_stepwise_peak": 2.3000408290879695e-10,
+          "aggregate_max_absolute": 5.035752792537096e-08
+        },
+        "b": {
+          "max_absolute": 4.034357914406428e-08,
+          "max_absolute_over_stepwise_peak": 3.5747244402549164e-10,
+          "aggregate_max_absolute": 4.034357914406428e-08
+        },
+        "soc": {
+          "max_absolute": 4.034347966808127e-08,
+          "max_absolute_over_stepwise_peak": 6.582844334023828e-11,
+          "aggregate_max_absolute": 4.034347966808127e-08
+        },
+        "p_nd": {
+          "max_absolute": 1.272870520097058e-08,
+          "max_absolute_over_stepwise_peak": 9.448670760382234e-11,
+          "aggregate_max_absolute": 2.3716665964457206e-08
+        }
+      },
+      "alternative_schedule_probe": [
+        {
+          "graph": "stepwise",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 5.2630826865308174e-14,
+          "objective": 9353.211866540974,
+          "objective_relative_gap": 0.0,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 9353.211867619944,
+          "objective_relative_gap": 1.1535822772935034e-10,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 9353.211867080458,
+          "objective_relative_gap": 5.7678919387159906e-11,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 2.6645352591003757e-15,
+          "objective": 9353.211866540976,
+          "objective_relative_gap": 1.94477515264343e-16,
+          "bound_projection_max_change": 5.2630826865308174e-14
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 9353.211867619942,
+          "objective_relative_gap": 1.1535803325183507e-10,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 9353.211867080458,
+          "objective_relative_gap": 5.7678919387159906e-11,
+          "bound_projection_max_change": 2.6315413432654087e-14
+        }
+      ]
+    },
+    {
+      "horizon": 24,
+      "objective_relative_difference": 7.63975227427179e-11,
+      "trajectory_differences": {
+        "Pg": {
+          "max_absolute": 1.1302114572231403e-05,
+          "max_absolute_over_stepwise_peak": 1.484778208918508e-07,
+          "aggregate_max_absolute": 1.5424322370449772e-06
+        },
+        "b": {
+          "max_absolute": 2.16142906509198,
+          "max_absolute_over_stepwise_peak": 0.014409527101928003,
+          "aggregate_max_absolute": 2.16142906509198
+        },
+        "soc": {
+          "max_absolute": 4.245350646211477,
+          "max_absolute_over_stepwise_peak": 0.004245350646246567,
+          "aggregate_max_absolute": 4.245350646211477
+        },
+        "p_nd": {
+          "max_absolute": 26.193582204018625,
+          "max_absolute_over_stepwise_peak": 0.0865092169188899,
+          "aggregate_max_absolute": 2.1614290894792703
+        }
+      },
+      "alternative_schedule_probe": [
+        {
+          "graph": "stepwise",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 36430.01535746341,
+          "objective_relative_gap": 0.0,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 36430.01536024656,
+          "objective_relative_gap": 7.639712329421134e-11,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 36430.015358854995,
+          "objective_relative_gap": 3.8198861233485586e-11,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 36430.01535746341,
+          "objective_relative_gap": 0.0,
+          "bound_projection_max_change": 1.1222512591078926e-14
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 36430.01536024657,
+          "objective_relative_gap": 7.63975227427179e-11,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 1.1368683772161603e-13,
+          "objective": 36430.01535885498,
+          "objective_relative_gap": 3.819846178497903e-11,
+          "bound_projection_max_change": 5.611256295539463e-15
+        }
+      ]
+    },
+    {
+      "horizon": 168,
+      "objective_relative_difference": 7.029304695396436e-10,
+      "trajectory_differences": {
+        "Pg": {
+          "max_absolute": 2.0214959349118544e-05,
+          "max_absolute_over_stepwise_peak": 1.5549968732418205e-07,
+          "aggregate_max_absolute": 4.994385102463639e-05
+        },
+        "b": {
+          "max_absolute": 2.5935002574290706,
+          "max_absolute_over_stepwise_peak": 0.01729000171701196,
+          "aggregate_max_absolute": 2.5935002574290706
+        },
+        "soc": {
+          "max_absolute": 4.031324794039506,
+          "max_absolute_over_stepwise_peak": 0.004031324794068268,
+          "aggregate_max_absolute": 4.031324794039506
+        },
+        "p_nd": {
+          "max_absolute": 14.856355207581657,
+          "max_absolute_over_stepwise_peak": 0.0294373704491529,
+          "aggregate_max_absolute": 2.593500540292837
+        }
+      },
+      "alternative_schedule_probe": [
+        {
+          "graph": "stepwise",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.1523371125,
+          "objective_relative_gap": 0.0,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.1525595896,
+          "objective_relative_gap": 7.029310212725043e-10,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "stepwise",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.15244835144,
+          "objective_relative_gap": 3.5146670605745046e-10,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "stepwise",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.1523371119,
+          "objective_relative_gap": 2.023020489376085e-15,
+          "bound_projection_max_change": 5.969691461200424e-14
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "vectorized",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.1525595894,
+          "objective_relative_gap": 7.029304695396436e-10,
+          "bound_projection_max_change": 0.0
+        },
+        {
+          "graph": "vectorized",
+          "trajectory": "midpoint",
+          "max_constraint_violation": 2.2737367544323206e-13,
+          "objective": 316499.1524483506,
+          "objective_relative_gap": 3.514641313041003e-10,
+          "bound_projection_max_change": 2.984845730600212e-14
+        }
+      ]
+    }
+  ]
+}

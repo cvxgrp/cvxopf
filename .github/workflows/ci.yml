@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -22,9 +26,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install IPOPT and linear algebra system libraries
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            update
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install -y \
             coinor-libipopt-dev \
             liblapack-dev \
             libblas-dev \
@@ -33,12 +46,20 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
+      - name: Install minimum supported CVXPY
+        if: matrix.python-version == '3.11'
+        run: pip install "cvxpy==1.9.3"
+
       - name: Run Ruff
         if: matrix.python-version == '3.11'
         run: ruff check .
 
+      - name: Run mypy
+        if: matrix.python-version == '3.11'
+        run: mypy
+
       - name: Run tests
-        run: pytest --cov=cvxopf --cov-branch --cov-report=xml
+        run: pytest --cov=cvxopf --cov-branch --cov-report=xml --durations=25
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

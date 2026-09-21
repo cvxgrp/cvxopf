@@ -1,0 +1,47 @@
+{
+  "study": "s3b_causal_recovery",
+  "execution_source_commit": "6c4214ce158feb5cb218dafc933d8fcd7b36f34c",
+  "execution_source_clean": true,
+  "created_utc": "2026-08-20T20:57:56.638966+00:00",
+  "environment": {
+    "python": "3.13.2",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.5.1",
+    "pandas": "3.0.3",
+    "cyipopt": "1.7.0",
+    "clarabel": "0.11.1",
+    "ipopt": "3.14.19"
+  },
+  "source_fingerprints": {
+    "cvxopf_python_tree_sha256": "c071d31e8c1d29af4d08eb1b128a920b75d765d53b8ea29c3b81e79b977ff237",
+    "scenario_py_sha256": "042c2febb49b384477222c9dceb66ddd1d4be928b6c3d35c3e68dbadf8590342",
+    "manual_runner_py_sha256": "23af2bb3a0ed6969ad8317dfc76164e82240590c90a51319af23da0c2993bec7",
+    "hard_replan_diagnostic_py_sha256": "019b9e495674178bc95f3963b87f9dced974c70cc0831642767ac71eff9b1eef",
+    "causal_recovery_runner_py_sha256": "2b2f5700f01d75eb2a8fa1d6dc527931ac0bf10f09e5908a5bb481ef86d94650",
+    "protocol_sha256": "1a3c34d7e5af27def677f610d5d5e8178d5240a966f0759b8f3585138565a6f4",
+    "scenario_manifest_sha256": "46ae15be4f56681416423f17d9374c95a8f5274010319c552ce5308bf7cbc80b"
+  },
+  "artifacts": {
+    "causal_recovery.json.gz": {
+      "bytes": 3312008,
+      "sha256": "a6f8ce5c5e01325a5ef376df6855687ee342f1504c28cd614d76a7dcbead1beb"
+    },
+    "summary.json": {
+      "bytes": 5833,
+      "sha256": "beba49c812fb99da2ede2a8aae86625dea619f6a9d575eadebf515f5ce50d0c8"
+    }
+  },
+  "result": {
+    "completed": true,
+    "completed_intervals": 96,
+    "registered_attempts": 864,
+    "actual_ac_solver_calls": 98,
+    "shifted_primary_successes": 94,
+    "shifted_primary_opportunities": 95,
+    "recovery_iteration": 80,
+    "successful_recovery_role": "copied_target_free",
+    "perturbation_solver_calls": 0,
+    "total_runtime_seconds": 142.63352353902883
+  }
+}

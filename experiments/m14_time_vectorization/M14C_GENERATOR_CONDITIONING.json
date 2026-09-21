@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "classification": "accepted",
+  "execution_complete": true,
+  "execution_commit": "aee154da92b8dc332d987a3e93bde5a46fd38eef",
+  "scope": "all_dispatchable_generators",
+  "quadratic_coefficient": 0.0001,
+  "coefficient_order": ["c0", "c1", "c2"],
+  "clarabel_options": {
+    "tol_gap_abs": 1e-10,
+    "tol_gap_rel": 1e-10,
+    "tol_feas": 1e-10
+  },
+  "diagnostic_runner": {
+    "path": "experiments/m14_time_vectorization/m14c_generator_conditioning.py",
+    "sha256": "9a708ca42044fcbded0ba905d024a7388ac6829dee10347abc75203e2f315b7b"
+  },
+  "protocol": {
+    "path": "experiments/m14_time_vectorization/M14C_GENERATOR_CONDITIONING_PROTOCOL.md",
+    "sha256": "e3c0fd44622a8fc397caa2fa99c61ac90151a08ee5857906282690060803a51b"
+  },
+  "raw_result_sha256": "2de21da15aac1bc58ecfc70c2b11a56cbbe67ba7905ab376b717bb02fd9d6aac",
+  "diagnostic_script_sha256": "9a708ca42044fcbded0ba905d024a7388ac6829dee10347abc75203e2f315b7b",
+  "selection_rationale": {
+    "criterion": "Select one uniform, easily tested rule that robustly reduces the stepwise/vectorized objective gap at both horizons, preserves native CLARABEL Solved status, passes every scientific and bounds audit, and keeps the remaining differences within the conservative scale of the combined reported solver gaps.",
+    "economic_interpretation": "Deliberate synthetic economic perturbation for this numerical case; not reviewed real-generator economics and not a uniqueness claim for storage or branch-flow trajectories.",
+    "generator_count": 54,
+    "largest_generator_pmax_mw": 1182.0,
+    "maximum_added_marginal_cost_per_mwh": 0.2364,
+    "conditioned_objective_increase_percent": {
+      "24": 0.249433,
+      "168": 0.24322
+    },
+    "tested_alternatives": [
+      {
+        "scope": "none",
+        "quadratic_coefficient": 0.0,
+        "objective_absolute_difference_24h": 0.019888526760041714,
+        "objective_absolute_difference_168h": 0.20005143620073795,
+        "disposition": "unconditioned weakly identified baseline"
+      },
+      {
+        "scope": "bus_69",
+        "quadratic_coefficient": 0.0001,
+        "objective_absolute_difference_24h": 0.0005054473876953125,
+        "objective_absolute_difference_168h": 0.05650130286812782,
+        "disposition": "improved but horizon-sensitive"
+      },
+      {
+        "scope": "bus_69",
+        "quadratic_coefficient": 0.001,
+        "objective_absolute_difference_24h": 0.0026348107494413853,
+        "objective_absolute_difference_168h": 0.02896583452820778,
+        "disposition": "nonmonotone across the tested horizons"
+      },
+      {
+        "scope": "all_dispatchable_generators",
+        "quadratic_coefficient": 0.0001,
+        "objective_absolute_difference_24h": 0.00007817614823579788,
+        "objective_absolute_difference_168h": 0.00000792182981967926,
+        "disposition": "selected simple fleet-wide rule"
+      }
+    ]
+  },
+  "records": [
+    {
+      "horizon_steps": 24,
+      "temporal_assembly": "stepwise",
+      "canonicalization_backend": "CPP",
+      "classification": "accepted",
+      "arm_result_sha256": "8dee27f125672dd1a969c32bacd99416c73f2f64fd9e9be5d2f2767f36bd64fa"
+    },
+    {
+      "horizon_steps": 24,
+      "temporal_assembly": "vectorized",
+      "canonicalization_backend": "SCIPY",
+      "classification": "accepted",
+      "arm_result_sha256": "887dcc5b4f79635549a97265148f1c0a779e4fc6bee715ee0bc9220bf97dbe3a"
+    },
+    {
+      "horizon_steps": 168,
+      "temporal_assembly": "stepwise",
+      "canonicalization_backend": "CPP",
+      "classification": "accepted",
+      "arm_result_sha256": "e30a7654de5f2a00df852220c5f05af2e2f8dadc288b9b37bf35be8eafe0ad95"
+    },
+    {
+      "horizon_steps": 168,
+      "temporal_assembly": "vectorized",
+      "canonicalization_backend": "SCIPY",
+      "classification": "accepted",
+      "arm_result_sha256": "7cc61fb38dd06026a3e86eb17b05326a77585cf72552155d2ae1a2cb87201d19"
+    }
+  ],
+  "comparisons": [
+    {
+      "horizon_steps": 24,
+      "objective_absolute_difference": 0.00007817614823579788,
+      "objective_relative_difference": 3.483240453284823e-11,
+      "generation_cost_absolute_difference": 0.000002057291567325592,
+      "dc_loss_cost_absolute_difference": 0.00007563902984486504,
+      "storage_cost_absolute_difference": 4.826205213248613e-7,
+      "Pg_maximum_absolute_difference_mw": 0.016372760336309966,
+      "storage_power_maximum_absolute_difference_mw": 0.7120557691071951,
+      "soc_maximum_absolute_difference_mwh": 0.7183984908076582
+    },
+    {
+      "horizon_steps": 168,
+      "objective_absolute_difference": 0.00000792182981967926,
+      "objective_relative_difference": 5.299696329990155e-13,
+      "generation_cost_absolute_difference": 0.00002070888876914978,
+      "dc_loss_cost_absolute_difference": 0.000030082277987730777,
+      "storage_cost_absolute_difference": 0.0000015177820387179963,
+      "Pg_maximum_absolute_difference_mw": 0.049255793479431986,
+      "storage_power_maximum_absolute_difference_mw": 0.6158651479058506,
+      "soc_maximum_absolute_difference_mwh": 0.41305527892575356
+    }
+  ],
+  "scientific_audits_accepted": true,
+  "bounds_audits_accepted": true,
+  "diagnostic_only": true,
+  "prefix_ladder_executed": false,
+  "annual_execution_authorized": false
+}

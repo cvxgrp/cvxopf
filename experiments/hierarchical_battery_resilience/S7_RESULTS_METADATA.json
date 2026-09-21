@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "study": "s7_public_equivalence",
+  "result_status": "authoritative_clean_run",
+  "created_utc": "2026-08-21T03:33:31.376946+00:00",
+  "execution_source": {
+    "git_commit": "5fb84cf6e78f3c84b6105a024d08a05d94622fe4",
+    "git_dirty": false,
+    "runner_sha256": "47f62e7951300e967c91895b0d2e6161ad279b9cc5da2bbb19f1a9c54e73f3ea",
+    "cvxopf_python_tree_sha256": "de05e65e5deed9196a617deb23b89d9098a868b0fa61fe8e4aabb128c2952034"
+  },
+  "environment": {
+    "python": "3.13.2",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.5.1",
+    "pandas": "3.0.3",
+    "cyipopt": "1.7.0",
+    "clarabel": "0.11.1"
+  },
+  "solver_stack": {
+    "outer": "CLARABEL",
+    "inner": "IPOPT through CVXPY DNLP and cyipopt"
+  },
+  "post_run_observation": {
+    "ipopt_version": "3.14.19",
+    "method": "Queried cyipopt.IPOPT_VERSION in the same local project environment after the authoritative run.",
+    "limitation": "The hashed authoritative artifact did not capture this field. It is a post-run observation from the presumed unchanged environment, not execution-captured provenance."
+  },
+  "artifact": {
+    "path": "results/s7_public_equivalence/equivalence.json",
+    "bytes": 9012952,
+    "sha256": "c63322146aaf21b97e505aa01d64ab3f2f386df07e4df40d5aa7c443b81fe5bf",
+    "integrity_note": "The hash identifies this local authoritative artifact; it does not promise byte-identical independent reruns."
+  },
+  "comparison": {
+    "absolute_tolerance": 1e-06,
+    "all_passed": true,
+    "cases": [
+      {
+        "case": "frozen__hard_equality",
+        "checks": 7639,
+        "failures": 0,
+        "maximum_absolute_difference": 5.820766091346741e-11,
+        "completed_intervals": 96
+      },
+      {
+        "case": "frozen__quadratic_soft",
+        "checks": 7831,
+        "failures": 0,
+        "maximum_absolute_difference": 9.094947017729282e-13,
+        "completed_intervals": 96
+      },
+      {
+        "case": "replan_every_step__hard_equality",
+        "checks": 4219,
+        "failures": 0,
+        "maximum_absolute_difference": 3.382183422218077e-12,
+        "completed_intervals": 35,
+        "termination_iteration": 35,
+        "termination_class": "ac:solver_certified_infeasible",
+        "manual_only_diagnostic_attempts": 1
+      },
+      {
+        "case": "replan_every_step__quadratic_soft",
+        "checks": 11360,
+        "failures": 0,
+        "maximum_absolute_difference": 4.433786671143025e-12,
+        "completed_intervals": 95,
+        "termination_iteration": 95,
+        "termination_class": "outer:solver_certified_infeasible"
+      },
+      {
+        "case": "replan_every_step__hard_equality__shifted_with_recovery",
+        "checks": 22109,
+        "failures": 0,
+        "maximum_absolute_difference": 9.094947017729282e-13,
+        "completed_intervals": 96,
+        "registered_attempt_slots": 864
+      }
+    ]
+  }
+}

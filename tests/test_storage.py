@@ -1,15 +1,17 @@
 """Test suite for Milestone 5 battery storage model."""
 
+from dataclasses import replace
 import warnings
 import numpy as np
 import pandas as pd
 import pytest
 import cvxpy as cp
+from cvxpy.reductions.dnlp2smooth.dnlp2smooth import Dnlp2Smooth
 
 from cvxopf.testcases import case9
 from cvxopf.problem import (
     build_opf, build_opf_multistep,
-    OPFBuild, OPFOptions, StorageUnitIdeal,
+    OPFBuild, StorageUnitIdeal,
 )
 from cvxopf.results import extract_results
 from cvxopf.storage import (
@@ -19,6 +21,7 @@ from cvxopf.storage import (
     dc_operating_constraints as storage_dc_operating_constraints,
     coupling_constraints as storage_coupling_constraints,
     storage_cost_expr,
+    vectorized_storage_cost_rate,
     terminal_cost_expr as storage_terminal_cost_expr,
 )
 
@@ -110,6 +113,67 @@ def _solve_dc_multistep(T, df_P, df_Q, storage=None, delta=1.0,
 
 
 class TestStorageComponentInterface:
+    @pytest.mark.parametrize("steps", [None, 1, 2])
+    @pytest.mark.parametrize(
+        "weights",
+        [(0.0, 0.0, 0.0), (0.0, 0.5, 0.0), (0.0, 1e-12, 0.0), (0.2, 0.5, 0.7)],
+    )
+    def test_throughput_cost_omits_unpenalized_dnlp_auxiliaries(
+        self, steps, weights
+    ):
+        units = [_default_unit(aging_weight=weight) for weight in weights]
+        values = np.array([[-3.0, 5.0], [2.0, -4.0], [-7.0, 1.0]])
+        if steps is not None:
+            values = values[:, :steps]
+            power = cp.Variable(values.shape)
+            cost = vectorized_storage_cost_rate(units, power)
+            expected = np.asarray(weights) @ np.abs(values)
+            assert cost.shape == (steps,)
+        else:
+            values = values[:, 0]
+            power = cp.Variable(values.shape)
+            cost = storage_cost_expr(units, power)
+            expected = np.asarray(weights) @ np.abs(values)
+            assert cost.shape == ()
+        assert cost.value is None
+        power.value = values
+        assert cost.is_dcp()
+        np.testing.assert_allclose(cost.value, expected, rtol=1e-12, atol=0.0)
+
+        # Keep every physical power variable in the problem, then count only
+        # auxiliaries introduced by DNLP's absolute-value transformation.
+        problem = cp.Problem(cp.Minimize(cp.sum(cost)), [power == values])
+        smooth, _ = Dnlp2Smooth().apply(problem)
+        auxiliary_size = sum(v.size for v in smooth.variables()) - power.size
+        assert auxiliary_size == np.count_nonzero(weights) * (steps or 1)
+
+    @pytest.mark.parametrize(
+        ("formulation", "assembly"),
+        [("ac", None), ("lossy_dc", None), ("singlenode_dc", None),
+         ("lossy_dc", "stepwise"), ("lossy_dc", "vectorized")],
+    )
+    def test_zero_throughput_cost_is_unavailable_without_primal(
+        self, formulation, assembly
+    ):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            if assembly is None:
+                build = build_opf(
+                    case9(), formulation=formulation,
+                    storage=[_default_unit()], delta=0.25,
+                )
+            else:
+                df_P, df_Q = _flat_load_dfs(case9, T=2)
+                build = build_opf_multistep(
+                    case9(), df_P, df_Q, T=2, formulation=formulation,
+                    temporal_assembly=assembly,
+                    storage=[_default_unit()], delta=0.25,
+                )
+        results = extract_results(build)
+        assert results["b"] is None
+        assert results["soc"] is None
+        assert np.isnan(results["storage_cost"])
+
     def test_ac_and_dc_injections_have_fixed_arity(self):
         units = [_default_unit(bus=4)]
         b = cp.Variable(1)
@@ -258,6 +322,7 @@ class TestStorageUnitIdeal:
         assert hasattr(unit, "terminal_constraint")
         assert hasattr(unit, "terminal_cost")
         assert hasattr(unit, "terminal_weight")
+        assert hasattr(unit, "device_id")
 
     def test_default_aging_weight_is_1e_2(self):
         unit = StorageUnitIdeal(bus=1, apparent_power_rating=50.0,
@@ -281,6 +346,20 @@ class TestStorageUnitIdeal:
         assert unit.terminal_constraint is None
         assert unit.terminal_cost is None
         assert unit.terminal_weight is None
+        assert unit.device_id is None
+
+    def test_device_id_is_appended_without_breaking_positional_construction(self):
+        unit = StorageUnitIdeal(
+            1, 50.0, 100.0, 50.0, 0.2, None, None, None, None,
+            "battery-west",
+        )
+        assert unit.device_id == "battery-west"
+
+    def test_dataclass_replace_preserves_device_id(self):
+        unit = _default_unit(device_id="battery-west")
+        derived = replace(unit, initial_soc=25.0)
+        assert derived.device_id == "battery-west"
+        assert derived.initial_soc == pytest.approx(25.0)
 
 
 class TestStorageValidation:
@@ -347,6 +426,78 @@ class TestStorageValidation:
                                  capacity=100.0, initial_soc=50.0)
         with pytest.raises(ValueError, match="bus"):
             build_opf(case9(), formulation="ac", storage=[unit])
+
+    @pytest.mark.parametrize("device_id", ["", "   ", 12])
+    def test_invalid_device_id_raises(self, device_id):
+        unit = _default_unit(device_id=device_id)
+        with pytest.raises(ValueError, match="device_id"):
+            build_opf(case9(), formulation="ac", storage=[unit])
+
+    def test_duplicate_explicit_device_ids_raise(self):
+        units = [
+            _default_unit(bus=1, device_id="battery"),
+            _default_unit(bus=2, device_id="battery"),
+        ]
+        with pytest.raises(ValueError, match="duplicate device_id"):
+            build_opf(case9(), formulation="ac", storage=units)
+
+    def test_legacy_labels_are_build_local_and_collision_safe(self):
+        units = [
+            _default_unit(bus=1),
+            _default_unit(bus=2, device_id="storage_0"),
+            _default_unit(bus=3),
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            build = build_opf(
+                case9(), formulation="lossy_dc", storage=units
+            )
+
+        np.testing.assert_array_equal(
+            build.data["storage_device_ids"],
+            ["storage_0_legacy_1", "storage_0", "storage_2"],
+        )
+        np.testing.assert_array_equal(
+            build.data["storage_device_id_is_explicit"],
+            [False, True, False],
+        )
+
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    @pytest.mark.parametrize("multistep", [False, True])
+    def test_explicit_identity_is_published_in_build_and_unsolved_results(
+        self, formulation, multistep
+    ):
+        units = [
+            _default_unit(bus=1, device_id="battery-west"),
+            _default_unit(bus=2, device_id="battery-east"),
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            if multistep:
+                df_P, df_Q = _flat_load_dfs(case9, 1)
+                build = build_opf_multistep(
+                    case9(), df_P, df_Q, T=1,
+                    formulation=formulation, storage=units
+                )
+            else:
+                build = build_opf(
+                    case9(), formulation=formulation, storage=units
+                )
+
+        results = extract_results(build)
+        expected = ["battery-west", "battery-east"]
+        np.testing.assert_array_equal(
+            build.data["storage_device_ids"], expected
+        )
+        np.testing.assert_array_equal(
+            results["storage_device_ids"], expected
+        )
+        np.testing.assert_array_equal(
+            results["storage_device_id_is_explicit"], [True, True]
+        )
+        assert results["b"] is None
 
     @pytest.mark.parametrize("mode", ["invalid", "", "reserve_floor"])
     def test_invalid_terminal_constraint_raises(self, mode):
@@ -432,27 +583,40 @@ class TestStorageValidation:
 class TestDeltaValidation:
     """Tests delta parameter validation."""
 
-    def test_delta_zero_with_storage_raises(self):
+    @pytest.mark.parametrize("delta", [0.0, -1.0, np.float64(0.0)])
+    @pytest.mark.parametrize(
+        "formulation", ["ac", "lossy_dc", "singlenode_dc"]
+    )
+    def test_nonpositive_delta_rejected_without_storage(
+        self, formulation, delta
+    ):
+        with pytest.raises(ValueError, match="delta must be > 0"):
+            build_opf(case9(), formulation=formulation, delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta", [np.nan, np.inf, -np.inf, np.float64(np.nan)]
+    )
+    def test_nonfinite_delta_rejected(self, delta):
+        with pytest.raises(ValueError, match="delta must be finite"):
+            build_opf(case9(), formulation="ac", delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta",
+        [None, "1.0", [1.0], 1.0 + 0.0j, True, np.bool_(False)],
+    )
+    def test_nonreal_scalar_delta_rejected(self, delta):
+        with pytest.raises(TypeError, match="delta must be a real scalar"):
+            build_opf(case9(), formulation="ac", delta=delta)
+
+    @pytest.mark.parametrize(
+        "delta", [1, 0.25, np.int64(2), np.float32(0.5), np.float64(0.75)]
+    )
+    def test_real_scalar_delta_is_stored(self, delta):
         unit = _default_unit()
-        with pytest.raises(ValueError, match="delta"):
-            build_opf(case9(), formulation="ac", storage=[unit], delta=0.0)
-
-    def test_delta_negative_with_storage_raises(self):
-        unit = _default_unit()
-        with pytest.raises(ValueError, match="delta"):
-            build_opf(case9(), formulation="ac", storage=[unit], delta=-1.0)
-
-    def test_delta_zero_without_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=None, delta=0.0)
-        assert isinstance(build, OPFBuild)
-
-    def test_delta_negative_without_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=None, delta=-1.0)
-        assert isinstance(build, OPFBuild)
-
-    def test_delta_negative_with_empty_storage_does_not_raise(self):
-        build = build_opf(case9(), formulation="ac", storage=[], delta=-1.0)
-        assert isinstance(build, OPFBuild)
+        build = build_opf(
+            case9(), formulation="ac", storage=[unit], delta=delta
+        )
+        assert build.data["storage_delta"] == pytest.approx(float(delta))
 
     def test_delta_default_is_one(self):
         # build.data["storage_delta"] should be 1.0 by default
@@ -481,8 +645,11 @@ class TestStorageTerminalPolicy:
             build = build_opf(
                 case9(), formulation=formulation, storage=[unit], delta=1.0
             )
-        build.solve()
-        return extract_results(build)
+        # Pytest retains solver diagnostics for a failed CI test.
+        build.solve(verbose=True)
+        results = extract_results(build)
+        assert results["status"] == "optimal"
+        return results
 
     @pytest.mark.parametrize(
         "formulation", ["ac", "lossy_dc", "singlenode_dc"]
@@ -688,6 +855,38 @@ class TestStorageTerminalPolicy:
         else:
             assert build.prob.status == cp.INFEASIBLE
 
+        results = extract_results(build)
+        expected = {
+            "status",
+            "objective",
+            "Pg",
+            "p_net",
+            "b",
+            "soc",
+            "storage_cost",
+            "storage_device_ids",
+            "storage_device_id_is_explicit",
+            "storage_terminal_deviation",
+            "p_load",
+            "q_load",
+            "p_load_served",
+        }
+        if formulation == "ac":
+            expected |= {
+                "Qg", "Vm", "Va_deg", "q_net", "b_q",
+                "branch_p_from", "branch_q_from",
+                "branch_p_to", "branch_q_to",
+                "branch_s_from", "branch_s_to",
+                "q_load_served",
+            }
+        elif formulation == "lossy_dc":
+            expected.add("p_flows")
+        assert set(results) == expected
+        if results["Pg"] is None:
+            assert np.isnan(results["objective"])
+            assert np.isnan(results["storage_cost"])
+            assert results["storage_terminal_deviation"] is None
+
     def test_multistep_terminal_uses_last_post_step_soc(self):
         unit = _default_unit(
             bus=1,
@@ -753,9 +952,9 @@ class TestStorageTerminalPolicy:
     @pytest.mark.parametrize(
         "formulation", ["ac", "lossy_dc", "singlenode_dc"]
     )
-    def test_multistep_terminal_penalty_is_counted_once(self, formulation):
-        ppc = case9()
-        ppc["gencost"][:, 4:] = 0.0
+    def test_multistep_objective_reconstructs_with_terminal_cost(
+        self, formulation
+    ):
         unit = _default_unit(
             bus=1,
             S_max=10.0,
@@ -770,22 +969,33 @@ class TestStorageTerminalPolicy:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             build = build_opf_multistep(
-                ppc,
+                case9(),
                 df_P,
                 reactive_load,
                 T=2,
                 formulation=formulation,
                 storage=[unit],
-                delta=1.0,
-                options=OPFOptions(loss_weight=0.0),
+                delta=0.25,
             )
         build.solve()
         results = extract_results(build)
 
         assert results["status"] == "optimal"
         assert results["storage_terminal_cost"] > VAL_ATOL
+        cost_names = {"generator_cost", "storage_cost"}
+        if formulation == "lossy_dc":
+            cost_names.add("dc_loss_cost")
+        reconstructed = sum(
+            float(build.expressions[name].value) for name in cost_names
+        )
+        reconstructed += float(
+            build.expressions["storage_terminal_cost"].value
+        )
+        assert build.prob.value == pytest.approx(
+            reconstructed, rel=1e-8, abs=1e-6
+        )
         assert results["objective"] == pytest.approx(
-            results["storage_terminal_cost"], rel=OBJ_RTOL
+            reconstructed, rel=1e-8, abs=1e-6
         )
 
     @pytest.mark.parametrize(
@@ -1064,6 +1274,55 @@ class TestStorageACMultistep:
         _, r = _solve_ac_multistep(3, df_P, df_Q, storage=[_default_unit()])
         assert "storage_cost" in r
         assert isinstance(r["storage_cost"], float)
+
+
+@pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
+@pytest.mark.parametrize("delta", [1.0, 0.5])
+def test_dc_t1_objective_counts_forced_storage_cycling_cost_once(
+    formulation,
+    delta,
+):
+    unit = _default_unit(
+        initial_soc=50.0,
+        aging_weight=7.0,
+        terminal_soc=30.0,
+        terminal_constraint="equality",
+    )
+    df_P, df_Q = _flat_load_dfs(case9, T=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        single = build_opf(
+            case9(),
+            formulation=formulation,
+            storage=[unit],
+            delta=delta,
+        )
+        multi = build_opf_multistep(
+            case9(),
+            df_P,
+            df_Q,
+            T=1,
+            formulation=formulation,
+            storage=[unit],
+            delta=delta,
+        )
+    single.solve()
+    multi.solve()
+    single_results = extract_results(single)
+    multi_results = extract_results(multi)
+
+    expected_power = 20.0 / delta
+    assert single_results["b"][0] == pytest.approx(
+        expected_power, abs=VAL_ATOL
+    )
+    assert multi_results["b"][0, 0] == pytest.approx(
+        expected_power, abs=VAL_ATOL
+    )
+    assert single_results["storage_cost"] == pytest.approx(140.0)
+    assert multi_results["storage_cost"] == pytest.approx(140.0)
+    assert single_results["objective"] == pytest.approx(
+        multi_results["objective"], rel=OBJ_RTOL
+    )
 
 
 class TestStorageDCSingle:

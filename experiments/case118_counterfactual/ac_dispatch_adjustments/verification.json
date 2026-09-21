@@ -1,0 +1,40 @@
+{
+  "wall_seconds": 483.02156137500424,
+  "aggregate_worker_seconds": 502.2175443339511,
+  "artifact_hashes_verified": 29,
+  "sampled_peak_aggregate_mib": 12386.921875,
+  "sampled_peak_worker_mib": 10643.078125,
+  "attempts": [
+    [
+      "joint-may03-R1",
+      "ac-002940-spec-00",
+      324.2590969169978,
+      "returned"
+    ],
+    [
+      "joint-may03-R1",
+      "ac-002940-spec-01",
+      20.1018845840008,
+      "lost_race"
+    ],
+    [
+      "joint-may03-B",
+      "ac-002940-spec-00",
+      22.57741362496745,
+      "returned"
+    ],
+    [
+      "joint-may03-G",
+      "ac-002940-spec-00",
+      82.21725079097087,
+      "returned"
+    ],
+    [
+      "joint-may03-R2",
+      "ac-002940-spec-00",
+      53.06189841701416,
+      "returned"
+    ]
+  ],
+  "reaped_all": true
+}

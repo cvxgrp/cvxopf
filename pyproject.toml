@@ -20,7 +20,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Mathematics",
@@ -29,9 +28,9 @@ classifiers = [
 
 # cyipopt requires the IPOPT system library to be installed BEFORE
 # running pip install. See README.md for platform-specific instructions.
-# cvxpy>=1.9 is required for the DNLP interface (cp.nlp.cos / cp.nlp.sin).
+# CVXPY 1.9.3 includes the sparse DNLP derivative fix needed by array gathers.
 dependencies = [
-    "cvxpy>=1.9",
+    "cvxpy>=1.9.3",
     "numpy",
     "pandas",
     "cyipopt",
@@ -40,6 +39,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "mypy>=1.11",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.16,<0.17",
@@ -62,9 +62,6 @@ packages = ["src/cvxopf"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
-[tool.uv.sources]
-cvxpy = { git = "https://github.com/cvxpy/cvxpy.git" }
-
 [tool.ruff]
 required-version = ">=0.16,<0.17"
 target-version = "py311"
@@ -81,3 +78,34 @@ select = ["E4", "E7", "E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # The package initializes IPOPT environment settings before public imports.
 "src/cvxopf/__init__.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/cvxopf/_component_adapter.py",
+    "src/cvxopf/_component_adapters.py",
+    "src/cvxopf/_component_assembly.py",
+    "src/cvxopf/load.py",
+    "src/cvxopf/hierarchical.py",
+    "src/cvxopf/_hierarchical_solver.py",
+]
+check_untyped_defs = true
+disallow_untyped_defs = true
+# Third-party CVXPY/NumPy stub internals are outside this typed contract.
+follow_imports = "normal"
+follow_imports_for_stubs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cvxpy",
+    "cvxpy.*",
+    "numpy",
+    "numpy.*",
+    "cvxopf.generator",
+    "cvxopf.nondispatchable",
+]
+follow_imports = "skip"

@@ -50,12 +50,48 @@ except ImportError as e:
 __version__ = "0.1.0"
 
 # Re-export public API
-from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions, OPFBuild
+from cvxopf.problem import (
+    build_opf,
+    build_opf_multistep,
+    OPFOptions,
+    OPFBuild,
+    TemporalAssembly,
+)
 from cvxopf.results import extract_results, compare_to_reference
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, hvdc_from_dcline
-from cvxopf.generator import DispatchableGenerator, gen_from_matpower
+from cvxopf.generator import (
+    DispatchableGenerator,
+    gen_from_matpower,
+    max_generation_marginal_cost,
+)
+from cvxopf.load import Load
+from cvxopf.hierarchical import (
+    ACCEPTED_SOLVER_STATUSES,
+    ACAttemptRecord,
+    AttemptOutcome,
+    AttemptRole,
+    AttemptSourceKind,
+    AttemptSlotState,
+    ExecutedIntervalRecord,
+    HierarchicalAcceptanceTolerances,
+    HierarchicalInputs,
+    HierarchicalPolicy,
+    HierarchicalProvenance,
+    HierarchicalResult,
+    HierarchicalSolveAudit,
+    HierarchicalSolveConfig,
+    IPOPTStartEvidence,
+    InitializationPolicy,
+    InnerTerminalPolicy,
+    LayerSolveConfig,
+    OuterPlanRecord,
+    OuterPolicy,
+    OuterTerminalMode,
+    ShiftedRecoveryConfig,
+    solve_hierarchical_opf,
+)
 from cvxopf.testcases import make_singlenode_case
 
 __all__ = [
@@ -63,6 +99,7 @@ __all__ = [
     "build_opf_multistep",
     "OPFOptions",
     "OPFBuild",
+    "TemporalAssembly",
     "extract_results",
     "compare_to_reference",
     "StorageUnitIdeal",
@@ -71,5 +108,30 @@ __all__ = [
     "hvdc_from_dcline",
     "DispatchableGenerator",
     "gen_from_matpower",
+    "max_generation_marginal_cost",
+    "Load",
+    "ACCEPTED_SOLVER_STATUSES",
+    "ACAttemptRecord",
+    "AttemptOutcome",
+    "AttemptRole",
+    "AttemptSourceKind",
+    "AttemptSlotState",
+    "ExecutedIntervalRecord",
+    "HierarchicalAcceptanceTolerances",
+    "HierarchicalInputs",
+    "HierarchicalPolicy",
+    "HierarchicalProvenance",
+    "HierarchicalResult",
+    "HierarchicalSolveAudit",
+    "HierarchicalSolveConfig",
+    "IPOPTStartEvidence",
+    "InitializationPolicy",
+    "InnerTerminalPolicy",
+    "LayerSolveConfig",
+    "OuterPlanRecord",
+    "OuterPolicy",
+    "OuterTerminalMode",
+    "ShiftedRecoveryConfig",
+    "solve_hierarchical_opf",
     "make_singlenode_case",
 ]

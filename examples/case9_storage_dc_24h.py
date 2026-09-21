@@ -16,7 +16,7 @@ real power bound only (|b_t| <= S_max). No reactive power is modelled.
 A UserWarning is emitted at build time.
 
 Storage unit: 60 MW rating, 150 MWh capacity, initially half-charged.
-Aging weight: 1e-2 $/MW.
+Aging weight: 1e-2 $/MWh.
 
 Usage:
     uv run examples/case9_storage_dc_24h.py
@@ -55,7 +55,7 @@ def main():
         apparent_power_rating=60.0,   # applied as real power limit in DC
         capacity=150.0,               # Q     = 150 MWh
         initial_soc=75.0,             # q_0   = 75 MWh (half charged)
-        aging_weight=1e-2,            # lambda = 0.01 $/MW
+        aging_weight=1e-2,            # lambda = 0.01 $/MWh
     )
 
     print("Building DC OPF with storage (T=24)...")
@@ -84,9 +84,9 @@ def main():
     # Summary
     # ------------------------------------------------------------------
     print(f"Status:               {r['status']}")
-    print(f"Total objective:      {r['objective']:.4f} $/hr")
+    print(f"Total objective:      {r['objective']:.4f} $")
     print(f"Total storage cost:   {r['storage_cost']:.4f} $ (aging penalty)")
-    print(f"Generation cost:      {r['objective'] - r['storage_cost']:.4f} $/hr")
+    print(f"Non-storage cost:     {r['objective'] - r['storage_cost']:.4f} $")
     print(f"Total |b| throughput: {np.sum(np.abs(r['b'])):.3f} MWh")
     print(f"Max discharge:        {np.max(r['b']):.3f} MW "
           f"at t={np.argmax(r['b'][:, 0])}")
@@ -169,9 +169,9 @@ def main():
     obj_with    = r["objective"]
     obj_without = r_no["objective"]
     saving      = obj_without - obj_with
-    print(f"  Objective without storage: {obj_without:.4f} $/hr")
-    print(f"  Objective with storage:    {obj_with:.4f} $/hr")
-    print(f"  Cost saving:               {saving:.4f} $/hr "
+    print(f"  Objective without storage: {obj_without:.4f} $")
+    print(f"  Objective with storage:    {obj_with:.4f} $")
+    print(f"  Cost saving:               {saving:.4f} $ "
           f"({100*saving/obj_without:.2f}%)")
 
 

@@ -65,9 +65,10 @@ class StorageUnitIdeal:
         0 <= initial_soc <= capacity.
     aging_weight : float
         Weight lambda on the L1 battery cycling penalty in the objective:
-            lambda * sum_t |b_t|
+            delta * lambda * sum_t |b_t|
         Penalises real power cycling to extend battery lifetime.
         Reactive power is not penalised.
+        Units are objective units/MWh of one-way throughput.
         Default 1e-2. Set to 0.0 for zero-cost storage.
         Reference: Nnorom et al., "Aging-Aware Battery Control via Convex
         Optimization," Optimization and Engineering, 27:1303-1326, 2026.
@@ -89,6 +90,12 @@ class StorageUnitIdeal:
         Positive terminal-cost weight. Required exactly when
         ``terminal_cost`` is configured. Linear weights have objective
         units/MWh; quadratic weights have objective units/MWh^2.
+    device_id : str | None
+        Optional stable device identity. Explicit nonempty IDs are suitable
+        for alignment across independently built problems. When omitted, the
+        builder publishes a collision-safe positional label such as
+        ``"storage_0"``; that label is local to the build and is not a claim
+        of stable cross-build identity.
     """
     bus:                   int
     apparent_power_rating: float
@@ -99,6 +106,7 @@ class StorageUnitIdeal:
     terminal_constraint:   str | None = None
     terminal_cost:         str | None = None
     terminal_weight:       float | None = None
+    device_id:             str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +142,24 @@ def _validate_storage(
     if storage_units is None or len(storage_units) == 0:
         return
     
+    explicit_ids: set[str] = set()
     for i, unit in enumerate(storage_units):
+        if unit.device_id is not None:
+            if (
+                not isinstance(unit.device_id, str)
+                or not unit.device_id.strip()
+            ):
+                raise ValueError(
+                    f"Storage unit {i}: device_id must be a nonempty string "
+                    "when supplied"
+                )
+            if unit.device_id in explicit_ids:
+                raise ValueError(
+                    f"Storage unit {i}: duplicate device_id "
+                    f"{unit.device_id!r}"
+                )
+            explicit_ids.add(unit.device_id)
+
         numeric_fields = {
             "apparent_power_rating": unit.apparent_power_rating,
             "capacity": unit.capacity,
@@ -152,7 +177,6 @@ def _validate_storage(
                 f"Storage unit {i}: apparent_power_rating must be > 0, "
                 f"got {unit.apparent_power_rating}"
             )
-        
         # Check capacity
         if unit.capacity <= 0:
             raise ValueError(
@@ -249,6 +273,44 @@ def _validate_storage(
             )
 
 
+def _storage_device_identity(
+    storage_units: list[StorageUnitIdeal],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resolve aligned IDs and mark which identities were supplied explicitly.
+
+    Generated labels are deterministic only for the current ordered fleet.
+    They are collision-safe convenience labels, not stable device identity.
+    """
+    reserved = {
+        unit.device_id
+        for unit in storage_units
+        if unit.device_id is not None
+    }
+    used = set(reserved)
+    resolved: list[str] = []
+    explicit: list[bool] = []
+    for index, unit in enumerate(storage_units):
+        if unit.device_id is not None:
+            resolved.append(unit.device_id)
+            explicit.append(True)
+            continue
+
+        base = f"storage_{index}"
+        candidate = base
+        suffix = 1
+        while candidate in used:
+            candidate = f"{base}_legacy_{suffix}"
+            suffix += 1
+        used.add(candidate)
+        resolved.append(candidate)
+        explicit.append(False)
+
+    return (
+        np.asarray(resolved, dtype=object),
+        np.asarray(explicit, dtype=bool),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Incidence matrix construction
 # ---------------------------------------------------------------------------
@@ -340,6 +402,9 @@ def _prepare_data(
 ) -> dict:
     """Validate and prepare formulation-independent storage data."""
     _validate_storage(storage_units, ext_bus_ids)
+    device_ids, device_id_is_explicit = _storage_device_identity(
+        storage_units
+    )
     return {
         "ns": len(storage_units),
         "Cs": _make_storage_incidence_matrix(
@@ -348,6 +413,8 @@ def _prepare_data(
         "storage_bus": np.array(
             [ext_to_int[unit.bus] for unit in storage_units], dtype=int
         ),
+        "storage_device_ids": device_ids,
+        "storage_device_id_is_explicit": device_id_is_explicit,
         **_storage_static_data(storage_units),
     }
 
@@ -358,6 +425,8 @@ def _build_metadata(prepared: dict) -> dict:
         "ns",
         "Cs",
         "storage_bus",
+        "storage_device_ids",
+        "storage_device_id_is_explicit",
         "storage_apparent_power_rating",
         "storage_capacity",
         "storage_initial_soc",
@@ -436,6 +505,17 @@ def ac_operating_constraints(
     return constraints
 
 
+def vectorized_ac_operating_constraints(storage_units, b, b_q, soc) -> list:
+    """Time-last inverter circles and post-step energy bounds."""
+    data = _storage_static_data(storage_units)
+    return [
+        cp.square(b) + cp.square(b_q)
+        <= data["storage_apparent_power_rating"][:, None] ** 2,
+        soc[:, 1:] >= 0,
+        soc[:, 1:] <= data["storage_capacity"][:, None],
+    ]
+
+
 def dc_operating_constraints(
     storage_units: list,
     b: cp.Variable,
@@ -501,10 +581,45 @@ def coupling_constraints(
     return constraints
 
 
+def vectorized_coupling_constraints(
+    storage_units: list,
+    power: cp.Variable,
+    soc: cp.Variable,
+    delta: float,
+) -> list[cp.Constraint]:
+    """Time-last ideal-storage recurrence and terminal policy."""
+    initial_soc = _storage_static_data(storage_units)["storage_initial_soc"]
+    constraints: list[cp.Constraint] = [
+        soc[:, 0] == initial_soc,
+        soc[:, 1:] == soc[:, :-1] - cp.multiply(float(delta), power),
+    ]
+    constraints += _terminal_soc_constraints(storage_units, soc[:, -1])
+    return constraints
+
+
 def storage_cost_expr(storage_units: list, b: cp.Variable) -> cp.Expression:
-    """Per-step L1 cycling cost; reactive power is intentionally unpenalized."""
+    """L1 cycling cost rate; integration is owned by shared assembly."""
     weights = _storage_static_data(storage_units)["storage_aging_weight"]
-    return cp.sum(cp.multiply(weights, cp.abs(b)))
+    # A zero-weight abs still creates an unpenalized auxiliary in DNLP.
+    active = weights > 0.0
+    if not np.any(active):
+        # Retain the power dependency so an unavailable primal reports no cost.
+        return 0.0 * cp.sum(b)
+    return cp.sum(cp.multiply(weights[active], cp.abs(b[active])))
+
+
+def vectorized_storage_cost_rate(
+    storage_units: list,
+    power: cp.Variable,
+) -> cp.Expression:
+    """Return the time-last L1 cycling cost rate for every interval."""
+    weights = _storage_static_data(storage_units)["storage_aging_weight"]
+    active = weights > 0.0
+    if not np.any(active):
+        return 0.0 * cp.sum(power, axis=0)
+    return cp.sum(
+        cp.multiply(weights[active, np.newaxis], cp.abs(power[active, :])), axis=0
+    )
 
 
 def terminal_cost_expr(

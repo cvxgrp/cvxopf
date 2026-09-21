@@ -36,7 +36,16 @@ def main():
 
     # --- build multi-step problem ---
     options = OPFOptions(init_flat=True)
-    build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac", options=options)
+    delta = 1.0
+    build = build_opf_multistep(
+        ppc,
+        df_P,
+        df_Q,
+        T=T,
+        formulation="ac",
+        options=options,
+        delta=delta,
+    )
 
     print(f"\nVariables  : {len(build.prob.variables())}")
     print(f"Constraints: {len(build.prob.constraints)}")
@@ -48,7 +57,7 @@ def main():
     results = extract_results(build)
 
     print(f"\nStatus    : {results['status']}")
-    print(f"Objective : {results['objective']:.4f} $/hr  (total across all steps)")
+    print(f"Objective : {results['objective']:.4f} $  (horizon total)")
 
     # --- per-step results ---
     for t in range(T):
@@ -84,8 +93,9 @@ def main():
             f"{diff:>+10.4f}"
         )
 
-    print(f"\n  Multi-step obj/step : {results['objective'] / T:.4f} $/hr")
-    print(f"  Single-step obj     : {results_s['objective']:.4f} $/hr")
+    average_rate = results["objective"] / (T * delta)
+    print(f"\n  Multi-step average rate: {average_rate:.4f} $/hr")
+    print(f"  Single-step objective  : {results_s['objective']:.4f} $")
 
 
 if __name__ == "__main__":

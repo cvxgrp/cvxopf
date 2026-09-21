@@ -30,6 +30,7 @@ TIMEOUT = 60  # seconds per script
 EXAMPLE_GROUPS = {
     "Core Formulations": [
         "case9_single_step.py",
+        "case9_ac_branch_limits.py",
         "case14_single_step.py",
         "case14_lossy_dc.py",
         "case9_singlenode_dc.py",
@@ -41,6 +42,9 @@ EXAMPLE_GROUPS = {
     "Multistep Problems": [
         "case9_multistep_flat_load.py",
     ],
+    "Hierarchical Control": [
+        "case9_hierarchical_dc_ac.py",
+    ],
     "Storage": [
         "case9_storage_ac.py",
         "case9_storage_dc.py",
@@ -51,6 +55,11 @@ EXAMPLE_GROUPS = {
     "Nondispatchable Generation": [
         "case9_multistep_nondispatchable_ac.py",
         "case9_nondispatchable_dc.py",
+    ],
+    "Loads and Reliability": [
+        "case9_first_class_loads.py",
+        "singlenode_load_shedding_phase_transition.py",
+        "case9_multistep_load_shedding.py",
     ],
     "HVDC Transmission": [
         "case9_hvdc_ac.py",
@@ -125,7 +134,9 @@ def run_script(filepath: Path) -> str:
             timeout=TIMEOUT,
             cwd=PROJECT_ROOT,
         )
-        output = result.stdout.strip()
+        output = "\n".join(
+            line.rstrip() for line in result.stdout.strip().splitlines()
+        )
         if result.returncode != 0:
             error = result.stderr.strip()
             return f"_Script exited with errors:_\n```\n{error}\n```"

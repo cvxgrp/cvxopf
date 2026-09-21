@@ -257,9 +257,13 @@ class TestWarmStart:
 
 class TestOptions:
 
-    def test_enforce_branch_limits_raises(self, case9_raw):
-        with pytest.raises(NotImplementedError, match="enforce_branch_limits"):
-            build_opf(case9_raw, formulation="ac", options=OPFOptions(enforce_branch_limits=True))
+    def test_enforce_branch_limits_builds(self, case9_raw):
+        build = build_opf(
+            case9_raw,
+            formulation="ac",
+            options=OPFOptions(enforce_branch_limits=True),
+        )
+        assert isinstance(build, OPFBuild)
 
     def test_enforce_vset_does_not_raise(self, case9_raw):
         """enforce_vset=True should build without error."""
@@ -267,7 +271,14 @@ class TestOptions:
         assert isinstance(build, OPFBuild)
 
     def test_sparsity_tol_accepted(self, case9_raw):
-        build = build_opf(case9_raw, formulation="ac", options=OPFOptions(sparsity_tol=1e-12))
+        build = build_opf(
+            case9_raw,
+            formulation="ac",
+            options=OPFOptions(
+                enforce_branch_limits=False,
+                sparsity_tol=1e-12,
+            ),
+        )
         assert isinstance(build, OPFBuild)
 
     def test_default_options_when_none_passed(self, case9_raw):

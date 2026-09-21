@@ -33,7 +33,7 @@ import cvxpy as cp
 import numpy as np
 
 from cvxopf.hvdc import hvdc_from_dcline
-from cvxopf.problem import build_opf
+from cvxopf.problem import OPFOptions, build_opf
 from cvxopf.results import extract_results
 from cvxopf.testcases.case9 import case9
 from cvxopf.testcases.case9_dcline import case9_dcline
@@ -71,11 +71,20 @@ def _build(smooth: bool, dc: bool):
             if smooth:
                 case["gencost"] = SMOOTH_GENCOST.copy()
             links = hvdc_from_dcline(case["dcline"])
-            build = build_opf(case, formulation="ac", hvdc=links)
+            build = build_opf(
+                case,
+                formulation="ac",
+                hvdc=links,
+                options=OPFOptions(enforce_branch_limits=False),
+            )
             _graft_loss0(build, case)
         else:
             case = case9() if smooth else case9_pwl()
-            build = build_opf(case, formulation="ac")
+            build = build_opf(
+                case,
+                formulation="ac",
+                options=OPFOptions(enforce_branch_limits=False),
+            )
     return build, links
 
 

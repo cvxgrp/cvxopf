@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "result_status": "authoritative_clean_run_protocol_incomplete",
+  "created_utc": "2026-08-20T19:47:15.249844+00:00",
+  "execution_source": {
+    "git_commit": "8dff8d1005a4773ce695e51e71d8cd466b5ccc47",
+    "git_dirty": false,
+    "execution_source_stable": true,
+    "diagnostic_source_sha256": "019b9e495674178bc95f3963b87f9dced974c70cc0831642767ac71eff9b1eef",
+    "cvxopf_python_tree_sha256": "c071d31e8c1d29af4d08eb1b128a920b75d765d53b8ea29c3b81e79b977ff237",
+    "scenario_py_sha256": "042c2febb49b384477222c9dceb66ddd1d4be928b6c3d35c3e68dbadf8590342",
+    "manual_runner_py_sha256": "23af2bb3a0ed6969ad8317dfc76164e82240590c90a51319af23da0c2993bec7"
+  },
+  "authoritative_baseline": {
+    "source_commit": "0cd65b1a1c809b81813389f58fde6559a161d147",
+    "manifest_sha256": "831ab987818af499d59be55f0e4cec1038548f224dc6b63f1144d5ff35b0089a"
+  },
+  "environment": {
+    "python": "3.13.2",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.5.1",
+    "pandas": "3.0.3",
+    "cyipopt": "1.7.0",
+    "ipopt": "3.14.19",
+    "clarabel": "0.11.1"
+  },
+  "artifacts": {
+    "diagnostic_records.json.gz": {
+      "bytes": 291188,
+      "sha256": "cc9e6cc3116aa341aa8adad317f3bafa4692384d9fb3beed56a2e47ae4d62cae"
+    },
+    "diagnostic_summary.json": {
+      "bytes": 377,
+      "sha256": "d4578862a119e33dd8c17f02a7c7e5bcc1807a41fd97d4fa2f6e8d50b46f842b"
+    }
+  },
+  "summary": {
+    "expected_record_count": 14,
+    "actual_record_count": 14,
+    "expected_solver_call_count": 14,
+    "actual_solver_call_count": 14,
+    "x0_verified_count": 14,
+    "model_x0_count_per_record": 745,
+    "auxiliary_x0_count_per_record": 185,
+    "complete": false,
+    "exact_problem_accepted": true,
+    "feasibility_classification": "modeled_feasible_initialization_dependent",
+    "classification": "modeled_feasible_initialization_dependent_incomplete_protocol",
+    "accepted_exact_alternates": [
+      "B_frozen",
+      "C_target_free",
+      "D_shifted_preceding",
+      "E_frozen_perturb_1e-4",
+      "E_frozen_perturb_1e-3",
+      "E_frozen_perturb_1e-2"
+    ],
+    "flat_control_status": "infeasible",
+    "source_reproduction": {
+      "matched_frozen_raw": "reproduced_authoritative_source",
+      "source_target_free": "reproduced_authoritative_source",
+      "source_preceding": "new_accepted_source_basin"
+    }
+  },
+  "artifact_integrity_note": "Artifact hashes identify this local run; they do not promise byte-identical output from an independent nonlinear rerun."
+}

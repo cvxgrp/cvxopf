@@ -1,4 +1,4 @@
-"""Time-resolution sensitivity under the package's current objective."""
+"""Time-resolution invariance under the time-integrated objective."""
 
 from __future__ import annotations
 
@@ -213,7 +213,7 @@ def run_resolution_study(
     resolutions_hours: tuple[float, ...] = RESOLUTIONS_HOURS,
     policies: dict[str, PolicySpec] = RESOLUTION_POLICIES,
 ) -> ResolutionStudy:
-    """Run the nine-case current-objective resolution experiment."""
+    """Run the nine-case time-integrated-objective resolution experiment."""
     if tuple(resolutions_hours) != RESOLUTIONS_HOURS:
         raise ValueError(
             f"Resolution grid must be {RESOLUTIONS_HOURS}"

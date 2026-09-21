@@ -151,13 +151,13 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="rows"):
             build_opf_multistep(ppc, df_P, df_Q, T=3)
 
-    def test_enforce_branch_limits_raises(self, case9_multistep_load):
+    def test_enforce_branch_limits_builds(self, case9_multistep_load):
         df_P, df_Q = case9_multistep_load
-        with pytest.raises(NotImplementedError, match="enforce_branch_limits"):
-            build_opf_multistep(
-                case9(), df_P, df_Q, T=3,
-                options=OPFOptions(enforce_branch_limits=True),
-            )
+        build = build_opf_multistep(
+            case9(), df_P, df_Q, T=3,
+            options=OPFOptions(enforce_branch_limits=True),
+        )
+        assert isinstance(build, OPFBuild)
 
 
 # ---------------------------------------------------------------------------

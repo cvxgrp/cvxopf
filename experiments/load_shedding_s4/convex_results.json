@@ -1,0 +1,42 @@
+[
+  {
+    "representation": "explicit",
+    "formulation": "lossy_dc",
+    "status": "optimal",
+    "objective": 2507509.0333396425,
+    "shed_fraction": [
+      0.5555555555745061
+    ],
+    "is_dcp": true
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "formulation": "lossy_dc",
+    "status": "optimal",
+    "objective": 2507509.0333380993,
+    "shed_fraction": [
+      0.555555555574161
+    ],
+    "is_dcp": true
+  },
+  {
+    "representation": "explicit",
+    "formulation": "singlenode_dc",
+    "status": "optimal",
+    "objective": 426420.25006104907,
+    "shed_fraction": [
+      0.08888888890262205
+    ],
+    "is_dcp": true
+  },
+  {
+    "representation": "leaf_plus_eligibility",
+    "formulation": "singlenode_dc",
+    "status": "optimal",
+    "objective": 426420.2500685847,
+    "shed_fraction": [
+      0.08888888890431691
+    ],
+    "is_dcp": true
+  }
+]

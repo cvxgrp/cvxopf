@@ -1,0 +1,216 @@
+# S4 annual outer-plan protocol
+
+This protocol is frozen before the authoritative S4 solve. S4 constructs,
+solves, audits, and archives the exact 8,760-step lossy-DC outer plan for the
+primary rated Case118 annual scenario. It does not construct or execute an AC
+window. The five-minute AC fallback and shard execution are therefore outside
+S4 and remain gates for S4b/S5.
+
+## Frozen scientific problem
+
+- converted, provenance-checked rated PGLib-OPF Case118 network;
+- all 8,760 hourly active-load, reactive-load, and renewable-availability rows
+  from the deterministic annual scenario, without slicing or wrapping;
+- 15% annual available renewable energy;
+- aggregate storage power equal to 5% of annual peak load;
+- four-hour storage duration at buses 41, 65, 89, and 105;
+- each storage device initially at 50% SoC and constrained to return to 50% at
+  annual boundary 8,760;
+- enforced branch ratings, explicit generator/load/device fleets, and no load
+  shedding;
+- a synthetic quadratic coefficient `c2 = 1e-4` on every dispatchable
+  generator, retaining each inherited constant and linear coefficient; and
+- the exact frozen CLARABEL outer options, construction options, identities,
+  tolerances, and one-hour timestep used by the hierarchy.
+- explicit `temporal_assembly="vectorized"` with SCIPY canonicalization,
+  selected separately from the unchanged numerical solver configuration.
+
+`s4_fixture.load_s4_fixture()` is the sole materialization path. It validates
+the complete case, input arrays, identities, policy, solver configuration,
+timestamps, and combined scenario hash before model construction.
+
+## Outer-only equivalence gate
+
+S4 uses `streaming_runner.solve_frozen_outer()` with the same immutable input
+snapshot and policy boundary used by the streaming hierarchy. Before annual
+execution, a characterized 24-hour fixture must compare this seam with the
+public hierarchical controller's retained outer plan on:
+
+- formulation and temporal-representation identity and exact vectorized scalar
+  variable, equality, and explicit-inequality counts (reported separately from
+  result-array dimensions and not required to equal the legacy stepwise graph);
+- storage and boundary identities;
+- accepted status/classification and objective;
+- complete public result arrays and boundary SoC trajectory;
+- residual audit and terminal obligation; and
+- model, policy, solver, and input fingerprints.
+
+The retained equivalence record contains canonical result, boundary, and
+structure digests for both sides; complete result schemas; objectives;
+storage/boundary identities; both residual mappings; and the common input,
+policy, and solve-configuration fingerprints. The public M17 outer audit omits
+the streaming probe's inactive `branch_mw_abs` diagnostic. Equivalence may
+project a zero public value only after asserting the public key is absent and
+independently requiring the streaming value to be zero.
+
+The public comparison may stop before AC construction. A standalone similar
+lossy-DC model is not equivalent evidence.
+
+## M14c integration amendment — 2026-08-29
+
+The reviewed vectorized lossy-DC implementation is integrated from M14c source
+commit `0ef895b5e665fdb3a8fffab60292329ed22fd32b` into `big-experiment` parent
+commit `6a9cd130b7817f2ac6fbca2ce0de634da8967b25`. The immutable integration record
+binds those parents and the unchanged S4 fixture, policy, solve-configuration,
+and scenario hashes. Both the public-controller outer and the streaming seam
+must explicitly report `vectorized` temporal assembly and `SCIPY`
+canonicalization on the 24-hour gate. This amendment changes representation,
+not the frozen physical problem, hierarchy policy, CLARABEL options, resource
+limits, or acceptance tolerances.
+
+The uncommitted integration checkpoint does not authorize or execute the 24-,
+168-, or 720-hour prefix ladder or the annual run. Review and commitment of a
+clean integration checkpoint authorize only that ordered prefix ladder. Annual
+execution remains unauthorized until accepted ladder evidence is reviewed and
+`M14C_INTEGRATION.json` explicitly records both `prefix_ladder_executed=true`
+and `annual_execution_authorized=true` in a subsequent clean checkpoint.
+
+## Generator-cost conditioning amendment — 2026-08-31
+
+The imported Case118 fleet contains no quadratic generation costs: 19 units
+have purely linear costs and 35 have zero production cost. Tight CLARABEL and
+MOSEK diagnostics showed that this weak curvature permits materially different
+intermediate generator/storage trajectories with nearly identical objective
+values. The frozen S4 numerical case therefore adds `c2 = 1e-4` to every
+dispatchable polynomial cost while retaining the inherited `c0` and `c1`.
+This is an explicit synthetic conditioning choice for the numerical study, not
+a claim about real generator economics or a unique complete trajectory. It
+conditions dispatchable generation and reduces representation sensitivity;
+storage and branch-flow coordinates may remain nonunique.
+
+The small reviewed sensitivity set compared the unconditioned case, bus-69
+curvature at `1e-4` and `1e-3`, and fleet-wide curvature at `1e-4`. The
+bus-only results improved but remained horizon-sensitive and nonmonotone. The
+fleet-wide `1e-4` rule was the simplest tested choice that robustly reduced the
+objective gap at both 24 and 168 hours while preserving every audit. This is a
+deliberate economic perturbation: it changes the unconditioned stepwise
+objective by about `0.249%` at 24 hours and `0.243%` at 168 hours, and the
+largest added marginal term over the declared generator boxes is `0.2364`
+cost/MWh.
+
+The reviewed 24/168-hour conditioning diagnostic passed every scientific and
+bounds audit. Relative to the unconditioned tight-CLARABEL comparison, the
+stepwise/vectorized objective difference fell from `0.01989` to `0.000078` at
+24 hours and from `0.20005` to `0.0000079` at 168 hours. The retained evidence
+is summarized by tracked record
+`M14C_GENERATOR_CONDITIONING.json`, SHA-256
+`c10d344c3985982f19b2e039134318f5eba70dc8b2e81cc21fd5433419d9abbe`.
+Its ignored complete result has SHA-256
+`2de21da15aac1bc58ecfc70c2b11a56cbbe67ba7905ab376b717bb02fd9d6aac`.
+The tracked
+`M14C_GENERATOR_CONDITIONING_PROTOCOL.md` and byte-identical tracked runner
+`m14c_generator_conditioning.py` preserve the selection rationale and exact
+reproduction path.
+
+This amendment changes the S4 input and scenario hashes and supersedes the
+earlier prefix-ladder evidence. Annual execution remains unauthorized. The
+conditioned 24/168/720 ladder must be executed and reviewed from the new
+immutable output root before any annual authority update.
+
+## Resource and supervision contract
+
+The authoritative output directory is
+`experiments/case118_annual_hierarchy/results/s4_annual_outer_rated_attempt_005`
+and must
+not exist at launch. One supervising parent starts one fresh worker process and
+samples current child RSS every second.
+
+Frozen limits on the S0/S3 workstation are:
+
+- child current RSS: 16,384 MiB;
+- worker wall time: 7,200 seconds;
+- total supervisor wall time: 10,800 seconds; and
+- polling interval: 1 second.
+
+The worker records current RSS and elapsed time before construction, after
+construction, before solve, after solve, after archive, and after live-build
+release. The supervisor separately retains first, peak, and final sampled RSS.
+Construction, canonicalization/solve, audit, serialization, release, and total
+wall time are reported separately where the existing interfaces expose them.
+
+Crossing a resource limit terminates the worker and produces an explicit
+`rss_limit`, `worker_wall_limit`, or `total_wall_limit` supervision outcome.
+Worker-launch or construction failures, solver exceptions, certified
+infeasibility, unusable primals, residual rejection, artifact failure, and
+provenance mismatch remain distinct. No failure is reclassified as
+mathematical infeasibility.
+
+If multiple limits are observed in one poll, all are retained and the primary
+classification uses the frozen priority RSS, worker wall, then total wall. An
+accepted resource gate requires at least one successful external RSS sample
+and a finite positive peak; missing RSS evidence is
+`resource_measurement_failure`, not a zero-memory observation.
+
+There is no scientifically valid mid-solve checkpoint. An abnormal outcome
+stops automatic execution and retains all reached evidence for review. Any
+approved rerun starts the complete annual outer problem from scratch in a new
+explicitly labeled attempt directory; it never overwrites or calls itself a
+resume.
+
+## Artifact layout and publication order
+
+The output directory contains:
+
+- immutable pre-worker execution context and frozen configuration;
+- an ephemeral active-worker marker;
+- append-only worker log;
+- immutable worker result retaining every reached phase and classification;
+- immutable accepted `outer-plan.json.gz`, written only after the complete
+  outer audit passes;
+- immutable supervision record and replaceable latest-supervision pointer; and
+- no AC window, attempt, trajectory checkpoint, or executed-action artifact.
+
+The worker result is published before supervision finalization. An accepted
+outer archive is written and hash-verified before the worker reports success.
+Existing immutable targets cause a controlled artifact failure rather than
+replacement. The active marker is removed only after durable supervision.
+
+After execution, independent analysis reloads and semantically validates the
+outer archive, reconstructs the complete residual audit and terminal boundary,
+checks every artifact/provenance hash, and promotes compact `S4_RESULTS.json`
+immutably. Promotion retains a separate clean Git commit and source fingerprint
+for the analysis implementation, distinct from execution provenance. Raw
+outputs remain ignored.
+
+## Advancement gate
+
+S4 can advance to S4b only when:
+
+1. fixture and 24-hour outer equivalence gates pass;
+2. the worker and supervisor contexts match the committed clean source;
+3. CLARABEL returns an eligible accepted primal;
+4. independent residual, identity, terminal, and result/signpost checks pass;
+5. resource limits are respected;
+6. exactly one immutable annual outer archive exists and no AC work exists;
+7. compact analysis is reviewed and promoted; and
+8. the accepted outer signposts are then used—without AC-outcome tuning—to
+   freeze the S4b shard manifest.
+
+An incomplete or resource-boundary result remains useful scaling evidence but
+does not authorize S4b.
+
+## Post-execution disposition — 2026-08-25
+
+S4 is paused before advancement. Three annual workers reached the same late
+construction/canonicalization phase and were killed without producing an outer
+primal or outer-plan artifact. The final attempt ran as a detached launchd job
+with unlimited per-job jetsam limits, ruling out the Codex command resource
+group. Its supervisor recorded no frozen resource trigger and sampled a peak
+RSS of 11,973 MiB; macOS separately recorded
+`memorystatus: killing largest compressed process ... 198602 MB`.
+
+This is retained as a construction/canonicalization resource boundary, not a
+solver failure or infeasibility result. The Case118 experiment is on hold until
+M14 delivers the vectorized lossy-DC horizon path and its annual resumption
+gate passes. The next authorized S4 execution must use a new clean commit and
+fresh output directory.

@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/Users/bmeyers/github/cvxopf/outputs/s5_analysis/closeout-analysis-20260917T211006Z/supervise.py", line 45, in <module>
+    processes += [parent] + parent.children(recursive=True)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bmeyers/github/cvxopf/.venv/lib/python3.11/site-packages/psutil/__init__.py", line 978, in children
+    ppid_map = _ppid_map()
+               ^^^^^^^^^^^
+  File "/Users/bmeyers/github/cvxopf/.venv/lib/python3.11/site-packages/psutil/__init__.py", line 256, in _ppid_map
+    for pid in pids():
+               ^^^^^^
+  File "/Users/bmeyers/github/cvxopf/.venv/lib/python3.11/site-packages/psutil/__init__.py", line 1485, in pids
+    ret = sorted(_psplatform.pids())
+                 ^^^^^^^^^^^^^^^^^^
+  File "/Users/bmeyers/github/cvxopf/.venv/lib/python3.11/site-packages/psutil/_psosx.py", line 320, in pids
+    ls = cext.pids()
+         ^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted (originated from sysctl() malloc 1/3)

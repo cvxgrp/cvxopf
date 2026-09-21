@@ -9,10 +9,11 @@
 """
 Generate Pypower reference fixture files for cvxopf validation tests.
 
-This script runs Pypower's AC-OPF solver on the case9 and case14 test cases
-and writes the results to JSON files in tests/fixtures/. The fixture files
-are committed to the repository and consumed by the validation test suite
-without requiring Pypower to be installed in the main package environment.
+This script runs Pypower's AC-OPF solver on case9, case14, case57, the case9
+piecewise-linear-cost variant, and the case9 DC-line variant. It writes the
+results to JSON files in tests/fixtures/. The fixture files are committed to
+the repository and consumed by the validation test suite without requiring
+Pypower to be installed in the main package environment.
 
 Usage
 -----
@@ -70,13 +71,15 @@ Output
 tests/fixtures/case9_pypower_reference.json
 tests/fixtures/case14_pypower_reference.json
 tests/fixtures/case57_pypower_reference.json
+tests/fixtures/case9_pwl_pypower_reference.json
 tests/fixtures/case9_dcline_pypower_reference.json
+tests/fixtures/case9_dcline_ybus_pypower_reference.json
 
 Fixture schema
 --------------
-Each JSON file contains a single object with the following keys:
+Each solved OPF JSON file contains a single object with the following keys:
 
-    case        str     name of the test case ("case9" or "case14")
+    case        str     name of the test-case variant
     solver      str     always "pypower-5.1.19"
     status      str     "optimal" if converged, "failed" otherwise
     objective   float   optimal cost in $/hr
@@ -84,6 +87,13 @@ Each JSON file contains a single object with the following keys:
     Qg          list    generator reactive outputs in MVAr, length ng
     Vm          list    bus voltage magnitudes in p.u., length nb
     Va_deg      list    bus voltage angles in degrees, length nb
+    PF          list    from-terminal real flows in MW, length nl
+    QF          list    from-terminal reactive flows in MVAr, length nl
+    PT          list    to-terminal real flows in MW, length nl
+    QT          list    to-terminal reactive flows in MVAr, length nl
+
+The separate case9 DC-line Ybus fixture contains ``case``, ``solver``,
+``quantity``, ``bus_ids``, ``Ybus_real``, and ``Ybus_imag``.
 """
 
 import json
@@ -108,6 +118,7 @@ from pypower.idx_gen import (
     QMIN,
     VG,
 )
+from pypower.idx_brch import PF, QF, PT, QT
 from pypower.idx_dcline import c
 from pypower.isload import isload
 from pypower.add_userfcn import add_userfcn
@@ -156,6 +167,10 @@ def _extract_result(result, case_name: str) -> dict:
             Qg=None,
             Vm=None,
             Va_deg=None,
+            PF=None,
+            QF=None,
+            PT=None,
+            QT=None,
         )
 
     objective = float(result["f"])
@@ -163,6 +178,10 @@ def _extract_result(result, case_name: str) -> dict:
     Qg = result["gen"][:, QG].tolist()  # MVAr
     Vm = result["bus"][:, VM].tolist()  # p.u.
     Va_deg = result["bus"][:, VA].tolist()  # degrees
+    p_from = result["branch"][:, PF].tolist()  # MW
+    q_from = result["branch"][:, QF].tolist()  # MVAr
+    p_to = result["branch"][:, PT].tolist()  # MW
+    q_to = result["branch"][:, QT].tolist()  # MVAr
 
     print(f"OK  (f = {objective:.4f} $/hr)")
 
@@ -175,6 +194,10 @@ def _extract_result(result, case_name: str) -> dict:
         Qg=Qg,
         Vm=Vm,
         Va_deg=Va_deg,
+        PF=p_from,
+        QF=q_from,
+        PT=p_to,
+        QT=q_to,
     )
 
 

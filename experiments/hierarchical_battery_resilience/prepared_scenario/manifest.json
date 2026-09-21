@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "scenario_name": "tracy_high_96h_v1",
+  "interpretation": "sustained energy-deficit window",
+  "start": "2021-12-18T00:00:00-08:00",
+  "end": "2021-12-21T23:00:00-08:00",
+  "horizon_steps": 96,
+  "delta_hours": 1.0,
+  "nominal_ac_window_steps": 5,
+  "source": {
+    "description": "BM-authored Tracy reduced-order composite derived from public sources",
+    "redistribution": "Derived scenario arrays approved for redistribution by the project owner",
+    "raw_file_required": false,
+    "raw_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+    "raw_columns": [
+      "9q9wtp_solar",
+      "9q9wtp_wind",
+      "9q9wtp_dist_solar",
+      "9q9wtp_load"
+    ]
+  },
+  "transformation": {
+    "source_to_case_scale": 0.2766160762753476,
+    "load_scale": 1.0,
+    "load_shift_mw": 0.0,
+    "solar_scale": 1.0,
+    "wind_scale": 1.0,
+    "dist_solar_scale": 1.0,
+    "spatial_noise_std": 0.0,
+    "random_seed": 0,
+    "load_fractions": {
+      "5": 0.2857142857142857,
+      "7": 0.31746031746031744,
+      "9": 0.3968253968253968
+    },
+    "load_q_over_p": {
+      "5": 0.3333333333333333,
+      "7": 0.35,
+      "9": 0.4
+    },
+    "resource_fractions": {
+      "utility_solar": {
+        "1": 0.2,
+        "2": 0.8
+      },
+      "wind": {
+        "2": 0.2,
+        "3": 0.8
+      },
+      "dist_solar": {
+        "5": 0.2857142857142857,
+        "7": 0.31746031746031744,
+        "9": 0.3968253968253968
+      }
+    },
+    "renewable_rating_multiplier": 1.1,
+    "renewable_ratings_sized_across": [
+      "low",
+      "moderate",
+      "high"
+    ]
+  },
+  "case": {
+    "factory": "cvxopf.testcases.case9",
+    "base_mva": 100.0,
+    "outer_formulation": "lossy_dc",
+    "inner_formulation": "ac",
+    "options": {
+      "enforce_vset": false,
+      "sparsity_tol": 0.0,
+      "init_flat": true,
+      "enforce_branch_limits": true,
+      "loss_weight": 1.0,
+      "branch_limit_sentinel": 1000000.0,
+      "sparse_pq": true
+    },
+    "bus_array_sha256": "4d63fbba0711dc8d8e7ebf3851efc233c6c728e7352b3647583005b2c21cc949",
+    "branch_array_sha256": "6761eb5be06d74aacbf4d07fb856317dbbfc2666e422ec250183d5f48adb4d64"
+  },
+  "generators": [
+    {
+      "bus": 1,
+      "p_max_mw": 105.0,
+      "p_min_mw": 10.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "cost_type": "polynomial",
+      "cost_coeffs": [
+        150.0,
+        5.0,
+        0.11
+      ],
+      "cost_points": null,
+      "startup": 0.0,
+      "shutdown": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 2,
+      "p_max_mw": 130.0,
+      "p_min_mw": 10.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "cost_type": "polynomial",
+      "cost_coeffs": [
+        600.0,
+        1.2,
+        0.085
+      ],
+      "cost_points": null,
+      "startup": 0.0,
+      "shutdown": 0.0,
+      "status": 1,
+      "vg": 1.0
+    },
+    {
+      "bus": 3,
+      "p_max_mw": 115.0,
+      "p_min_mw": 10.0,
+      "q_max_mvar": 300.0,
+      "q_min_mvar": -300.0,
+      "cost_type": "polynomial",
+      "cost_coeffs": [
+        335.0,
+        1.0,
+        0.1225
+      ],
+      "cost_points": null,
+      "startup": 0.0,
+      "shutdown": 0.0,
+      "status": 1,
+      "vg": 1.0
+    }
+  ],
+  "loads": [
+    {
+      "device_id": "load_bus_5",
+      "bus": 5,
+      "p_load_mw_static_fallback": 0.0,
+      "q_load_mvar_static_fallback": null,
+      "shedding_cost_per_mwh": null,
+      "max_shed_fraction": 1.0
+    },
+    {
+      "device_id": "load_bus_7",
+      "bus": 7,
+      "p_load_mw_static_fallback": 0.0,
+      "q_load_mvar_static_fallback": null,
+      "shedding_cost_per_mwh": null,
+      "max_shed_fraction": 1.0
+    },
+    {
+      "device_id": "load_bus_9",
+      "bus": 9,
+      "p_load_mw_static_fallback": 0.0,
+      "q_load_mvar_static_fallback": null,
+      "shedding_cost_per_mwh": null,
+      "max_shed_fraction": 1.0
+    }
+  ],
+  "nondispatchable": [
+    {
+      "bus": 1,
+      "p_available": 0.0,
+      "apparent_power_rating": 253.47485253422306,
+      "device_id": "utility_solar_bus_1"
+    },
+    {
+      "bus": 2,
+      "p_available": 0.0,
+      "apparent_power_rating": 1013.8994101368922,
+      "device_id": "utility_solar_bus_2"
+    },
+    {
+      "bus": 2,
+      "p_available": 0.0,
+      "apparent_power_rating": 212.9943787320177,
+      "device_id": "wind_bus_2"
+    },
+    {
+      "bus": 3,
+      "p_available": 0.0,
+      "apparent_power_rating": 851.9775149280708,
+      "device_id": "wind_bus_3"
+    },
+    {
+      "bus": 5,
+      "p_available": 0.0,
+      "apparent_power_rating": 15.955609363584237,
+      "device_id": "dist_solar_bus_5"
+    },
+    {
+      "bus": 7,
+      "p_available": 0.0,
+      "apparent_power_rating": 17.728454848426928,
+      "device_id": "dist_solar_bus_7"
+    },
+    {
+      "bus": 9,
+      "p_available": 0.0,
+      "apparent_power_rating": 22.16056856053366,
+      "device_id": "dist_solar_bus_9"
+    }
+  ],
+  "storage": [
+    {
+      "device_id": "battery_bus_7",
+      "bus": 7,
+      "apparent_power_rating_mva": 150.0,
+      "capacity_mwh": 1000.0,
+      "initial_soc_mwh": 500.0,
+      "aging_weight": 0.01,
+      "outer_terminal_soc_mwh": 500.0,
+      "outer_terminal_constraint": "equality"
+    }
+  ],
+  "hvdc": [],
+  "policies": {
+    "outer": [
+      "frozen",
+      "replan_every_step"
+    ],
+    "inner_terminal": [
+      "hard_equality",
+      "quadratic_soft"
+    ],
+    "quadratic_soft_weight": 0.05,
+    "automatic_fallback": false,
+    "perfect_forecast": true,
+    "replans_retain_global_terminal_boundary": true,
+    "global_terminal_boundary": 96,
+    "accepted_statuses": [
+      "optimal",
+      "optimal_inaccurate"
+    ]
+  },
+  "solver": {
+    "outer": "CVXPY default convex solver",
+    "inner": "IPOPT through CVXPY DNLP",
+    "inner_initialization": "project default flat start"
+  },
+  "acceptance_tolerances": {
+    "soc_recurrence_mwh_abs": 0.0001,
+    "terminal_soc_mwh_abs": 0.001,
+    "soft_terminal_cost_abs": 1e-06,
+    "ac_active_balance_pu_abs": 1e-06,
+    "ac_reactive_balance_pu_abs": 1e-06,
+    "dc_injection_reporting_mw_abs": 0.0001,
+    "dc_nodal_balance_pu_abs": 1e-06,
+    "voltage_bound_pu_abs": 1e-06,
+    "branch_mva_abs": 0.0001,
+    "branch_normalized_squared_residual": 1e-07
+  },
+  "preparation_environment": {
+    "python": "3.13.2",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "numpy": "2.5.1",
+    "pandas": "3.0.3",
+    "cyipopt": "1.7.0"
+  },
+  "arrays": {
+    "load_p": {
+      "file": "load_p.csv",
+      "columns": [
+        "load_bus_5",
+        "load_bus_7",
+        "load_bus_9"
+      ],
+      "shape": [
+        96,
+        3
+      ],
+      "array_sha256": "0af9505a969b58cc9b02c7033dba1207654b1dcf4ea89e4431b25952e9fe6844",
+      "file_sha256": "e094a1df83e26027cd46fe7295d0a0b4ee260a03124b1fa2c9da09beb73635f6"
+    },
+    "load_q": {
+      "file": "load_q.csv",
+      "columns": [
+        "load_bus_5",
+        "load_bus_7",
+        "load_bus_9"
+      ],
+      "shape": [
+        96,
+        3
+      ],
+      "array_sha256": "e2357297c7f82c08cb84f391cf599425769428cc02163d3269bf738b2b6708e2",
+      "file_sha256": "066644efb9184c27b9fe454befb6e5f700209ab0f15b146700d559d71093ccbf"
+    },
+    "nondispatchable": {
+      "file": "nondispatchable.csv",
+      "columns": [
+        "utility_solar_bus_1",
+        "utility_solar_bus_2",
+        "wind_bus_2",
+        "wind_bus_3",
+        "dist_solar_bus_5",
+        "dist_solar_bus_7",
+        "dist_solar_bus_9"
+      ],
+      "shape": [
+        96,
+        7
+      ],
+      "array_sha256": "71192c77eda37f1c3bda1f3a1504da9e8c61ba4b1e5e643014a84f0bca52b22f",
+      "file_sha256": "026b1a49dca588fe3e81d992855fff9bc57ca37b9c11deb84c4733640d732bce"
+    }
+  }
+}
