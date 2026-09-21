@@ -24,6 +24,32 @@ The package is developed by the CVX Group at Stanford.
 
 ---
 
+## Owner's collaboration preferences
+
+These preferences apply to every task in this repository, including cleanup,
+documentation, experiments, and code changes.
+
+- Follow existing patterns and approved decisions. Read the relevant plans,
+  disposition records, and implementation before proposing changes. If intent,
+  scope, or an existing decision is unclear, ask the owner rather than guessing.
+- Stay within the authorized task. Do not push through ambiguity or "go the
+  extra mile" with adjacent cleanup, refactoring, or new features. If an
+  extension seems worthwhile, explain its purpose and consequences and obtain
+  permission before doing it. Approval of one change does not authorize a
+  broader reorganization.
+- The owner stages, commits, and pushes unless explicitly delegated otherwise;
+  follow **Owner's Git workflow** below. Implementation approval is not Git
+  approval.
+- Prioritize good science over shipping code quickly. Preserve evidence and
+  provenance, distinguish verified results from assumptions, and report
+  uncertainty or failed checks rather than working around them to declare
+  success.
+- The owner must be able to understand and explain the codebase to others.
+  Explain proposed features and design decisions in plain language, including
+  why they are needed, how they fit existing patterns, and their tradeoffs.
+  Obtain approval before implementing them. Reuse decisions already approved
+  for the task; seek approval again when the proposed scope or design changes.
+
 ## Design aesthetic (read this first)
 
 This project follows a specific engineering aesthetic, articulated by Stephen
