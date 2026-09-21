@@ -520,6 +520,28 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
+Opt into vectorized assembly with `temporal_assembly="vectorized"` for
+`"ac"`, `"lossy_dc"`, or `"singlenode_dc"`. `build.solve()` selects SCIPY
+canonicalization and CLARABEL for convex formulations; AC uses the same
+DNLP/IPOPT path as stepwise AC, with no CPP/SCIPY backend selection.
+The default assembly is still `"stepwise"`.
+
+Vectorized `build.variables` contain time-last CVXPY variables: for example,
+`Pg` has shape `(ng, T)` and storage `soc` has shape `(ns, T+1)`, including the
+initial boundary. Assign initialization through their `.value` attributes.
+`extract_results()` retains time-first arrays, including `Pg: (T, ng)`,
+post-step `soc: (T, ns)`, and single-node `p_net: (T,)`. Single-node assembly
+collapses bus injections while preserving device identity and reporting.
+
+Vectorized AC voltage and angle variables have shape `(nb, T)`, and sparse
+`P_vec`/`Q_vec` have shape `(nnz, T)`. CVXPY's current DNLP derivative engine
+supports at most two variable dimensions. For `sparse_pq=False`, dense `P`/`Q`
+therefore use `(nb*nb, T)`, with bus pair `(i, j)` stored at row `i*nb+j`.
+For example, reshape a solved `P.value` to `(nb, nb, T)` with NumPy's default
+C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
+shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
+explicit constraints.
+
 ### Objective units and time discretization
 
 `delta` is the interval duration in hours. cvxopf treats generator, storage
@@ -853,16 +875,25 @@ package environment.
 - [ ] SOCP network model
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
-- [ ] M14 time-vectorized multistep formulations: the explicit time-last
-  lossy-DC path is integrated into the Case118 `big-experiment` branch; its
-  conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
-  accepted. The retained
-  stepwise builder remains the default. The historical stepwise/CPP profiling
+- [x] M14 agreed implementation, validation and bounded comparison requirements:
+  all three time-vectorized formulations are reviewed and owner-accepted. M14a–c are complete and
+  merged into `main` with the completed Case118 study. The vectorized lossy-DC
+  path's conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
+  accepted. The retained stepwise builder remains the default. The historical
+  stepwise/CPP profiling
   mismatch and the certificate-backed tight-tolerance disposition are both
   tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual
   realization. A non-promotional default-solver matrix found no accepted
-  alternative annual arm (see
+  alternative annual arm. Single-node DC and AC vectorization are implemented,
+  with Case9 Tracy comparisons and the existing AC initialization helpers.
+  The 168-hour stepwise AC attempts timed out at 180 and 1,800 seconds;
+  their unavailable numerical results remain a limitation. The owner accepted
+  these bounded outcomes as satisfying the comparison requirement (see
   `plans/milestone-14-time-vectorization.md`).
+- [x] Final M14 closure: owner-accepted on 2026-09-20, including the completed
+  Case118 replay experiment (126/126 accepted; see
+  `experiments/case118_vectorization_replay/REPORT.md`). The stepwise AC timeouts
+  and nonuniform replay timing gains remain documented limitations.
 - [ ] Full lossy HVDC (sign-switching converter losses via charge/discharge split) and reactive power support
 - [x] Unify grid component model patterns (dispatchable generators, storage, nondispatchable → first-class composable components)
 - [x] M16+ typed component adapters and shared formulation assembly (see `plans/milestone-16-plus-component-adapters.md`)

@@ -1,0 +1,226 @@
+{
+  "comparison_record_sha256": "963e758c19ce9e0b1d6d6c7bdce4628e2647266c4998ba7f6f12db58477e95dd",
+  "checker_sha256": "8f54e888ee30461ddae74e044e1b1b15d45281277f266cbca418fc895339f39f",
+  "observations": [
+    {
+      "formulation": "lossy_dc",
+      "horizon": 3,
+      "graph": "stepwise",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.31133272574988e-13,
+      "objective": 9353.431136363955,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 3,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.1368683772161603e-13,
+      "objective": 9353.431136297342,
+      "source_objective_relative_error": 3.889459123694204e-16
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 3,
+      "graph": "vectorized",
+      "source": "stepwise",
+      "bound_projection_max": 2.31133272574988e-13,
+      "constraint_violation_max": 1.1368683772161603e-13,
+      "objective": 9353.431136363955,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 3,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.1368683772161603e-13,
+      "objective": 9353.431136297339,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "ac",
+      "horizon": 3,
+      "graph": "stepwise",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.8978880078623916e-08,
+      "objective": 9677.768878543364,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "ac",
+      "horizon": 3,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 4.1905851011492246e-10,
+      "objective": 9677.768870612854,
+      "source_objective_relative_error": 1.879554500489602e-16
+    },
+    {
+      "formulation": "ac",
+      "horizon": 3,
+      "graph": "vectorized",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.8978880078623916e-08,
+      "objective": 9677.768878543367,
+      "source_objective_relative_error": 3.7591089978987784e-16
+    },
+    {
+      "formulation": "ac",
+      "horizon": 3,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 4.1905851011492246e-10,
+      "objective": 9677.768870612856,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 24,
+      "graph": "stepwise",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.2737367544323206e-13,
+      "objective": 36431.79613071682,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 24,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.1368683772161603e-13,
+      "objective": 36431.79612962734,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 24,
+      "graph": "vectorized",
+      "source": "stepwise",
+      "bound_projection_max": 9.212349779251817e-15,
+      "constraint_violation_max": 2.2737367544323206e-13,
+      "objective": 36431.79613071684,
+      "source_objective_relative_error": 3.994289816553311e-16
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 24,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.1368683772161603e-13,
+      "objective": 36431.79612962734,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "ac",
+      "horizon": 24,
+      "graph": "stepwise",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.2009813194223682e-08,
+      "objective": 37747.012381941066,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "ac",
+      "horizon": 24,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.4267265813217023e-08,
+      "objective": 37747.22445480431,
+      "source_objective_relative_error": 9.637738561275039e-16
+    },
+    {
+      "formulation": "ac",
+      "horizon": 24,
+      "graph": "vectorized",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 2.2009813194223682e-08,
+      "objective": 37747.01238194106,
+      "source_objective_relative_error": 1.9275585417362438e-16
+    },
+    {
+      "formulation": "ac",
+      "horizon": 24,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.4267265813217023e-08,
+      "objective": 37747.22445480427,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 168,
+      "graph": "stepwise",
+      "source": "stepwise",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.0893064228412186e-11,
+      "objective": 326369.68285798974,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 168,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.801447879756779e-11,
+      "objective": 326369.68286600005,
+      "source_objective_relative_error": 8.917443005477657e-16
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 168,
+      "graph": "vectorized",
+      "source": "stepwise",
+      "bound_projection_max": 9.956901971950639e-14,
+      "constraint_violation_max": 1.0893064228412186e-11,
+      "objective": 326369.682857989,
+      "source_objective_relative_error": 2.318535181481094e-15
+    },
+    {
+      "formulation": "lossy_dc",
+      "horizon": 168,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 1.8014700842172715e-11,
+      "objective": 326369.68286599976,
+      "source_objective_relative_error": 0.0
+    },
+    {
+      "formulation": "ac",
+      "horizon": 168,
+      "graph": "stepwise",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 9.317715932155579e-09,
+      "objective": 341477.7114444261,
+      "source_objective_relative_error": 1.70458155723409e-15
+    },
+    {
+      "formulation": "ac",
+      "horizon": 168,
+      "graph": "vectorized",
+      "source": "vectorized",
+      "bound_projection_max": 0.0,
+      "constraint_violation_max": 9.317715932155579e-09,
+      "objective": 341477.7114444267,
+      "source_objective_relative_error": 0.0
+    }
+  ]
+}

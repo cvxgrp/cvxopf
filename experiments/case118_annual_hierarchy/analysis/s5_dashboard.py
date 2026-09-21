@@ -5,6 +5,7 @@
 #     "matplotlib>=3.10",
 #     "numpy>=2.0",
 #     "pandas>=2.2",
+#     "plotly==7.1.0",
 # ]
 # ///
 
@@ -12,7 +13,7 @@ import marimo
 
 __generated_with = "0.24.2"
 app = marimo.App(
-    width="full",
+    width="medium",
     app_title="Completed toy AC study · Matrix and Tensor views",
 )
 
@@ -206,6 +207,252 @@ def _(Path, mo, plt, snapshot, stress_data):
         mo.md("Generation sums dispatchable generators and excludes wind/solar. Battery power is the signed fleet sum: positive discharge, negative charging. SoC is total fleet energy at the end of each hour, plotted on that hour's start row. AC and DC use identical scales: generation from zero to the combined maximum, battery power ±fleet rating, and SoC from zero to fleet capacity. All 8,760 hours are shown, independently of the correlation filters. AC totals combine the accepted DC trajectory with the saved executed AC−DC differences."),
     ])
     return operating_trajectories, report_input_data
+
+
+@app.cell(hide_code=True)
+def weekly_imports():
+    import numpy as np
+    import pandas as pd
+    import plotly.graph_objects as go
+
+    return go, np, pd
+
+
+@app.cell(hide_code=True)
+def weekly_input_series(np, pd, report_input_data, snapshot):
+    weekly_timestamps = pd.to_datetime(report_input_data.timestamp, utc=True)
+    assert np.array_equal(weekly_timestamps, pd.date_range(snapshot["start"], periods=8760, freq="h"))
+    assert weekly_timestamps.iloc[0].hour == 0
+    assert snapshot["report"]["delta_hours"] == 1
+    np.testing.assert_allclose(report_input_data.net_load_mw,
+                               report_input_data.load_mw - report_input_data.available_nd_mw)
+    net_load = pd.Series(report_input_data.net_load_mw.to_numpy(), index=pd.DatetimeIndex(weekly_timestamps))
+    assert np.isfinite(net_load.to_numpy()).all()
+    return (net_load,)
+
+
+@app.cell(hide_code=True)
+def weekly_metrics(net_load, np, pd):
+    def weekly_metrics(net):
+        blocks = np.lib.stride_tricks.sliding_window_view(net.to_numpy(), 168)[::24]
+        starts = net.index[:len(net) - 167:24]
+        result = pd.DataFrame({
+            "start": starts,
+            "end": starts + pd.Timedelta(hours=167),
+            "net_energy_gwh": blocks.sum(axis=1) / 1000,
+            "peak_net_load_mw": blocks.max(axis=1),
+            "minimum_net_load_mw": blocks.min(axis=1),
+            "positive_net_hours": (blocks > 0).sum(axis=1),
+        })
+        result["dates"] = result.start.dt.strftime("%b %d") + "–" + result.end.dt.strftime("%b %d, %Y")
+        result["start_date"] = result.start.dt.strftime("%Y-%m-%d")
+        return result
+
+    raw_weeks = weekly_metrics(net_load)
+    assert len(raw_weeks) == 359
+    # Reconstruct the three measures with pandas rolling operations independently.
+    rolling_endpoints = net_load.rolling(168)
+    assert np.allclose(raw_weeks.net_energy_gwh, rolling_endpoints.sum().iloc[167::24] / 1000)
+    assert np.allclose(raw_weeks.peak_net_load_mw, rolling_endpoints.max().iloc[167::24])
+    assert np.allclose(raw_weeks.minimum_net_load_mw, rolling_endpoints.min().iloc[167::24])
+    return (raw_weeks,)
+
+
+@app.cell(hide_code=True)
+def weekly_controls(mo, raw_weeks):
+    show_candidates = mo.ui.checkbox(value=True, label="Label candidate weeks")
+    week_picker = mo.ui.dropdown(options=raw_weeks.start_date.tolist(),
+        value=raw_weeks.loc[raw_weeks.net_energy_gwh.idxmax(), "start_date"],
+        label="Inspect week starting (2025 UTC)", allow_select_none=False, searchable=True)
+    mo.vstack([
+        mo.md("## Weekly input conditions · energy, peak, and minimum\n"
+              "Each point is a midnight-start **168-hour window** in the toy study's **synthetic 2025 UTC** calendar: "
+              "359 overlapping windows wholly inside the year. Net load = load − available wind − utility solar, "
+              "before curtailment, storage dispatch, or losses. All hours are included, independently of the AC−DC correlation filters. "
+              "Energy is the signed hourly sum (GWh); peak and minimum are hourly net load (MW). "
+              "Hover for dates and all three metrics; the black diamond marks the inspected week. "
+              "Candidate medians are selected per metric; energy balance means nearest zero."),
+        mo.hstack([show_candidates, week_picker], justify="start", gap=2, wrap=True),
+    ])
+    return show_candidates, week_picker
+
+
+@app.cell(hide_code=True)
+def weekly_selection(raw_weeks, week_picker):
+    weeks = raw_weeks
+    metric_columns = ["net_energy_gwh", "peak_net_load_mw", "minimum_net_load_mw"]
+    axis_labels = {"net_energy_gwh": "Net energy (GWh)",
+                   "peak_net_load_mw": "Peak net load (MW)",
+                   "minimum_net_load_mw": "Minimum net load (MW)"}
+    inspected_week = weeks.loc[weeks.start_date.eq(week_picker.value)].iloc[0]
+    return axis_labels, inspected_week, metric_columns, weeks
+
+
+@app.cell(hide_code=True)
+def weekly_candidates(pd, weeks):
+    def candidate_periods(frame):
+        rules = [
+            ("Energy low", "net_energy_gwh", 0, "#197a62"),
+            ("Energy median", "net_energy_gwh", .5, "#2666a3"),
+            ("Energy high", "net_energy_gwh", 1, "#b54836"),
+            ("Peak low", "peak_net_load_mw", 0, "#197a62"),
+            ("Peak median", "peak_net_load_mw", .5, "#2666a3"),
+            ("Peak high", "peak_net_load_mw", 1, "#b54836"),
+            ("Lowest minimum", "minimum_net_load_mw", 0, "#b57816"),
+            ("Highest minimum", "minimum_net_load_mw", 1, "#71589e"),
+        ]
+        rows = []
+        for label, metric, quantile, color in rules:
+            index = (frame[metric] - frame[metric].quantile(quantile)).abs().idxmin()
+            rows.append({"candidate": label, "color": color, **frame.loc[index].to_dict()})
+        balance = frame.loc[frame.net_energy_gwh.abs().idxmin()].to_dict()
+        rows.append({"candidate": "Energy balance", "color": "#8e5a9c", **balance})
+        return pd.DataFrame(rows)
+
+    candidates = candidate_periods(weeks)
+    return (candidates,)
+
+
+@app.cell(hide_code=True)
+def weekly_plot_helpers(go):
+    hover_columns = ["dates", "net_energy_gwh", "peak_net_load_mw", "minimum_net_load_mw", "positive_net_hours"]
+    hover_template = (
+        "<b>%{customdata[0]}</b><br>"
+        "Net energy: %{customdata[1]:,.3f} GWh<br>"
+        "Peak net load: %{customdata[2]:,.2f} MW<br>"
+        "Minimum net load: %{customdata[3]:,.2f} MW<br>"
+        "Positive-net hours: %{customdata[4]} / 168<extra></extra>"
+    )
+
+    def scatter_view(frame, candidate_frame, chosen, axes, labels, annotate, dimension=2):
+        trace_type = go.Scatter3d if dimension == 3 else go.Scatter
+        positions = dict(zip(["x", "y", "z"][:dimension], [frame[column] for column in axes]))
+        chart = go.Figure(trace_type(
+            **positions, mode="markers", name="All 359 windows",
+            marker={"size": 4 if dimension == 3 else 7, "color": "#8495a7", "opacity": .6},
+            customdata=frame[hover_columns].to_numpy(), hovertemplate=hover_template,
+        ))
+        if annotate:
+            unique_candidates = {}
+            for candidate in candidate_frame.to_dict("records"):
+                key = tuple(candidate[column] for column in hover_columns[1:4])
+                if key in unique_candidates:
+                    unique_candidates[key]["candidate"] += " / " + candidate["candidate"]
+                else:
+                    unique_candidates[key] = candidate.copy()
+            label_positions = {"Energy median": "top left", "Peak median": "bottom right",
+                               "Energy high": "top right", "Peak high": "top left",
+                               "Peak low": "bottom center", "Highest minimum": "bottom right",
+                               "Energy low / Energy balance": "bottom right"}
+            for candidate in unique_candidates.values():
+                positions = dict(zip(["x", "y", "z"][:dimension], [[candidate[column]] for column in axes]))
+                chart.add_trace(trace_type(
+                    **positions, mode="markers+text", name=candidate["candidate"],
+                    text=[candidate["candidate"]], textposition=label_positions.get(candidate["candidate"], "top center"),
+                    textfont={"size": 10, "color": candidate["color"]},
+                    marker={"size": 6 if dimension == 3 else 10, "color": candidate["color"]},
+                    customdata=[[candidate[column] for column in hover_columns]], hovertemplate=hover_template,
+                ))
+        positions = dict(zip(["x", "y", "z"][:dimension], [[chosen[column]] for column in axes]))
+        chart.add_trace(trace_type(
+            **positions, mode="markers", name="Inspected week",
+            marker={"size": 8 if dimension == 3 else 13, "color": "#151b27", "symbol": "diamond"},
+            customdata=[[chosen[column] for column in hover_columns]], hovertemplate=hover_template,
+        ))
+        chart.update_layout(template="plotly_white", showlegend=False,
+                            margin={"l": 65, "r": 25, "t": 45, "b": 60},
+                            height=600 if dimension == 3 else 440,
+                            uirevision="toy-weekly", hoverlabel={"namelength": -1})
+        if dimension == 3:
+            chart.update_layout(scene={
+                "xaxis_title": labels[axes[0]], "yaxis_title": labels[axes[1]],
+                "zaxis_title": labels[axes[2]], "aspectmode": "cube",
+                "camera": {"eye": {"x": 1.5, "y": 1.6, "z": 1.1}},
+            })
+        else:
+            chart.update_xaxes(title=labels[axes[0]], zeroline=True, zerolinecolor="#bfc5cd")
+            chart.update_yaxes(title=labels[axes[1]], zeroline=True, zerolinecolor="#bfc5cd")
+        return chart
+
+    return (scatter_view,)
+
+
+@app.cell(hide_code=True)
+def weekly_three_dimensions(
+    axis_labels,
+    candidates,
+    inspected_week,
+    metric_columns,
+    mo,
+    scatter_view,
+    show_candidates,
+    weeks,
+):
+    figure_3d = scatter_view(weeks, candidates, inspected_week, metric_columns, axis_labels, show_candidates.value, dimension=3)
+    figure_3d.update_layout(title="Weekly energy, peak, and minimum net load")
+    mo.vstack([mo.md("## Three dimensions\nDrag to rotate; scroll to zoom. The black diamond is the inspected week."), mo.as_html(figure_3d)])
+    return
+
+
+@app.cell(hide_code=True)
+def weekly_energy_peak(
+    axis_labels,
+    candidates,
+    inspected_week,
+    mo,
+    scatter_view,
+    show_candidates,
+    weeks,
+):
+    figure_energy_peak = scatter_view(weeks, candidates, inspected_week, ["net_energy_gwh", "peak_net_load_mw"], axis_labels, show_candidates.value)
+    figure_energy_peak.update_layout(title="Net energy versus peak net load")
+    mo.vstack([mo.md("## Pairwise projections"), mo.ui.plotly(figure_energy_peak)])
+    return
+
+
+@app.cell(hide_code=True)
+def weekly_energy_minimum(
+    axis_labels,
+    candidates,
+    inspected_week,
+    mo,
+    scatter_view,
+    show_candidates,
+    weeks,
+):
+    figure_energy_minimum = scatter_view(weeks, candidates, inspected_week, ["net_energy_gwh", "minimum_net_load_mw"], axis_labels, show_candidates.value)
+    figure_energy_minimum.update_layout(title="Net energy versus minimum net load")
+    mo.ui.plotly(figure_energy_minimum)
+    return
+
+
+@app.cell(hide_code=True)
+def weekly_peak_minimum(
+    axis_labels,
+    candidates,
+    inspected_week,
+    mo,
+    scatter_view,
+    show_candidates,
+    weeks,
+):
+    figure_peak_minimum = scatter_view(weeks, candidates, inspected_week, ["peak_net_load_mw", "minimum_net_load_mw"], axis_labels, show_candidates.value)
+    figure_peak_minimum.update_layout(title="Peak versus minimum net load")
+    mo.ui.plotly(figure_peak_minimum)
+    return
+
+
+@app.cell(hide_code=True)
+def weekly_candidate_table(axis_labels, candidates, metric_columns, mo, weeks):
+    candidate_table = candidates[["candidate", "dates", *metric_columns, "positive_net_hours"]].rename(columns={
+        **axis_labels, "candidate": "Candidate", "dates": "2025 interval", "positive_net_hours": "Positive-net hours",
+    })
+    mo.vstack([
+        mo.md("## Candidate periods\nExtrema and medians are selected separately for each metric. Earliest start breaks ties."),
+        mo.ui.table(candidate_table.round(3), selection=None),
+        mo.accordion({"All 359 windows": mo.ui.table(weeks[["dates", *metric_columns, "positive_net_hours"]].rename(columns=axis_labels).round(3), selection=None)}),
+    ])
+    return
 
 
 @app.cell(hide_code=True)

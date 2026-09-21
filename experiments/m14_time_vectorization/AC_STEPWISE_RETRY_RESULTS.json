@@ -1,0 +1,166 @@
+{
+  "execution_metadata": {
+    "source_sha256": "45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f",
+    "start": "2021-12-22 00:00:00-08:00",
+    "end": "2021-12-28 23:00:00-08:00",
+    "horizons": [
+      168
+    ],
+    "initialization": "Case118 complete_flat_start + assign_start, using variable.value; no shifted start needed for independent full-horizon comparisons.",
+    "solver_options": {
+      "ac": {
+        "max_iter": 1000,
+        "max_cpu_time": 1800.0
+      }
+    },
+    "worker_wall_limit_seconds": 1800,
+    "versions": {
+      "cvxpy": "1.9.2",
+      "numpy": "2.4.6",
+      "pandas": "3.0.3",
+      "cyipopt": "1.7.0",
+      "clarabel": "0.11.1"
+    },
+    "metadata_capture": {
+      "timing": "before_execution",
+      "created_utc": "2026-09-20T18:01:17.484168+00:00"
+    },
+    "formulation": "ac",
+    "assembly": "stepwise",
+    "purpose": "One owner-requested longer-budget retry; initial timeout retained unchanged.",
+    "source_hashes": {
+      "src/cvxopf/_component_assembly.py": "0b9e6a07431c8244e7de4b9646d4852d59132413f4ed2c9cc59cc35a359af39f",
+      "src/cvxopf/hvdc.py": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+      "src/cvxopf/results.py": "26b830cd7fb480755e25099b4ea0e857a75958e187e2a449c5f1c51d98e1c7dd",
+      "src/cvxopf/hierarchical.py": "cda0828a2f6f6f237aae04e8c38b8062da97ad00ac0e00efbb96aeab7178bf18",
+      "src/cvxopf/__init__.py": "ea80f0c9aa1dc636472e4ea6a6c8b5e43ef7ce591509acbf06ae07e80473a3d7",
+      "src/cvxopf/_component_adapters.py": "bd4e934df73d6cf82c9d460b40d57dc82924a6437f6f317752908ab68650a432",
+      "src/cvxopf/_component_adapter.py": "f9edb5062c0fecaef1483bb60df9ba192685e9c3eb03f8b190da6e94d68f3aff",
+      "src/cvxopf/generator.py": "0ec996c2f3ec8c772b097bac303c650103281bbcc18261b702dcfd2ad16de8ab",
+      "src/cvxopf/characterization.py": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+      "src/cvxopf/problem.py": "835bf03bdf854dfa11089b4b36c9a07aef88234b8f13fe53400c0ad122e1b413",
+      "src/cvxopf/singlenode_dc_problem.py": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+      "src/cvxopf/storage.py": "6964dbe9168926128b605575566ec3fd99217271350a96de19fef66acabca871",
+      "src/cvxopf/network.py": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+      "src/cvxopf/cost.py": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+      "src/cvxopf/load.py": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+      "src/cvxopf/dc_problem.py": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+      "src/cvxopf/_temporal_assembly.py": "1d918ddbc4c6d623283c210fbbfe9f87cbfff183aa829c3db81d40955e8be388",
+      "src/cvxopf/_hierarchical_solver.py": "7337a22091e733afe4ccf4c234b3ea1e86e5562f474a16c3e803aea1920d88ea",
+      "src/cvxopf/ac_problem.py": "8b821436529c5e8e3be7b17962e0650e9066cd3cf6ea9de5343b2e38b790fe3c",
+      "src/cvxopf/data.py": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+      "src/cvxopf/nondispatchable.py": "8d7e0d503df5d1cc7864354e73b01370d0903d23dbbbf6faffbe73dfc74aaa1b",
+      "experiments/m14_time_vectorization/compare_network_vectorization.py": "ef10e11070940beb3a8e0ca4e78ac03bebb973dd0de689b7c12183f3e221b166",
+      "experiments/m14_time_vectorization/run_m14d_singlenode.py": "642b68984b8d8cd86f702ec499317d2b8137a13ec7c04c4a2cff8d678455e688",
+      "experiments/battery_terminal/scenario.py": "7a39161877892169c393736854e04fed0b592e1c90f4ecc8ae8bda67e449b702",
+      "experiments/battery_terminal/devices.py": "1b6536199765af25a8e1e036a9d26d3193a07dcc36fcba364eb5aa925262e52e",
+      "experiments/case118_annual_hierarchy/streaming_runner.py": "f28f4f65b110bce316724ca76ec5f963f6480a92a15ab6ea0da0e0729ab59053"
+    },
+    "worker_sha256": "b4f59f5bf9f8a937908ebece884ab33d1f8d24d60e3b167b45db67da4f59e472",
+    "supervisor_sha256": "4487d5362f6a78aaf23785c777ce6e0f952d55c2bf0eee1b2077728c04a36457",
+    "original_artifact_hashes": {
+      "lossy_dc_vectorized_168.json": "bc41e556e236ca3e9d985ea7a69cada5f1f48b480297c1a60f1f8896142c09d7",
+      "ac_stepwise_168_timeout.json": "f8fa8bece421f3591a1229875fb382c9806449e5165685ef5f3eff0fc59f71ff",
+      "lossy_dc_vectorized_3.json": "1a3163d0115276c5b435f81371457c348cfb6316042251a0a6c9aa38470f245a",
+      "lossy_dc_vectorized_24.json": "bc7e1d418bb80619618a870eea27906b249732727e64e878db5df553c704dd88",
+      "ac_stepwise_3.json": "248483048ca9701306e09635f1e31eaf4729ebfe619f9df2a3055d1c0158ccfb",
+      "ac_vectorized_168.json": "3832cf3f9512468267a2936aec54c1d896dc7a8c27a036484f7e1401a01282a1",
+      "execution_metadata.json": "f27f68ab9cd28a5c8f618ada77e4ccfe085a646481e5d66de8b19d0273469fe6",
+      "lossy_dc_stepwise_168.json": "e114d94a5a949cb5e7eadaf9a52cf996afdea8404fcb34a99640fcf3200a5cd0",
+      "lossy_dc_stepwise_24.json": "2adf34236e80b3a8d6ed10743a1822f35d445734018ed5dbc83f6f85f3ebc69d",
+      "ac_stepwise_24.json": "f02857c89d039b117dc9bdadd2f5bf8fe31c1e1f9701daa2026e3de7e0a174be",
+      "ac_vectorized_24.json": "4d37aa36eea9d4e03fa7870892bd971095f8d6d37a5beb3260edbce4a3ad3618",
+      "ac_stepwise_168.json": "f8fa8bece421f3591a1229875fb382c9806449e5165685ef5f3eff0fc59f71ff",
+      "lossy_dc_stepwise_3.json": "37201d41faad4a8a897b0c0cf5e7ce7c159914221f2c93afc6cd6c4093351477",
+      "execution_source_hashes.json": "e96839bdc5045ba014304c33e8fb7c92c942a08b2b3a9051eececf2d677dd43d",
+      "ac_vectorized_3.json": "e73fc6d51f50d25b230e2628bb64d5abacfe68bcbdf00052cd518ee3cdf256bc"
+    },
+    "thread_environment": {
+      "OMP_NUM_THREADS": null,
+      "OPENBLAS_NUM_THREADS": null,
+      "MKL_NUM_THREADS": null
+    }
+  },
+  "scope": "One 1800-second stepwise AC retry compared with the retained original vectorized solve; no other solves.",
+  "timing_caveat": "Different time budgets and execution dates; descriptive single-run timing comparison.",
+  "original_comparison_record_sha256": "963e758c19ce9e0b1d6d6c7bdce4628e2647266c4998ba7f6f12db58477e95dd",
+  "retry": {
+    "formulation": "ac",
+    "assembly": "stepwise",
+    "horizon": 168,
+    "status": "wall_timeout",
+    "wall_limit_seconds": 1800,
+    "solver_status": null,
+    "supervised_wall_seconds": 1800.407509333978
+  },
+  "retained_vectorized": {
+    "formulation": "ac",
+    "assembly": "vectorized",
+    "horizon": 168,
+    "backend": "DNLP_IPOPT",
+    "seconds": {
+      "construction": 0.01727983297314495,
+      "initialization": 0.0014894999912939966,
+      "reductions": 0.03769279201515019,
+      "derivative_oracles": 1.671985000022687,
+      "solver": 115.02745183400111,
+      "canonicalization": 1.7096777920378372,
+      "interface_overhead": 0.011594290961511433,
+      "extraction": 0.00017416698392480612,
+      "total": 116.76768291695043
+    },
+    "peak_process_rss_mib": 830.5,
+    "status": "optimal",
+    "objective": 341477.7114444267,
+    "audit": {
+      "residuals": {
+        "storage_recurrence_mwh": 1.2789769243681803e-13,
+        "terminal_soc_mwh": 0.0,
+        "storage_energy_mwh": 0.0,
+        "generator_p_mw": 0.0,
+        "renewable_availability_mw": 7.304432415531905e-16,
+        "real_balance_mw": 7.030948836472817e-07,
+        "reactive_balance_mvar": 9.317715949919148e-07,
+        "branch_reporting_mva": 1.0115576610337543e-06,
+        "branch_limit_mva": 6.721450063196244e-10,
+        "voltage_pu": 0.0,
+        "generator_q_mvar": 0.0,
+        "storage_rating_mva": 0.0,
+        "renewable_rating_mva": 0.0,
+        "objective_absolute": 3.3509195418446325e-11
+      },
+      "accepted": true,
+      "generation_cost": 341335.2964155456,
+      "cycling_cost": 142.41502888101527,
+      "loss_cost": 0
+    },
+    "graph": {
+      "variable_object_count": 17,
+      "constraint_object_count": 94,
+      "parameter_object_count": 3,
+      "scalar_variables": 25033,
+      "scalar_equalities": 21506,
+      "scalar_inequalities": 9072
+    }
+  },
+  "memory_sampling": {
+    "interval_seconds": 30,
+    "sample_count": 60,
+    "maximum_sample": {
+      "elapsed_seconds": 480.4530582500156,
+      "rss_mib": 11098.078125
+    },
+    "note": "Maximum sampled RSS, not measured process peak RSS."
+  },
+  "artifact_hashes": {
+    "outputs/network_vectorization/stepwise_retry_2026-09-20/ac_stepwise_168.json": "8c2338a9136e4d93d6e09f41de26849d325390a5d7367686fd39a62cb6925ef8",
+    "outputs/network_vectorization/stepwise_retry_2026-09-20/execution_metadata.json": "770765dc6fadab5aba59864db4e898deeebc4b0e94ab438fd48384cc1288e21b",
+    "outputs/network_vectorization/stepwise_retry_2026-09-20/runner.py": "b4f59f5bf9f8a937908ebece884ab33d1f8d24d60e3b167b45db67da4f59e472",
+    "outputs/network_vectorization/stepwise_retry_2026-09-20/process_samples.jsonl": "2e11b517754315f6b020900e0a1e772e5cc02012bb4d932eed5162dd95081516",
+    "outputs/network_vectorization/stepwise_retry_2026-09-20/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "outputs/network_vectorization/run_stepwise_retry.py": "4487d5362f6a78aaf23785c777ce6e0f952d55c2bf0eee1b2077728c04a36457",
+    "outputs/network_vectorization/ac_vectorized_168.json": "3832cf3f9512468267a2936aec54c1d896dc7a8c27a036484f7e1401a01282a1",
+    "outputs/network_vectorization/analyze_stepwise_retry.py": "4b81ee87612759d8c5454a4d4387310c5b02f0883b1fa59eec3bc554a8c091e4"
+  },
+  "graph_checks": []
+}

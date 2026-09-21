@@ -505,6 +505,17 @@ def ac_operating_constraints(
     return constraints
 
 
+def vectorized_ac_operating_constraints(storage_units, b, b_q, soc) -> list:
+    """Time-last inverter circles and post-step energy bounds."""
+    data = _storage_static_data(storage_units)
+    return [
+        cp.square(b) + cp.square(b_q)
+        <= data["storage_apparent_power_rating"][:, None] ** 2,
+        soc[:, 1:] >= 0,
+        soc[:, 1:] <= data["storage_capacity"][:, None],
+    ]
+
+
 def dc_operating_constraints(
     storage_units: list,
     b: cp.Variable,

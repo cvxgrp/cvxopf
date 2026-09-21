@@ -9,9 +9,13 @@ validate the realized mapping in Stage A.
 **Current handoff:** the analytical study and selected Stage 0c follow-ups are
 complete and committed. The annual S5 closeout and owner decision to omit S6
 are recorded in `3513284`; the Stage 0c findings are recorded in `0f3b392`.
-The toy horizon study remains deferred. The remaining transition steps are
-the user's PR merge, local `main` update and verification, fresh Tracy branch,
-and authorization to begin Stage A. No Tracy input generation has begun.
+The toy horizon study remains deferred. The owner has since reported the
+`big-experiment` merge; M14 closeout and an additional independent Case118
+vectorization replay followed on `m14-time-vectorization`. Record the verified
+merged baseline and fresh Tracy branch at the transition gate below before
+beginning Stage A. No Tracy Case118 input generation has begun. The replay
+motivates the runner-policy qualification now planned in Stage D; it does not
+select the annual Tracy runner policy or authorize numerical execution.
 
 ## Execution order
 
@@ -36,9 +40,12 @@ and authorization to begin Stage A. No Tracy input generation has begun.
    comparison and mapping before any Tracy study solves.
 7. Run targeted week-to-month DC studies selected using predicted congestion
    and difficult operating periods; review them before an annual DC launch.
-8. Solve/audit the full 8,760-hour DC problem and obtain **user review 2** of
-   the data-generation choices in light of the resulting operation.
-9. Only then qualify Tracy AC and seek approval for annual AC execution.
+8. Solve/audit both full 8,760-hour DC problems—single-node and lossy-network
+   DC—and obtain **user review 2** of their comparison and the data-generation
+   choices in light of the resulting operation.
+9. Only then qualify Tracy AC, compare runner strategies on frozen windows
+   and short causal rollouts in Stage D, and seek approval for annual AC
+   execution with the selected policy.
 
 Both old-study commits and the toy-follow-up disposition must precede the
 Stage 0c PR closeout and fresh-branch gate. This Tracy plan may merge with
@@ -513,7 +520,7 @@ year, scale, counts, seed, or storage choices.
 | Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
 | Economics | Apply the starting generator rule and default battery regularization above. Keep both curvature and battery weight configurable; select annual settings from shorter-study evidence. Explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
 | Load shedding | Provide the approved all-load option through existing `Load` settings. Review its enabled/disabled setting and explicit penalties before solving, and check its intended last-resort behavior alongside the generator/storage cost comparisons. |
-| Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy and recovery machinery. Reconsider the experimental scope and runner requirements at the post-0a design pause and after selected toy follow-ups; confirm the Tracy policy before its execution gates. |
+| Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy, two-primary/one-helper execution, and full recovery ladder. Stage D compares vectorized and stepwise AC assembly and alternative starts before selecting helper order, launch delay, and budgets for Tracy. Neither historical timings nor M14 replay results freeze the annual policy. |
 
 The intended primary study seeks full load service with rated branches and
 voltage/device constraints, with the explicit shedding option above available
@@ -930,7 +937,7 @@ sanity check passes; DC-relevant operating choices are resolved; and the owner
 approves this concrete realization and a bounded targeted-DC protocol. A
 matching digest alone does not establish source fidelity.
 
-### B. Targeted week-to-month DC studies before the annual DC solve
+### B. Targeted week-to-month DC studies before the annual DC solves
 
 Do not jump from initial data generation to an 8,760-hour DC solve. Use the
 frozen input series, realized siting, branch ratings/topology, and available
@@ -989,25 +996,50 @@ rating, or source changes.
 
 Exit: the owner receives the targeted-DC findings, the curvature/regularization
 sensitivity and proposed annual economic settings, and any other revisions,
-plus a full-year DC runtime/resource estimate. Obtain explicit approval for
-the annual DC solve only after the windows are reviewed. A changed fixture
-must return through the affected input-review and qualification checks.
+plus a full-year runtime/resource estimate covering both DC formulations.
+Obtain explicit approval for the annual DC solves only after the windows are
+reviewed. A changed fixture must return through the affected input-review and
+qualification checks.
 
-### C. Full 8,760-hour DC solve and user review 2
+### C. Single-node and lossy-network 8,760-hour DC solves and user review 2
 
-After the targeted-DC gate, solve and physically audit the new annual convex
-outer problem. Persist its full primal trajectory, complete analysis, source
-identity, and SOC signposts. Inspect annual boundary conditions and continuity,
-not just successful solver status.
+After the targeted-DC gate, run both **vectorized, full-year T=8760** problems:
 
-**User review 2 is an explicit stop after the Tracy annual DC solve, before any
-Tracy AC solve.** Re-present the data-generation choices with their full-year DC
-consequences:
+- `singlenode_dc`: the copper-plate comparison with aggregate power balance.
+- `lossy_dc`: the rated network-flow model used for the hierarchical outer plan.
+
+Use the same frozen Tracy 2021 hours, resource identities and capacities,
+available renewable channels, costs, shedding policy, time step, and per-device
+initial/terminal SOC policy. Preserve the individual generators, renewable
+devices, and batteries when collapsing network balance; do not replace them
+with a differently sized or priced aggregate fleet. The intentional model
+differences are network constraints and the lossy-DC loss proxy and its cost.
+Keep those objective components explicit in the comparison.
+
+Audit each solution against its own formulation and persist both full primal
+trajectories, complete analyses, source identities, and SOC trajectories under
+distinct formulation labels. Inspect annual boundary conditions and continuity,
+not just successful solver status. Compare annual/monthly costs by component,
+dispatch, curtailment, load service, battery throughput and SOC, along with
+construction, canonicalization, solver, extraction, total time, and peak memory.
+Report network congestion and loss-proxy quantities for lossy DC only;
+single-node feasibility does not establish network deliverability. Neither
+DC result is an AC solution or an asserted bound on the AC objective or SOC.
+
+The lossy-network DC result remains the source of AC SOC signposts and shard
+boundary states. The single-node annual result is a required comparison;
+using its signposts for a separate AC rollout would be an additional experiment.
+
+**User review 2 is an explicit stop after both Tracy annual DC solves, before
+any Tracy AC solve.** Re-present the data-generation choices with their
+full-year DC consequences:
 
 - The exact reviewed final-input heatmaps/tables and proof that those arrays
   reached the solved model; make any approved changes since review 1 visible.
-- Hours-by-days output heatmaps for dispatch, renewable use/curtailment, storage
-  charging/discharging and SOC as useful, distinctly labeled as outputs.
+- Comparable hours-by-days output heatmaps for both formulations: dispatch,
+  renewable use/curtailment, storage charging/discharging and SOC as useful,
+  distinctly labeled as outputs. Include aligned trajectory and difference
+  plots for inspecting where network constraints change operation.
 - Annual/monthly balance and cost summaries; congestion locations, severity,
   and duration; losses; dispatchable shortfalls and storage response; boundary
   effects and residual audits; observed computational difficulty. Include any
@@ -1019,14 +1051,15 @@ consequences:
 
 Ask the owner to retain or revise the data-generation/configuration choices
 and separately approve a bounded AC qualification. Record the decision against
-the annual result and fixture. Do not treat completed DC execution as automatic
-permission for AC. If the configuration changes, regenerate affected inputs
+both annual results and the fixture. Do not treat completed DC execution as
+automatic permission for AC. If the configuration changes, regenerate affected inputs
 and results rather than reusing stale signposts or concealing the revision.
 
-Exit: accepted annual DC evidence and explicit owner acceptance of the
-configuration in light of it. Only then derive the new shard boundaries and
-states using the reviewed rule for the approved trajectory; never copy old
-states or assume old boundaries remain appropriate.
+Exit: accepted annual evidence for both DC formulations and explicit owner
+acceptance of the configuration in light of their comparison. Only then derive
+the new shard boundaries and states using the reviewed rule for the approved
+lossy-network DC trajectory; never copy old states or assume old boundaries
+remain appropriate.
 
 ### D. Bounded AC qualification, separately authorized after user review 2
 
@@ -1060,20 +1093,106 @@ behavior. Bring a documented targeted revision; do not quietly redraw sites,
 retune source channels, expand budgets, or jump to larger storage. The six-hour
 storage sensitivity is the declared next size, not a universal remedy.
 
-Exit: independently reviewed qualification evidence plus a credible annual
-runtime/resource estimate and unresolved-risk summary. Representative success
-screens configurations; it does not establish full-year AC feasibility.
+#### Runner-policy tests within the qualification budget
+
+The [independent Case118 replay](../experiments/case118_vectorization_replay/REPORT.md)
+provides motivation, not Tracy calibration. Of 120 historical primary winners,
+108 had faster vectorized winner solve phases and 12 were slower; the
+population-weighted mean improved from 55.21 to 43.47 seconds, while the
+estimated 99th percentile increased from 328.88 to 499.01 seconds. Five of six
+historical helper winners became primary wins. These are historical
+comparisons on the toy fixture, with different execution ordering and host
+conditions. They neither establish the cause of individual slowdowns nor show
+which helper would best rescue a new Tracy window.
+
+Test two distinct choices: **time assembly** (vectorized or stepwise AC) and
+**initialization** (the primary physical start or an existing ladder start).
+Both assemblies solve the same AC model through DNLP/IPOPT; this is not a
+change of network physics or a CPP/SCIPY comparison. Reuse the existing AC
+initialization helpers and physical acceptance audit. Do not add reactive
+regularization or change costs to tune runner performance.
+
+1. **Establish a Tracy baseline and retain replayable requests.** Once the
+   Case118 mapping, annual DC plan, and AC qualification are approved, use
+   vectorized primaries with the existing ladder as the initial candidate.
+   Retain complete requests, named physical starts, targets, results, and
+   failed or timed-out attempts from the qualification windows. Cover ordinary
+   operation as well as the operating regimes selected above; slow cases
+   alone cannot estimate the cost of launching helpers during normal work.
+   Freeze a representative comparison set and a separately labeled set of
+   difficult cases discovered during qualification. Reserve windows for
+   validation that are not used to choose the policy. Exact counts and total
+   compute limits belong in the pre-execution protocol.
+2. **Compare helper choices on identical independent requests.** Compare a
+   vectorized alternative start from the existing ladder with a stepwise
+   solve from the primary's same physical start. Retain the vectorized primary
+   as the reference. This measures initialization diversity and assembly
+   diversity separately; add a stepwise alternative-start arm only if the
+   first comparison leaves a material interaction unresolved. Match physical
+   initial values, SoC boundaries, costs, solver settings, and acceptance
+   tolerances by device identity. Canonical coordinate order and auxiliary
+   variables need not be identical. Feed no new result into another sampled
+   request. Balance execution order and repeat a small declared subset to
+   gauge timing variability under recorded host and cooling conditions.
+3. **Select and exercise a small set of race policies.** Use those paired
+   results to choose candidate helper ordering and launch delays, keeping the
+   existing 300-second delay and ladder as the reference. A stepwise helper
+   is a candidate, not a predetermined addition. Compare candidates with the
+   same two-primary/one-shared-helper resource allocation, preserving the
+   remaining recovery path and auditing before a winner is accepted. Check
+   actual shared-helper contention, cancellation/reaping, memory use, and
+   checkpoint/resume. Offline timing replay can screen candidates, but does
+   not replace concurrent measurements. Freeze the selected candidate before
+   evaluating the reserved validation windows.
+4. **Validate short causal rollouts before annual execution.** Run the
+   baseline and selected candidate over common bounded intervals, each from
+   the same reviewed boundary state and DC signposts. Within each rollout,
+   feed its own accepted action and shifted initialization forward using the
+   annual controller semantics. Close objectives can accompany different
+   battery and reactive trajectories, changing subsequent solve difficulty.
+   Report this divergence and its physical/economic effects rather than
+   treating downstream windows as identical paired optimization problems.
+   Include the shard-join and restart checks already required above.
+
+Judge policies by accepted-window throughput, typical and tail window
+latency, unresolved windows, total worker time (including losing attempts),
+helper occupancy, and memory, alongside objective and trajectory differences
+and physical audits. Record construction, canonicalization, native solver,
+extraction, and total timing separately where instrumentation permits; label
+combined phases where it does not. Distinguish winner latency from completion
+including loser cleanup. Retain timeouts as censored observations and race
+cancellations as cancellations, not completed solve times or missing data.
+Keep representative-set summaries separate from deliberately enriched hard
+cases, and show sample counts and uncertainty for tail estimates.
+
+Before launching this work, freeze sample sizes, candidate count, per-attempt
+and aggregate budgets, repeat counts, and stopping rules in the bounded
+protocol. The original uncapped-primary policy is historical context, not an
+unlimited qualification budget. Prefer the simplest policy with a defensible
+throughput/tail improvement and acceptable physical and economic outcomes;
+if results are inconclusive, retain the baseline and state the limitation.
+Present the chosen assembly, helper order, delay, recovery limits, measured
+resource envelope, and validation evidence for the annual launch decision.
+
+Exit: independently reviewed physical and runner-policy qualification evidence
+plus a credible annual runtime/resource range and unresolved-risk summary.
+Short causal rollouts inform that range; the independent toy replay's
+1.75 windows/minute is not a Tracy annual throughput forecast. Representative
+success screens configurations; it does not establish full-year AC feasibility.
 
 ### E. Annual AC execution, after an explicit launch decision
 
 Reuse the vectorized outer builder, controller, checkpoint/archive machinery,
-supervision, and reviewed recovery policy. Do not repeat the full historical
-S0-through-S4b engineering campaign or introduce a new scheduler research
-project as part of this input replacement.
+and supervision with the runner policy selected and reviewed in Stage D.
+Keep that qualification focused on assembly, initialization, and helper
+scheduling within the existing runner. Do not repeat the full historical
+S0-through-S4b engineering campaign or turn this into an open-ended scheduler
+research project.
 
 Create new scenario-bound execution records and authority bound to the already
-accepted Tracy outer dispatch, SOC signposts, and shard states from package C.
-Do not repeat the annual DC solve merely to launch AC. Generate the new AC
+accepted Tracy lossy-network DC outer dispatch, SOC signposts, and shard states
+from package C. Do not repeat either annual DC solve merely to launch AC.
+Generate the new AC
 actions, recovery outcomes, and scientific metrics. No toy-study numerical
 solution or checkpoint becomes part of the Tracy trajectory.
 

@@ -1,4 +1,4 @@
-"""M14a frozen characterization of the legacy temporal graph."""
+"""Frozen characterization of the stepwise temporal graph."""
 
 from contextlib import nullcontext
 from dataclasses import FrozenInstanceError, asdict
@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from cvxopf import build_opf, build_opf_multistep
+import cvxopf.problem as problem_module
 from cvxopf.characterization import (
     NamedShape,
     characterize_convex_canonicalization,
@@ -100,14 +101,6 @@ def test_temporal_selector_is_closed_and_vectorized_scope_is_explicit():
             T=1,
             temporal_assembly="other",  # type: ignore[arg-type]
         )
-    with pytest.raises(NotImplementedError, match="only.*lossy_dc"):
-        build_opf_multistep(
-            case9(),
-            active,
-            reactive,
-            T=1,
-            temporal_assembly="vectorized",
-        )
 
     build = build_opf_multistep(
         case9(),
@@ -125,6 +118,22 @@ def test_single_step_build_records_stepwise_provenance():
     build = build_opf(case9(), formulation="lossy_dc")
     assert build.temporal_assembly == "stepwise"
     assert characterize_source_graph(build).horizon is None
+
+
+@pytest.mark.parametrize('formulation', ['ac', 'lossy_dc', 'singlenode_dc'])
+def test_unregistered_vectorized_builder_does_not_fall_back_to_stepwise(
+    monkeypatch, formulation,
+):
+    active, reactive = _frames(1)
+    reactive = reactive if formulation == 'ac' else None
+    builders = problem_module._get_vectorized_multistep_builders()
+    del builders[formulation]
+    monkeypatch.setattr(problem_module, '_get_vectorized_multistep_builders', lambda: builders)
+    with pytest.raises(NotImplementedError, match='registered vectorized formulations'):
+        build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation,
+                            temporal_assembly='vectorized')
+    stepwise = build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation)
+    assert stepwise.temporal_assembly == 'stepwise'
 
 
 @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])

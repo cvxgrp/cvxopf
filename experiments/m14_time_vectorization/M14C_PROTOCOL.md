@@ -2,9 +2,16 @@
 
 ## Status and authority
 
-M14c is open. It implements the first production formulation on the completed
-M14b time-last assembly contract and is the remaining blocker for resuming the
-Case118 annual S4 outer solve. The retained stepwise/CPP formulation remains
+**M14c is complete.** Its vectorized lossy-DC implementation, conditioned
+24/168/720-hour prefix ladder, representation comparison and certificate-backed
+disposition, and accepted 8,760-hour Case118 S4 solve are complete. The annual
+solve from `ab2375cddcb4823a47610123ae2b0d8cd8c8f33d` closes the M14c scaling
+gate; its promoted record is `../case118_annual_hierarchy/S4_RESULTS.json`.
+The completed Case118 study and M14c are merged into `main`. M14d single-node
+DC and AC vectorization remain open in the milestone plan.
+
+The execution sequence and gates below are retained as the protocol under
+which M14c completed. The retained stepwise/CPP formulation remains
 available and remains the default; callers select the new path explicitly with
 `temporal_assembly="vectorized"`.
 

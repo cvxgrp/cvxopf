@@ -1,8 +1,7 @@
-"""Branch-local gates for the M14c vectorized lossy-DC formulation."""
+"""Correctness and compatibility of vectorized lossy-DC dispatch."""
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from typing import Any
 import warnings
 
@@ -194,7 +193,21 @@ def test_constant_only_generator_cost_is_broadcast_over_horizon():
     )
 
 
-def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypatch):
+@pytest.mark.parametrize("copy_constants", [False, True])
+def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(
+    monkeypatch, copy_constants,
+):
+    if copy_constants:
+        # Exercise dependency stacks that copy arrays at the Constant boundary.
+        from cvxpy.interface.numpy_interface.ndarray_interface import NDArrayInterface
+
+        original_conversion = NDArrayInterface.const_to_matrix
+
+        def copy_constant(self, value, convert_scalars=False):
+            return original_conversion(self, value, convert_scalars).copy()
+
+        monkeypatch.setattr(NDArrayInterface, "const_to_matrix", copy_constant)
+
     steps = 100
     loads = [
         Load(
@@ -225,7 +238,7 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
         )
     ]
     observed_hvdc_box_shapes: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    observed_load_eligible: list[tuple[tuple[int, ...], bool]] = []
+    observed_load_eligible: list[np.ndarray] = []
     observed_load_cost_shapes: list[tuple[int, ...]] = []
     original_coefficients = hvdc_module.loss_branch_coefficients
     original_load_channels = load_module.served_and_shed_expressions
@@ -250,7 +263,7 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
         **kwargs,
     ):
         eligible = np.asarray(p_eligible_mw.value)
-        observed_load_eligible.append((eligible.shape, eligible.flags.owndata))
+        observed_load_eligible.append(eligible)
         return original_load_channels(
             p_load_mw,
             q_load_mvar,
@@ -313,7 +326,11 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
     assert not pd_series.flags.owndata
     assert pd_series.strides[0] == 0
     assert observed_hvdc_box_shapes == [((1,), (1,))]
-    assert observed_load_eligible == [((1, 1), False)]
+    # CVXPY may copy the compact constant. The contract is one static column,
+    # not its NumPy ownership flag: copying (nload, 1) does not scale with T.
+    assert len(observed_load_eligible) == 1
+    assert observed_load_eligible[0].shape == (1, 1)
+    np.testing.assert_array_equal(observed_load_eligible[0], [[90.0]])
     assert observed_load_cost_shapes == [(1, 1)]
     assert {parameter.name() for parameter in build.prob.parameters()}.isdisjoint(
         {
@@ -323,14 +340,19 @@ def test_static_fallbacks_avoid_horizon_owned_parameters_and_constants(monkeypat
             "load_q_mvar",
         }
     )
-    assert np.shares_memory(
-        np.asarray(build.expressions["p_load"].value),
-        np.asarray(build.data["load_p_source_mw"]),
-    )
-    assert np.shares_memory(
-        np.asarray(build.expressions["q_load"].value),
-        np.asarray(build.data["load_q_source_mvar"]),
-    )
+    for expression_name, source_name in (
+        ("p_load", "load_p_source_mw"),
+        ("q_load", "load_q_source_mvar"),
+    ):
+        expression = build.expressions[expression_name]
+        source = np.asarray(build.data[source_name])
+        # A compact leaf may be copied, but must never store a full horizon.
+        assert [constant.shape for constant in expression.constants()] == [(1, 1)]
+        values = np.asarray(expression.value)
+        np.testing.assert_array_equal(
+            values, np.broadcast_to(source[:, None], (1, steps)),
+        )
+        assert values.strides[-1] == 0
     for name in ("load_shed_fraction", "p_nd", "p_hvdc_in"):
         bounds = build.variables[name].attributes["bounds"]
         assert bounds is not None
@@ -740,22 +762,6 @@ def test_partial_unusable_primal_retains_stable_production_schema():
     assert step_results["objective"] == pytest.approx(
         vector_results["objective"], abs=ATOL
     )
-
-
-@pytest.mark.parametrize("formulation", ["ac", "singlenode_dc"])
-def test_unqualified_vectorized_formulations_are_rejected(formulation: str):
-    active, reactive = _legacy_frames(1)
-    context = nullcontext()
-    with context:
-        with pytest.raises(NotImplementedError, match="only.*lossy_dc"):
-            build_opf_multistep(
-                case9(),
-                active,
-                reactive,
-                T=1,
-                formulation=formulation,
-                temporal_assembly="vectorized",
-            )
 
 
 def test_vectorized_solve_rejects_conflicting_canonicalization_backend():

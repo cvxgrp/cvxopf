@@ -64,7 +64,7 @@ def test_profile_source_registry_binds_protocol_runner_and_recursive_package() -
 
 @pytest.mark.skipif(
     not (runner.ROOT / runner.PREFIX_LADDER_OUTPUT_DIRECTORY).is_dir(),
-    reason="local M14c reference execution archive is not distributed with the repository",
+    reason="local Case118 reference execution archive is not distributed with the repository",
 )
 def test_conditioned_reference_chain_is_complete() -> None:
     assert tuple(runner.validate_reference_ladder()) == (24, 168, 720)
@@ -173,7 +173,7 @@ def test_branch_flows_are_residual_gated_but_schema_bound() -> None:
 
 @pytest.mark.skipif(
     not (runner.ROOT / HISTORICAL_REFERENCE).is_dir(),
-    reason="local historical M14c execution archive is not distributed with the repository",
+    reason="local historical Case118 execution archive is not distributed with the repository",
 )
 def test_historical_outer_is_rejected_by_conditioned_fixture() -> None:
     root = runner.ROOT / HISTORICAL_REFERENCE

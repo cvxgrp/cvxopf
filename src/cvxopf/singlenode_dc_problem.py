@@ -69,20 +69,28 @@ from cvxopf._component_adapter import (
     HorizonContext,
     PreparationContext,
     StepContext,
+    VectorizedContext,
 )
 from cvxopf._component_assembly import (
     PreparedComponents,
     aggregate_horizon_contributions,
     aggregate_step_contributions,
+    aggregate_vectorized_contributions,
     assemble_component_horizon,
     assemble_component_step,
+    assemble_component_vectorized,
     integrate_component_stage_costs,
     integrate_stage_cost_rates,
+    integrate_vectorized_component_stage_costs,
+    integrate_vectorized_stage_cost_rate,
     merge_prepared_component_data,
     prepare_components,
     publish_component_expressions,
     publish_component_metadata,
     publish_component_variables,
+    publish_vectorized_component_expressions,
+    publish_vectorized_component_variables,
+    vectorized_component_result_projections,
 )
 from cvxopf._component_adapters import (
     LoadInputs,
@@ -97,6 +105,11 @@ from cvxopf.nondispatchable import (
     NondispatchableUnit,
 )
 from cvxopf.network import BUS_I
+from cvxopf._temporal_assembly import (
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
+    merge_result_projection_registries,
+)
 
 if TYPE_CHECKING:
     from cvxopf.problem import OPFBuild
@@ -169,6 +182,7 @@ def _parse_singlenode_dc_case(
     is_multistep: bool = False,
     loads: list[Load] | None = None,
     load_participates_when_empty: bool = False,
+    nondispatchable_inputs: NondispatchableInputs | None = None,
 ) -> dict:
     """
     Parse a MATPOWER case dict for the single-node DC formulation.
@@ -232,7 +246,7 @@ def _parse_singlenode_dc_case(
         delta=delta,
         is_multistep=is_multistep,
     )
-    if nondispatchable and nd_available_mw is None:
+    if nondispatchable and nd_available_mw is None and nondispatchable_inputs is None:
         nd_available_mw = np.array(
             [[unit.p_available for unit in nondispatchable]],
             dtype=float,
@@ -248,17 +262,18 @@ def _parse_singlenode_dc_case(
         nondispatchable_inputs=(
             None
             if not nondispatchable
-            else NondispatchableInputs(nd_available_mw)
+            else (
+                nondispatchable_inputs
+                if nondispatchable_inputs is not None
+                else NondispatchableInputs(nd_available_mw)
+            )
         ),
         hvdc_links=hvdc or (),
     )
     components = prepare_components(
         requests, "singlenode_dc", preparation
     )
-    load_p_mw = (
-        np.asarray(components.flat_data["load_p_mw"], dtype=float)
-        if load_inputs is None else load_inputs.p_mw[0]
-    )
+    load_p_mw = np.asarray(components.flat_data["_load_p_mw_by_step"], dtype=float)[0]
     Pd_total = float(np.sum(load_p_mw) / baseMVA)
 
     formulation_data = {
@@ -403,6 +418,120 @@ def _build_singlenode_dc_single(
         formulation="singlenode_dc",
         is_convex=True,
         expressions=expressions,
+    )
+
+
+def _build_singlenode_dc_vectorized(
+    case: dict,
+    df_P: pd.DataFrame | None,
+    df_Q: pd.DataFrame | None,
+    T: int,
+    options,
+    coupling_constraints: list,
+    storage: list[StorageUnitIdeal] | None = None,
+    delta: float = 1.0,
+    nondispatchable: list[NondispatchableUnit] | None = None,
+    df_nd: pd.DataFrame | None = None,
+    *,
+    hvdc=None,
+    df_hvdc_min=None,
+    df_hvdc_max=None,
+    generators: list[DispatchableGenerator] | None = None,
+    loads: list[Load] | None = None,
+    load_inputs: LoadInputs,
+    load_participates_when_empty: bool = False,
+    nd_inputs: NondispatchableInputs | None = None,
+    hvdc_inputs=None,
+) -> "OPFBuild":
+    """Build a time-last copper-plate horizon with shared DC device hooks."""
+    from cvxopf.problem import OPFBuild
+
+    d = _parse_singlenode_dc_case(
+        case,
+        options,
+        storage,
+        delta,
+        nondispatchable,
+        generators,
+        hvdc=hvdc,
+        horizon_steps=T,
+        nd_available_mw=(
+            None if nd_inputs is not None or df_nd is None
+            else df_nd.to_numpy(dtype=float)
+        ),
+        nondispatchable_inputs=nd_inputs,
+        load_inputs=load_inputs,
+        is_multistep=True,
+        loads=loads,
+        load_participates_when_empty=load_participates_when_empty,
+    )
+    components: PreparedComponents = d["_components"]
+    context = VectorizedContext(
+        "singlenode_dc", T, delta, d["baseMVA"],
+        d["collapsed_ext_to_int"], DCNetworkState(),
+    )
+    contributions = assemble_component_vectorized(components, context)
+    aggregate = aggregate_vectorized_contributions(contributions)
+    p_net = aggregate.model.injection.p_pu
+    cost_rate = aggregate.model.stage_cost_rate
+    if p_net is None or cost_rate is None:
+        raise RuntimeError(
+            "single-node vectorized assembly requires active injection and cost"
+        )
+    total_cost = integrate_vectorized_stage_cost_rate(cost_rate, delta)
+    component_costs = integrate_vectorized_component_stage_costs(contributions, delta)
+    if aggregate.model.horizon.terminal_cost is not None:
+        total_cost = total_cost + aggregate.model.horizon.terminal_cost
+
+    constraints = [p_net == 0]
+    constraints.extend(aggregate.model.operating_constraints)
+    constraints.extend(aggregate.model.network_constraints)
+    constraints.extend(aggregate.model.horizon.constraints)
+    constraints.extend(coupling_constraints)
+    problem = cp.Problem(cp.Minimize(total_cost), constraints)
+
+    expressions = publish_vectorized_component_expressions(
+        aggregate, {"p_net": p_net, **component_costs},
+    )
+    # Preserve the scalar-per-interval metadata without tiling static input.
+    load_class = components.flat_data["_load_p_temporal_class"]
+    if load_class == "static":
+        total_pd = np.sum(components.flat_data["_load_p_mw_source"]) / d["baseMVA"]
+        pd_series = np.broadcast_to(total_pd, (T,))
+    elif load_class == "interval":
+        pd_series = np.asarray(
+            components.flat_data["_load_p_mw_by_step"]
+        ).sum(axis=1) / d["baseMVA"]
+    else:
+        raise RuntimeError(
+            "vectorized single-node load temporal provenance must be static or interval"
+        )
+    data = publish_component_metadata(components, {
+        "baseMVA": d["baseMVA"],
+        "nb": d["nb"],
+        "source_nb": d["source_nb"],
+        "ext_to_int": d["ext_to_int"],
+        "T": T,
+        "Pd_series": pd_series,
+    })
+    # Internally p_net has one bus axis; the public single-node result is (T,).
+    network_projections = ResultProjectionRegistry(expressions={
+        "p_net": ResultProjectionSpec("p_net", (1,), (), "interval"),
+    })
+    component_projections = vectorized_component_result_projections(
+        aggregate, integrated_component_costs=component_costs,
+    )
+    return OPFBuild(
+        prob=problem,
+        variables=publish_vectorized_component_variables(aggregate),
+        data=data,
+        formulation="singlenode_dc",
+        is_convex=True,
+        expressions=expressions,
+        temporal_assembly="vectorized",
+        result_projections=merge_result_projection_registries(
+            network_projections, component_projections,
+        ),
     )
 
 

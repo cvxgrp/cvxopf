@@ -1,4 +1,4 @@
-"""Structural tests for the M14b horizon-assembly vocabulary."""
+"""Structural contracts for temporal assembly."""
 
 import numpy as np
 import pytest
@@ -353,7 +353,7 @@ def test_result_projection_registry_is_immutable_source_specific_and_mergeable()
         ("singlenode_dc", VariableBoxFamily.DISPATCHABLE_P),
     ],
 )
-def test_m14a1_qualified_convex_boxes_select_leaf(formulation, family):
+def test_qualified_convex_network_boxes_select_leaf(formulation, family):
     decision = box_representation_decision(formulation, family)
 
     assert decision.representation == "leaf"
@@ -372,7 +372,7 @@ def test_existing_ac_voltage_leaf_is_not_blanket_ac_authorization():
     assert active.authority == reactive.authority == "ac_explicit_policy"
 
 
-def test_m14b_qualified_component_boxes_select_leaf():
+def test_qualified_component_boxes_select_leaf():
     expected = {
         VariableBoxFamily.STORAGE_REAL_POWER,
         VariableBoxFamily.STORAGE_SOC,

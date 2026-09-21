@@ -36,6 +36,7 @@ from cvxopf._component_adapter import (
     HorizonContext,
     PreparationContext,
     StepContext,
+    VectorizedContext,
 )
 from cvxopf._component_assembly import (
     PreparedComponents,
@@ -50,6 +51,18 @@ from cvxopf._component_assembly import (
     publish_component_expressions,
     publish_component_metadata,
     publish_component_variables,
+    assemble_component_vectorized,
+    aggregate_vectorized_contributions,
+    integrate_vectorized_stage_cost_rate,
+    integrate_vectorized_component_stage_costs,
+    publish_vectorized_component_expressions,
+    publish_vectorized_component_variables,
+    vectorized_component_result_projections,
+)
+from cvxopf._temporal_assembly import (
+    ResultProjectionRegistry,
+    ResultProjectionSpec,
+    merge_result_projection_registries,
 )
 from cvxopf._component_adapters import (
     HVDCInputs,
@@ -104,19 +117,23 @@ def _terminal_power_expression(
     j: int,
     yii: complex,
     yij: complex,
+    *,
+    vectorized: bool = False,
 ) -> tuple[cp.Expression, cp.Expression]:
     """Construct one oriented branch-terminal complex-power expression."""
-    cosine = cp.nlp.cos(theta[i, 0] - theta[j, 0])
-    sine = cp.nlp.sin(theta[i, 0] - theta[j, 0])
-    self_p = float(yii.real) * cp.square(v[i, 0])
-    self_q = -float(yii.imag) * cp.square(v[i, 0])
-    cross_scale = v[i, 0] * v[j, 0]
-    cross_p = cross_scale * (
+    ti, tj = (theta[i, :], theta[j, :]) if vectorized else (theta[i, 0], theta[j, 0])
+    vi, vj = (v[i, :], v[j, :]) if vectorized else (v[i, 0], v[j, 0])
+    cosine = cp.nlp.cos(ti - tj)
+    sine = cp.nlp.sin(ti - tj)
+    self_p = float(yii.real) * cp.square(vi)
+    self_q = -float(yii.imag) * cp.square(vi)
+    cross_scale = cp.multiply(vi, vj)
+    cross_p = cp.multiply(cross_scale, (
         float(yij.real) * cosine + float(yij.imag) * sine
-    )
-    cross_q = cross_scale * (
+    ))
+    cross_q = cp.multiply(cross_scale, (
         float(yij.real) * sine - float(yij.imag) * cosine
-    )
+    ))
     return self_p + cross_p, self_q + cross_q
 
 
@@ -126,6 +143,7 @@ def _make_branch_terminal_flow(
     admittance: BranchAdmittance,
     *,
     suffix: str,
+    horizon_steps: int | None = None,
 ) -> tuple[_BranchTerminalFlow, list[cp.Constraint]]:
     """Create lifted terminal flows and their authoritative definitions."""
     nl = len(admittance.from_bus)
@@ -139,7 +157,7 @@ def _make_branch_terminal_flow(
     q_to_direct = []
     for e in range(nl):
         if not admittance.status[e]:
-            zero = cp.Constant(0.0)
+            zero = cp.Constant(0.0 if horizon_steps is None else np.zeros(horizon_steps))
             p_from_direct.append(zero)
             q_from_direct.append(zero)
             p_to_direct.append(zero)
@@ -149,27 +167,31 @@ def _make_branch_terminal_flow(
         f = int(admittance.from_bus[e])
         t = int(admittance.to_bus[e])
         pf, qf = _terminal_power_expression(
-            theta, v, f, t, admittance.yff[e], admittance.yft[e]
+            theta, v, f, t, admittance.yff[e], admittance.yft[e],
+            vectorized=horizon_steps is not None,
         )
         pt, qt = _terminal_power_expression(
-            theta, v, t, f, admittance.ytt[e], admittance.ytf[e]
+            theta, v, t, f, admittance.ytt[e], admittance.ytf[e],
+            vectorized=horizon_steps is not None,
         )
         p_from_direct.append(pf)
         q_from_direct.append(qf)
         p_to_direct.append(pt)
         q_to_direct.append(qt)
 
+    stack = cp.hstack if horizon_steps is None else cp.vstack
+    shape = (nl,) if horizon_steps is None else (nl, horizon_steps)
     direct = _BranchTerminalFlow(
-        cp.hstack(p_from_direct),
-        cp.hstack(q_from_direct),
-        cp.hstack(p_to_direct),
-        cp.hstack(q_to_direct),
+        stack(p_from_direct),
+        stack(q_from_direct),
+        stack(p_to_direct),
+        stack(q_to_direct),
     )
     lifted = _BranchTerminalFlow(
-        cp.Variable(nl, name=f"branch_p_from_pu{suffix}"),
-        cp.Variable(nl, name=f"branch_q_from_pu{suffix}"),
-        cp.Variable(nl, name=f"branch_p_to_pu{suffix}"),
-        cp.Variable(nl, name=f"branch_q_to_pu{suffix}"),
+        cp.Variable(shape, name=f"branch_p_from_pu{suffix}"),
+        cp.Variable(shape, name=f"branch_q_from_pu{suffix}"),
+        cp.Variable(shape, name=f"branch_p_to_pu{suffix}"),
+        cp.Variable(shape, name=f"branch_q_to_pu{suffix}"),
     )
     defining_equalities = [
         lifted.p_from == direct.p_from,
@@ -326,6 +348,7 @@ def _parse_case(
     is_multistep: bool = False,
     loads: list[Load] | None = None,
     load_participates_when_empty: bool = False,
+    nondispatchable_inputs: NondispatchableInputs | None = None,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
@@ -403,7 +426,7 @@ def _parse_case(
         delta=delta,
         is_multistep=is_multistep,
     )
-    if nondispatchable and nd_available_mw is None:
+    if nondispatchable and nd_available_mw is None and nondispatchable_inputs is None:
         nd_available_mw = np.array(
             [[unit.p_available for unit in nondispatchable]],
             dtype=float,
@@ -419,20 +442,15 @@ def _parse_case(
         nondispatchable_inputs=(
             None
             if not nondispatchable
-            else NondispatchableInputs(nd_available_mw)
+            else (nondispatchable_inputs if nondispatchable_inputs is not None
+                  else NondispatchableInputs(nd_available_mw))
         ),
         hvdc_links=hvdc or (),
         hvdc_inputs=hvdc_inputs,
     )
     components = prepare_components(requests, "ac", preparation)
-    load_p_mw = (
-        np.asarray(components.flat_data["load_p_mw"], dtype=float)
-        if load_inputs is None else load_inputs.p_mw[0]
-    )
-    load_q_mvar = (
-        np.asarray(components.flat_data["load_q_mvar"], dtype=float)
-        if load_inputs is None else load_inputs.q_mvar[0]
-    )
+    load_p_mw = np.asarray(components.flat_data["_load_p_mw_by_step"], dtype=float)[0]
+    load_q_mvar = np.asarray(components.flat_data["_load_q_mvar_by_step"], dtype=float)[0]
     Pd = np.asarray(components.flat_data["Cload"]) @ load_p_mw / baseMVA
     Qd = np.asarray(components.flat_data["Cload"]) @ load_q_mvar / baseMVA
 
@@ -775,6 +793,131 @@ def _build_ac_single(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
         expressions=expressions,
+    )
+
+
+def _build_ac_vectorized(
+    case, df_P, df_Q, T, options, coupling_constraints,
+    storage=None, delta=1.0, nondispatchable=None, df_nd=None, *,
+    hvdc=None, df_hvdc_min=None, df_hvdc_max=None, generators=None,
+    loads=None, load_inputs, load_participates_when_empty=False,
+    nd_inputs=None, hvdc_inputs=None,
+) -> "OPFBuild":
+    """Build AC power flow with native spatial axes and time last.
+
+    Nonlinear network terms use basic bus indexing and vectorize over time.
+    This retains the lifted DNLP equations without compound spatial gathers in
+    their Hessians. Object counts depend on network size, not horizon length.
+    """
+    from cvxopf.problem import OPFBuild
+
+    d = _parse_case(
+        case, options, storage, delta, nondispatchable, hvdc, generators,
+        horizon_steps=T, nondispatchable_inputs=nd_inputs,
+        hvdc_inputs=hvdc_inputs, load_inputs=load_inputs, is_multistep=True,
+        loads=loads, load_participates_when_empty=load_participates_when_empty,
+    )
+    nb = d["nb"]
+    theta = cp.Variable((nb, T), name="theta")
+    voltage = cp.Variable((nb, T), name="v", bounds=[
+        np.broadcast_to(d["vmin_arr"][:, None], (nb, T)),
+        np.broadcast_to(d["vmax_arr"][:, None], (nb, T)),
+    ])
+    p = cp.Variable((nb, T), name="p")
+    q = cp.Variable((nb, T), name="q")
+    pq_shape = (len(d["rows"]), T) if options.sparse_pq else (nb * nb, T)
+    p_name, q_name = ("P_vec", "Q_vec") if options.sparse_pq else ("P", "Q")
+    PQ_P, PQ_Q = cp.Variable(pq_shape, name=p_name), cp.Variable(pq_shape, name=q_name)
+    if options.init_flat:
+        theta.value = np.zeros(theta.shape)
+        voltage.value = np.ones(voltage.shape)
+    components: PreparedComponents = d["_components"]
+    context = VectorizedContext(
+        "ac", T, delta, d["baseMVA"], d["_component_ext_to_int"],
+        ACNetworkState(voltage, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset),
+    )
+    contributions = assemble_component_vectorized(components, context)
+    aggregate = aggregate_vectorized_contributions(contributions)
+    flow, defining = _make_branch_terminal_flow(
+        theta, voltage, d["branch_admittance"], suffix="", horizon_steps=T,
+    )
+
+    constraints = [theta[d["ref"]] == 0]
+    for k, (row, col) in enumerate(zip(d["rows"], d["cols"], strict=True)):
+        i, j = int(row), int(col)
+        angle = theta[i, :] - theta[j, :]
+        cosine, sine = cp.nlp.cos(angle), cp.nlp.sin(angle)
+        vv = cp.multiply(voltage[i, :], voltage[j, :])
+        target_p = PQ_P[k, :] if options.sparse_pq else PQ_P[i * nb + j, :]
+        target_q = PQ_Q[k, :] if options.sparse_pq else PQ_Q[i * nb + j, :]
+        constraints += [
+            target_p == cp.multiply(vv, float(d["G_vec"][k]) * cosine
+                                   + float(d["B_vec"][k]) * sine),
+            target_q == cp.multiply(vv, float(d["G_vec"][k]) * sine
+                                   - float(d["B_vec"][k]) * cosine),
+        ]
+    if options.sparse_pq:
+        constraints += [p == d["Rp"] @ PQ_P, q == d["Rp"] @ PQ_Q]
+    else:
+        for row, col in zip(*d["Z"], strict=True):
+            constraints += [PQ_P[int(row) * nb + int(col), :] == 0,
+                            PQ_Q[int(row) * nb + int(col), :] == 0]
+        constraints += [p == np.kron(np.eye(nb), np.ones((1, nb))) @ PQ_P,
+                        q == np.kron(np.eye(nb), np.ones((1, nb))) @ PQ_Q]
+    constraints += defining
+    constraints += [p == aggregate.model.injection.p_pu,
+                    q == aggregate.model.injection.q_pu]
+    constraints += _make_network_operating_constraints(
+        flow, options, d["constrained_branch_indices"], d["branch_rate_a_mva"], d["baseMVA"],
+    )
+    constraints += list(aggregate.model.operating_constraints)
+    constraints += list(aggregate.model.network_constraints)
+    constraints += list(aggregate.model.horizon.constraints)
+    constraints += list(coupling_constraints)
+    total_cost = integrate_vectorized_stage_cost_rate(aggregate.model.stage_cost_rate, delta)
+    component_costs = integrate_vectorized_component_stage_costs(contributions, delta)
+    if aggregate.model.horizon.terminal_cost is not None:
+        total_cost += aggregate.model.horizon.terminal_cost
+
+    variables = publish_vectorized_component_variables(aggregate, {
+        "theta": theta, "v": voltage, p_name: PQ_P, q_name: PQ_Q, "p": p, "q": q,
+    })
+    expressions = publish_vectorized_component_expressions(aggregate, {
+        "p_net": p, "q_net": q, **_branch_expression_mapping(flow), **component_costs,
+    })
+    keys = ("baseMVA", "nb", "ref", "pv", "ext_to_int", "nl",
+            "branch_from_bus_internal", "branch_to_bus_internal",
+            "branch_from_bus_external", "branch_to_bus_external", "branch_status",
+            "branch_rate_a_mva", "constrained_branch_indices", "Ybus", "G", "B",
+            "E", "Z", "rows", "cols", "G_vec", "B_vec", "Rp")
+    data = {key: d[key] for key in keys}
+    data["T"] = T
+    for channel, result_key in (("p", "Pd_series"), ("q", "Qd_series")):
+        unit = "mw" if channel == "p" else "mvar"
+        field = f"_load_{channel}_{unit}"
+        if components.flat_data[f"_load_{channel}_temporal_class"] == "static":
+            native = d["Cload"] @ components.flat_data[field + "_source"] / d["baseMVA"]
+            data[result_key] = np.broadcast_to(native, (T, nb))
+        else:
+            data[result_key] = components.flat_data[field + "_by_step"] @ d["Cload"].T / d["baseMVA"]
+    data = publish_component_metadata(components, data)
+    network_projections = ResultProjectionRegistry(
+        variables={name: ResultProjectionSpec(name, variable.shape[:-1],
+                    (nb,) if name in ("theta", "v") else variable.shape[:-1], "interval")
+                   for name, variable in (("theta", theta), ("v", voltage), ("p", p), ("q", q),
+                                           (p_name, PQ_P), (q_name, PQ_Q))},
+        expressions={name: ResultProjectionSpec(name, expression.shape[:-1],
+                                                expression.shape[:-1], "interval")
+                     for name, expression in {"p_net": p, "q_net": q,
+                                               **_branch_expression_mapping(flow)}.items()},
+    )
+    return OPFBuild(
+        prob=cp.Problem(cp.Minimize(total_cost), constraints), variables=variables,
+        data=data, formulation="ac", is_convex=False, expressions=expressions,
+        temporal_assembly="vectorized", result_projections=merge_result_projection_registries(
+            network_projections,
+            vectorized_component_result_projections(aggregate, integrated_component_costs=component_costs),
+        ),
     )
 
 

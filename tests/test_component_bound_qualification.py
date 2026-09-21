@@ -1,4 +1,4 @@
-"""Focused gates for the final M14b component-box qualification slice."""
+"""Qualification of component box bounds."""
 
 from pathlib import Path
 

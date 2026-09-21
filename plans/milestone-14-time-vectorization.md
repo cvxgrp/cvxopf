@@ -2,9 +2,23 @@
 
 ## Status
 
-**In progress; M14c vectorized lossy DC and the Case118 annual S4 outer solve
-are complete.** The frozen
-legacy Case9 and Case118 scaling ladders completed, and the formulation-
+**Complete and owner-accepted; closed on 2026-09-20, including the additional
+independent Case118 replay experiment.** All three
+vectorized formulations are implemented, reviewed and accepted. The 168-hour
+stepwise AC attempts timed out at 180 and 1,800 seconds. Their missing numerical
+results remain a limitation, but the accepted bounded outcomes satisfy the
+comparison requirement and are not a closure blocker.
+
+The completed Case118 hierarchical study (`big-experiment`) was
+merged into `main` at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; the
+`m14-time-vectorization` branch was fast-forwarded to that checkpoint on
+2026-09-18. The accepted annual S4 solve already closes M14c's scaling gate.
+The single-node DC slice reuses the qualified vectorized device hooks and
+retains the public result shapes. AC now uses the shared horizon hooks and existing initialization helpers as
+described under M14d. The public default remains `stepwise`; all three
+formulations support explicit `vectorized` selection.
+
+The frozen legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
 aggregation/publication, and public-result projection slices are implemented;
 the reusable seven-gate component-box harness and fresh-process runner are also
@@ -66,8 +80,8 @@ comparison mismatch is preserved. The subsequent tight-tolerance diagnostic
 passed all audits and bounded every objective difference by the paired native
 CLARABEL gaps. The tracked scientific disposition now accepts both
 representations for this study, selects vectorized/SCIPY as the authoritative
-annual realization, and explicitly authorizes annual S4 execution after this
-checkpoint is reviewed and committed.
+annual realization, and supplied the authorization for the subsequent annual
+S4 execution.
 
 The authoritative annual solve completed from clean commit
 `ab2375cddcb4823a47610123ae2b0d8cd8c8f33d` in 93.95 solver seconds and
@@ -118,8 +132,10 @@ compatibility, profiling, and problem classes where it performs better.
 
 ## Representation and canonicalization contract
 
-The legacy and vectorized paths are intentionally matched to different CVXPY
-canonicalization backends:
+The intervention is time vectorization. For DCP problems, the legacy and
+vectorized data structures use their appropriate CVXPY canonicalization
+backends; the backend switch supports vectorization and is not a separate
+experimental intervention:
 
 | Model representation | Canonicalization backend | Role |
 |---|---|---|
@@ -133,9 +149,14 @@ expressions with dimension greater than two. Cross-combinations may be retained
 as diagnostics where CVXPY supports them, but they are not required
 authoritative baselines.
 
-The vectorized path passes `canon_backend=cp.SCIPY_CANON_BACKEND` explicitly.
+The vectorized DCP path passes `canon_backend=cp.SCIPY_CANON_BACKEND` explicitly.
 It must not rely on an implicit fallback or treat CVXPY's N-dimensional SCIPY
 selection warning as a defect.
+
+AC uses the DNLP canonicalization path in both assembly modes, through
+`build.solve()` with `nlp=True, solver=cp.IPOPT`. Neither CPP nor SCIPY is
+selected for this path. Its comparison measures the vectorization change with
+the same DNLP/IPOPT solve route.
 
 ### Permanent dual temporal formulations
 
@@ -158,16 +179,16 @@ release notes and equivalence evidence. The Case118 S4 annual outer explicitly
 selects `vectorized`; short M17/S3-style AC windows may continue to select
 `stepwise` unless direct profiling supports a different choice.
 
-Temporal assembly and canonicalization backend are separate recorded choices.
-Their expected primary pairings are `stepwise` + CPP and `vectorized` + SCIPY,
-but profiling may evaluate other supported pairings. An unsupported pairing,
+Temporal assembly and canonicalization route are recorded separately. For DCP,
+the intended pairings are `stepwise` + CPP and `vectorized` + SCIPY. M14d
+compares these implementations without a separate backend experiment. An unsupported pairing,
 such as a CPP request for an N-dimensional expression it cannot canonicalize,
 must fail validation before solve rather than silently switching backends.
 
 This dual contract is scientifically useful. A three-step nonlinear AC problem
-can favor a different assembly/backend pairing from an 8,760-step convex
-lossy-DC problem. M14 therefore reports construction, canonicalization, solver,
-memory, and numerical behavior by the complete tuple:
+can favor a different temporal assembly from an 8,760-step convex lossy-DC
+problem. M14 reports construction, canonicalization, solver, extraction, and
+total time, peak memory, graph size, and numerical outcomes by the tuple:
 
 ```text
 (network formulation, temporal assembly mode, canonicalization backend, T)
@@ -187,6 +208,16 @@ already matrix-shaped. Flattening an intrinsic matrix axis into a two-
 dimensional workaround is not the default design; it requires characterization
 showing a material advantage while preserving explicit, deterministic index
 semantics.
+
+**Characterized AC/DNLP exception:** the installed derivative engine rejects
+variables with more than two dimensions (`build_var_dict` unpacks exactly two
+shape entries). Vectorized AC removes the redundant voltage/angle singleton
+axis to use `(nb, T)`. Sparse P/Q stays `(nnz, T)`; dense P/Q uses `(nb*nb, T)`
+with explicit row-major bus-pair index `i*nb+j`, reconstructable as `(nb, nb, T)`
+in NumPy C order. Both representations pass independent power-flow checks and
+short paired solves. This limited packing exception preserves all spatial
+coordinates and the final time axis; it does not change public result shapes.
+No CVXPY dependency patch or backend change is involved.
 
 The lifting rule does not apply to static network/device data, incidence or
 admittance matrices, integrated horizon-cost scalars, or fixed boundary data.
@@ -531,15 +562,110 @@ does not, by itself, complete this stage.
 
 ### M14d — Single-node DC and AC
 
-Apply the same horizon contract to single-node DC and AC after the lossy-DC
-path is stable. AC requires an additional design gate because IPOPT starting
-coordinates, original-variable names, canonicalization-added coordinates, and
-the M17 causal initialization audit are part of the accepted public contract.
+**Implementation, validation and bounded comparisons complete and owner-accepted.** The single-node builder uses the
+existing vectorized component hooks and formulation-specific qualified bounds,
+one horizon-wide copper-plate balance, and typed result projections. Static
+load and renewable inputs retain broadcast provenance; device identities,
+terminal policies, time integration, and time-first public results are retained.
+The default remains stepwise. See
+`experiments/m14_time_vectorization/M14D_SINGLENODE_REPORT.md` and the paired
+JSON record for the initial Tracy comparison. This is a bounded single-node
+checkpoint approved and committed at `6d02f09`. The subsequent AC implementation
+and comparison checkpoint was owner-accepted and committed at `4b39099`.
 
-Annual S4 may resume after M14c passes its gates; it does not need to wait for
-AC time vectorization. M14 as a repository milestone is complete only after
-the declared single-node and AC scope also passes, or after a reviewed plan
-revision explicitly narrows that scope.
+AC now extends the horizon contract with reactive device channels, explicit AC
+boxes, inverter circles, branch-terminal physics and time-first result projection.
+See `experiments/m14_time_vectorization/AC_VECTORIZATION_REPORT.md`,
+`AC_DC_COMPARISON_RESULTS.json`, and `NETWORK_TRAJECTORY_CHECKS.json` in that
+directory. The full suite passed (2,858 tests plus six subtests); the existing
+hierarchy initialization and regression checks remain clean.
+
+The selected week’s first 3 and 24 hours completed for both DC and AC modes.
+Lossy DC completed both 168-hour modes. Vectorized AC completed 168 hours in
+116.77 seconds with 830.5 MiB peak RSS and passed independent physical audits.
+Stepwise AC hit the 180-second worker-wall bound; its solver status and peak RSS
+are unavailable. A 91-second snapshot showed about 10.2 GiB RSS. This is a
+censored outcome, not infeasibility or a completed long-horizon numerical pair.
+All completed objective comparisons were below the 0.1% expectation. Larger
+primal differences were investigated by assigning the solutions into both actual
+model graphs, including the vectorized full-week AC solution in the stepwise
+graph. This does not establish a completed paired solve. On 2026-09-19, the
+owner accepted the bounded timeout as the full-week stepwise comparison outcome;
+the initial performance comparison requirement is satisfied without a retry.
+The missing full-week stepwise objective and trajectory remain unavailable.
+The owner also accepted the unpriced reactive allocation differences with the
+feasibility and objective checks passing; reactive regularization remains future
+work under M20, not an M14 closure requirement.
+
+On 2026-09-20, the owner requested one optional longer-budget AC stepwise T=168
+retry. It also timed out at the 1,800-second worker-wall limit (1,800.41 seconds
+including termination overhead), with IPOPT's CPU limit raised to 1,800 seconds
+and all other solve settings retained. The maximum sampled RSS was 11,098.1 MiB
+(10.84 GiB), not a measured process peak. No final solver status, objective or
+trajectory was returned. Original outcomes remain unchanged; see
+`experiments/m14_time_vectorization/AC_STEPWISE_RETRY_RESULTS.json` and the AC
+report for the separate retry record. No further retry was launched.
+
+The implementation and agreed initial comparison are complete and owner-accepted,
+with the timeout disposition recorded above. The owner requested one further
+experiment before final M14 closure: independent vectorized Case118 three-hour
+replays of 120 historical primary winners and six helper winners. That experiment
+is now complete, with results below. This does not reopen
+the accepted implementation or make a successful stepwise AC solve a requirement.
+This is feature implementation with correctness tests and an initial performance
+comparison, not a new solver qualification study or a required speedup contest.
+
+**Owner decisions, 2026-09-18:**
+
+- Compare stepwise (graph-form) and vectorized assembly on the Case9 network
+  for both lossy DC and AC at **T=3** and **T=168**. These are the required
+  short- and long-horizon comparisons before closure. Reach 168 incrementally,
+  checking that the intermediate horizons are practical, particularly for AC.
+- Reuse the Tracy source and existing Case9 mapping in
+  `experiments/battery_terminal/scenario.py`, with the shared formulation setup
+  in `experiments/battery_terminal/problem_setup.py`. Use the same inputs and
+  device settings within each representation pair. The owner selected the
+  **2021-12-22 00:00 through 2021-12-28 23:00, fixed UTC−08:00**
+  energy-balance week for T=168. Its raw Tracy net energy is −0.411313 GWh,
+  peak net load is 1,765.9732 MW, minimum net load is −5,426.0595 MW, and
+  108 of 168 hours have positive net load. These are source-scale input
+  statistics, before Case9 scaling, curtailment, losses, or storage dispatch.
+  The execution uses its first 3 hours and a 24-hour intermediate prefix.
+- Inherit the AC initialization helper method developed for the Case118
+  hierarchical study. CVXPY variable `.value` is the initialization interface
+  for scalar and array variables alike. Adapt the existing helpers' shapes and
+  time indexing where needed; no new solver initialization mechanism is needed.
+  Preserve the causal-shift/SoC behavior and existing initialization audits.
+  The retained helpers include `complete_flat_start` and `assign_start` in
+  `experiments/case118_annual_hierarchy/streaming_runner.py` and their shared
+  hierarchy counterparts in `src/cvxopf/_hierarchical_solver.py`.
+- Use **less than 0.1% relative change** as the default numerical-comparison
+  expectation; investigate larger differences. Retain physical feasibility
+  checks and use appropriate absolute comparisons near zero. Observe and
+  investigate AC outcomes without assuming identical local solutions.
+- The timing test evaluates the **vectorization change**. DCP uses CPP for
+  stepwise assembly and SCIPY for vectorized assembly because those backends
+  suit the respective data structures. AC uses `nlp=True, solver=cp.IPOPT`
+  through `build.solve()` in both forms, with no canonicalization backend to
+  specify.
+- Report **construction, canonicalization, solver, extraction, and total
+  time; peak memory; graph size; and numerical outcomes**. Label the measured
+  phase boundaries clearly and avoid double-counting nested timings. No
+  separate backend experiment, required speedup, repeated-run campaign, or new
+  performance acceptance gate is needed.
+
+Retain the existing AC bound representations; the convex qualification results
+do not authorize new AC leaf-bound migration. Complete the applicable structural,
+`T=1`, component, failure-schema, result-compatibility, and hierarchy regression
+tests. The comparison above replaces the proposed additional M14d annual
+single-node and Case118 scaling campaigns; M14c's completed evidence remains
+unchanged.
+
+Annual S4, the downstream Case118 study, and the declared single-node and AC
+requirements are complete. The additional Case118 replay experiment is complete
+and owner-accepted; the owner closed M14 on 2026-09-20. Runner-policy qualification
+for the future Tracy annual study is recorded in
+`plans/case118-tracy-2021-study-plan.md` and is separate from M14 closure.
 
 ## Verification ladder
 
@@ -568,20 +694,19 @@ For each implemented formulation:
 6. **Formulation-specific scaling ladders:**
    - lossy DC progresses through the exact 24-, 168-, 720-, and 8,760-step S4
      problem ladder;
-   - single-node DC progresses through a separately predeclared large horizon
-     sufficient to demonstrate scaling, including 8,760 when inexpensive; and
-   - AC uses bounded case9 and Case118 horizons selected from existing timing
-     and memory evidence, stopping at declared resource limits rather than
-     requiring an annual AC solve.
+   - M14d uses the owner-approved Case9 Tracy comparisons at 3 and 168 steps
+     for lossy DC and AC, reaching the longer horizon incrementally; and
+   - single-node DC receives the applicable feature and compatibility tests;
+     an additional annual scaling campaign is not required for M14d.
 7. **Hierarchy regression:** M17 focused tests and the retained S7 equivalence
    gate remain clean.
-8. **Backend verification:** the legacy baseline records CPP and the vectorized
-   path records SCIPY; performance comparisons never conflate a representation
-   change with an undocumented backend change.
+8. **Backend verification:** convex comparisons record the stepwise CPP and
+   vectorized SCIPY choices. AC retains DNLP/IPOPT for both assembly modes.
 9. **Profiling matrix:** representative short and long horizons report results
    by network formulation, temporal assembly mode, canonicalization backend,
-   and `T`. At minimum, include short AC windows and the lossy-DC scaling
-   ladder; do not extrapolate the annual DC result to short nonlinear AC.
+   and `T`. M14c retains its completed lossy-DC ladder. M14d adds the Case9
+   short/long DC and AC comparison above, with the agreed time, memory,
+   graph-size, and numerical measurements. The intervention is vectorization.
 
 For M14c, the lossy-DC row of that matrix is an explicit pre-annual checkpoint.
 It reuses the accepted `vectorized + SCIPY` 24/168/720 artifacts and runs the
@@ -597,8 +722,9 @@ required repository gates.
 
 ## Annual S4 resumption gate
 
-The Case118 `big-experiment` branch remains on hold until all of the following
-are true:
+**Completed; retained execution contract.** The accepted annual result above
+satisfied this gate. The following requirements governed resumption of the
+Case118 `big-experiment` branch and are retained as historical authority:
 
 1. the exact frozen S4 annual inputs build through the vectorized lossy-DC
    path;
@@ -665,8 +791,54 @@ M14 does not:
 ## Completion criteria
 
 M14 is complete when the reviewed vectorized paths preserve the frozen
-mathematics and result contracts, pass the verification ladder, and demonstrate
-materially improved time-axis construction/canonicalization scaling. M14c is
-complete—and S4 may resume—when the exact 8,760-step Case118 lossy-DC outer
-problem clears the annual resumption gate. Completion retains both stepwise and
-vectorized modes as supported, profiled implementations.
+mathematics and result contracts, pass the applicable correctness tests, and
+complete the agreed initial performance comparison. M14c already demonstrates
+the long-horizon lossy-DC scaling benefit; M14d has no required speedup threshold.
+M14c is
+complete: the exact 8,760-step Case118 lossy-DC outer problem cleared the annual
+resumption gate. M14d's implementation, validation and bounded comparison
+requirements are also complete and accepted, including disposition of both
+stepwise AC timeouts. The additional Case118 experiment is complete and
+owner-accepted; M14 is closed. Unavailable full-week stepwise AC results remain
+a limitation.
+Completion retains
+both stepwise and vectorized modes as supported, profiled implementations.
+
+
+## Additional Case118 replay experiment (2026-09-20)
+
+The owner approved vectorized-only replays of a frozen random sample from the
+completed toy Case118 study, compared with its recorded stepwise timings. Sample
+120 successful primary winners with proportional quantile coverage and modest
+tail oversampling, plus six historical helper winners spanning race latency.
+Each replay preserves the historical problem, initial SoC, terminal target,
+causal initialization, solver settings, and costs. Replays are independent: no
+new solution is fed into another window.
+
+Reuse the unchanged two-primary/one-helper experimental ladder, including helper
+eligibility, bounded attempts, uncapped primary/recovery, and first accepted
+winner. A historical helper win may now finish in the primary before a race
+starts, or elect a different winner. Do not add an alternate timeout policy.
+The frozen seed is 20260920; eligible populations contain 5,154 primary and 55
+helper wins. The sample selects 11 from each lower decile, seven each from
+p90–95/p95–99/p99–100, and one helper winner per latency sextile.
+
+Implementation, protocol, and analysis live in
+`experiments/case118_vectorization_replay/`; raw evidence is retained separately
+under `outputs/case118_vectorization_replay/`. Execution is complete: all 126
+windows passed the original physical audit in 72.08 minutes. Independent
+scientific results review returned clean; the owner accepted the experiment
+and closed M14 on 2026-09-20.
+
+For the 120 historical-primary cases, 108 replay solves were faster and 12
+slower. Population-weighted mean solve-phase time fell from 55.21 to 43.47
+seconds; median time fell from 36.38 to 23.87 seconds. The estimated 99th
+percentile increased from 328.88 to 499.01 seconds, so the improvement is not
+uniform in the tail. Five historical helper winners now finish through the
+primary; the sixth is won by helper order 3 instead of order 6, with window
+latency falling from 2,338.05 to 958.50 seconds. The maximum absolute relative
+objective change is 0.00079487%, below the 0.1% inspection threshold, while
+individual dispatch trajectories can differ. Cooling changed mid-run and later
+thermal telemetry is retained; timing comparisons are observational. See
+`experiments/case118_vectorization_replay/REPORT.md` for clocks, weights, races,
+limitations, and evidence. The previously accepted M14 requirements remain complete.

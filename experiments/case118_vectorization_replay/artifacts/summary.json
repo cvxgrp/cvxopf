@@ -1,0 +1,1095 @@
+{
+  "complete": true,
+  "completed": 126,
+  "expected": 126,
+  "attempts": [
+    {
+      "iteration": 7736,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7492,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7589,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7905,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7785,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7778,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8057,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7697,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7637,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7815,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7765,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7519,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7666,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8148,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7587,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7545,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7900,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7750,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7722,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7547,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7642,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7748,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8619,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8533,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8668,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8671,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8388,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8496,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8297,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8606,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8361,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8731,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8386,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8191,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8285,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 8344,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4455,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4158,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4128,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4295,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4457,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4337,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4036,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4275,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4019,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4146,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4417,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4428,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4282,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3447,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3270,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3717,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3607,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3482,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3258,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3684,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3602,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3343,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3669,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3453,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3645,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 3618,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4884,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4652,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4675,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4535,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4730,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5108,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5057,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5151,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4883,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4551,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5021,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4923,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4660,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4852,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5059,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4635,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 4932,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6458,
+      "order": 3,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6257,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6458,
+      "order": 2,
+      "reason": "solve_budget",
+      "outcome": null
+    },
+    {
+      "iteration": 6120,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6241,
+      "order": 2,
+      "reason": "lost_race",
+      "outcome": null
+    },
+    {
+      "iteration": 6269,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6120,
+      "order": 1,
+      "reason": "lost_race",
+      "outcome": null
+    },
+    {
+      "iteration": 6164,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6411,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6017,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6455,
+      "order": 1,
+      "reason": "lost_race",
+      "outcome": null
+    },
+    {
+      "iteration": 6347,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6455,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6089,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6436,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6245,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6458,
+      "order": 0,
+      "reason": "lost_race",
+      "outcome": null
+    },
+    {
+      "iteration": 6458,
+      "order": 1,
+      "reason": "solve_budget",
+      "outcome": null
+    },
+    {
+      "iteration": 6047,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6241,
+      "order": 1,
+      "reason": "solve_budget",
+      "outcome": null
+    },
+    {
+      "iteration": 6241,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6376,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5984,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7306,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6887,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7276,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7196,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6937,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7009,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7366,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6864,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7033,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6899,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7202,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6940,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 6794,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 7091,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5610,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5840,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5929,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5548,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5243,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5349,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5474,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5930,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5553,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5684,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5539,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5561,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5324,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5218,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5879,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5604,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    },
+    {
+      "iteration": 5912,
+      "order": 0,
+      "reason": "returned",
+      "outcome": "accepted"
+    }
+  ],
+  "primary_completed": 120,
+  "helper_completed": 6,
+  "new_helper_winners": 1,
+  "helper_attempts": 7,
+  "attempt_outcomes": {
+    "accepted": 126,
+    "solve_budget": 3,
+    "lost_race": 4
+  },
+  "objective_over_0_1_percent": [],
+  "max_abs_objective_relative_change": 7.948695964140416e-06,
+  "weighted_primary_quantiles": {
+    "historical_solve_seconds": [
+      36.381360917002894,
+      91.53981408299296,
+      152.87222841600305,
+      328.8829275419994
+    ],
+    "new_solve_seconds": [
+      23.874188958026934,
+      88.66954079200514,
+      115.13813820795622,
+      499.0094113749801
+    ],
+    "winner_solve_speedup": [
+      1.63732935697201,
+      2.8093736630693815,
+      4.2946177553108855,
+      7.387204292586307
+    ],
+    "historical_window_seconds": [
+      42.70182637499238,
+      98.30680966700311,
+      158.84277283301344,
+      335.67539925000165
+    ],
+    "new_window_seconds": [
+      29.716687166015618,
+      94.73484304203885,
+      121.05632966698613,
+      505.05275670904666
+    ],
+    "window_speedup": [
+      1.5033058226294407,
+      2.45506412299621,
+      3.718996832205753,
+      6.4279786882792616
+    ]
+  },
+  "weighted_primary_means": {
+    "historical_solve_seconds": 55.20887535686274,
+    "new_solve_seconds": 43.467064897656066,
+    "historical_window_seconds": 61.711978163716914,
+    "new_window_seconds": 49.35356141975351
+  },
+  "quantile_probabilities": [
+    0.5,
+    0.9,
+    0.95,
+    0.99
+  ],
+  "weighted_primary_geometric_mean_window_speedup": 1.4359623535991255,
+  "weighted_primary_geometric_mean_solve_speedup": 1.5347487776458808,
+  "primary_slower_count": 12,
+  "accepted_count": 126,
+  "primary_auxiliary_mismatch_hours": [],
+  "evidence": {
+    "sample": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/sample.json",
+      "sha256": "f950b14b061b60a582526d5a4d30ac02124ef2f1a62ddc41e6c74343f8750ddb"
+    },
+    "environment": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/run/environment.json",
+      "sha256": "9434f9a8fb7df3defb248678068bb25585728a3e4be7aeadde45afd666243361"
+    },
+    "analysis": {
+      "path": "/Users/bmeyers/github/cvxopf/experiments/case118_vectorization_replay/analyze.py",
+      "sha256": "16469441d5f9f8a30dc5384c2d05dc7821abb734e359965f43f65ae8503664d0"
+    },
+    "comparison": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/comparison.csv",
+      "sha256": "9822944b227a5903486f05435611c1cc54b666d39faa8cb23e7a2e8d40b37672"
+    },
+    "environment_notes": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/run/environment-notes.json",
+      "sha256": "b351040bfb30b21afc448e52157a0d56a0a3d17e7ffb05ceea513297e576841c"
+    }
+  },
+  "sampling": {
+    "seed": 20260920,
+    "population_counts": {
+      "primary": 5154,
+      "helper": 55
+    },
+    "primary_strata": [
+      {
+        "stratum": "0.0000\u20130.0999",
+        "population": 515,
+        "sample": 11,
+        "min_seconds": 12.785751791998337,
+        "max_seconds": 21.134953624990885
+      },
+      {
+        "stratum": "0.0999\u20130.2000",
+        "population": 516,
+        "sample": 11,
+        "min_seconds": 21.13665441700141,
+        "max_seconds": 25.959249666993855
+      },
+      {
+        "stratum": "0.2000\u20130.3000",
+        "population": 515,
+        "sample": 11,
+        "min_seconds": 25.96398799997405,
+        "max_seconds": 29.562419874993793
+      },
+      {
+        "stratum": "0.3000\u20130.4001",
+        "population": 516,
+        "sample": 11,
+        "min_seconds": 29.600489208009094,
+        "max_seconds": 32.88124779200007
+      },
+      {
+        "stratum": "0.4001\u20130.5000",
+        "population": 515,
+        "sample": 11,
+        "min_seconds": 32.883179040996765,
+        "max_seconds": 36.40306383301504
+      },
+      {
+        "stratum": "0.5000\u20130.5999",
+        "population": 515,
+        "sample": 11,
+        "min_seconds": 36.40387029098929,
+        "max_seconds": 40.58507349999854
+      },
+      {
+        "stratum": "0.5999\u20130.7000",
+        "population": 516,
+        "sample": 11,
+        "min_seconds": 40.58548854199944,
+        "max_seconds": 46.615167708005174
+      },
+      {
+        "stratum": "0.7000\u20130.8000",
+        "population": 515,
+        "sample": 11,
+        "min_seconds": 46.62614916701568,
+        "max_seconds": 58.31746750000093
+      },
+      {
+        "stratum": "0.8000\u20130.9001",
+        "population": 516,
+        "sample": 11,
+        "min_seconds": 58.33546762500191,
+        "max_seconds": 92.96178987500025
+      },
+      {
+        "stratum": "0.9001\u20130.9499",
+        "population": 257,
+        "sample": 7,
+        "min_seconds": 92.99452633300098,
+        "max_seconds": 146.41601545806043
+      },
+      {
+        "stratum": "0.9499\u20130.9899",
+        "population": 206,
+        "sample": 7,
+        "min_seconds": 147.40505812500123,
+        "max_seconds": 301.0460343330633
+      },
+      {
+        "stratum": "0.9899\u20131.0000",
+        "population": 52,
+        "sample": 7,
+        "min_seconds": 302.30141258300137,
+        "max_seconds": 2615.6598697500012
+      }
+    ],
+    "helper_strata": [
+      {
+        "stratum": "0.0000\u20130.1636",
+        "population": 9,
+        "sample": 1,
+        "min_seconds": 127.79468837499735,
+        "max_seconds": 349.40339370799484
+      },
+      {
+        "stratum": "0.1636\u20130.3273",
+        "population": 9,
+        "sample": 1,
+        "min_seconds": 356.3385898340057,
+        "max_seconds": 403.5245086249997
+      },
+      {
+        "stratum": "0.3273\u20130.5091",
+        "population": 10,
+        "sample": 1,
+        "min_seconds": 412.33359995900537,
+        "max_seconds": 448.042801333002
+      },
+      {
+        "stratum": "0.5091\u20130.6727",
+        "population": 9,
+        "sample": 1,
+        "min_seconds": 448.5873403750011,
+        "max_seconds": 482.39855433302
+      },
+      {
+        "stratum": "0.6727\u20130.8364",
+        "population": 9,
+        "sample": 1,
+        "min_seconds": 496.7218524579948,
+        "max_seconds": 723.111197582999
+      },
+      {
+        "stratum": "0.8364\u20131.0000",
+        "population": 9,
+        "sample": 1,
+        "min_seconds": 752.9630012909765,
+        "max_seconds": 2338.0471229169925
+      }
+    ],
+    "sampling": "Nine lower deciles: 11 each; p90\u201395, p95\u201399, p99\u2013100: 7 each. Six helper winners: one per winner-latency sextile. Random without replacement within strata; shuffled execution order."
+  },
+  "software_versions": {
+    "clarabel": "0.11.1",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.2",
+    "cyipopt": "1.7.0",
+    "ipopt": [
+      3,
+      14,
+      19
+    ],
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "python": "3.11.15"
+  },
+  "environment_notes": [
+    {
+      "reported_utc": "2026-09-20T20:35:17.330973+00:00",
+      "owner_observation": "Computer felt hot; owner turned the external fan on a couple minutes before reporting.",
+      "switch_time": "Approximate; reported as a couple minutes before this note. No precise switch timestamp was measured.",
+      "completed_at_report": 61,
+      "interpretation": "Cooling conditions changed during the experiment. Temperature and throttling were not measured. Do not attribute timing differences causally to fan use."
+    }
+  ],
+  "peak_sampled_aggregate_rss_mib": 9118.109375,
+  "peak_sampled_worker_rss_mib": 4229.953125,
+  "experiment_wall_seconds": 4324.693776,
+  "windows_per_minute": 1.7481006497973142,
+  "temperature_telemetry": {
+    "metadata": {
+      "started_utc": "2026-09-20T20:38:53.957464+00:00",
+      "started_monotonic_seconds": 409869.830891916,
+      "collector_pid": 83955,
+      "macmon_pid": 83956,
+      "command": [
+        "/opt/homebrew/bin/macmon",
+        "pipe",
+        "-i",
+        "10000"
+      ],
+      "sample_interval_seconds": 10,
+      "macmon_version": "macmon 0.8.2",
+      "scope": "Machine-wide observational telemetry, started mid-experiment; no solver control.",
+      "clock_note": "macmon timestamp is the source UTC; receipt clocks are added by this collector."
+    },
+    "metadata_reference": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/temperature_telemetry/20260920T203816Z/metadata.json",
+      "sha256": "522f0e9d2158c6b46cc4d6cf1be8626bfd0c6b05aa470fa0fc8f4e7a29786911"
+    },
+    "snapshot": {
+      "path": "/Users/bmeyers/github/cvxopf/outputs/case118_vectorization_replay/temperature_samples.jsonl",
+      "sha256": "871960a561eead979100987263eb0075ade2ea4058e79e074bfc8cde2e0cceef"
+    },
+    "sample_count": 281,
+    "first_sample_utc": "2026-09-20T20:39:04.674266+00:00",
+    "last_sample_utc": "2026-09-20T21:25:47.702080+00:00",
+    "cpu_temperature_c_range": [
+      51.432071685791016,
+      72.5210189819336
+    ],
+    "performance_core_frequency_mhz_range": [
+      3969,
+      4047
+    ]
+  }
+}
