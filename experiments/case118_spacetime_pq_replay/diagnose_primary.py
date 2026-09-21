@@ -1,10 +1,12 @@
-"""Replay hour 6047's frozen primary once per temporal representation."""
+"""Replay hour 6047's frozen primary with explicit vectorization conditions."""
 
 from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
+from hashlib import sha256
 from importlib.metadata import version
 import os
 from pathlib import Path
@@ -36,6 +38,17 @@ from .telemetry import TemperatureCollector
 
 REQUEST = STUDY / "run/s4b-shard-008/ac-006047-spec-00/request.json"
 MODES = ("stepwise", "vectorized")
+FOUR_WAY_MODES = ("none", "time_only", "spatial_only", "both")
+CONDITIONS = {
+    "stepwise": ("stepwise", True), "vectorized": ("vectorized", True),
+    "none": ("stepwise", False), "time_only": ("vectorized", False),
+    "spatial_only": ("stepwise", True), "both": ("vectorized", True),
+}
+SPATIAL_SWITCH_COMMIT = "e432b8194c14645eae561d013e0eb052959dac36"
+SPATIAL_SWITCH_SOURCES = {
+    "src/cvxopf/problem.py", "src/cvxopf/ac_problem.py",
+    "experiments/case118_annual_hierarchy/streaming_runner.py",
+}
 
 
 @contextmanager
@@ -74,8 +87,30 @@ def check_versions(binding):
         raise ValueError("Diagnostic dependencies differ from the failed study")
 
 
-def preflight(output, *, commit=None, prepare_only=False):
-    for previous in (STUDY, PREVIOUS):
+def bind_sources(historical, *, four_way):
+    """Allow only the committed spatial-switch sources to differ from history."""
+    sources, changes = {}, {}
+    for path, expected in historical.items():
+        actual = sha(path)
+        relative = str(Path(path).relative_to(ROOT))
+        if four_way and relative in SPATIAL_SWITCH_SOURCES:
+            committed = subprocess.check_output(
+                ["git", "show", f"{SPATIAL_SWITCH_COMMIT}:{relative}"], cwd=ROOT,
+            )
+            if actual != sha256(committed).hexdigest():
+                raise ValueError(f"Source differs from approved spatial-switch commit: {path}")
+            changes[path] = dict(historical_sha256=expected, current_sha256=actual,
+                                 approved_commit=SPATIAL_SWITCH_COMMIT)
+        elif actual != expected:
+            raise ValueError(f"Execution source changed: {path}")
+        sources[path] = actual
+    return sources, changes
+
+
+def preflight(output, *, commit=None, prepare_only=False, four_way=False):
+    for previous in (STUDY, PREVIOUS,
+                     ROOT / "outputs/case118_6047_primary_diagnostic",
+                     ROOT / "outputs/case118_6047_primary_diagnostic_retry"):
         validate_destination(output, previous)
     head = git("rev-parse", "HEAD")
     dirty = git("status", "--porcelain", "--untracked-files=normal")
@@ -89,10 +124,10 @@ def preflight(output, *, commit=None, prepare_only=False):
         raise ValueError("Expected hour 6047's original primary request")
     for reference in request["selected"]["references"].values():
         checked(reference)
-    sources = dict(request["execution_sources"])
-    check_sources(sources)
+    sources, source_changes = bind_sources(request["execution_sources"], four_way=four_way)
     sources[str(Path(__file__).resolve())] = sha(__file__)
-    plan = Path(__file__).with_name("PRIMARY_DIAGNOSTIC.md")
+    plan = Path(__file__).with_name("FOUR_WAY_DIAGNOSTIC.md" if four_way
+                                  else "PRIMARY_DIAGNOSTIC.md")
     sources[str(plan)] = sha(plan)
     study_binding = read(STUDY / "binding.json")
     check_versions(study_binding)
@@ -101,35 +136,55 @@ def preflight(output, *, commit=None, prepare_only=False):
         working_tree_status=dirty, prepare_only=prepare_only,
         primary_request=ref(REQUEST), failed_study_binding=ref(STUDY / "binding.json"),
         execution_sources=sources, software_versions=_software_versions(),
-        sparsediffpy_version=version("sparsediffpy"), modes=list(MODES),
-        spatial_pq_vectorization=True, sparse_pq=True,
+        sparsediffpy_version=version("sparsediffpy"),
+        modes=list(FOUR_WAY_MODES if four_way else MODES),
+        conditions={name: dict(temporal_assembly=CONDITIONS[name][0],
+                               vectorize_pq=CONDITIONS[name][1])
+                    for name in (FOUR_WAY_MODES if four_way else MODES)},
+        historical_source_changes=source_changes, sparse_pq=True,
         numerical_solver_options="Unchanged; print_level=5 is the only logging override",
         workers=1, helpers=0,
     )
 
 
-def prepare(directory, mode, fixture, outer, request):
+def prepare(directory, mode, fixture, outer, request, *, vectorize_pq=True):
     """Build without solving, and verify the physical start in either layout."""
     if mode not in MODES:
         raise ValueError(f"Unknown temporal representation: {mode}")
+    if not isinstance(vectorize_pq, bool):
+        raise ValueError("vectorize_pq must be a boolean")
     selected = request["selected"]
     historical = checked(selected["references"]["primary_request.json"])
     retained = load_retained_start(
         Path(selected["references"]["primary_start.json"]["path"])
     )
-    if mode == "vectorized":
-        prepared = vectorized_worker.prepare(directory, fixture, outer, request)
-        assigned = vectorized_worker.unpack_values(prepared.assigned, retained.assigned)
-    else:
-        prepared = prepare_attempt(
-            fixture.inputs, fixture.policy, fixture.solve_config, outer,
-            invocation(request["invocation"]), selected["initial_soc_mwh"],
-            restore_source(historical["preceding_source"]),
-            trajectory_start=selected["trajectory_start"],
-            trajectory_stop=selected["trajectory_stop"],
-            trajectory_initial_soc_mwh=selected["trajectory_initial_soc_mwh"],
+    # Reconstruct the same historical request/start before changing representation.
+    prepared = prepare_attempt(
+        fixture.inputs, fixture.policy, fixture.solve_config, outer,
+        invocation(request["invocation"]), selected["initial_soc_mwh"],
+        restore_source(historical["preceding_source"]),
+        trajectory_start=selected["trajectory_start"],
+        trajectory_stop=selected["trajectory_stop"],
+        trajectory_initial_soc_mwh=selected["trajectory_initial_soc_mwh"],
+    )
+    representation_inputs = replace(
+        fixture.inputs, options=replace(fixture.inputs.options, vectorize_pq=vectorize_pq),
+    )
+    if mode != "stepwise" or not vectorize_pq:
+        storage = streaming._inner_storage(fixture.inputs, prepared.initial, prepared.target)
+        build = streaming.build_window(
+            representation_inputs, "ac", 6047, prepared.stop, storage,
+            temporal_assembly=mode,
         )
-        assigned = prepared.assigned
+        raw, assigned = prepared.raw, prepared.assigned
+        if mode == "vectorized":
+            initial = [prepared.initial[k] for k in fixture.inputs.storage_device_ids]
+            raw = vectorized_worker.pack_start(raw, build, initial)
+            assigned = vectorized_worker.pack_start(assigned, build, initial)
+        streaming.assign_start(build, assigned)
+        prepared = replace(prepared, build=build, raw=raw, assigned=assigned)
+    assigned = (vectorized_worker.unpack_values(prepared.assigned, retained.assigned)
+                if mode == "vectorized" else prepared.assigned)
     if prepared.request_sha256 != retained.request_sha256:
         raise ValueError("Frozen physical request identity changed")
     if set(assigned) != set(retained.assigned):
@@ -140,6 +195,8 @@ def prepare(directory, mode, fixture, outer, request):
         raise ValueError("Built the wrong temporal representation")
     atomic_immutable_json(directory / "prepared.json", dict(
         temporal_assembly=mode, request_sha256=prepared.request_sha256,
+        vectorize_pq=vectorize_pq,
+        representation_input_sha256=streaming.execution_input_sha256(representation_inputs),
         historical_named_start_exact=True,
         variable_objects=len(prepared.build.prob.variables()),
         constraint_objects=len(prepared.build.prob.constraints),
@@ -173,7 +230,9 @@ def worker(directory):
         atomic_json(directory / "phase.json", dict(events=events))
 
     phase("before_ac_build")
-    prepared = prepare(directory, directory.name, fixture, outer, request)
+    condition = binding["conditions"][directory.name]
+    prepared = prepare(directory, condition["temporal_assembly"], fixture, outer, request,
+                       vectorize_pq=condition["vectorize_pq"])
     phase("after_ac_build")
     if not binding["prepare_only"]:
         # Retain IPOPT iterations/termination diagnostics without numerical tuning.
@@ -191,10 +250,10 @@ def worker(directory):
     check_sources(binding["execution_sources"])
 
 
-def run_pair(output, *, commit=None, prepare_only=False, fan_on=False):
+def run_pair(output, *, commit=None, prepare_only=False, fan_on=False, four_way=False):
     if not prepare_only and not fan_on:
         raise ValueError("Confirm the external fan is on before launch")
-    binding = preflight(output, commit=commit, prepare_only=prepare_only)
+    binding = preflight(output, commit=commit, prepare_only=prepare_only, four_way=four_way)
     if not prepare_only:
         # Fail before launching a solve if the monitoring permission is absent.
         subprocess.run(["ps", "-o", "pid=", "-p", str(os.getpid())],
@@ -204,7 +263,7 @@ def run_pair(output, *, commit=None, prepare_only=False, fan_on=False):
 
     def pair():
         rows = []
-        for mode in MODES:
+        for mode in (FOUR_WAY_MODES if four_way else MODES):
             directory = output / mode
             directory.mkdir()
             started = time.monotonic()
@@ -263,6 +322,8 @@ if __name__ == "__main__":
     parser.add_argument("--commit")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--fan-on", action="store_true")
+    parser.add_argument("--four-way", action="store_true",
+                        help="Repeat all four time/spatial conditions, once each")
     parser.add_argument("--worker-directory", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker_directory is not None:
@@ -271,4 +332,4 @@ if __name__ == "__main__":
         parser.error("--output is required and must name a new directory")
     else:
         run_pair(args.output.resolve(), commit=args.commit,
-                 prepare_only=args.prepare_only, fan_on=args.fan_on)
+                 prepare_only=args.prepare_only, fan_on=args.fan_on, four_way=args.four_way)

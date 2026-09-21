@@ -1,6 +1,7 @@
 """Admission boundaries for the isolated primary diagnostic; no solver runs."""
 
 from contextlib import nullcontext
+from hashlib import sha256
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -134,3 +135,56 @@ def test_logging_restores_solver_on_escaping_exception():
             assert diagnostic.streaming.IPOPT is not original
             raise RuntimeError("test failure")
     assert diagnostic.streaming.IPOPT is original
+
+
+def test_four_way_conditions_are_distinct_and_ordered():
+    assert [diagnostic.CONDITIONS[name] for name in diagnostic.FOUR_WAY_MODES] == [
+        ("stepwise", False), ("vectorized", False),
+        ("stepwise", True), ("vectorized", True),
+    ]
+
+
+def test_four_way_sources_require_exact_approved_commit(monkeypatch):
+    permitted = str(diagnostic.ROOT / "src/cvxopf/ac_problem.py")
+    unchanged = str(diagnostic.ROOT / "src/cvxopf/results.py")
+    approved = b"approved spatial-switch implementation\n"
+    digest = sha256(approved).hexdigest()
+    monkeypatch.setattr(diagnostic, 'sha', lambda path: digest if path == permitted else 'old')
+    monkeypatch.setattr(diagnostic.subprocess, 'check_output', lambda *a, **k: approved)
+    sources, changes = diagnostic.bind_sources({permitted: 'historical', unchanged: 'old'},
+                                               four_way=True)
+    assert sources == {permitted: digest, unchanged: 'old'}
+    assert changes[permitted] == dict(historical_sha256='historical', current_sha256=digest,
+                                    approved_commit=diagnostic.SPATIAL_SWITCH_COMMIT)
+    with pytest.raises(ValueError, match='Execution source changed'):
+        diagnostic.bind_sources({permitted: 'historical'}, four_way=False)
+    with pytest.raises(ValueError, match='Execution source changed'):
+        diagnostic.bind_sources({unchanged: 'unexpected'}, four_way=True)
+    monkeypatch.setattr(diagnostic, 'sha', lambda path: 'unapproved')
+    with pytest.raises(ValueError, match='approved spatial-switch commit'):
+        diagnostic.bind_sources({permitted: 'historical'}, four_way=True)
+
+
+def test_four_way_runs_each_condition_once_even_after_solver_rejection(tmp_path, monkeypatch):
+    output = tmp_path / 'four_way'
+    launched = []
+    monkeypatch.setattr(diagnostic, 'preflight', lambda *a, **k: {})
+    monkeypatch.setattr(diagnostic, 'TemperatureCollector', lambda p: nullcontext())
+    monkeypatch.setattr(diagnostic.subprocess, 'run', lambda *a, **k: None)
+
+    def launch(command, **kwargs):
+        directory = Path(command[-1])
+        launched.append(directory.name)
+        (directory / 'result.json').write_text(json.dumps(dict(attempt=dict(
+            slot_state='executed', audit=dict(exception=None, status='user_limit',
+                                             accepted_primal=False),
+            result=dict(status='user_limit', objective=123),
+        ))))
+        return SimpleNamespace(pid=123, wait=lambda: 0)
+
+    monkeypatch.setattr(diagnostic.subprocess, 'Popen', launch)
+    diagnostic.run_pair(output, commit='expected', fan_on=True, four_way=True)
+    assert launched == ['none', 'time_only', 'spatial_only', 'both']
+    finished = json.loads((output / 'finished.json').read_text())
+    assert len(finished['attempts']) == 4
+    assert all(not a['audit']['accepted_primal'] for a in finished['attempts'])

@@ -60,3 +60,8 @@ For the separately authorized two-solve investigation of the failed primary at
 hour 6047, see [PRIMARY_DIAGNOSTIC.md](PRIMARY_DIAGNOSTIC.md). That diagnostic
 compares stepwise with time-vectorized assembly, with spatial P/Q vectorization
 enabled in both, and does not resume or modify the 120+6 replay.
+
+The subsequent [four-way diagnostic](FOUR_WAY_DIAGNOSTIC.md) repeats hour 6047's
+isolated primary under all four time/spatial combinations in the current
+environment. Select it explicitly with `diagnose_primary --four-way`; it has
+its own reviewed source transition and fresh output directory.
