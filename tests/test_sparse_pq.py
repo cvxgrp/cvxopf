@@ -9,10 +9,11 @@ Verifies:
   - No effect on DC formulation
 """
 
+import cvxpy as cp
 import numpy as np
 import pytest
 
-from cvxopf.testcases import case9, case14
+from cvxopf.testcases import case9, case14, case118
 from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions
 from cvxopf.results import extract_results
 
@@ -50,23 +51,80 @@ def _flat_load_dfs(case_fn, T):
     return df_P, df_Q
 
 
-@pytest.mark.parametrize("case_fn", [case9, case14])
-@pytest.mark.parametrize("horizon", [None, 3])
-def test_sparse_gather_flows_match_complex_power(case_fn, horizon):
+ASSEMBLY_HORIZONS = [
+    ("single", 1), ("stepwise", 1), ("stepwise", 3),
+    ("vectorized", 1), ("vectorized", 3),
+]
+
+
+def _build_pq_case(case_fn, sparse, assembly, horizon):
+    if assembly == "single":
+        return _build_ac(case_fn, sparse_pq=sparse)
+    df_P, df_Q = _flat_load_dfs(case_fn, horizon)
+    scales = np.linspace(0.8, 1.2, horizon)
+    return build_opf_multistep(
+        case_fn(), df_P.mul(scales, axis=0), df_Q.mul(scales, axis=0),
+        T=horizon, options=OPFOptions(sparse_pq=sparse),
+        temporal_assembly=assembly,
+    )
+
+
+@pytest.mark.parametrize("case_fn", [case9, case14, case118])
+@pytest.mark.parametrize("sparse", [True, False])
+@pytest.mark.parametrize("assembly,horizon", ASSEMBLY_HORIZONS)
+def test_pq_definitions_are_batched_over_all_spatial_entries(
+    case_fn, sparse, assembly, horizon,
+):
+    """Count P/Q defining objects, not total graph objects or scalar equations.
+
+    The former per-entry time-vectorized loop also had counts independent of
+    T, so horizon-invariance alone does not enforce spatial vectorization.
+    """
+    build = _build_pq_case(case_fn, sparse, assembly, horizon)
+    nnz = len(build.data["rows"])
+    shape = (nnz, horizon) if assembly == "vectorized" else (nnz,)
+    keys = ("P_vec", "Q_vec") if sparse else ("P", "Q")
+    for key in keys:
+        variables = build.variables[key]
+        if assembly != "stepwise":
+            variables = [variables]
+        assert len(variables) == (horizon if assembly == "stepwise" else 1)
+        for variable in variables:
+            definitions = [
+                constraint for constraint in build.prob.constraints
+                if isinstance(constraint, cp.constraints.Equality)
+                and {v.id for v in constraint.args[0].variables()} == {variable.id}
+                and not constraint.args[1].is_affine()
+            ]
+            assert len(definitions) == 1
+            assert definitions[0].shape == shape
+            if not sparse:
+                zeros = [
+                    constraint for constraint in build.prob.constraints
+                    if isinstance(constraint, cp.constraints.Equality)
+                    and {v.id for v in constraint.args[0].variables()} == {variable.id}
+                    and constraint.args[1].is_constant()
+                ]
+                assert len(zeros) == 1
+                zero_count = len(build.data["Z"][0])
+                assert zeros[0].shape == (
+                    (zero_count, horizon) if assembly == "vectorized"
+                    else (zero_count,)
+                )
+
+
+@pytest.mark.parametrize("case_fn,sparse", [
+    (case9, True), (case9, False), (case14, True), (case14, False),
+    (case118, True),
+])
+@pytest.mark.parametrize("assembly,horizon", ASSEMBLY_HORIZONS)
+def test_gather_flows_match_complex_power(case_fn, sparse, assembly, horizon):
     """Audit repeated-index gathers against complex Ybus power, including shunts.
 
     This exercises the DNLP derivative path behind CVXPY issue #3442 and
     checks the solved P/Q entries independently of the trigonometric model.
     """
-    if horizon is None:
-        build = _build_ac(case_fn, sparse_pq=True)
-    else:
-        df_P, df_Q = _flat_load_dfs(case_fn, horizon)
-        scales = np.array([0.8, 1.0, 1.2])
-        build = build_opf_multistep(
-            case_fn(), df_P.mul(scales, axis=0), df_Q.mul(scales, axis=0),
-            T=horizon, options=OPFOptions(sparse_pq=True),
-        )
+    build = _build_pq_case(case_fn, sparse, assembly, horizon)
     build.solve(max_iter=400)
     assert build.prob.status == "optimal"
     rows, cols = build.data["rows"], build.data["cols"]
@@ -78,11 +136,20 @@ def test_sparse_gather_flows_match_complex_power(case_fn, horizon):
     )
     for t, phasor in enumerate(voltage):
         power = phasor[:, None] * np.conj(build.data["Ybus"] * phasor[None, :])
-        for key, expected in (("P_vec", power.real), ("Q_vec", power.imag)):
+        keys = ("P_vec", "Q_vec") if sparse else ("P", "Q")
+        for key, expected in zip(keys, (power.real, power.imag), strict=True):
             variable = build.variables[key]
-            if horizon is not None:
-                variable = variable[t]
-            np.testing.assert_allclose(variable.value, expected[rows, cols], atol=1e-6)
+            if assembly == "stepwise":
+                actual = variable[t].value
+            elif assembly == "vectorized":
+                actual = variable.value[:, t]
+            else:
+                actual = variable.value
+            if sparse:
+                expected = expected[rows, cols]
+            else:
+                actual = actual.reshape(expected.shape)
+            np.testing.assert_allclose(actual, expected, atol=1e-6)
         for key, expected in (("p_net", power.real), ("q_net", power.imag)):
             np.testing.assert_allclose(
                 np.atleast_2d(result[key])[t],

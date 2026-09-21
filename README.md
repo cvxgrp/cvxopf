@@ -542,6 +542,12 @@ C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
 shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
 explicit constraints.
 
+P/Q flow definitions are vectorized across Ybus entries in both temporal
+representations, for sparse and dense P/Q storage. Stepwise assembly uses two
+defining vector equalities per step; time-vectorized assembly uses two matrix
+equalities over all entries and time steps. Dense off-pattern zeros are also
+constrained in batches.
+
 ### Objective units and time discretization
 
 `delta` is the interval duration in hours. cvxopf treats generator, storage

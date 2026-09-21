@@ -777,14 +777,17 @@ or `cyipopt` will fail to build with a linker error.
 
 ### Sparse P/Q vectorization
 
-Single-step and stepwise multistep AC builds express the sparse
-`P_vec`/`Q_vec` flow equations with array gathers over the Ybus pattern.
+All AC builds share P/Q flow expressions formed by array gathers over the
+Ybus pattern. Stepwise assembly uses two vector equalities per step;
+time-vectorized assembly uses two matrix equalities over all entries and
+times. Both sparse and dense P/Q storage use these expressions, and dense
+off-pattern zeros are constrained in batches.
 CVXPY issue #3442 required a scalar-loop workaround until the derivative
 fix in `sparsediffpy >= 0.6.0` became available in CVXPY **1.9.3**.
 CVXPY 1.9.2 still requires `sparsediffpy < 0.4.0` and is insufficient.
 The package and lockfile use released dependencies; no CVXPY Git source
-is needed. The separate time-vectorized AC builder retains its existing
-basic spatial indexing and vectorization over time.
+is needed. Variable layouts, initializations, and result schemas remain
+specific to each temporal representation.
 
 ---
 
