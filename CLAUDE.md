@@ -823,6 +823,31 @@ docstring.
 
 ---
 
+## Owner's Git workflow
+
+- Work in the owner's existing checkout and current branch. Do not create a
+  worktree, use a separate checkout, or switch branches without explicit approval.
+- Before starting changes, summarize the proposed scope and state where the work
+  will happen. Stay within the approved scope and make any change of location or
+  approach clear before acting.
+- The owner reviews, stages, commits, and pushes. Leave changes unstaged unless
+  explicitly asked otherwise. Do not commit or push unless the owner explicitly
+  delegates that action; permission to implement or test is not permission to
+  commit or push.
+- When authorized to integrate another branch, update the checkout the owner is
+  using. Do not leave its local branch behind while updating only another
+  worktree or a remote branch. Report the resulting local state clearly.
+- Preserve existing untracked and ignored files, including research data,
+  presentations, and generated outputs. Their presence is not permission to
+  delete or stage them. Keep generated `outputs/` ignored.
+- Put reviewable plans and experiment code in the appropriate repository
+  directory, not only in ignored outputs or conversation context. State which
+  files changed and what the owner will see in the current diff.
+- Proposed commit messages should be plain English and describe only the current
+  changes, without internal milestone labels or work from earlier commits.
+
+---
+
 ## Fresh coding sessions
 
 1. Read `CLAUDE.md` before touching code.
