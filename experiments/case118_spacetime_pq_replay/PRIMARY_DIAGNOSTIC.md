@@ -20,8 +20,11 @@ and this plan too. Work in the owner's existing checkout and branch.
 
 The only solver-option override is `print_level=5`, to retain IPOPT iteration
 counts, infeasibilities, and termination reasons in each `worker.log`. Record
-original and effective options explicitly. The retained physical request hash
-describes the original numerical request, not this logging override. No numerical
+the unchanged frozen options and the solver-boundary logging override explicitly.
+A process-local scoped IPOPT subclass forwards the original solver call with
+only its print level changed, after the existing frozen-configuration validation
+and start capture. The retained physical request hash describes the original
+numerical request, not this logging override. No numerical
 tuning, new time limit, or tolerance relaxation is permitted.
 
 Before execution, obtain clean scientific review from `cvxopf-review` and the
@@ -38,7 +41,7 @@ After the owner commits, bind the full commit SHA to execute the pair:
 ```sh
 uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.diagnose_primary \
   --commit <full-reviewed-commit-sha> --fan-on \
-  --output outputs/case118_6047_primary_diagnostic
+  --output outputs/case118_6047_primary_diagnostic_retry
 ```
 
 Use process-monitoring and thermal-telemetry permissions from the outset. The
@@ -62,3 +65,11 @@ as a diagnostic, not a replicated timing estimate. This comparison tests tempora
 representation with spatial vectorization enabled in both conditions; it cannot
 isolate spatial vectorization or dependency changes. Keep the failed study's
 original primary and prior historical results as separate reference evidence.
+
+The first launch at commit `2a3dde18448fd0054e7601a1ed50512ec0c086c8` is
+preserved in `outputs/case118_6047_primary_diagnostic/`. It stopped on the
+stepwise primary before IPOPT entry because the initial implementation put the
+logging option into the hash-locked solver configuration. It ran zero native
+solves and never launched the vectorized condition. The corrected diagnostic
+requires another owner-reviewed commit and explicit retry authorization; use
+the separate unused output directory above and retain the failed launch intact.

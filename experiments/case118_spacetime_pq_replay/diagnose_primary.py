@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from importlib.metadata import version
 import os
@@ -14,6 +14,7 @@ import time
 
 import numpy as np
 
+from experiments.case118_annual_hierarchy import streaming_runner as streaming
 from experiments.case118_annual_hierarchy.run_s0 import _software_versions
 from experiments.case118_annual_hierarchy.run_s4b import _outer
 from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
@@ -35,6 +36,30 @@ from .telemetry import TemperatureCollector
 
 REQUEST = STUDY / "run/s4b-shard-008/ac-006047-spec-00/request.json"
 MODES = ("stepwise", "vectorized")
+
+
+@contextmanager
+def ipopt_iteration_log():
+    """Add logging at the solver boundary without changing the frozen config.
+
+    Each diagnostic runs in its own process. Retain the original streaming
+    canonicalization and x0 checks; only the forwarded print level changes.
+    """
+    original = streaming.IPOPT
+
+    class LoggingIPOPT(original):
+        def solve_via_data(self, data, warm_start, verbose, solver_opts,
+                           solver_cache=None):
+            return original.solve_via_data(
+                self, data, warm_start, verbose,
+                {**solver_opts, "print_level": 5}, solver_cache,
+            )
+
+    streaming.IPOPT = LoggingIPOPT
+    try:
+        yield
+    finally:
+        streaming.IPOPT = original
 
 
 def check_sources(sources):
@@ -152,18 +177,17 @@ def worker(directory):
     phase("after_ac_build")
     if not binding["prepare_only"]:
         # Retain IPOPT iterations/termination diagnostics without numerical tuning.
-        ac = replace(fixture.solve_config.ac,
-                     options={**fixture.solve_config.ac.options, "print_level": 5})
-        config = replace(fixture.solve_config, ac=ac)
         atomic_immutable_json(directory / "solver_configuration.json", dict(
             original_options=dict(fixture.solve_config.ac.options),
-            effective_options=dict(config.ac.options),
+            frozen_config_unchanged=True,
+            solver_boundary_logging_override={"print_level": 5},
         ))
-        execute_prepared_attempt(
-            prepared, fixture.inputs, fixture.policy, config, outer,
-            start_path=directory / "start.json", result_path=directory / "result.json",
-            phase_observer=phase,
-        )
+        with ipopt_iteration_log():
+            execute_prepared_attempt(
+                prepared, fixture.inputs, fixture.policy, fixture.solve_config, outer,
+                start_path=directory / "start.json", result_path=directory / "result.json",
+                phase_observer=phase,
+            )
     check_sources(binding["execution_sources"])
 
 

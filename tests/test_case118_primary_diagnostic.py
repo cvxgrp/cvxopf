@@ -92,3 +92,45 @@ def test_pair_preserves_structured_errors_and_continues_numerical_rejections(
     assert completion["wall_seconds"] >= 0
     assert bool(completion["execution_error"]) == stops
     assert completion["audit"] == attempt["audit"]
+
+
+def test_logging_reaches_solver_through_real_frozen_config_and_x0_checks(monkeypatch):
+    from cvxopf import build_opf
+    from cvxopf.testcases import case9
+    from experiments.case118_annual_hierarchy.p0_fixture import (
+        frozen_p0_solve_config, solve_config_sha256,
+    )
+
+    streaming = diagnostic.streaming
+    config = frozen_p0_solve_config()
+    original_hash = solve_config_sha256(config)
+    original_solver = streaming.IPOPT
+    calls, starts = [], []
+
+    def native_entry(self, data, warm_start, verbose, solver_opts, solver_cache=None):
+        calls.append(dict(solver_opts))
+        raise RuntimeError("TEST_STOP_BEFORE_NATIVE_SOLVE")
+
+    monkeypatch.setattr(original_solver, "solve_via_data", native_entry)
+    for logging in (False, True):
+        build = build_opf(case9(), formulation="ac")
+        streaming.assign_start(build, streaming.complete_flat_start(build))
+        with diagnostic.ipopt_iteration_log() if logging else nullcontext():
+            run = streaming.solve_ac_with_verified_x0(
+                build, config, start_observer=starts.append,
+            )
+        assert run.exception == "RuntimeError: TEST_STOP_BEFORE_NATIVE_SOLVE"
+        assert streaming.IPOPT is original_solver
+    assert len(starts) == len(calls) == 2
+    assert calls[0]["print_level"] == 0
+    assert calls[1] == {**calls[0], "print_level": 5}
+    assert solve_config_sha256(config) == original_hash
+
+
+def test_logging_restores_solver_on_escaping_exception():
+    original = diagnostic.streaming.IPOPT
+    with pytest.raises(RuntimeError, match="test failure"):
+        with diagnostic.ipopt_iteration_log():
+            assert diagnostic.streaming.IPOPT is not original
+            raise RuntimeError("test failure")
+    assert diagnostic.streaming.IPOPT is original
