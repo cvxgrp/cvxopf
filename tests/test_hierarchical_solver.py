@@ -99,6 +99,32 @@ def test_private_alignment_and_window_bounds_fail_clearly():
         )
 
 
+def test_localize_storage_connection_window():
+    inputs = _inputs(horizon_steps=3)
+    unit = replace(inputs.storage[0], connection_window=(1, 3))
+
+    disconnected = _hierarchical_solver._localize_storage_windows(
+        (unit,), 0, 1, 3
+    )
+    connected = _hierarchical_solver._localize_storage_windows(
+        (unit,), 1, 3, 3
+    )
+
+    assert disconnected[0].connection_window == (0, 0)
+    assert connected[0].connection_window == (0, 2)
+
+
+def test_hierarchical_inputs_reject_window_beyond_global_horizon():
+    inputs = _inputs(horizon_steps=3)
+    unit = replace(inputs.storage[0], connection_window=(1, 4))
+    snapshot = _execution_snapshot(replace(inputs, storage=(unit,)))
+
+    with pytest.raises(ValueError, match="horizon length"):
+        _hierarchical_solver._build_window(
+            snapshot, "ac", 0, 1, snapshot.storage
+        )
+
+
 def test_finite_field_and_storage_identity_diagnostics_are_total():
     missing = _hierarchical_solver._finite_fields(
         {"bad": object(), "nan": np.nan}, ("bad", "nan", "absent")
