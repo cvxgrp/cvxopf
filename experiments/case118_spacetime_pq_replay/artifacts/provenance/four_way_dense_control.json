@@ -1,0 +1,455 @@
+{
+  "source_commit": "93294af124e1135388dc5d8d444a32b0b16755c2",
+  "density_threshold": 0.0,
+  "cvxpy": "1.9.3",
+  "sparsediffpy": "0.6.1",
+  "conditions": [
+    {
+      "condition": "none",
+      "temporal_assembly": "stepwise",
+      "vectorize_pq": false,
+      "sparse_pq": true,
+      "status": "optimal",
+      "accepted": true,
+      "iterations": 339,
+      "native_seconds": 212.517,
+      "solve_phase_seconds": 220.16162733302917,
+      "build_seconds": 1.4473770409822464,
+      "worker_wall_seconds": 230.88360858301166,
+      "termination": "Optimal Solution Found.",
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412431,
+        "m": 10597,
+        "n": 9120,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2142.240854875304,
+          "unscaled": 266883.7161650703
+        },
+        "Dual infeasibility": {
+          "scaled": 9.641868621655632e-12,
+          "unscaled": 1.2011990727684186e-09
+        },
+        "Constraint violation": {
+          "scaled": 5.684343473135153e-14,
+          "unscaled": 7.638334409421077e-14
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 2.11952661173285e-08,
+          "unscaled": 2.6405394022930704e-06
+        },
+        "Overall NLP error": {
+          "scaled": 2.497446190501978e-09,
+          "unscaled": 2.6405394022930704e-06
+        }
+      },
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 1.1368683772161603e-15,
+        "ac_reactive_balance_pu_abs": 4.3520742565306136e-16,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 4.0578017969404925e-14,
+        "terminal_soc_mwh_abs": 0.0,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "extracted_objective": 266883.7161239854,
+      "previous_default": {
+        "status": "user_limit",
+        "accepted": false,
+        "iterations": 3000,
+        "native_seconds": 717.402,
+        "solve_phase_seconds": 723.4407187499455
+      }
+    },
+    {
+      "condition": "time_only",
+      "temporal_assembly": "vectorized",
+      "vectorize_pq": false,
+      "sparse_pq": true,
+      "status": "optimal",
+      "accepted": true,
+      "iterations": 70,
+      "native_seconds": 31.903,
+      "solve_phase_seconds": 35.28936704201624,
+      "build_seconds": 1.1035955830011517,
+      "worker_wall_seconds": 45.20929058303591,
+      "termination": "Optimal Solution Found.",
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412439,
+        "m": 10601,
+        "n": 9124,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2142.240863849188,
+          "unscaled": 266883.7172830508
+        },
+        "Dual infeasibility": {
+          "scaled": 1.5873586412641204e-06,
+          "unscaled": 0.00019775562215760493
+        },
+        "Constraint violation": {
+          "scaled": 5.1098648867764496e-08,
+          "unscaled": 5.1098648867764496e-08
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 1.9551804820189042e-07,
+          "unscaled": 2.435794423521962e-05
+        },
+        "Overall NLP error": {
+          "scaled": 5.1098648867764496e-08,
+          "unscaled": 0.00019775562215760493
+        }
+      },
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 7.847944516470307e-14,
+        "ac_reactive_balance_pu_abs": 8.967937503712164e-14,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 2.8158311308079015e-18,
+        "soc_recurrence_mwh_abs": 1.4898009329688449e-12,
+        "terminal_soc_mwh_abs": 7.389644451905042e-13,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "extracted_objective": 266883.71728151327,
+      "previous_default": {
+        "status": "user_limit",
+        "accepted": false,
+        "iterations": 3000,
+        "native_seconds": 284.574,
+        "solve_phase_seconds": 286.52758666698355
+      }
+    },
+    {
+      "condition": "spatial_only",
+      "temporal_assembly": "stepwise",
+      "vectorize_pq": true,
+      "sparse_pq": true,
+      "status": "optimal",
+      "accepted": true,
+      "iterations": 190,
+      "native_seconds": 98.332,
+      "solve_phase_seconds": 103.32046737498604,
+      "build_seconds": 0.6152340839616954,
+      "worker_wall_seconds": 110.46892445901176,
+      "termination": "Optimal Solution Found.",
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412431,
+        "m": 10597,
+        "n": 9120,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2142.240916371974,
+          "unscaled": 266883.72382642166
+        },
+        "Dual infeasibility": {
+          "scaled": 4.029685318160911e-06,
+          "unscaled": 0.0005020244993643387
+        },
+        "Constraint violation": {
+          "scaled": 4.407107745407757e-08,
+          "unscaled": 4.407107745407757e-08
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 1.7813574002204156e-07,
+          "unscaled": 2.219242909624399e-05
+        },
+        "Overall NLP error": {
+          "scaled": 4.407107745407757e-08,
+          "unscaled": 0.0005020244993643387
+        }
+      },
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 1.3841372492606752e-13,
+        "ac_reactive_balance_pu_abs": 9.164224934465893e-14,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 8.74603417371834e-13,
+        "terminal_soc_mwh_abs": 8.668621376273222e-13,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "extracted_objective": 266883.7238073657,
+      "previous_default": {
+        "status": "user_limit",
+        "accepted": false,
+        "iterations": 3000,
+        "native_seconds": 448.483,
+        "solve_phase_seconds": 451.8788526660064
+      }
+    },
+    {
+      "condition": "both",
+      "temporal_assembly": "vectorized",
+      "vectorize_pq": true,
+      "sparse_pq": true,
+      "status": "optimal",
+      "accepted": true,
+      "iterations": 76,
+      "native_seconds": 32.188,
+      "solve_phase_seconds": 34.088042374991346,
+      "build_seconds": 0.8343158750212751,
+      "worker_wall_seconds": 40.16065425000852,
+      "termination": "Optimal Solution Found.",
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412439,
+        "m": 10601,
+        "n": 9124,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2142.2408536011767,
+          "unscaled": 266883.71600633755
+        },
+        "Dual infeasibility": {
+          "scaled": 5.511084880009026e-07,
+          "unscaled": 6.865795736882971e-05
+        },
+        "Constraint violation": {
+          "scaled": 5.304813832651689e-08,
+          "unscaled": 5.304813832651689e-08
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 2.0494832871471961e-07,
+          "unscaled": 2.5532783330466636e-05
+        },
+        "Overall NLP error": {
+          "scaled": 5.304813832651689e-08,
+          "unscaled": 6.865795736882971e-05
+        }
+      },
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 7.837286375433905e-14,
+        "ac_reactive_balance_pu_abs": 9.28856991322391e-14,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 1.439008532830039e-12,
+        "terminal_soc_mwh_abs": 7.247535904753022e-13,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "extracted_objective": 266883.7159979859,
+      "previous_default": {
+        "status": "user_limit",
+        "accepted": false,
+        "iterations": 3000,
+        "native_seconds": 196.344,
+        "solve_phase_seconds": 197.4639862080221
+      }
+    }
+  ],
+  "solution_comparisons": [
+    {
+      "first": "none",
+      "second": "time_only",
+      "objective_difference": 0.0011575278476811945,
+      "max_absolute_differences": {
+        "Pg": 0.06888156917091237,
+        "Qg": 154.3313929718032,
+        "Vm": 0.0001779751566421961,
+        "Va_deg": 0.008583138216916808,
+        "b": 0.06492964725528338,
+        "b_q": 124.32231497074386,
+        "soc": 0.06257564820214156,
+        "p_nd": 1.9718527255463414e-07,
+        "q_nd": 278.6435477134746
+      }
+    },
+    {
+      "first": "none",
+      "second": "spatial_only",
+      "objective_difference": 0.007683380274102092,
+      "max_absolute_differences": {
+        "Pg": 0.16835898739827826,
+        "Qg": 130.15079658409135,
+        "Vm": 0.0004210983471351071,
+        "Va_deg": 0.02004194280981153,
+        "b": 0.15657429750009655,
+        "b_q": 137.15521576790925,
+        "soc": 0.15138312326790526,
+        "p_nd": 1.042161557052168e-07,
+        "q_nd": 267.2816331754388
+      }
+    },
+    {
+      "first": "none",
+      "second": "both",
+      "objective_difference": -0.0001259995042346418,
+      "max_absolute_differences": {
+        "Pg": 0.02208368161245744,
+        "Qg": 141.81479711333486,
+        "Vm": 6.660093675936452e-05,
+        "Va_deg": 0.0029187844611904268,
+        "b": 0.021509034176427022,
+        "b_q": 124.70795434431679,
+        "soc": 0.020647017088876396,
+        "p_nd": 1.6119543033710215e-07,
+        "q_nd": 266.5201890588848
+      }
+    },
+    {
+      "first": "time_only",
+      "second": "spatial_only",
+      "objective_difference": 0.006525852426420897,
+      "max_absolute_differences": {
+        "Pg": 0.09947741822736589,
+        "Qg": 36.98858186218927,
+        "Vm": 0.00024312319049291098,
+        "Va_deg": 0.011458804592894722,
+        "b": 0.09164465024481316,
+        "b_q": 29.144249974806872,
+        "soc": 0.0888074750657637,
+        "p_nd": 9.296911684941733e-08,
+        "q_nd": 34.43339805160802
+      }
+    },
+    {
+      "first": "time_only",
+      "second": "both",
+      "objective_difference": -0.0012835273519158363,
+      "max_absolute_differences": {
+        "Pg": 0.04718075914547626,
+        "Qg": 20.413162447882943,
+        "Vm": 0.00012066591082215972,
+        "Va_deg": 0.005664353755726381,
+        "b": 0.04342061307885636,
+        "b_q": 10.218535159168615,
+        "soc": 0.04192863111326517,
+        "p_nd": 3.5989842217531987e-08,
+        "q_nd": 20.629898565927494
+      }
+    },
+    {
+      "first": "spatial_only",
+      "second": "both",
+      "objective_difference": -0.007809379778336734,
+      "max_absolute_differences": {
+        "Pg": 0.14665817737284215,
+        "Qg": 25.60126736060706,
+        "Vm": 0.0003637891013150707,
+        "Va_deg": 0.017123158348621104,
+        "b": 0.13506526332366953,
+        "b_q": 28.78695451936562,
+        "soc": 0.13073610617902887,
+        "p_nd": 5.6979274631885346e-08,
+        "q_nd": 13.803499485680526
+      }
+    }
+  ],
+  "time_only_exact_historical_solution": {
+    "named_values": true,
+    "extracted_result": true
+  },
+  "thermal": {
+    "samples": 43,
+    "errors": [],
+    "cpu_temperature_min_c": 44.07060623168945,
+    "cpu_temperature_max_c": 68.8428726196289
+  },
+  "binding_sha256": "bdf8d486670b13dd4140b1016d116051e610d7d683afaad515d4532c922f351c",
+  "evidence_sha256": {
+    "run/none/result.json": "5a2f1b8e30b45baa4bb01b5c768a7536637aa3e94f4a96656ebbfe98945a8b56",
+    "run/none/start.json": "9c012c84b40327c8a038f174acd35c60d82979eb1b9ae5a736a58611228fcb8e",
+    "run/none/phase.json": "b7cfbc9f559c46c04d744d2aa56f4cb72325d9202df0790b1194cce4ffcef2a1",
+    "run/none/native_entry.json": "acb0e8da0861c0ec0e18d2b27173cecb196acd0485a4fc478634ebbfd5524c95",
+    "run/none/native_result.json": "8b932294c8481af421a83053e5a3853359740f609b28096e3684334ff214f1f0",
+    "run/none/summary.json": "b0383ac06c1833da856bd61528e1677e8c6021cda25d1427598cc3ad6ecbe6dc",
+    "run-none.log": "205190808f1ab9c5cca894028cde90ff025ff553389017c64d8f6042f829d2fc",
+    "run/time_only/result.json": "5f19e092d59f724d296b6f4436d86c2230dba1e3665d53d6805fe8b046fdd958",
+    "run/time_only/start.json": "c37b23b941a005ee551f2e08911c20fd968721683032b710afdc1a65564e8891",
+    "run/time_only/phase.json": "7925c9c8582e2f5103636d1b3142f44ca5f065003fb06dd317256109d4f8f58a",
+    "run/time_only/native_entry.json": "d0f46237b5543a910ccc1bd58d32c3c9b1e20973838e7964abeb346b0e64aa7f",
+    "run/time_only/native_result.json": "5ab04ef1c4e87b828eae367e742059644befef838e6b48365b9470122d99d317",
+    "run/time_only/summary.json": "1d5cdec5823f193abc871f7f81586761e87c7e82f763893e37640d5c606e9e50",
+    "run-time_only.log": "0f0a89f10bb19e9ffa445b7614505fd7938b6410a5fc24c4ec3b8defd2d3863d",
+    "run/spatial_only/result.json": "7d836e9114f565be88df859456e5f6da895e6484dad474ea1b97925ef7e9c97f",
+    "run/spatial_only/start.json": "54d4766794524444732d52b7b051a5273a3f025ed8e452c03069b7a1b7e31ac9",
+    "run/spatial_only/phase.json": "45ee5e8dc980f879bafe7d65c3e7b36d4fa05114c5db9e3274e2b139fbfc644e",
+    "run/spatial_only/native_entry.json": "acb0e8da0861c0ec0e18d2b27173cecb196acd0485a4fc478634ebbfd5524c95",
+    "run/spatial_only/native_result.json": "eb03bb39ae06ae003a7d73d0b1cf6333a140d47dfad9367245926563dffe6d51",
+    "run/spatial_only/summary.json": "6618928859f72a6d75f308b6fe6749944817f82dccc8b3e903c76980162dc9fc",
+    "run-spatial_only.log": "6336f225d7916b7f14a5559f69ba65ffa0d917ed643e6e20c0a12561f3f44d33",
+    "run/both/result.json": "30c14d587869b7d11b9eb8484a01ff9b2f2d07c7c34044fa9ec1f740a875d878",
+    "run/both/start.json": "00bf7398aeb9475c1be2d58c73402086273f57eef0570522199901ce9322b177",
+    "run/both/phase.json": "55472bc47290e2a32b2652118322aef04ce380179a84282d4e45965ffdf35fb1",
+    "run/both/native_entry.json": "d0f46237b5543a910ccc1bd58d32c3c9b1e20973838e7964abeb346b0e64aa7f",
+    "run/both/native_result.json": "cc98398e9f3cd0912ea08c5fdfbe74b7d66b240f96b6270b68cd2f06e3a687ad",
+    "run/both/summary.json": "558ecfcb674fc93025d19b88360f0b4268e390160ee5f7979fead4c0e61dfd22",
+    "run-both.log": "6ca914523dd14ca9a72c557462131597d51538704c927ef9b0ba53a69120dc63"
+  }
+}

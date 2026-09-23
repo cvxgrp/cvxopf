@@ -1,0 +1,128 @@
+{
+  "b-01": {
+    "canonical_expressions_and_order_exact": true,
+    "vectors": {
+      "x": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "objective": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "constraints": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "gradient": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      }
+    },
+    "matrices": {
+      "jac_values": {
+        "old_stored": 412439,
+        "other_stored": 36167,
+        "old_nonzero": 35451,
+        "other_nonzero": 35451,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": false,
+        "raw_values_exact": false
+      },
+      "hess_objective": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 162,
+        "other_nonzero": 162,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      },
+      "hess_ones": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 10104,
+        "other_nonzero": 10104,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      },
+      "hess_random": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 10104,
+        "other_nonzero": 10104,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      }
+    }
+  },
+  "b-dense-01": {
+    "canonical_expressions_and_order_exact": true,
+    "vectors": {
+      "x": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "objective": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "constraints": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      },
+      "gradient": {
+        "exact": true,
+        "max_abs_difference": 0.0
+      }
+    },
+    "matrices": {
+      "jac_values": {
+        "old_stored": 412439,
+        "other_stored": 412439,
+        "old_nonzero": 35451,
+        "other_nonzero": 35451,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      },
+      "hess_objective": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 162,
+        "other_nonzero": 162,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      },
+      "hess_ones": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 10104,
+        "other_nonzero": 10104,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      },
+      "hess_random": {
+        "old_stored": 10104,
+        "other_stored": 10104,
+        "old_nonzero": 10104,
+        "other_nonzero": 10104,
+        "different_entries": 0,
+        "max_abs_difference": 0.0,
+        "raw_coordinates_exact": true,
+        "raw_values_exact": true
+      }
+    }
+  }
+}

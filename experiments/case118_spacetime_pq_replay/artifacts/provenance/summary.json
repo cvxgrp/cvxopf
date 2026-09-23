@@ -1,0 +1,1441 @@
+{
+  "historical_snapshot_commit": "2ac05b039780efd5f2b04465b2b6b42a7405ada9",
+  "source_checks": [
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/__init__.py",
+      "expected_sha256": "25fbadf0af2543602aded4a95667f9af4ed40aefbfd4ba1c13794c124ff66b41",
+      "actual_sha256": "25fbadf0af2543602aded4a95667f9af4ed40aefbfd4ba1c13794c124ff66b41",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/analyze_dispatch_changes.py",
+      "expected_sha256": "cbd02d540e02f8203ab0bf6dbd3c9caac900166f38b6812ecfb2e6fa17ef4c2c",
+      "actual_sha256": "cbd02d540e02f8203ab0bf6dbd3c9caac900166f38b6812ecfb2e6fa17ef4c2c",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/analyze_stress_correlations.py",
+      "expected_sha256": "357335e610d0d1af3c9b8901f907d50322b4e73bc193a02590d58510ee345cd6",
+      "actual_sha256": "357335e610d0d1af3c9b8901f907d50322b4e73bc193a02590d58510ee345cd6",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/collectors/collect_completion.py",
+      "expected_sha256": "88c4c5899bf9eb8a94aad130373acb5a3097dfda2e2317125d39d58334d5bbc2",
+      "actual_sha256": "88c4c5899bf9eb8a94aad130373acb5a3097dfda2e2317125d39d58334d5bbc2",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/collectors/collect_periods.py",
+      "expected_sha256": "7335f9d8644fd70ef5b75bd02c6528d7e9e6c28d5aa1f2f3f96a80b952f0bfbf",
+      "actual_sha256": "7335f9d8644fd70ef5b75bd02c6528d7e9e6c28d5aa1f2f3f96a80b952f0bfbf",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/collectors/collect_solves.py",
+      "expected_sha256": "818569680ebe4da32e43acd83b90d94e5ee423662c51f84cdd0a90b38dc78014",
+      "actual_sha256": "818569680ebe4da32e43acd83b90d94e5ee423662c51f84cdd0a90b38dc78014",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/collectors/refresh_completion_band.py",
+      "expected_sha256": "72e6b2c2e76d4433ec2d78cec3af0b52e9ca51b8eb5103aeac524aff2968b087",
+      "actual_sha256": "72e6b2c2e76d4433ec2d78cec3af0b52e9ca51b8eb5103aeac524aff2968b087",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/coverage_report.py",
+      "expected_sha256": "f2a580507357b490c3d6071b1d832df62fc0d3cf7aa80fbc53b50dbf77a174fe",
+      "actual_sha256": "f2a580507357b490c3d6071b1d832df62fc0d3cf7aa80fbc53b50dbf77a174fe",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/dashboard_stress.py",
+      "expected_sha256": "e44729be1a5fa415e3a099369e864264474bc2cc95dabe7375b3ea3cf14f0638",
+      "actual_sha256": "e44729be1a5fa415e3a099369e864264474bc2cc95dabe7375b3ea3cf14f0638",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/dashboard_support.py",
+      "expected_sha256": "b5232027dcc24fa0b8464ca496966e572dd5d2603418983cfaa05512980a45c6",
+      "actual_sha256": "b5232027dcc24fa0b8464ca496966e572dd5d2603418983cfaa05512980a45c6",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/extract_dc_operating_totals.py",
+      "expected_sha256": "215fd387f9f88fb80a3dcaa779f70300228a588915d65720dc6d442a8803787f",
+      "actual_sha256": "215fd387f9f88fb80a3dcaa779f70300228a588915d65720dc6d442a8803787f",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/render_saved_timing.py",
+      "expected_sha256": "eca7e040593829d92549b40af2301b3fb3600d613301e2678732561a2ed9517d",
+      "actual_sha256": "eca7e040593829d92549b40af2301b3fb3600d613301e2678732561a2ed9517d",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/analysis/s5_dashboard.py",
+      "expected_sha256": "4dd76ba5c463ca4972c0f5a69b7fd11ace4609d95185dedd9d0eeeef58c74801",
+      "actual_sha256": "4dd76ba5c463ca4972c0f5a69b7fd11ace4609d95185dedd9d0eeeef58c74801",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/audit.py",
+      "expected_sha256": "736b284b0ac88950d8c16e1718ada82e7662022b83dd2745fe00eadf2c9f7347",
+      "actual_sha256": "736b284b0ac88950d8c16e1718ada82e7662022b83dd2745fe00eadf2c9f7347",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_consolidated_gate.py",
+      "expected_sha256": "2647c4bd2cbe363152c22247b77b8d90a25fd23e1b6d0dc5b850175811fa605c",
+      "actual_sha256": "2647c4bd2cbe363152c22247b77b8d90a25fd23e1b6d0dc5b850175811fa605c",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_equivalence.py",
+      "expected_sha256": "d53bf14a3f696c48af36565b97fc13d024851a32e3547b2ae745ca94aeec9d80",
+      "actual_sha256": "d53bf14a3f696c48af36565b97fc13d024851a32e3547b2ae745ca94aeec9d80",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_fixture.py",
+      "expected_sha256": "45d9f27072818f942f30ac3308c6713eb13ddee243cf980f787d1302e312b1b7",
+      "actual_sha256": "45d9f27072818f942f30ac3308c6713eb13ddee243cf980f787d1302e312b1b7",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_import_gate.py",
+      "expected_sha256": "44a68768e7aeaa6d15a64afad080d4b3f1c69a7037da7b01f30aaee0c88e4a9e",
+      "actual_sha256": "44a68768e7aeaa6d15a64afad080d4b3f1c69a7037da7b01f30aaee0c88e4a9e",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_injected_equivalence.py",
+      "expected_sha256": "10cd0bb918ab3e1e3d7291778131e2397b2d2ceb10f6ead86e25b0c77c964df9",
+      "actual_sha256": "10cd0bb918ab3e1e3d7291778131e2397b2d2ceb10f6ead86e25b0c77c964df9",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_persistence_gate.py",
+      "expected_sha256": "5e57a6e19cb35a6d97608479f14f4163fa1910a9ef93181f7a3be42e258f5f25",
+      "actual_sha256": "5e57a6e19cb35a6d97608479f14f4163fa1910a9ef93181f7a3be42e258f5f25",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_s1_boundary_gate.py",
+      "expected_sha256": "75d37d362d3e530d1466e0e7c173cad4eddd08a60b077b89c34d668a3970dc6c",
+      "actual_sha256": "75d37d362d3e530d1466e0e7c173cad4eddd08a60b077b89c34d668a3970dc6c",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/p0_s3b_gate.py",
+      "expected_sha256": "88d3d310c138266eaca81a840764b8ce80e132feb780a360617be94ec4457696",
+      "actual_sha256": "88d3d310c138266eaca81a840764b8ce80e132feb780a360617be94ec4457696",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/pglib_case.py",
+      "expected_sha256": "36eaece8ebe13887d83da893e976c032096d5b7f55cd5d2b4e00f453d076bb59",
+      "actual_sha256": "36eaece8ebe13887d83da893e976c032096d5b7f55cd5d2b4e00f453d076bb59",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/recycle_analysis.py",
+      "expected_sha256": "2721b0e89552cef54ad767ed860e51054838726dcef4d526df4c952fe4c71927",
+      "actual_sha256": "2721b0e89552cef54ad767ed860e51054838726dcef4d526df4c952fe4c71927",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/reference/extract_s2_reference.py",
+      "expected_sha256": "980e52aadce273bf81e04c2e63af5ed1b1c723c3504047a165afc34e85e37b9c",
+      "actual_sha256": "980e52aadce273bf81e04c2e63af5ed1b1c723c3504047a165afc34e85e37b9c",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/results/run_s4_mosek_timing.py",
+      "expected_sha256": "7b8756381b72832d4f8bfc1ee085f5ad3dd51a7a4a3c7530765f2f08db5dd7f0",
+      "actual_sha256": "7b8756381b72832d4f8bfc1ee085f5ad3dd51a7a4a3c7530765f2f08db5dd7f0",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/results/run_s4_solver_matrix.py",
+      "expected_sha256": "2dd7cd1348b0eb8b31a769217207a6ebfafe741785940b065f805397362966cb",
+      "actual_sha256": "2dd7cd1348b0eb8b31a769217207a6ebfafe741785940b065f805397362966cb",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/results/s4b_annual_ac/operator-intervention-002448/replay.py",
+      "expected_sha256": "e191fe12d4a036c7652e864e5b3a976a5f7f87fd74311baf29267f2f6427698e",
+      "actual_sha256": "e191fe12d4a036c7652e864e5b3a976a5f7f87fd74311baf29267f2f6427698e",
+      "source": "retained ignored file",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_recycle_comparison.py",
+      "expected_sha256": "a8a4d0cb986d58b4f374804991abc2214a446c56f7956d0178e1ec08345591a9",
+      "actual_sha256": "a8a4d0cb986d58b4f374804991abc2214a446c56f7956d0178e1ec08345591a9",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s0.py",
+      "expected_sha256": "8899b16aedcef83cc02b4b63e2f0031cab31c66c43d5861877d3c32a3f8c8753",
+      "actual_sha256": "8899b16aedcef83cc02b4b63e2f0031cab31c66c43d5861877d3c32a3f8c8753",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s1.py",
+      "expected_sha256": "b2986574ac990c130e07ba80b4102000bda279bf7000a0d6827702449d75a432",
+      "actual_sha256": "b2986574ac990c130e07ba80b4102000bda279bf7000a0d6827702449d75a432",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s2.py",
+      "expected_sha256": "b12b2ac689e05b0f63dd6b52dcb34d907d35e97a4c1d01396d282935b0d0669b",
+      "actual_sha256": "b12b2ac689e05b0f63dd6b52dcb34d907d35e97a4c1d01396d282935b0d0669b",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s3.py",
+      "expected_sha256": "aa004d6345738cef03bad8d6f603dbf298616fbff4e49bb2ecfb12517ef1e751",
+      "actual_sha256": "aa004d6345738cef03bad8d6f603dbf298616fbff4e49bb2ecfb12517ef1e751",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s4.py",
+      "expected_sha256": "2829fef08f8be3fe53182d4ee14584e9e2e6cafa6684a917499e097cb780d670",
+      "actual_sha256": "2829fef08f8be3fe53182d4ee14584e9e2e6cafa6684a917499e097cb780d670",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s4b.py",
+      "expected_sha256": "e02df0c09833ac9a0d8d17d72c694aa000d9d465bc96abccf9ff07ca148c8bbe",
+      "actual_sha256": "e02df0c09833ac9a0d8d17d72c694aa000d9d465bc96abccf9ff07ca148c8bbe",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/run_s5.py",
+      "expected_sha256": "ee22332ba0e0903375be5a31db4f8c9d6cedc5490149c85b7500a99af32013f5",
+      "actual_sha256": "ee22332ba0e0903375be5a31db4f8c9d6cedc5490149c85b7500a99af32013f5",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s2_analysis.py",
+      "expected_sha256": "e7cc24554f4f1502af549057d212976c7ecd9017c5ca6ad97e3f527e45f52949",
+      "actual_sha256": "e7cc24554f4f1502af549057d212976c7ecd9017c5ca6ad97e3f527e45f52949",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s2_fixture.py",
+      "expected_sha256": "fd982862a46d584862adf6009d56d0dbe06a26b6cd928d72c1071d3191fe0c36",
+      "actual_sha256": "fd982862a46d584862adf6009d56d0dbe06a26b6cd928d72c1071d3191fe0c36",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s3_analysis.py",
+      "expected_sha256": "370c2fa334d5809cddf2263516e539aa9aaae23d455f51babb8c8d7d80aadf21",
+      "actual_sha256": "370c2fa334d5809cddf2263516e539aa9aaae23d455f51babb8c8d7d80aadf21",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s3_fixture.py",
+      "expected_sha256": "b501b8c513b00d5f8b94448365e655a17538a01491a35ae4e1287d8b7034e7e5",
+      "actual_sha256": "b501b8c513b00d5f8b94448365e655a17538a01491a35ae4e1287d8b7034e7e5",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4_analysis.py",
+      "expected_sha256": "28bf6925ec6476b3767cc254b8d7cb8a08a0564b2f705b405e37dc6ec2fc89f3",
+      "actual_sha256": "28bf6925ec6476b3767cc254b8d7cb8a08a0564b2f705b405e37dc6ec2fc89f3",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4_equivalence.py",
+      "expected_sha256": "3694aaa172648481bb423f001e5839fb4ac3484e901b485ef525447e975039bb",
+      "actual_sha256": "3694aaa172648481bb423f001e5839fb4ac3484e901b485ef525447e975039bb",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4_fixture.py",
+      "expected_sha256": "c62ed6f027fe3d623363ee3724e77de037c63679c7a6dfa675cf2792d5e13490",
+      "actual_sha256": "c62ed6f027fe3d623363ee3724e77de037c63679c7a6dfa675cf2792d5e13490",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4b_analysis.py",
+      "expected_sha256": "2b0e8d1f3f91e84fc383b235df7d34876fa9515e8bebfc0851c7f663740e06d1",
+      "actual_sha256": "2b0e8d1f3f91e84fc383b235df7d34876fa9515e8bebfc0851c7f663740e06d1",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4b_execution.py",
+      "expected_sha256": "bc68b593aef9368b8693fbfbaf3def4fd55f382e361f4bb4fad4d18e8f326344",
+      "actual_sha256": "bc68b593aef9368b8693fbfbaf3def4fd55f382e361f4bb4fad4d18e8f326344",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s4b_manifest.py",
+      "expected_sha256": "4f28bfca6915f6f4c63733cdd39eb26e00b6ac2a0925c4089bcc9b5b428eb728",
+      "actual_sha256": "4f28bfca6915f6f4c63733cdd39eb26e00b6ac2a0925c4089bcc9b5b428eb728",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_analysis.py",
+      "expected_sha256": "e85bfb97f479ca933a657745b55ca92d691d1e08073ce4144a0d82c16bef2dfe",
+      "actual_sha256": "e85bfb97f479ca933a657745b55ca92d691d1e08073ce4144a0d82c16bef2dfe",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_closeout.py",
+      "expected_sha256": "a5a13bfcbd7595952a4f126c5c76c495be66cc298f448c978144c9ea345f53b0",
+      "actual_sha256": "a5a13bfcbd7595952a4f126c5c76c495be66cc298f448c978144c9ea345f53b0",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_execution.py",
+      "expected_sha256": "c84de72e434959e079c32b4af390703d8c37a9890c853d62891360fbc16d3ea5",
+      "actual_sha256": "c84de72e434959e079c32b4af390703d8c37a9890c853d62891360fbc16d3ea5",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_operator_intervention.py",
+      "expected_sha256": "cfc2977582dbcc40c845458ed06822c9c5ae90bebfb63af5daff9482c36a5432",
+      "actual_sha256": "cfc2977582dbcc40c845458ed06822c9c5ae90bebfb63af5daff9482c36a5432",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_prefix_anchor.py",
+      "expected_sha256": "fa66c50924d6df21f571f56e1e87fa4e7f996b5deb6097202d975347548197c1",
+      "actual_sha256": "fa66c50924d6df21f571f56e1e87fa4e7f996b5deb6097202d975347548197c1",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_repaired_window.py",
+      "expected_sha256": "cea7151be31ae7e0fb22c115e4723f7e961fb8366e38af54a916d6d8ff2c0377",
+      "actual_sha256": "cea7151be31ae7e0fb22c115e4723f7e961fb8366e38af54a916d6d8ff2c0377",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_retry_transition.py",
+      "expected_sha256": "8cda74b6bdc0af1484f31459927bc2d1d100607e32e45bd669265c4167297f53",
+      "actual_sha256": "8cda74b6bdc0af1484f31459927bc2d1d100607e32e45bd669265c4167297f53",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_source_transition.py",
+      "expected_sha256": "6e1fe256f6dd8b24669fd1d862518a5af2661e0beb8cb2aa2905cf0ccdc9b802",
+      "actual_sha256": "6e1fe256f6dd8b24669fd1d862518a5af2661e0beb8cb2aa2905cf0ccdc9b802",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_archive.py",
+      "expected_sha256": "7d79fa8dc3ecb943197ffa5ede4276b55c9d924f73cc1c7e48214b2546f28123",
+      "actual_sha256": "7d79fa8dc3ecb943197ffa5ede4276b55c9d924f73cc1c7e48214b2546f28123",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_attempt.py",
+      "expected_sha256": "22d2321f724dc835216adad5b6429ab4975bc4aa78f9eaf3e119d2f651ccb460",
+      "actual_sha256": "22d2321f724dc835216adad5b6429ab4975bc4aa78f9eaf3e119d2f651ccb460",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_continuation.py",
+      "expected_sha256": "fc55e91b8861e50acb204aeef220114dfde414a21bffb44e1e089653083792c7",
+      "actual_sha256": "fc55e91b8861e50acb204aeef220114dfde414a21bffb44e1e089653083792c7",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_policy.py",
+      "expected_sha256": "145c826e56f0c5711bd746840d1aae7205ebababf968c20e4a0a041ba7ac5729",
+      "actual_sha256": "145c826e56f0c5711bd746840d1aae7205ebababf968c20e4a0a041ba7ac5729",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_process.py",
+      "expected_sha256": "3c03903eea76a36dee1547e94945780384d90f6653196076212572a02aa70b4b",
+      "actual_sha256": "3c03903eea76a36dee1547e94945780384d90f6653196076212572a02aa70b4b",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_runtime.py",
+      "expected_sha256": "c445d22d1d9f90fb0daa44463f27a834259ad982e64699af3b31f2a9ce955835",
+      "actual_sha256": "c445d22d1d9f90fb0daa44463f27a834259ad982e64699af3b31f2a9ce955835",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_supervisor.py",
+      "expected_sha256": "3fe9efda43bc682951cb3629b6cd4ad57e92b5ea483a092996440e9bf3fbd8b4",
+      "actual_sha256": "3fe9efda43bc682951cb3629b6cd4ad57e92b5ea483a092996440e9bf3fbd8b4",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_transaction.py",
+      "expected_sha256": "8261a0e7ae47f06d3c75d6594d28e05759f724289cffee6e0bf594fd47defa4d",
+      "actual_sha256": "8261a0e7ae47f06d3c75d6594d28e05759f724289cffee6e0bf594fd47defa4d",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_window.py",
+      "expected_sha256": "bcef0985ef75527e7218c104e795132741f223b870dc58eca29d8a4488973d61",
+      "actual_sha256": "bcef0985ef75527e7218c104e795132741f223b870dc58eca29d8a4488973d61",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/s5_speculative_worker.py",
+      "expected_sha256": "58f02943d9e78f339fab8003f2e17ccb2a46099357734abfd527a637074d1d79",
+      "actual_sha256": "58f02943d9e78f339fab8003f2e17ccb2a46099357734abfd527a637074d1d79",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/scenario.py",
+      "expected_sha256": "2af4da420a2df4c9901bb9e23a2de75c83bc6a3782484bbef50917ff1a10f83d",
+      "actual_sha256": "2af4da420a2df4c9901bb9e23a2de75c83bc6a3782484bbef50917ff1a10f83d",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/streaming_archive.py",
+      "expected_sha256": "c869d683c4fc053daefb41f16bf6d0dfe6e7faa3efd54140ab7936314a13d3ac",
+      "actual_sha256": "c869d683c4fc053daefb41f16bf6d0dfe6e7faa3efd54140ab7936314a13d3ac",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/streaming_driver.py",
+      "expected_sha256": "2f5c491bf0d8187a66a8387964eb0fab0d7f8402c85d0b62def6fe5bf23d3979",
+      "actual_sha256": "2f5c491bf0d8187a66a8387964eb0fab0d7f8402c85d0b62def6fe5bf23d3979",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/streaming_runner.py",
+      "expected_sha256": "f28f4f65b110bce316724ca76ec5f963f6480a92a15ab6ea0da0e0729ab59053",
+      "actual_sha256": "f28f4f65b110bce316724ca76ec5f963f6480a92a15ab6ea0da0e0729ab59053",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_annual_hierarchy/streaming_schema.py",
+      "expected_sha256": "d030c8bf299d7562aa8270b0448d2ca35a99e0669273b5a0670c0425ed2e6911",
+      "actual_sha256": "d030c8bf299d7562aa8270b0448d2ca35a99e0669273b5a0670c0425ed2e6911",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_vectorization_replay/__init__.py",
+      "expected_sha256": "73ab1d64d74f7d0cb6050665c615f36ec426d10a202b76bbb0ff5cf5e714eb27",
+      "actual_sha256": "73ab1d64d74f7d0cb6050665c615f36ec426d10a202b76bbb0ff5cf5e714eb27",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_vectorization_replay/run.py",
+      "expected_sha256": "4d782f7621b5dd4fbd0dd4cdcc490afd8c29a5fb683a1596739042e136e9ab2f",
+      "actual_sha256": "4d782f7621b5dd4fbd0dd4cdcc490afd8c29a5fb683a1596739042e136e9ab2f",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_vectorization_replay/sample.py",
+      "expected_sha256": "c82b4ebb4d4c08507e27e0198407bff5c2e966d0c7cd333d1021e085ecf0c026",
+      "actual_sha256": "c82b4ebb4d4c08507e27e0198407bff5c2e966d0c7cd333d1021e085ecf0c026",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "experiments/case118_vectorization_replay/worker.py",
+      "expected_sha256": "7b1e91c88c33bfe9bb5affc8a704ce84ed87fa52f247dbf58fac082f914e3b9b",
+      "actual_sha256": "7b1e91c88c33bfe9bb5affc8a704ce84ed87fa52f247dbf58fac082f914e3b9b",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/__init__.py",
+      "expected_sha256": "ea80f0c9aa1dc636472e4ea6a6c8b5e43ef7ce591509acbf06ae07e80473a3d7",
+      "actual_sha256": "ea80f0c9aa1dc636472e4ea6a6c8b5e43ef7ce591509acbf06ae07e80473a3d7",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/_component_adapter.py",
+      "expected_sha256": "f9edb5062c0fecaef1483bb60df9ba192685e9c3eb03f8b190da6e94d68f3aff",
+      "actual_sha256": "f9edb5062c0fecaef1483bb60df9ba192685e9c3eb03f8b190da6e94d68f3aff",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/_component_adapters.py",
+      "expected_sha256": "bd4e934df73d6cf82c9d460b40d57dc82924a6437f6f317752908ab68650a432",
+      "actual_sha256": "bd4e934df73d6cf82c9d460b40d57dc82924a6437f6f317752908ab68650a432",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/_component_assembly.py",
+      "expected_sha256": "0b9e6a07431c8244e7de4b9646d4852d59132413f4ed2c9cc59cc35a359af39f",
+      "actual_sha256": "0b9e6a07431c8244e7de4b9646d4852d59132413f4ed2c9cc59cc35a359af39f",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/_hierarchical_solver.py",
+      "expected_sha256": "7337a22091e733afe4ccf4c234b3ea1e86e5562f474a16c3e803aea1920d88ea",
+      "actual_sha256": "7337a22091e733afe4ccf4c234b3ea1e86e5562f474a16c3e803aea1920d88ea",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/_temporal_assembly.py",
+      "expected_sha256": "1d918ddbc4c6d623283c210fbbfe9f87cbfff183aa829c3db81d40955e8be388",
+      "actual_sha256": "1d918ddbc4c6d623283c210fbbfe9f87cbfff183aa829c3db81d40955e8be388",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/ac_problem.py",
+      "expected_sha256": "8b821436529c5e8e3be7b17962e0650e9066cd3cf6ea9de5343b2e38b790fe3c",
+      "actual_sha256": "8b821436529c5e8e3be7b17962e0650e9066cd3cf6ea9de5343b2e38b790fe3c",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/characterization.py",
+      "expected_sha256": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+      "actual_sha256": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/cost.py",
+      "expected_sha256": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+      "actual_sha256": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/data.py",
+      "expected_sha256": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+      "actual_sha256": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/dc_problem.py",
+      "expected_sha256": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+      "actual_sha256": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/generator.py",
+      "expected_sha256": "0ec996c2f3ec8c772b097bac303c650103281bbcc18261b702dcfd2ad16de8ab",
+      "actual_sha256": "0ec996c2f3ec8c772b097bac303c650103281bbcc18261b702dcfd2ad16de8ab",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/hierarchical.py",
+      "expected_sha256": "cda0828a2f6f6f237aae04e8c38b8062da97ad00ac0e00efbb96aeab7178bf18",
+      "actual_sha256": "cda0828a2f6f6f237aae04e8c38b8062da97ad00ac0e00efbb96aeab7178bf18",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/hvdc.py",
+      "expected_sha256": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+      "actual_sha256": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/load.py",
+      "expected_sha256": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+      "actual_sha256": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/network.py",
+      "expected_sha256": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+      "actual_sha256": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/nondispatchable.py",
+      "expected_sha256": "8d7e0d503df5d1cc7864354e73b01370d0903d23dbbbf6faffbe73dfc74aaa1b",
+      "actual_sha256": "8d7e0d503df5d1cc7864354e73b01370d0903d23dbbbf6faffbe73dfc74aaa1b",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/problem.py",
+      "expected_sha256": "835bf03bdf854dfa11089b4b36c9a07aef88234b8f13fe53400c0ad122e1b413",
+      "actual_sha256": "835bf03bdf854dfa11089b4b36c9a07aef88234b8f13fe53400c0ad122e1b413",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/results.py",
+      "expected_sha256": "26b830cd7fb480755e25099b4ea0e857a75958e187e2a449c5f1c51d98e1c7dd",
+      "actual_sha256": "26b830cd7fb480755e25099b4ea0e857a75958e187e2a449c5f1c51d98e1c7dd",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/singlenode_dc_problem.py",
+      "expected_sha256": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+      "actual_sha256": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/storage.py",
+      "expected_sha256": "6964dbe9168926128b605575566ec3fd99217271350a96de19fef66acabca871",
+      "actual_sha256": "6964dbe9168926128b605575566ec3fd99217271350a96de19fef66acabca871",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/__init__.py",
+      "expected_sha256": "987d7eaa7935e05ac739a64acc5244fc6ed356612e533192b13df5bf85eddd2f",
+      "actual_sha256": "987d7eaa7935e05ac739a64acc5244fc6ed356612e533192b13df5bf85eddd2f",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case118.py",
+      "expected_sha256": "989cfb26ded5a60fc32dfd311b6c6f9161e0653819d874f76291f23d7ed0f264",
+      "actual_sha256": "989cfb26ded5a60fc32dfd311b6c6f9161e0653819d874f76291f23d7ed0f264",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case14.py",
+      "expected_sha256": "b28c001ad9c1568fa6c9fbe112a5225638f80899c8a9673f80e45c3f164a8bd3",
+      "actual_sha256": "b28c001ad9c1568fa6c9fbe112a5225638f80899c8a9673f80e45c3f164a8bd3",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case30.py",
+      "expected_sha256": "8e92a4843a3750f500388ee951369209f036906f0e1b615cb2a5cb99b27039e1",
+      "actual_sha256": "8e92a4843a3750f500388ee951369209f036906f0e1b615cb2a5cb99b27039e1",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case30pwl.py",
+      "expected_sha256": "092e2489b725c199c5be542a3019640a16748dcb657d2026ccd474195ae401fb",
+      "actual_sha256": "092e2489b725c199c5be542a3019640a16748dcb657d2026ccd474195ae401fb",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case39.py",
+      "expected_sha256": "571c17b2791fb503631173340a52c303acb7b50ad4715732baee30859ad2b4d2",
+      "actual_sha256": "571c17b2791fb503631173340a52c303acb7b50ad4715732baee30859ad2b4d2",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case57.py",
+      "expected_sha256": "b53b12eeace410699f39fa9c157eb2c8d5461fb9ead8ef9f04f3d43e14e9af99",
+      "actual_sha256": "b53b12eeace410699f39fa9c157eb2c8d5461fb9ead8ef9f04f3d43e14e9af99",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case9.py",
+      "expected_sha256": "e9caaead9f13c262cbc6075e77e00117463220ceace5ca4f2b421c28a7194a68",
+      "actual_sha256": "e9caaead9f13c262cbc6075e77e00117463220ceace5ca4f2b421c28a7194a68",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case9_dcline.py",
+      "expected_sha256": "2ade63e529e0274fe800d58faf649529074f242dfdf3d8762b499e9ce368ad20",
+      "actual_sha256": "2ade63e529e0274fe800d58faf649529074f242dfdf3d8762b499e9ce368ad20",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/case9_pwl.py",
+      "expected_sha256": "57213a8e36658180f820346856911c805913b5747263bddd6fc6e01a2165a8bb",
+      "actual_sha256": "57213a8e36658180f820346856911c805913b5747263bddd6fc6e01a2165a8bb",
+      "source": "git blob",
+      "matches": true
+    },
+    {
+      "path": "src/cvxopf/testcases/singlenode.py",
+      "expected_sha256": "9de5c60fd2e016738bb4b01ae79673496711e92809458ca4e4a9be3a9e193224",
+      "actual_sha256": "9de5c60fd2e016738bb4b01ae79673496711e92809458ca4e4a9be3a9e193224",
+      "source": "git blob",
+      "matches": true
+    }
+  ],
+  "request_sources_equal_environment": true,
+  "selected_reference_hash_checks": {
+    "primary_lifecycle.json": true,
+    "primary_phase.json": true,
+    "primary_request.json": true,
+    "primary_result.json": true,
+    "primary_start.json": true,
+    "winner_lifecycle.json": true,
+    "winner_phase.json": true,
+    "winner_request.json": true,
+    "winner_result.json": true,
+    "winner_start.json": true,
+    "archive": true
+  },
+  "start_comparison": {
+    "raw_start": true,
+    "assigned_start": true,
+    "complete_x0": true,
+    "source_kind": true,
+    "source_attempt_id": true,
+    "request_sha256": true,
+    "layout_signature": true,
+    "model_coordinate_count": true,
+    "auxiliary_coordinate_count": true
+  },
+  "canonical_coordinates": 9124,
+  "layout_signature": "632d0a094bbed7a9cce13ce9f7f3ce1b779857254ddc2636b8759565afe7cf48",
+  "locks": {
+    "historical": {
+      "sha256": "106635fd072994d8b1c2b815378dcd0d3b8758fc2e58440326fd8f0d4bf58953",
+      "packages": [
+        [
+          "anyio",
+          "4.14.1"
+        ],
+        [
+          "ast-serialize",
+          "0.6.0"
+        ],
+        [
+          "asttokens",
+          "3.0.2"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "clarabel",
+          "0.11.1"
+        ],
+        [
+          "click",
+          "8.4.2"
+        ],
+        [
+          "colorama",
+          "0.4.6"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "coverage",
+          "7.15.0"
+        ],
+        [
+          "cvxopf",
+          "0.1.0"
+        ],
+        [
+          "cvxpy",
+          "1.9.2"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "cyipopt",
+          "1.7.0"
+        ],
+        [
+          "decorator",
+          "5.3.1"
+        ],
+        [
+          "docutils",
+          "0.23"
+        ],
+        [
+          "executing",
+          "2.2.1"
+        ],
+        [
+          "fonttools",
+          "4.63.0"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "highspy",
+          "1.15.1"
+        ],
+        [
+          "idna",
+          "3.18"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "ipython",
+          "9.15.0"
+        ],
+        [
+          "ipython-pygments-lexers",
+          "1.1.1"
+        ],
+        [
+          "itsdangerous",
+          "2.2.0"
+        ],
+        [
+          "jedi",
+          "0.19.2"
+        ],
+        [
+          "jinja2",
+          "3.1.6"
+        ],
+        [
+          "joblib",
+          "1.5.3"
+        ],
+        [
+          "kiwisolver",
+          "1.5.0"
+        ],
+        [
+          "librt",
+          "0.13.0"
+        ],
+        [
+          "loro",
+          "1.13.1"
+        ],
+        [
+          "marimo",
+          "0.23.13"
+        ],
+        [
+          "markdown",
+          "3.10.2"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "matplotlib",
+          "3.11.0"
+        ],
+        [
+          "matplotlib-inline",
+          "0.2.2"
+        ],
+        [
+          "msgspec",
+          "0.21.1"
+        ],
+        [
+          "mypy",
+          "2.3.0"
+        ],
+        [
+          "mypy-extensions",
+          "1.1.0"
+        ],
+        [
+          "narwhals",
+          "2.23.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.6"
+        ],
+        [
+          "numpy",
+          "2.5.1"
+        ],
+        [
+          "osqp",
+          "1.1.3"
+        ],
+        [
+          "packaging",
+          "26.2"
+        ],
+        [
+          "pandas",
+          "3.0.3"
+        ],
+        [
+          "parso",
+          "0.8.7"
+        ],
+        [
+          "pathspec",
+          "1.1.1"
+        ],
+        [
+          "pexpect",
+          "4.9.0"
+        ],
+        [
+          "pillow",
+          "12.3.0"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt-toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "ptyprocess",
+          "0.7.0"
+        ],
+        [
+          "pure-eval",
+          "0.2.3"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pygments",
+          "2.20.0"
+        ],
+        [
+          "pymdown-extensions",
+          "10.21.3"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pytest",
+          "9.1.1"
+        ],
+        [
+          "pytest-cov",
+          "7.1.0"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-multipart",
+          "0.0.32"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "pyzmq",
+          "27.1.0"
+        ],
+        [
+          "qdldl",
+          "0.1.9.post1"
+        ],
+        [
+          "ruff",
+          "0.16.0"
+        ],
+        [
+          "scipy",
+          "1.17.1"
+        ],
+        [
+          "scipy",
+          "1.18.0"
+        ],
+        [
+          "scs",
+          "3.2.11"
+        ],
+        [
+          "setuptools",
+          "83.0.0"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sparsediffpy",
+          "0.3.0"
+        ],
+        [
+          "stack-data",
+          "0.6.3"
+        ],
+        [
+          "starlette",
+          "1.3.1"
+        ],
+        [
+          "tomli",
+          "2.4.1"
+        ],
+        [
+          "tomlkit",
+          "0.15.0"
+        ],
+        [
+          "traitlets",
+          "5.15.1"
+        ],
+        [
+          "typing-extensions",
+          "4.16.0"
+        ],
+        [
+          "tzdata",
+          "2026.2"
+        ],
+        [
+          "uvicorn",
+          "0.50.0"
+        ],
+        [
+          "wcwidth",
+          "0.8.2"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ]
+    },
+    "current": {
+      "sha256": "7c9def26be1751a1caaf01de51e0156d77cfe701513f807584cde033debe8379",
+      "packages": [
+        [
+          "anyio",
+          "4.14.1"
+        ],
+        [
+          "ast-serialize",
+          "0.6.0"
+        ],
+        [
+          "asttokens",
+          "3.0.2"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "clarabel",
+          "0.11.1"
+        ],
+        [
+          "click",
+          "8.4.2"
+        ],
+        [
+          "colorama",
+          "0.4.6"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "coverage",
+          "7.15.0"
+        ],
+        [
+          "cvxopf",
+          "0.1.0"
+        ],
+        [
+          "cvxpy",
+          "1.9.3"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "cyipopt",
+          "1.7.0"
+        ],
+        [
+          "decorator",
+          "5.3.1"
+        ],
+        [
+          "docutils",
+          "0.23"
+        ],
+        [
+          "executing",
+          "2.2.1"
+        ],
+        [
+          "fonttools",
+          "4.63.0"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "highspy",
+          "1.15.1"
+        ],
+        [
+          "idna",
+          "3.18"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "ipython",
+          "9.15.0"
+        ],
+        [
+          "ipython-pygments-lexers",
+          "1.1.1"
+        ],
+        [
+          "itsdangerous",
+          "2.2.0"
+        ],
+        [
+          "jedi",
+          "0.19.2"
+        ],
+        [
+          "jinja2",
+          "3.1.6"
+        ],
+        [
+          "joblib",
+          "1.5.3"
+        ],
+        [
+          "kiwisolver",
+          "1.5.0"
+        ],
+        [
+          "librt",
+          "0.13.0"
+        ],
+        [
+          "loro",
+          "1.13.1"
+        ],
+        [
+          "marimo",
+          "0.23.13"
+        ],
+        [
+          "markdown",
+          "3.10.2"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "matplotlib",
+          "3.11.0"
+        ],
+        [
+          "matplotlib-inline",
+          "0.2.2"
+        ],
+        [
+          "msgspec",
+          "0.21.1"
+        ],
+        [
+          "mypy",
+          "2.3.0"
+        ],
+        [
+          "mypy-extensions",
+          "1.1.0"
+        ],
+        [
+          "narwhals",
+          "2.23.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.6"
+        ],
+        [
+          "numpy",
+          "2.5.1"
+        ],
+        [
+          "osqp",
+          "1.1.3"
+        ],
+        [
+          "packaging",
+          "26.2"
+        ],
+        [
+          "pandas",
+          "3.0.3"
+        ],
+        [
+          "parso",
+          "0.8.7"
+        ],
+        [
+          "pathspec",
+          "1.1.1"
+        ],
+        [
+          "pexpect",
+          "4.9.0"
+        ],
+        [
+          "pillow",
+          "12.3.0"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt-toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "ptyprocess",
+          "0.7.0"
+        ],
+        [
+          "pure-eval",
+          "0.2.3"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pygments",
+          "2.20.0"
+        ],
+        [
+          "pymdown-extensions",
+          "10.21.3"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pytest",
+          "9.1.1"
+        ],
+        [
+          "pytest-cov",
+          "7.1.0"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-multipart",
+          "0.0.32"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "pyzmq",
+          "27.1.0"
+        ],
+        [
+          "qdldl",
+          "0.1.9.post1"
+        ],
+        [
+          "ruff",
+          "0.16.0"
+        ],
+        [
+          "scipy",
+          "1.17.1"
+        ],
+        [
+          "scipy",
+          "1.18.0"
+        ],
+        [
+          "scs",
+          "3.2.11"
+        ],
+        [
+          "setuptools",
+          "83.0.0"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sparsediffpy",
+          "0.6.1"
+        ],
+        [
+          "stack-data",
+          "0.6.3"
+        ],
+        [
+          "starlette",
+          "1.3.1"
+        ],
+        [
+          "tomli",
+          "2.4.1"
+        ],
+        [
+          "tomlkit",
+          "0.15.0"
+        ],
+        [
+          "traitlets",
+          "5.15.1"
+        ],
+        [
+          "typing-extensions",
+          "4.16.0"
+        ],
+        [
+          "tzdata",
+          "2026.2"
+        ],
+        [
+          "uvicorn",
+          "0.50.0"
+        ],
+        [
+          "wcwidth",
+          "0.8.2"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ]
+    }
+  },
+  "evidence_files": {
+    "experiments/case118_vectorization_replay/results/case118_vectorization_replay/run/environment.json": "9434f9a8fb7df3defb248678068bb25585728a3e4be7aeadde45afd666243361",
+    "experiments/case118_vectorization_replay/results/case118_vectorization_replay/run/s4b-shard-008/ac-006047-spec-00/request.json": "0e591dde181ce1ccf765ac523c67fb13f41baa159f7ccb5e6f27fa2cb14fb02b",
+    "experiments/case118_vectorization_replay/results/case118_vectorization_replay/run/s4b-shard-008/ac-006047-spec-00/start.json": "497116c67ad1fbca19da04ea6c62e6215152017437368a0732b86fce5a63bc65",
+    "experiments/case118_spacetime_pq_replay/results/case118_6047_four_way/time_only/start.json": "b2da4f92f6f754ea9a53ba0b71c2702fb0d113f9563a7f293aed93ebdb8ac5aa"
+  }
+}

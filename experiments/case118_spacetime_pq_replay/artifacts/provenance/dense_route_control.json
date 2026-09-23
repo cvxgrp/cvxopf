@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "status": "optimal",
+  "iterations": 70,
+  "native_ipopt_seconds": 29.94,
+  "extracted_results_exact_to_old_stack": true,
+  "named_solution_exact_to_old_stack": true,
+  "control": {
+    "setting": "cvxpy.settings.SPARSE_DENSITY_THRESHOLD",
+    "original": 0.05,
+    "diagnostic_value": 0.0,
+    "scope": "This process only; historical time-only model",
+    "control_sha256": "a84691d28fa38ca865ee6dbd4830acb75c2e9200b23696de0ed5ea342eae3016"
+  },
+  "evidence_sha256": {
+    "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/oracle-investigation/dense-control-run/worker.log": "c85163c5660888bd819ff5d306f075107547d6b3ab3be482dca96913e5a64cb6",
+    "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/oracle-investigation/dense-control-run/attempt/start.json": "44df2dd9ba503219bf955b47dd0876456bbc5134e716317a1398a4ea33c6a181",
+    "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/oracle-investigation/dense-control-run/attempt/result.json": "f5ed8165d80f2aa45554526dbd59752710ea597dc3a021cbe2a4fc831681b26a",
+    "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/oracle-investigation/dense-control-run/launch.json": "bf1b81cfb38def244ab098824349670b4644e910c256a8d8a6b6c04152c311c0"
+  }
+}
