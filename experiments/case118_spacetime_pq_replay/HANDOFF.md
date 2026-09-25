@@ -4,6 +4,17 @@ Prepared 2026-09-21. Project workflow instructions are in `CLAUDE.md`.
 
 ## Current state
 
+Latest 2026-09-25: execution and refreshed analysis of all four fresh 120+6
+conditions are complete: **504/504 accepted windows**. See
+`FOUR_WAY_STUDY_REPORT.md` and `artifacts/study_final_summary.json` for the
+fresh factorial comparison, numerical differences, races and limitations.
+The last solve condition finished at 23:24:12 UTC; monitoring is disabled.
+Bound execution commit was `ae7b043397b9995ab2ecfd64799c59eed48016af`.
+Combined vectorization remains the preferred candidate under the explicit
+experiment-only disabled-dispatch policy. No production-wide policy was
+changed by this analysis. The dated entries below preserve the investigation
+history and are not the current execution status.
+
 Latest 2026-09-23: the owner selected four fresh 120+6 replays using the new
 packages and disabled sparse dispatch. Runner and paired analysis are prepared;
 see `FOUR_WAY_STUDY.md` and `STUDY_READINESS.md`. No study solves have started.

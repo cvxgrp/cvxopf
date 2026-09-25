@@ -2,6 +2,11 @@
 
 ## Current study: four fresh conditions
 
+Completed 2026-09-25: **504/504 accepted windows**. The refreshed final comparison
+is in [FOUR_WAY_STUDY_REPORT.md](FOUR_WAY_STUDY_REPORT.md), with compact evidence
+in `artifacts/study_final_summary.json`. The launch instructions below document
+the completed protocol; do not rerun them against the existing output root.
+
 The owner selected four fresh replays on 2026-09-23. See
 [FOUR_WAY_STUDY.md](FOUR_WAY_STUDY.md) for the current protocol and
 [STUDY_READINESS.md](STUDY_READINESS.md) for checks and launch gates.

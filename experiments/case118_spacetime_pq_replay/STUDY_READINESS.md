@@ -1,5 +1,10 @@
 # Four fresh 120+6 replays: preparation checkpoint
 
+Execution update, 2026-09-25: the gates described in this historical preparation
+checkpoint were subsequently satisfied and the owner-authorized run finished
+all 504 windows. See `FOUR_WAY_STUDY_REPORT.md` for refreshed final results and
+final-review status. The statements below describe the pre-launch checkpoint.
+
 Prepared 2026-09-23 on base commit `4d56dd66fb43cd678371a549d103d92596fe7d2d`.
 The owner selected four fresh conditions. **No study solves have started.**
 The new root `results/case118_four_way_120plus6_dense_control` is unused.
