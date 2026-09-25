@@ -156,7 +156,7 @@ def analyze(output=None, *, telemetry_folder=None):
             row[f"{label}_variable_objects"] = len(signature["variables"])
             row[f"{label}_constraint_objects"] = len(signature["constraints"])
         old_start = checked(s["references"]["primary_start.json"])
-        new_start = read(primary / "start.json")
+        new_start = read(primary / "start.json") if (primary / "start.json").exists() else None
 
         def auxiliary(start):
             x0 = np.asarray(start["complete_x0"])
@@ -170,11 +170,11 @@ def analyze(output=None, *, telemetry_folder=None):
                 )
             )
 
-        row["primary_auxiliary_values_match"] = np.array_equal(
+        row["primary_auxiliary_values_match"] = None if new_start is None else np.array_equal(
             auxiliary(old_start), auxiliary(new_start)
         )
         row["historical_model_coordinates"] = old_start["model_coordinate_count"]
-        row["new_model_coordinates"] = new_start["model_coordinate_count"]
+        row["new_model_coordinates"] = None if new_start is None else new_start["model_coordinate_count"]
         for key in ("Pg", "Qg", "b", "b_q", "soc", "p_nd", "q_nd", "Vm", "Va_deg"):
             label = f"{key}_raw" if key == "Va_deg" else key
             row[f"max_abs_delta_{label}"] = float(
@@ -274,7 +274,10 @@ def analyze(output=None, *, telemetry_folder=None):
         primary_slower_count=sum(r["winner_solve_speedup"] < 1 for r in primary),
         accepted_count=sum(r["accepted"] for r in rows),
         primary_auxiliary_mismatch_hours=[
-            r["iteration"] for r in rows if not r["primary_auxiliary_values_match"]
+            r["iteration"] for r in rows if r["primary_auxiliary_values_match"] is False
+        ],
+        primary_start_unavailable_hours=[
+            r["iteration"] for r in rows if r["primary_auxiliary_values_match"] is None
         ],
         evidence=dict(
             sample=ref(output / "sample.json"),

@@ -45,7 +45,9 @@ def validate_versions(current, historical, allowed_changes=None):
 
 @retained_operation()
 def run(output=None, *, allowed_version_changes=None, provenance=None,
-        additional_sources=()):
+        additional_sources=(), execution_configuration=None):
+    from .worker import execution_configuration as validate_configuration
+    configuration = validate_configuration(execution_configuration)
     output = OUT if output is None else output
     manifest = read(output / "sample.json")
     root = output / "run"
@@ -81,6 +83,7 @@ def run(output=None, *, allowed_version_changes=None, provenance=None,
             sparsediffpy_version=version("sparsediffpy"),
             allowed_version_changes=allowed_version_changes or {},
             provenance=provenance,
+            execution_configuration=configuration,
             policy="Unmodified SpeculativeSupervisor/WindowRace; two independent primary windows, one shared helper.",
             initialization="Frozen historical initial SoC, terminal target, and preceding controller; never another replay result.",
         ),
@@ -112,6 +115,7 @@ def run(output=None, *, allowed_version_changes=None, provenance=None,
                 selected=selected[spec.window],
                 invocation=asdict(spec),
                 execution_sources=sources,
+                execution_configuration=configuration,
                 target_free_directory=str(free_dir)
                 if free_dir is not None and spec.source_slot in (2, 3, 4, 5)
                 else None,

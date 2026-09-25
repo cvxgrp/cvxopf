@@ -1,5 +1,38 @@
 # Combined time and spatial P/Q vectorization replay
 
+## Current study: four fresh conditions
+
+The owner selected four fresh replays on 2026-09-23. See
+[FOUR_WAY_STUDY.md](FOUR_WAY_STUDY.md) for the current protocol and
+[STUDY_READINESS.md](STUDY_READINESS.md) for checks and launch gates.
+Each condition reuses the frozen 120+6 sample with the new dependency pair and
+disabled automatic sparse dispatch. The original protocol below remains as
+historical context for the interrupted combined-only run.
+
+Read-only preflight (does not create the study output or launch workers):
+
+```sh
+uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.study --preflight
+```
+
+After independent review, owner commit, and launch authorization with current
+fan confirmation:
+
+```sh
+uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.study \
+  --commit "$(git rev-parse HEAD)" --fan-on
+```
+
+Output: `results/case118_four_way_120plus6_dense_control/`, with `none`,
+`time_only`, `spatial_only`, and `both` subdirectories. The root must not exist.
+No automatic resume or retry. Analyze partial or completed results without solves:
+
+```sh
+uv run --locked --extra dev python -m experiments.case118_spacetime_pq_replay.analyze_study
+```
+
+## Historical combined-only protocol
+
 Run the exact same 120 primary-winner and six helper-winner Case118 windows once,
 using the committed combined-vectorization implementation. Compare against the
 recorded original stepwise and time-only replay timings. See [PLAN.md](PLAN.md)

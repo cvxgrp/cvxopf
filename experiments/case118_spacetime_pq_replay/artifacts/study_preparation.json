@@ -1,0 +1,186 @@
+{
+  "base_commit": "4d56dd66fb43cd678371a549d103d92596fe7d2d",
+  "working_tree_clean": false,
+  "sample_sha256": "f950b14b061b60a582526d5a4d30ac02124ef2f1a62ddc41e6c74343f8750ddb",
+  "windows_per_condition": 126,
+  "total_window_evaluations": 504,
+  "historical_references_verified": 655,
+  "software_versions": {
+    "python": "3.11.15",
+    "cvxopf": "0.1.0",
+    "cvxpy": "1.9.3",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "clarabel": "0.11.1",
+    "cyipopt": "1.7.0",
+    "ipopt": [
+      3,
+      14,
+      19
+    ]
+  },
+  "sparsediffpy_version": "0.6.1",
+  "preflight_path": "experiments/case118_spacetime_pq_replay/results/four_way_study_preflight_20260923_02.json",
+  "preflight_sha256": "ae6606c49274ace1d451ea26440856ce1b0280e592249a49d7458e64de2e846a",
+  "native_boundary_root": "experiments/case118_spacetime_pq_replay/results/four_way_study_preparation_20260923_03",
+  "native_boundary_checks": {
+    "none": {
+      "verification": {
+        "bounds_options_structure_exact": true,
+        "condition": "none",
+        "configuration": {
+          "sparse_density_threshold": 0.0,
+          "temporal_assembly": "stepwise",
+          "vectorize_pq": false
+        },
+        "full_start_exact": true,
+        "native_optimization_run": false
+      },
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412431,
+        "m": 10597,
+        "n": 9120,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "evidence": {
+        "request.json": "91f27cafecdbb82948e49ed01955283c204482bfde457b752fcb295364f58c4e",
+        "verified.json": "1dbf26c66221307bd7f67c2d1c01d8445534d688038a30cf06e2fcdebb3c5261",
+        "native_entry.json": "acb0e8da0861c0ec0e18d2b27173cecb196acd0485a4fc478634ebbfd5524c95",
+        "start.json": "3a3234ef281c779c97c9195724ea39e6f0a3c4e3078c3c621a384a8be0634400",
+        "replica.json": "75c0fb725baa1b64299f7c45053eec8e17baffe4174766401c95f7b42c5de6df",
+        "execution_configuration.json": "a1a4e8979b7af6951864347c236a6e57d6fc0f419ae73386c16519f40e058942"
+      }
+    },
+    "time_only": {
+      "verification": {
+        "bounds_options_structure_exact": true,
+        "condition": "time_only",
+        "configuration": {
+          "sparse_density_threshold": 0.0,
+          "temporal_assembly": "vectorized",
+          "vectorize_pq": false
+        },
+        "full_start_exact": true,
+        "native_optimization_run": false
+      },
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412439,
+        "m": 10601,
+        "n": 9124,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "evidence": {
+        "request.json": "53ef9a84de32f60a3c5b5ce510eff8904210dd42e51d9303ce718ed46061a1c9",
+        "verified.json": "e8ebdeda5b914edec2586a829a4c4dbf1cd41e14ab9289308f79344b89334380",
+        "native_entry.json": "d0f46237b5543a910ccc1bd58d32c3c9b1e20973838e7964abeb346b0e64aa7f",
+        "start.json": "97da54a135637859a7c666cc5b310a1ec9af810c0dfe461e9443b80b2d5d4b98",
+        "replica.json": "ac1803ad261d4cc2975486eaf59cf25c0dbd46420d5540c58a8066c170b89f8f",
+        "execution_configuration.json": "6fd6c6b58fc277bfc66a7d472812bb9abf583acb4c43b99b243b6a0da797457e"
+      }
+    },
+    "spatial_only": {
+      "verification": {
+        "bounds_options_structure_exact": true,
+        "condition": "spatial_only",
+        "configuration": {
+          "sparse_density_threshold": 0.0,
+          "temporal_assembly": "stepwise",
+          "vectorize_pq": true
+        },
+        "full_start_exact": true,
+        "native_optimization_run": false
+      },
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412431,
+        "m": 10597,
+        "n": 9120,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "evidence": {
+        "request.json": "0ef940f41131ed642a414eca1324da16f0d69ab08a617a7a687deb196a02c056",
+        "verified.json": "e4dc2c9b581fe68e7d0af0edcdd63fb6b69ab7eb2c69c461a38afbb25e732328",
+        "native_entry.json": "acb0e8da0861c0ec0e18d2b27173cecb196acd0485a4fc478634ebbfd5524c95",
+        "start.json": "c926941162a6e1fd4bf9a8f5f1c4c97a8adb2971fb3d79a285dc30e7f1e2bdcf",
+        "replica.json": "c837fe0fc8d2258e3e159618646eff62cd69fbe64b9a3c7a7c00a2083a05da8f",
+        "execution_configuration.json": "f0f29ea0da199e2b5069b377ef32c589a23987e854d5bd73a4029b2b2a53996c"
+      }
+    },
+    "both": {
+      "verification": {
+        "bounds_options_structure_exact": true,
+        "condition": "both",
+        "configuration": {
+          "sparse_density_threshold": 0.0,
+          "temporal_assembly": "vectorized",
+          "vectorize_pq": true
+        },
+        "full_start_exact": true,
+        "native_optimization_run": false
+      },
+      "native_entry": {
+        "density_threshold": 0.0,
+        "exact_previous_full_x0": true,
+        "hessian_entries": 10104,
+        "jacobian_entries": 412439,
+        "m": 10601,
+        "n": 9124,
+        "options": {
+          "bound_relax_factor": 0.0,
+          "derivative_test": "none",
+          "hessian_approximation": "exact",
+          "least_square_init_duals": "no",
+          "mu_strategy": "adaptive",
+          "print_level": 0,
+          "sb": "yes",
+          "tol": 1e-07
+        }
+      },
+      "evidence": {
+        "request.json": "fe4abe61cb8f8ffa6ad17b7fa179eb9da591691a296a11d7750164ad55ca7cdd",
+        "verified.json": "77d2bc8a8e1f78eedfa22238e0488ed4423f80be87631bae418b8e02e932e0b8",
+        "native_entry.json": "d0f46237b5543a910ccc1bd58d32c3c9b1e20973838e7964abeb346b0e64aa7f",
+        "start.json": "2d51e028a7b1aaae247e4cc1671c836eb1c7754240a87f32e6c7a50256351270",
+        "replica.json": "1682f2b670357734810eeadd2c33a5e01e12e6f519a16b0557f9b3aeb066fec7",
+        "execution_configuration.json": "cdad75a4e240a3efe841bd94fb16163613d581397d8304960828176dd6621cef"
+      }
+    }
+  },
+  "focused_tests_passed": 110,
+  "native_study_solves_run": false
+}

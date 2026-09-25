@@ -4,6 +4,11 @@ Prepared 2026-09-21. Project workflow instructions are in `CLAUDE.md`.
 
 ## Current state
 
+Latest 2026-09-23: the owner selected four fresh 120+6 replays using the new
+packages and disabled sparse dispatch. Runner and paired analysis are prepared;
+see `FOUR_WAY_STUDY.md` and `STUDY_READINESS.md`. No study solves have started.
+Owner review/commit, current fan confirmation and launch authorization remain.
+
 Latest 2026-09-22: the owner-authorized repeat of all four vectorization modes
 with the new packages and sparse dispatch disabled is complete. **All four are
 optimal and accepted:** none 339 iterations, time-only 70, spatial-only 190,

@@ -38,9 +38,10 @@ def validate_destination(output, previous):
 
 
 @retained_operation()
-def preflight(*, commit=None, require_clean=False):
+def preflight(*, commit=None, require_clean=False, output=None):
     """Read-only checks; no output creation, model solves, or subprocess workers."""
-    validate_destination(OUTPUT, PREVIOUS)
+    output = OUTPUT if output is None else Path(output)
+    validate_destination(output, PREVIOUS)
     head = git("rev-parse", "HEAD")
     if commit is not None and commit != head:
         raise ValueError(f"Commit binding mismatch: expected {commit}, found {head}")
@@ -91,7 +92,7 @@ def preflight(*, commit=None, require_clean=False):
         software_versions=versions, sparsediffpy_version=version("sparsediffpy"),
         dependency_transition={"cvxpy": ["1.9.2", "1.9.3"],
                                "sparsediffpy": ["0.3.0", "0.6.1"]},
-        primary_workers=2, shared_helper_workers=1, output=str(OUTPUT),
+        primary_workers=2, shared_helper_workers=1, output=str(output),
     )
 
 
