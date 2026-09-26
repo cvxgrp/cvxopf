@@ -58,6 +58,7 @@ from cvxopf.problem import (
     build_opf_multistep,
 )
 from cvxopf.results import extract_results
+from cvxopf._cvxpy_dispatch import sparse_dispatch_policy
 from cvxopf.storage import StorageUnitIdeal, storage_cost_expr
 
 
@@ -447,15 +448,16 @@ def _solve_ac_with_verified_x0(
             Dnlp2Smooth(),
             solver,
         ])
-        canonical_problem, inverse_data = chain.apply(problem=build.prob)
-        solution = solver.solve_via_data(
-            canonical_problem,
-            warm_start,
-            verbose,
-            solver_opts=options,
-            solver_cache=None,
-        )
-        build.prob.unpack_results(solution, chain, inverse_data)
+        with sparse_dispatch_policy(build.automatic_sparse_dispatch):
+            canonical_problem, inverse_data = chain.apply(problem=build.prob)
+            solution = solver.solve_via_data(
+                canonical_problem,
+                warm_start,
+                verbose,
+                solver_opts=options,
+                solver_cache=None,
+            )
+            build.prob.unpack_results(solution, chain, inverse_data)
     except Exception as exc:
         exception = f"{type(exc).__name__}: {exc}"
     elapsed = perf_counter() - started
@@ -767,7 +769,7 @@ def _solve_outer(
     solve_config: HierarchicalSolveConfig,
     iteration: int,
     realized_soc: Mapping[str, float],
-    outer_temporal_assembly: TemporalAssembly = "stepwise",
+    outer_temporal_assembly: TemporalAssembly = "vectorized",
 ) -> OuterPlanRecord:
     storage = _outer_storage(snapshot, realized_soc)
     build = _build_window(
@@ -1492,7 +1494,7 @@ def solve_hierarchical_opf(
     policy: HierarchicalPolicy,
     solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
     *,
-    outer_temporal_assembly: TemporalAssembly = "stepwise",
+    outer_temporal_assembly: TemporalAssembly = "vectorized",
 ) -> HierarchicalResult:
     """Execute receding-window AC control from lossy-DC energy signposts.
 

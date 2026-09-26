@@ -195,7 +195,7 @@ def _build(formulation, multistep):
             case,
             df_p,
             df_q,
-            T=2,
+            temporal_assembly="stepwise", T=2,
             formulation=formulation,
             delta=0.5,
         )
@@ -401,7 +401,7 @@ def test_intentional_multistep_t1_load_schema_and_objective(formulation):
             case,
             df_p,
             df_q,
-            T=1,
+            temporal_assembly="stepwise", T=1,
             formulation=formulation,
             delta=0.5,
         )

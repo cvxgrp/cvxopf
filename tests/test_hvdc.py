@@ -801,7 +801,7 @@ class TestHVDCLossyDCWiring:
                 case,
                 df_P,
                 df_Q,
-                T=T,
+                temporal_assembly="stepwise", T=T,
                 formulation="lossy_dc",
                 hvdc=[self._LINK],
             )
@@ -1068,7 +1068,7 @@ class TestHVDCACWiring:
                 case,
                 df_P,
                 df_Q,
-                T=T,
+                temporal_assembly="stepwise", T=T,
                 formulation="ac",
                 hvdc=[self._LINK],
             )

@@ -70,7 +70,8 @@ def test_stepwise_source_graph_baseline(formulation, expected):
     context = pytest.warns(UserWarning) if formulation != "ac" else nullcontext()
     with context:
         build = build_opf_multistep(
-            case9(), active, reactive, T=2, formulation=formulation
+            case9(), active, reactive, T=2, formulation=formulation,
+            temporal_assembly="stepwise",
         )
 
     record = characterize_source_graph(build)
@@ -134,14 +135,16 @@ def test_unregistered_vectorized_builder_does_not_fall_back_to_stepwise(
     with pytest.raises(NotImplementedError, match='registered vectorized formulations'):
         build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation,
                             temporal_assembly='vectorized')
-    stepwise = build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation)
+    stepwise = build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation,
+                                 temporal_assembly='stepwise')
     assert stepwise.temporal_assembly == 'stepwise'
 
 
 @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
 def test_cpp_and_scipy_characterizations_retain_backend_identity(formulation):
     active, _reactive = _frames(2)
-    build = build_opf_multistep(case9(), active, T=2, formulation=formulation)
+    build = build_opf_multistep(case9(), active, T=2, formulation=formulation,
+                              temporal_assembly="stepwise")
 
     cpp = characterize_convex_canonicalization(build, backend="CPP")
     scipy = characterize_convex_canonicalization(build, backend="SCIPY")

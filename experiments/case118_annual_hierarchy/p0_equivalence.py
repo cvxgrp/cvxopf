@@ -273,7 +273,10 @@ def run_nominal_equivalence(
 ) -> NominalEquivalenceReport:
     """Run and compare the frozen nominal public and streaming trajectories."""
     fixture = load_p0_fixture(horizon_steps)
-    public = solve_hierarchical_opf(fixture.inputs, fixture.policy, fixture.solve_config)
+    public = solve_hierarchical_opf(
+        fixture.inputs, fixture.policy, fixture.solve_config,
+        outer_temporal_assembly="stepwise",
+    )
     streaming = run_streaming_trajectory(
         directory,
         fixture.inputs,

@@ -271,11 +271,11 @@ class TestExplicitLoadAPI:
             )
 
         np.testing.assert_allclose(
-            [item.value for item in build.expressions["p_load"]],
+            build.expressions["p_load"].value.T,
             [[11.0, 22.0], [12.0, 24.0]],
         )
         np.testing.assert_allclose(
-            [item.value for item in build.expressions["q_load"]],
+            build.expressions["q_load"].value.T,
             [[-1.0, 5.0], [-2.0, 6.0]],
         )
         assert build.data["load_has_reactive"].tolist() == [True, True]
@@ -294,8 +294,7 @@ class TestExplicitLoadAPI:
             1 if formulation == "singlenode_dc" else 9,
             0,
         )
-        assert len(build.expressions["p_load"]) == 1
-        assert build.expressions["p_load"][0].shape == (0,)
+        assert build.expressions["p_load"].shape == (0, 1)
         assert build.data["Pd_series"].shape == (
             (1,) if formulation == "singlenode_dc" else (1, 9)
         )
@@ -372,7 +371,7 @@ class TestExplicitLoadAPI:
 
         assert multi.data["T"] == 1
         assert multi.data["load_has_reactive"].tolist() == [False, True]
-        assert len(multi.expressions["p_load"]) == 1
+        assert multi.expressions["p_load"].shape == (2, 1)
         assert extract_results(multi)["p_load"].shape == (1, 2)
         assert multi.prob.value == pytest.approx(
             single.prob.value, rel=2e-5, abs=2e-3
@@ -822,9 +821,7 @@ def test_delta_integrates_shedding_cost_and_ens_exactly_once():
     )
     build.solve()
 
-    shed = np.array(
-        [item.value[0] for item in build.expressions["p_load_shed"]]
-    )
+    shed = build.expressions["p_load_shed"].value
     expected_ens = 0.25 * np.sum(shed)
     assert build.expressions["energy_not_served_by_load"].shape == (1,)
     assert build.expressions["energy_not_served_by_load"].value[0] == (

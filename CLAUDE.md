@@ -339,7 +339,7 @@ capability explicitly on every component adapter.
 build_opf(case, *, formulation="ac", options=None,
           storage=None, delta=1.0,
           nondispatchable=None, hvdc=None, generators=None,
-          loads=None) -> OPFBuild
+          loads=None, automatic_sparse_dispatch=False) -> OPFBuild
 
 build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     options=None, coupling_constraints=None,
@@ -347,7 +347,9 @@ build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     nondispatchable=None, df_nd=None,
                     hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
                     generators=None, loads=None,
-                    df_load_p=None, df_load_q=None) -> OPFBuild
+                    df_load_p=None, df_load_q=None,
+                    temporal_assembly="vectorized",
+                    automatic_sparse_dispatch=False) -> OPFBuild
 ```
 
 ### Deprecated aliases (will be removed in a future release)
@@ -384,7 +386,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step, time-last arrays by default multistep, or lists in explicit stepwise mode. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
 | `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
 | `formulation` | str | `"ac"`, `"lossy_dc"`, or `"singlenode_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
@@ -769,7 +771,7 @@ their plans are not imported by this documentation-only addition.
 | 11 — SOCP (convex) network model | 🔲 Future | |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
 | 13 — Extend CVXPY parameterization for problem data | 🔲 Future | Faster repeated solves of the same graph over new data |
-| 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Stepwise remains the default; DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. See `plans/milestone-14-time-vectorization.md`. |
+| 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Time-vectorized multistep assembly is now the default across formulations; explicit stepwise assembly remains available. DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. The completed four-condition Case118 study supports combined AC vectorization with automatic sparse dispatch disabled; see `experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md`. See `plans/milestone-14-time-vectorization.md`. |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | ✅ Complete | The capstone controller passes **identity-aligned SoC signposts only** (not other setpoints) from long-horizon `lossy_dc` planning into short AC-OPF windows, executes only residual-checked target-conditioned first actions, supports causal shifted initialization with audited recovery, and retains the complete plan/attempt tree. M17 fixes the validated `lossy_dc`→`ac` workflow; configurable formulations and additional layers are M21. See `plans/milestone-17-hierarchical-dc-ac.md`. |
@@ -809,6 +811,9 @@ Ybus pattern. Stepwise assembly uses two vector equalities per step;
 time-vectorized assembly uses two matrix equalities over all entries and
 times. Both sparse and dense P/Q storage use these expressions, and dense
 off-pattern zeros are constrained in batches.
+Public multistep builders default to `temporal_assembly="vectorized"` across all
+formulations. AC builders additionally default to `automatic_sparse_dispatch=False`: construction and solving temporarily set CVXPY’s density threshold to zero and restore the caller’s value afterward. This is independent of sparse P/Q storage. Explicit `automatic_sparse_dispatch=True` retains the caller’s threshold. cvxopf build/solve entry points serialize access to this process-global setting; unrelated concurrent CVXPY operations should use separate processes.
+
 Set `OPFOptions(vectorize_pq=False)` to construct each Ybus entry separately
 in either temporal representation and either storage layout. This includes
 per-entry dense zero constraints. Time-vectorized builds retain vectorization

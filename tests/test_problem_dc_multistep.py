@@ -100,7 +100,7 @@ class TestReturnType:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             build = build_opf_multistep(
-                case9(), df_P, df_Q, T=T, formulation="lossy_dc"
+                case9(), df_P, df_Q, temporal_assembly="stepwise", T=T, formulation="lossy_dc"
             )
         for key in ("p_flows", "Pg"):
             assert isinstance(build.variables[key], list)

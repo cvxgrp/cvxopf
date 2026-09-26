@@ -89,10 +89,9 @@ def test_single_and_multistep_t1_storage_schemas_remain_distinct(formulation):
     assert single.variables["b"].shape == (1,)
     assert single.variables["soc"].shape == (1,)
     assert multi.data["T"] == 1
-    assert len(multi.variables["b"]) == 1
-    assert len(multi.variables["soc"]) == 1
-    assert multi.variables["b"][0].shape == (1,)
-    assert multi.variables["soc"][0].shape == (1,)
+    assert multi.variables["b"].shape == (1, 1)
+    # Vectorized SoC includes the initial boundary; extracted results do not.
+    assert multi.variables["soc"].shape == (1, 2)
 
     assert single_result["b"].shape == (1,)
     assert single_result["soc"].shape == (1,)

@@ -261,6 +261,7 @@ def _build_window(
         return build_opf_multistep(
             deepcopy(scenario.case),
             T=stop - start,
+            temporal_assembly="stepwise",
             formulation=formulation,
             options=replace(scenario.options),
             generators=list(scenario.generators),

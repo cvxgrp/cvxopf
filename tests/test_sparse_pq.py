@@ -309,7 +309,7 @@ class TestSparsePQMultistep:
         T          = 3
         df_P, df_Q = _flat_load_dfs(case9, T)
         build      = build_opf_multistep(
-            case9(), df_P, df_Q, T=T,
+            case9(), df_P, df_Q, T=T, temporal_assembly="stepwise",
             options=OPFOptions(sparse_pq=True),
         )
         assert "P_vec" in build.variables
@@ -321,7 +321,7 @@ class TestSparsePQMultistep:
         T          = 3
         df_P, df_Q = _flat_load_dfs(case9, T)
         build      = build_opf_multistep(
-            case9(), df_P, df_Q, T=T,
+            case9(), df_P, df_Q, T=T, temporal_assembly="stepwise",
             options=OPFOptions(sparse_pq=False),
         )
         assert "P" in build.variables
