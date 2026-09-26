@@ -318,7 +318,7 @@ def run_injected_equivalence(
     with _instrument(public_solver, case.outcomes):
         public = solve_hierarchical_opf(
             fixture.inputs, fixture.policy, fixture.solve_config,
-            outer_temporal_assembly="stepwise",
+            outer_temporal_assembly="stepwise", inner_temporal_assembly="stepwise",
         )
     with _instrument(streaming_runner, case.outcomes):
         streaming = run_streaming_trajectory(

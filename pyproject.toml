@@ -82,6 +82,7 @@ select = ["E4", "E7", "E9", "F"]
 [tool.mypy]
 python_version = "3.11"
 files = [
+    "src/cvxopf/_ac_start_mapping.py",
     "src/cvxopf/_component_adapter.py",
     "src/cvxopf/_component_adapters.py",
     "src/cvxopf/_component_assembly.py",

@@ -32,6 +32,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_immutable_json,
 )
 from .sample import read, checked, sha
+from cvxopf._ac_start_mapping import pack_start, unpack_values
 
 
 def execution_configuration(value=None):
@@ -48,41 +49,6 @@ def execution_configuration(value=None):
     return config
 
 
-def pack_start(step_values, build, initial):
-    """Map original time-suffixed physical coordinates to time-last arrays."""
-    output = {}
-    used = set()
-    horizon = build.data["T"]
-    for name, variable in streaming.variables_by_name(build).items():
-        names = [f"{name}_{t}" for t in range(horizon)]
-        columns = [np.asarray(step_values[n], dtype=float).reshape(-1) for n in names]
-        used.update(names)
-        if name == "soc":
-            columns.insert(0, np.asarray(initial, dtype=float))
-        value = np.column_stack(columns)
-        if value.shape != variable.shape:
-            raise ValueError(
-                f"Unexpected packed shape for {name}: {value.shape} vs {variable.shape}"
-            )
-        output[name] = value
-    if used != set(step_values):
-        raise ValueError("Unmapped historical variables")
-    return output
-
-
-def unpack_values(values, template):
-    """Restore stepwise names for the existing deterministic helper initializer."""
-    result = {}
-    for name, original in template.items():
-        base, index = name.rsplit("_", 1)
-        column = int(index) + (base == "soc")
-        result[name] = np.asarray(values[base])[:, column].reshape(
-            np.asarray(original).shape
-        )
-    return result
-
-
-@retained_operation()
 def prepare(directory, fixture, outer, request):
     config = execution_configuration(request.get("execution_configuration"))
     vectorized = config["temporal_assembly"] == "vectorized"

@@ -191,7 +191,10 @@ def run_public_case(case_name: CaseName) -> HierarchicalResult:
     """Execute one frozen S7 case exclusively through the public M17 API."""
     if case_name not in ALL_CASES:
         raise ValueError(f"unknown S7 case {case_name!r}")
-    return solve_hierarchical_opf(_inputs(), _policy(case_name))
+    return solve_hierarchical_opf(
+        _inputs(), _policy(case_name),
+        outer_temporal_assembly="stepwise", inner_temporal_assembly="stepwise",
+    )
 
 
 def _array_comparison(name: str, actual: object, expected: object) -> Comparison:

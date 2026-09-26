@@ -275,7 +275,7 @@ def run_nominal_equivalence(
     fixture = load_p0_fixture(horizon_steps)
     public = solve_hierarchical_opf(
         fixture.inputs, fixture.policy, fixture.solve_config,
-        outer_temporal_assembly="stepwise",
+        outer_temporal_assembly="stepwise", inner_temporal_assembly="stepwise",
     )
     streaming = run_streaming_trajectory(
         directory,

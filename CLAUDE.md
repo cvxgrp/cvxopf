@@ -804,6 +804,18 @@ or `cyipopt` will fail to build with a linker error.
 `pytest`, `pytest-cov` — installed via `pip install -e ".[dev]"` or
 `uv run --extra dev`.
 
+### Hierarchical temporal assembly
+
+The public hierarchical controller defaults both `outer_temporal_assembly` and
+`inner_temporal_assembly` to `"vectorized"`, with independent `"stepwise"`
+overrides. Recovery transformations keep the historical logical coordinate
+order; `_ac_start_mapping.py` owns conversion shared with the replay worker.
+Do not build a second graph solely to transform a start. The initial SoC
+boundary is supplied from realized device-aligned state and is not perturbed.
+Complete canonical IPOPT x0 verification, recovery ordering, and acceptance
+criteria apply in both representations. See
+`plans/hierarchical-inner-vectorization.md` for bounded integration evidence.
+
 ### Sparse P/Q vectorization
 
 By default, AC builds share P/Q flow expressions formed by array gathers over the

@@ -59,6 +59,10 @@ from cvxopf.problem import (
 )
 from cvxopf.results import extract_results
 from cvxopf._cvxpy_dispatch import sparse_dispatch_policy
+from cvxopf._ac_start_mapping import (
+    variables_by_name as _variables_by_name, pack_start, stepwise_values,
+    stepwise_template, project_stepwise_values,
+)
 from cvxopf.storage import StorageUnitIdeal, storage_cost_expr
 
 
@@ -107,6 +111,7 @@ class _ExecutionInputs:
     df_hvdc_max: pd.DataFrame | None
     options: OPFOptions
     storage_device_ids: tuple[str, ...]
+    inner_temporal_assembly: TemporalAssembly = "stepwise"
 
 
 @dataclass(frozen=True)
@@ -309,16 +314,13 @@ def _identity_error(
     return None
 
 
-def _variables_by_name(build: OPFBuild) -> dict[str, cp.Variable]:
-    variables = build.prob.variables()
-    names = [variable.name() for variable in variables]
-    if len(names) != len(set(names)):
-        raise ValueError("hierarchical initialization requires unique variable names")
-    return dict(zip(names, variables, strict=True))
-
-
 def _complete_start(build: OPFBuild) -> dict[str, np.ndarray]:
     _set_nlp_initial_point(build.prob)
+    if build.temporal_assembly == "vectorized" and "soc" in build.variables:
+        soc = build.variables["soc"]
+        value = np.asarray(soc.value, dtype=float).copy()
+        value[:, 0] = build.data["storage_initial_soc"]
+        soc.value = value
     result: dict[str, np.ndarray] = {}
     for name, variable in _variables_by_name(build).items():
         if variable.value is None:
@@ -902,12 +904,12 @@ def _shifted_start(
     policy: HierarchicalPolicy,
     realized_soc: Mapping[str, float],
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    variables = _variables_by_name(destination)
+    template = stepwise_template(destination)
     source_stepped, source_unsuffixed = _values_by_step(preceding)
     raw: dict[str, np.ndarray] = {}
     projected: dict[str, np.ndarray] = {}
     soc_steps: list[int] = []
-    for name, variable in variables.items():
+    for name, shape_value in template.items():
         match = _STEP_NAME.fullmatch(name)
         if match is None:
             if name not in source_unsuffixed:
@@ -918,6 +920,7 @@ def _shifted_start(
             step = int(match.group("step"))
             if base == "soc":
                 soc_steps.append(step)
+                raw[name] = shape_value.copy()
                 continue
             if base not in source_stepped:
                 raise ValueError(f"shift source lacks family {base}")
@@ -926,32 +929,36 @@ def _shifted_start(
             if shifted in family:
                 candidate = family[shifted]
             elif base in {"b", "b_q"}:
-                candidate = np.zeros(variable.shape)
+                candidate = np.zeros(shape_value.shape)
             else:
                 candidate = family[max(family)]
         candidate = np.asarray(candidate, dtype=float)
-        if candidate.shape != variable.shape:
+        if candidate.shape != shape_value.shape:
             raise ValueError(f"shifted shape mismatch for {name}")
         raw[name] = candidate.copy()
-        projected[name] = np.asarray(variable.project(candidate), dtype=float)
+
     if sorted(soc_steps) != list(range(len(soc_steps))):
         raise ValueError("destination SoC steps are not consecutive")
+    projected = project_stepwise_values(destination, raw)
     state = _aligned(realized_soc, snapshot.storage_device_ids, "realized SoC")
-    for step in soc_steps:
+    for step in sorted(soc_steps):
         b_name = f"b_{step}"
         if b_name not in projected:
             raise ValueError(f"shifted start lacks {b_name}")
         state = state - snapshot.delta * projected[b_name]
         name = f"soc_{step}"
         candidate = state.copy()
-        leaf = np.asarray(variables[name].project(candidate), dtype=float)
-        if np.max(np.abs(leaf - candidate)) > policy.tolerances.soc_recurrence_mwh_abs:
-            raise ValueError(f"reconstructed {name} violates destination bounds")
         raw[name] = candidate.copy()
         projected[name] = candidate.copy()
-    if set(projected) != set(variables):
+    checked = project_stepwise_values(destination, projected)
+    for step in sorted(soc_steps):
+        name = f"soc_{step}"
+        if np.max(np.abs(checked[name] - projected[name])) > policy.tolerances.soc_recurrence_mwh_abs:
+            raise ValueError(f"reconstructed {name} violates destination bounds")
+    if set(projected) != set(template):
         raise ValueError("shift did not initialize every destination variable")
-    return raw, projected
+    initial = _aligned(realized_soc, snapshot.storage_device_ids, "realized SoC")
+    return pack_start(raw, destination, initial), pack_start(projected, destination, initial)
 
 
 def _perturbed_start(
@@ -961,21 +968,20 @@ def _perturbed_start(
     scale: float,
     seed: int,
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    variables = _variables_by_name(destination)
-    if set(center) != set(variables):
+    template = stepwise_template(destination)
+    if set(center) != set(_variables_by_name(destination)):
         raise ValueError("perturbation center does not match destination")
+    logical = stepwise_values(destination, center)
     rng = np.random.default_rng(seed)
     raw: dict[str, np.ndarray] = {}
-    projected: dict[str, np.ndarray] = {}
-    for name in sorted(variables):
-        variable = variables[name]
-        value = np.asarray(center[name], dtype=float)
+    for name in sorted(template):
+        value = np.asarray(logical[name], dtype=float)
         flat = value.flatten(order="F")
         change = scale * np.maximum(1.0, np.abs(flat)) * rng.standard_normal(flat.size)
-        candidate = (flat + change).reshape(value.shape, order="F")
-        raw[name] = candidate.copy()
-        projected[name] = np.asarray(variable.project(candidate), dtype=float)
-    return raw, projected
+        raw[name] = (flat + change).reshape(value.shape, order="F")
+    projected = project_stepwise_values(destination, raw)
+    initial = destination.data.get("storage_initial_soc", [])
+    return pack_start(raw, destination, initial), pack_start(projected, destination, initial)
 
 
 def _solution_values(build: OPFBuild) -> dict[str, np.ndarray]:
@@ -1063,7 +1069,10 @@ def _execute_attempt(
             snapshot, policy, initial, None if target_free else target
         )
         if build is None:
-            build = _build_window(snapshot, "ac", iteration, stop, storage)
+            build = _build_window(
+                snapshot, "ac", iteration, stop, storage,
+                temporal_assembly=snapshot.inner_temporal_assembly,
+            )
         if assigned_start is not None:
             _assign_start(build, assigned_start)
             retained_assigned = assigned_start
@@ -1191,7 +1200,7 @@ def _window_attempts(
                 None,
             )
         preceding_values = _attempt_solution(preceding_attempt)
-        if preceding_values is None:
+        if preceding_values is None or preceding_attempt.build is None:
             reason = "preceding accepted controlling prediction is unavailable"
             return (
                 tuple(
@@ -1207,9 +1216,11 @@ def _window_attempts(
             primary_build = _build_window(
                 snapshot, "ac", iteration, stop,
                 _inner_storage(snapshot, policy, initial, target),
+                temporal_assembly=snapshot.inner_temporal_assembly,
             )
             causal_raw, causal_start = _shifted_start(
-                preceding_values, primary_build, snapshot, policy, initial
+                stepwise_values(preceding_attempt.build, preceding_values),
+                primary_build, snapshot, policy, initial
             )
         except Exception as exc:
             reason = f"causal_start_construction_error:{type(exc).__name__}: {exc}"
@@ -1320,6 +1331,7 @@ def _window_attempts(
                     build = _build_window(
                         snapshot, "ac", iteration, stop,
                         _inner_storage(snapshot, policy, initial, target),
+                        temporal_assembly=snapshot.inner_temporal_assembly,
                     )
                     raw, projected = _perturbed_start(
                         center, build, scale=slot.scale, seed=slot.seed
@@ -1339,6 +1351,7 @@ def _window_attempts(
                         outer_plan, initial, target, slot, target_free=False,
                         raw_start=raw, assigned_start=projected,
                         source_kind=source_kind, source_attempt_id=source_id,
+                        prebuilt=build,
                     )
                     if record.supplied_executed_action:
                         accepted = record
@@ -1495,6 +1508,7 @@ def solve_hierarchical_opf(
     solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
     *,
     outer_temporal_assembly: TemporalAssembly = "vectorized",
+    inner_temporal_assembly: TemporalAssembly = "vectorized",
 ) -> HierarchicalResult:
     """Execute receding-window AC control from lossy-DC energy signposts.
 
@@ -1512,7 +1526,9 @@ def solve_hierarchical_opf(
         raise ValueError(
             "outer_temporal_assembly must be 'stepwise' or 'vectorized'"
         )
-    snapshot = _execution_snapshot(inputs)
+    if inner_temporal_assembly not in {"stepwise", "vectorized"}:
+        raise ValueError("inner_temporal_assembly must be 'stepwise' or 'vectorized'")
+    snapshot = replace(_execution_snapshot(inputs), inner_temporal_assembly=inner_temporal_assembly)
     ids = snapshot.storage_device_ids
     realized = _initial_soc(snapshot)
     realized_history = [_aligned(realized, ids, "initial SoC")]

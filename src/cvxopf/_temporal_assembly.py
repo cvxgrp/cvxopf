@@ -1,8 +1,8 @@
 """Typed internal contracts for horizon-vectorized model assembly.
 
 This module contains representation mechanics only. It does not own component
-physics or formulation equations. The public stepwise builders remain the
-default while M14b composes these contracts into the vectorized path.
+physics or formulation equations. Public multistep builders default to
+time-vectorized assembly; explicit stepwise assembly remains available.
 """
 
 from __future__ import annotations

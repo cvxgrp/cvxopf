@@ -47,3 +47,7 @@ ran 28 passing tests and returned CLEAN with no remaining findings. No claim is
 made that hierarchical inner-AC recovery has migrated to vectorized assembly;
 that is separate work. The final full regression rerun passed: **3,066 tests and six subtests**,
 58 warnings, in 228 seconds.
+
+Follow-up: the previously deferred inner-AC integration is now covered by
+[the hierarchical integration plan](hierarchical-inner-vectorization.md).
+The checkpoint above records the original reviewed scope.

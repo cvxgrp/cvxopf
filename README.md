@@ -528,10 +528,15 @@ Pass `temporal_assembly="stepwise"` to retain the per-interval graph and variabl
 lists. Code that accesses `build.variables` must use the selected layout;
 extracted result shapes are unchanged.
 
-The hierarchical controller also defaults to a vectorized DC outer plan;
-`outer_temporal_assembly="stepwise"` restores its legacy outer graph. Its inner
-AC recovery path retains explicit stepwise assembly for the causal start
-protocol.
+The hierarchical controller defaults to vectorized DC outer and AC inner
+graphs. `outer_temporal_assembly="stepwise"` and
+`inner_temporal_assembly="stepwise"` independently restore either legacy graph.
+Shifted preceding solutions, copied target-free solutions, and seeded recovery
+perturbations work in both representations. The initial SoC boundary is fixed
+from the identity-aligned realized state, and shrinking final windows retain
+chronological state reconstruction. Recovery ordering, acceptance criteria and
+extracted result schemas are unchanged; every native AC attempt retains complete
+IPOPT starting-vector verification, including canonicalization auxiliaries.
 
 AC also defaults to spatial P/Q batching and disables CVXPY's automatic
 density-based sparse derivative dispatch. This compatibility policy applies
