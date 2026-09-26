@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-22",
+  "approval_scope": "Source/environment preparation and mocked native-entry checks only; no optimization run",
+  "historical_source_commit": "2ac05b039780efd5f2b04465b2b6b42a7405ada9",
+  "source_count": 105,
+  "package_count": 49,
+  "package_differences": {
+    "sparsediffpy": [
+      "0.3.0",
+      "0.6.1"
+    ],
+    "cvxpy": [
+      "1.9.2",
+      "1.9.3"
+    ]
+  },
+  "checks": {
+    "harness_sha256": true,
+    "python": true,
+    "imports": true,
+    "input_fingerprint": true,
+    "policy_sha256": true,
+    "solve_config_sha256": true,
+    "request_sha256": true,
+    "native_dimensions": true,
+    "native_options": true,
+    "layout_signature": true,
+    "thread_environment": true
+  },
+  "array_checks": {
+    "x0": true,
+    "lb": true,
+    "ub": true,
+    "cl": true,
+    "cu": true
+  },
+  "native_binary_hashes": {
+    "ipopt_wrapper.cpython-311-darwin.so": "af6c7cca49a22b8a6d567f55c2dd13d2cf63174f9db20b1cdf47e204210896e7",
+    "libipopt.3.dylib": "238d6e75664836be332992bb295ef3fbd9371da72b30e4a62a277a7d831a94bd",
+    "libpord.dylib": "acd39b271e39b20519c1df9ea4e5816babed84c22226cca7a389dba330d3eb9e",
+    "libquadmath.0.dylib": "773034db811835ca98358409e647c46a97cb9dc3f4fbb6956c858e5a31cdf580",
+    "libgfortran.5.dylib": "624e083bf9ebdcd8c6713ef8adaf1aa49ec2a1756cd0dbaed553fd48fc3e6950",
+    "libopenblasp-r0.3.33.dylib": "578194952493651b19d2fc1db4bf6ec5b8506b8d4cd6e35054eb62b0ca79d966",
+    "libomp.dylib": "b6d9b621ca10f9e097de32b77b1bd50ca0b6e606168a0d7368e82fd279dbfb4f",
+    "libmumps_common.dylib": "192b55e3e6bd05a4658314931512310171438ee5dbdb5f4c492aedb61abbb656",
+    "libmpiseq.dylib": "75f6cdf38a5dcf885959beb4245b2c7f0f2fecd59956bdc48f8edc4d14b405af",
+    "libdmumps.dylib": "6c2f836c5dcd9034359ca77c3d7fd2dac59ae00e64731994b18ff7b2160f9e59"
+  },
+  "historical_full_x0_exact_both": true,
+  "native_optimization_run": false,
+  "native_dimensions": {
+    "n": 9124,
+    "m": 10601
+  },
+  "native_options": {
+    "mu_strategy": "adaptive",
+    "tol": 1e-07,
+    "bound_relax_factor": 0.0,
+    "hessian_approximation": "exact",
+    "derivative_test": "none",
+    "least_square_init_duals": "no",
+    "print_level": 0,
+    "sb": "yes"
+  },
+  "input_fingerprint": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+  "preparations": {
+    "a": {
+      "path": "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/preparation-a-02",
+      "sha256": "b044e7f9581ac4cb0649294496ca5ffbf42ac0a50ceeb33e1e77b4ccb0b63315"
+    },
+    "b": {
+      "path": "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/preparation-b-01",
+      "sha256": "9199824a955d54f0db15d5e508086b33a175aef23a1f127889f16656ce87e75f"
+    }
+  },
+  "harness_sha256": "70a242e32b8ea5163cef809bb90b5ac98ec905c335bc5c80e1f6b940cd81f27c"
+}

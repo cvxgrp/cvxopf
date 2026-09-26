@@ -1,0 +1,326 @@
+{
+  "commit": "56a531b5f0d6f6d737d83a449b07714973553622",
+  "conditions": [
+    {
+      "condition": "none",
+      "status": "user_limit",
+      "accepted": false,
+      "iterations": 3000,
+      "native_seconds": 717.402,
+      "solve_phase_seconds": 723.4407187499455,
+      "preparation_seconds": 1.372199916979298,
+      "worker_wall_seconds": 728.5959139160113,
+      "termination": "Maximum Number of Iterations Exceeded.",
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 5.991668410842976e-07,
+        "ac_reactive_balance_pu_abs": 3.7620909580482474e-06,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 5.291299649853045e-07,
+        "soc_recurrence_mwh_abs": 8.834418691174711e-06,
+        "terminal_soc_mwh_abs": 1.2665524664612349e-06,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2223.591190604005,
+          "unscaled": 277018.4682220773
+        },
+        "Dual infeasibility": {
+          "scaled": 591979056.4863544,
+          "unscaled": 73749676712.31656
+        },
+        "Constraint violation": {
+          "scaled": 5.2912996496762505e-05,
+          "unscaled": 5.2912996496762505e-05
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 879.8015976799588,
+          "unscaled": 109607.05904867129
+        },
+        "Overall NLP error": {
+          "scaled": 5749.444217043168,
+          "unscaled": 73749676712.31656
+        }
+      },
+      "extracted_objective": 274452.21996899915,
+      "preparation": {
+        "constraint_objects": 4057,
+        "historical_named_start_exact": true,
+        "model_coordinates": 6876,
+        "representation_input_sha256": "1838b99cef942e955f1998dfe102ba0445996b8e606e42558f98a9668123ac2c",
+        "request_sha256": "38e05f982cc2458b3f752e9fbc06defedf369b4aa9cde4a57e80b3d46049d307",
+        "temporal_assembly": "stepwise",
+        "variable_objects": 51,
+        "vectorize_pq": false
+      }
+    },
+    {
+      "condition": "time_only",
+      "status": "user_limit",
+      "accepted": false,
+      "iterations": 3000,
+      "native_seconds": 284.574,
+      "solve_phase_seconds": 286.52758666698355,
+      "preparation_seconds": 0.8942532079527155,
+      "worker_wall_seconds": 291.32356395898387,
+      "termination": "Maximum Number of Iterations Exceeded.",
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 2.0848869212386489e-07,
+        "ac_reactive_balance_pu_abs": 1.679909816232339e-07,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 1.9009986604312523e-07,
+        "terminal_soc_mwh_abs": 1.585151068184132e-07,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2142.469061875627,
+          "unscaled": 266912.1465500863
+        },
+        "Dual infeasibility": {
+          "scaled": 3126190153.7352962,
+          "unscaled": 389465658713.7552
+        },
+        "Constraint violation": {
+          "scaled": 0.00037709153804517886,
+          "unscaled": 0.0013264780494637305
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 7237.596407288135,
+          "unscaled": 901671.0800207636
+        },
+        "Overall NLP error": {
+          "scaled": 432027.1199451824,
+          "unscaled": 389465658713.7552
+        }
+      },
+      "extracted_objective": 266909.3878353608,
+      "preparation": {
+        "constraint_objects": 1349,
+        "historical_named_start_exact": true,
+        "model_coordinates": 6880,
+        "representation_input_sha256": "1838b99cef942e955f1998dfe102ba0445996b8e606e42558f98a9668123ac2c",
+        "request_sha256": "38e05f982cc2458b3f752e9fbc06defedf369b4aa9cde4a57e80b3d46049d307",
+        "temporal_assembly": "vectorized",
+        "variable_objects": 17,
+        "vectorize_pq": false
+      }
+    },
+    {
+      "condition": "spatial_only",
+      "status": "user_limit",
+      "accepted": false,
+      "iterations": 3000,
+      "native_seconds": 448.483,
+      "solve_phase_seconds": 451.8788526660064,
+      "preparation_seconds": 0.5899323329795152,
+      "worker_wall_seconds": 456.38109845801955,
+      "termination": "Maximum Number of Iterations Exceeded.",
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 8.37125924135762e-11,
+        "ac_reactive_balance_pu_abs": 4.669225006637134e-12,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 0.0004421030669491475,
+        "terminal_soc_mwh_abs": 7.815970093361102e-14,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 2137.6027185900534,
+          "unscaled": 266305.8898926086
+        },
+        "Dual infeasibility": {
+          "scaled": 2.2481811317944412e+16,
+          "unscaled": 2.8008192155424993e+18
+        },
+        "Constraint violation": {
+          "scaled": 13.271788746906992,
+          "unscaled": 13.271788746906992
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 11269.6516435194,
+          "unscaled": 1403990.827484859
+        },
+        "Overall NLP error": {
+          "scaled": 380604.3552649334,
+          "unscaled": 2.8008192155424993e+18
+        }
+      },
+      "extracted_objective": 266303.55074493034,
+      "preparation": {
+        "constraint_objects": 1207,
+        "historical_named_start_exact": true,
+        "model_coordinates": 6876,
+        "representation_input_sha256": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+        "request_sha256": "38e05f982cc2458b3f752e9fbc06defedf369b4aa9cde4a57e80b3d46049d307",
+        "temporal_assembly": "stepwise",
+        "variable_objects": 51,
+        "vectorize_pq": true
+      }
+    },
+    {
+      "condition": "both",
+      "status": "user_limit",
+      "accepted": false,
+      "iterations": 3000,
+      "native_seconds": 196.344,
+      "solve_phase_seconds": 197.4639862080221,
+      "preparation_seconds": 0.8068964999984019,
+      "worker_wall_seconds": 202.06864458299242,
+      "termination": "Maximum Number of Iterations Exceeded.",
+      "physical_residuals": {
+        "ac_active_balance_pu_abs": 0.0002731470209057818,
+        "ac_reactive_balance_pu_abs": 0.006341535149050515,
+        "branch_loss_nonnegativity_pu_abs": 0.0,
+        "branch_mva_abs": 0.0,
+        "branch_normalized_squared_residual": 0.0,
+        "curtailment_nonnegativity_pu_abs": 0.0,
+        "soc_recurrence_mwh_abs": 0.0045097383366048405,
+        "terminal_soc_mwh_abs": 0.0034018511303557375,
+        "voltage_bound_pu_abs": 0.0
+      },
+      "native_metrics": {
+        "Objective": {
+          "scaled": 3657.230699646854,
+          "unscaled": 455623.5204708328
+        },
+        "Dual infeasibility": {
+          "scaled": 1659559.601605452,
+          "unscaled": 206750530.71923023
+        },
+        "Constraint violation": {
+          "scaled": 0.01061381757748281,
+          "unscaled": 0.01061381757748281
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 2198.573224276189,
+          "unscaled": 273901.69084885856
+        },
+        "Overall NLP error": {
+          "scaled": 6521.234423992771,
+          "unscaled": 206750530.71923023
+        }
+      },
+      "extracted_objective": 325055.78931038035,
+      "preparation": {
+        "constraint_objects": 399,
+        "historical_named_start_exact": true,
+        "model_coordinates": 6880,
+        "representation_input_sha256": "40480e8cc09b40b472de51ddd7b032a46f2dc23339bef8d9fdbb44ef15c1cb13",
+        "request_sha256": "38e05f982cc2458b3f752e9fbc06defedf369b4aa9cde4a57e80b3d46049d307",
+        "temporal_assembly": "vectorized",
+        "variable_objects": 17,
+        "vectorize_pq": true
+      }
+    }
+  ],
+  "total_wall_seconds": 1690.289937,
+  "total_solve_phase_seconds": 1659.3111442909576,
+  "mean_solve_seconds": 414.8277860727394,
+  "median_solve_seconds": 369.203219666495,
+  "completed_attempts_per_hour": 8.519248493875404,
+  "accepted_attempts_per_hour": 0.0,
+  "accepted": 0,
+  "pairwise": [
+    {
+      "first": "none",
+      "second": "time_only",
+      "second_over_first_solve_time": 0.39606228850662845,
+      "second_minus_first_seconds": -436.91313208296197
+    },
+    {
+      "first": "none",
+      "second": "spatial_only",
+      "second_over_first_solve_time": 0.6246245766298878,
+      "second_minus_first_seconds": -271.5618660839391
+    },
+    {
+      "first": "none",
+      "second": "both",
+      "second_over_first_solve_time": 0.27295116391737795,
+      "second_minus_first_seconds": -525.9767325419234
+    },
+    {
+      "first": "time_only",
+      "second": "spatial_only",
+      "second_over_first_solve_time": 1.5770867228613565,
+      "second_minus_first_seconds": 165.35126599902287
+    },
+    {
+      "first": "time_only",
+      "second": "both",
+      "second_over_first_solve_time": 0.6891622147277723,
+      "second_minus_first_seconds": -89.06360045896145
+    },
+    {
+      "first": "spatial_only",
+      "second": "both",
+      "second_over_first_solve_time": 0.43698434888691745,
+      "second_minus_first_seconds": -254.41486645798432
+    }
+  ],
+  "spatial_pair_start_comparison": [
+    {
+      "first": "none",
+      "second": "spatial_only",
+      "full_canonical_x0_exact": true,
+      "normalized_layout_exact": true
+    },
+    {
+      "first": "time_only",
+      "second": "both",
+      "full_canonical_x0_exact": true,
+      "normalized_layout_exact": true
+    }
+  ],
+  "previous_diagnostic_comparison": [
+    {
+      "current": "spatial_only",
+      "previous": "stepwise",
+      "extracted_result_exact": true,
+      "physical_residuals_exact": true,
+      "full_canonical_x0_exact": true,
+      "normalized_layout_exact": true
+    },
+    {
+      "current": "both",
+      "previous": "vectorized",
+      "extracted_result_exact": true,
+      "physical_residuals_exact": true,
+      "full_canonical_x0_exact": true,
+      "normalized_layout_exact": true
+    }
+  ],
+  "thermal": {
+    "samples": 168,
+    "errors": [],
+    "cpu_min_c": 39.00995635986328,
+    "cpu_median_c": 52.55764389038086,
+    "cpu_max_c": 63.108612060546875
+  },
+  "verification": "Recorded execution source hashes verified from unchanged files or the bound Git commit; retained start artifact hashes verified."
+}

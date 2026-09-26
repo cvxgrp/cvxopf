@@ -1,0 +1,153 @@
+{
+  "rows": [
+    {
+      "arm": "a",
+      "status": "optimal",
+      "accepted": true,
+      "iterations": 70,
+      "native_ipopt_seconds": 29.572,
+      "solve_phase_seconds": 31.561415917007253,
+      "native_call_seconds": 29.57248933298979,
+      "objective": 266883.71728151327,
+      "native_termination": {
+        "Objective": {
+          "scaled": 2142.240863849188,
+          "unscaled": 266883.7172830508
+        },
+        "Dual infeasibility": {
+          "scaled": 1.5873586412641204e-06,
+          "unscaled": 0.00019775562215760493
+        },
+        "Constraint violation": {
+          "scaled": 5.1098648867764496e-08,
+          "unscaled": 5.1098648867764496e-08
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 1.9551804820189042e-07,
+          "unscaled": 2.435794423521962e-05
+        },
+        "Overall NLP error": {
+          "scaled": 5.1098648867764496e-08,
+          "unscaled": 0.00019775562215760493
+        }
+      },
+      "audit": {
+        "accepted_primal": true,
+        "exception": null,
+        "identity_error": null,
+        "missing_or_nonfinite_fields": [],
+        "outcome": "accepted",
+        "residuals": {
+          "ac_active_balance_pu_abs": 7.847944516470307e-14,
+          "ac_reactive_balance_pu_abs": 8.967937503712164e-14,
+          "branch_loss_nonnegativity_pu_abs": 0.0,
+          "branch_mva_abs": 0.0,
+          "branch_normalized_squared_residual": 0.0,
+          "curtailment_nonnegativity_pu_abs": 2.8158311308079015e-18,
+          "soc_recurrence_mwh_abs": 1.4898009329688449e-12,
+          "terminal_soc_mwh_abs": 7.389644451905042e-13,
+          "voltage_bound_pu_abs": 0.0
+        },
+        "solver_num_iters": "Not available",
+        "solver_setup_time_seconds": null,
+        "solver_solve_time_seconds": null,
+        "status": "optimal",
+        "wall_time_seconds": 31.533912124985363
+      },
+      "compared_to": "experiments/case118_vectorization_replay/results/case118_vectorization_replay/run/s4b-shard-008/ac-006047-spec-00",
+      "extracted_result_exact": true,
+      "named_solution_exact": true,
+      "evidence_sha256": {
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a/start.json": "505a1862f974dcb2ff7c1c82393a7e7053d7b2d8eaf78a056ece8948028cf260",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a/result.json": "d13971b6f8fc4319c20f898e372a41156a9673cb28844760d839d4a926777ad4",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a/native_entry.json": "63438223015747cace105e2ef61cb18ee3a89f1e653fef7540fb8ee0085d063e",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a/native_result.json": "5ab04ef1c4e87b828eae367e742059644befef838e6b48365b9470122d99d317",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a/phase.json": "6d4600c9c7e5b61049a13e92c78fdd733ef6214c443f96e1230fb509e6debfe3",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/a-worker.log": "6877cf8081f3d4e82aec30a433f2fcfff155cc65816b1c8613be493b6f0df092"
+      }
+    },
+    {
+      "arm": "b",
+      "status": "user_limit",
+      "accepted": false,
+      "iterations": 3000,
+      "native_ipopt_seconds": 292.88,
+      "solve_phase_seconds": 294.9569787500077,
+      "native_call_seconds": 292.86043679196155,
+      "objective": 266909.3878353608,
+      "native_termination": {
+        "Objective": {
+          "scaled": 2142.469061875627,
+          "unscaled": 266912.1465500863
+        },
+        "Dual infeasibility": {
+          "scaled": 3126190153.7352962,
+          "unscaled": 389465658713.7552
+        },
+        "Constraint violation": {
+          "scaled": 0.00037709153804517886,
+          "unscaled": 0.0013264780494637305
+        },
+        "Variable bound violation": {
+          "scaled": 0.0,
+          "unscaled": 0.0
+        },
+        "Complementarity": {
+          "scaled": 7237.596407288135,
+          "unscaled": 901671.0800207636
+        },
+        "Overall NLP error": {
+          "scaled": 432027.1199451824,
+          "unscaled": 389465658713.7552
+        }
+      },
+      "audit": {
+        "accepted_primal": false,
+        "exception": null,
+        "identity_error": null,
+        "missing_or_nonfinite_fields": [],
+        "outcome": "unusable_primal",
+        "residuals": {
+          "ac_active_balance_pu_abs": 2.0848869212386489e-07,
+          "ac_reactive_balance_pu_abs": 1.679909816232339e-07,
+          "branch_loss_nonnegativity_pu_abs": 0.0,
+          "branch_mva_abs": 0.0,
+          "branch_normalized_squared_residual": 0.0,
+          "curtailment_nonnegativity_pu_abs": 0.0,
+          "soc_recurrence_mwh_abs": 1.9009986604312523e-07,
+          "terminal_soc_mwh_abs": 1.585151068184132e-07,
+          "voltage_bound_pu_abs": 0.0
+        },
+        "solver_num_iters": "Not available",
+        "solver_setup_time_seconds": null,
+        "solver_solve_time_seconds": null,
+        "status": "user_limit",
+        "wall_time_seconds": 294.9217204999877
+      },
+      "compared_to": "experiments/case118_spacetime_pq_replay/results/case118_6047_four_way/time_only",
+      "extracted_result_exact": true,
+      "named_solution_exact": true,
+      "evidence_sha256": {
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b/start.json": "72628bede0f914b5bdf72ee654b56d97e3c7092bc4aede69856662fc3153f231",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b/result.json": "bd044ec2eac6603e6bdc7e3ec1489105b7b6897159e927ed0a0b346607ae509e",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b/native_entry.json": "63438223015747cace105e2ef61cb18ee3a89f1e653fef7540fb8ee0085d063e",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b/native_result.json": "99c0e7061b5f0cec26809e2c2831e5418882ea6c4b5a1b4492f3428280874a8b",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b/phase.json": "eb0821d6270cf47515fa3197ce5bac78fa403dd269f367b881cd80147aa8da8f",
+        "experiments/case118_spacetime_pq_replay/results/hour6047_environment_reproduction/convergence-test/b-worker.log": "9f3da82aa1b3a3f9b36c0c0f5516bd760494d50407978e9cdf87f26bacf2db72"
+      }
+    }
+  ],
+  "binding_sha256": "bc960662ae095badaf83e3abc3dd97a5efb1752edfa1825ee6a39a674c478992",
+  "binding_unchanged": true,
+  "external_fan_confirmed_on": true,
+  "thermal": {
+    "samples": 35,
+    "cpu_average_temperature_min_c": 44.703346252441406,
+    "cpu_average_temperature_max_c": 66.89939880371094
+  },
+  "interpretation": "Changing CVXPY/sparsediffpy together is sufficient to change convergence with historical code, identical canonical start, and matched native libraries. Does not distinguish packages or establish faulty derivatives."
+}

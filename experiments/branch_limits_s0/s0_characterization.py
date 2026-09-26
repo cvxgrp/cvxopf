@@ -476,6 +476,7 @@ def characterize_multistep(*, lifted: bool, enforce: bool = True) -> dict:
         df_p,
         df_q,
         T=t_steps,
+        temporal_assembly="stepwise",
         formulation="ac",
     )
     baseline_seconds = time.perf_counter() - start

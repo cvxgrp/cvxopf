@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from experiments.retained_paths import retained_operation
+
 import csv
 from collections import Counter
 from datetime import datetime, timedelta
@@ -33,10 +35,12 @@ def wrapped_angle_delta(new, old):
     return (np.asarray(new) - np.asarray(old) + 180) % 360 - 180
 
 
-def temperature_snapshot(end):
+def temperature_snapshot(end, *, output=None, folder=None):
     """Freeze complete collector records received no later than solve completion."""
-    folder = OUT / "temperature_telemetry" / "20260920T203816Z"
-    if not folder.exists():
+    output = OUT if output is None else output
+    folder = (output / "temperature_telemetry" / "20260920T203816Z"
+              if folder is None else folder)
+    if not (folder / "samples.jsonl").exists():
         return None
     metadata = read(folder / "metadata.json")
     lines = [
@@ -48,7 +52,7 @@ def temperature_snapshot(end):
     samples = [json.loads(line) for line in lines]
     if not samples:
         return None
-    snapshot = OUT / "temperature_samples.jsonl"
+    snapshot = output / "temperature_samples.jsonl"
     snapshot.write_bytes(b"".join(lines))
     return dict(
         metadata=metadata,
@@ -68,9 +72,11 @@ def temperature_snapshot(end):
     )
 
 
-def analyze():
-    root = OUT / "run"
-    manifest = read(OUT / "sample.json")
+@retained_operation()
+def analyze(output=None, *, telemetry_folder=None):
+    output = OUT if output is None else output
+    root = output / "run"
+    manifest = read(output / "sample.json")
     completed_path = root / "completed.json"
     completed = (
         set(read(completed_path)["iterations"]) if completed_path.exists() else set()
@@ -150,7 +156,7 @@ def analyze():
             row[f"{label}_variable_objects"] = len(signature["variables"])
             row[f"{label}_constraint_objects"] = len(signature["constraints"])
         old_start = checked(s["references"]["primary_start.json"])
-        new_start = read(primary / "start.json")
+        new_start = read(primary / "start.json") if (primary / "start.json").exists() else None
 
         def auxiliary(start):
             x0 = np.asarray(start["complete_x0"])
@@ -164,11 +170,11 @@ def analyze():
                 )
             )
 
-        row["primary_auxiliary_values_match"] = np.array_equal(
+        row["primary_auxiliary_values_match"] = None if new_start is None else np.array_equal(
             auxiliary(old_start), auxiliary(new_start)
         )
         row["historical_model_coordinates"] = old_start["model_coordinate_count"]
-        row["new_model_coordinates"] = new_start["model_coordinate_count"]
+        row["new_model_coordinates"] = None if new_start is None else new_start["model_coordinate_count"]
         for key in ("Pg", "Qg", "b", "b_q", "soc", "p_nd", "q_nd", "Vm", "Va_deg"):
             label = f"{key}_raw" if key == "Va_deg" else key
             row[f"max_abs_delta_{label}"] = float(
@@ -204,7 +210,7 @@ def analyze():
         )
     if not rows:
         raise ValueError("No completed replay windows")
-    with (OUT / "comparison.csv").open("w", newline="") as stream:
+    with (output / "comparison.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
@@ -268,13 +274,16 @@ def analyze():
         primary_slower_count=sum(r["winner_solve_speedup"] < 1 for r in primary),
         accepted_count=sum(r["accepted"] for r in rows),
         primary_auxiliary_mismatch_hours=[
-            r["iteration"] for r in rows if not r["primary_auxiliary_values_match"]
+            r["iteration"] for r in rows if r["primary_auxiliary_values_match"] is False
+        ],
+        primary_start_unavailable_hours=[
+            r["iteration"] for r in rows if r["primary_auxiliary_values_match"] is None
         ],
         evidence=dict(
-            sample=ref(OUT / "sample.json"),
+            sample=ref(output / "sample.json"),
             environment=ref(root / "environment.json"),
             analysis=ref(Path(__file__)),
-            comparison=ref(OUT / "comparison.csv"),
+            comparison=ref(output / "comparison.csv"),
         ),
         sampling={
             key: manifest[key]
@@ -306,8 +315,10 @@ def analyze():
         summary["windows_per_minute"] = (
             len(rows) * 60 / summary["experiment_wall_seconds"]
         )
-        summary["temperature_telemetry"] = temperature_snapshot(end)
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        summary["temperature_telemetry"] = temperature_snapshot(
+            end, output=output, folder=telemetry_folder,
+        )
+    (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps({k: v for k, v in summary.items() if k != "attempts"}, indent=2))
     return rows, summary
 
@@ -557,7 +568,7 @@ def report(rows, summary, destination):
             "",
             "The frozen selection, row-level comparison, and summary are in `artifacts/`. "
             "Raw phases, starts, results, lifecycle records, and source hashes are retained under "
-            "`outputs/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` "
+            "`experiments/case118_vectorization_replay/results/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` "
             "in the project environment. The sample seed is 20260920; see README.md for population definitions, allocation, and execution commands.",
             "",
         ]

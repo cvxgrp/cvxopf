@@ -256,7 +256,7 @@ def _build(
         if with_nd:
             kwargs["df_nd"] = pd.DataFrame({"nd": [20.0, 15.0]})
         return build_opf_multistep(
-            case, df_P, df_Q, T=T, formulation=formulation, **kwargs
+            case, df_P, df_Q, temporal_assembly="stepwise", T=T, formulation=formulation, **kwargs
         )
 
 

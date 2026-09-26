@@ -1787,11 +1787,24 @@ def solve_hierarchical_opf(
     inputs: HierarchicalInputs,
     policy: HierarchicalPolicy,
     solve_config: HierarchicalSolveConfig = HierarchicalSolveConfig(),
+    *,
+    outer_temporal_assembly: Literal["stepwise", "vectorized"] = "vectorized",
+    inner_temporal_assembly: Literal["stepwise", "vectorized"] = "vectorized",
 ) -> HierarchicalResult:
-    """Run the M17 lossy-DC-to-AC hierarchical controller."""
+    """Run the lossy-DC-to-AC controller with a vectorized outer plan.
+
+    Select ``outer_temporal_assembly="stepwise"`` for the legacy outer graph.
+    Inner AC recovery also defaults to vectorized assembly; select
+    ``inner_temporal_assembly="stepwise"`` to retain its legacy graph.
+    Recovery ordering and accepted-result schemas are representation independent.
+    """
     from cvxopf._hierarchical_solver import solve_hierarchical_opf as _solve
 
-    return _solve(inputs, policy, solve_config)
+    return _solve(
+        inputs, policy, solve_config,
+        outer_temporal_assembly=outer_temporal_assembly,
+        inner_temporal_assembly=inner_temporal_assembly,
+    )
 
 
 __all__ = [

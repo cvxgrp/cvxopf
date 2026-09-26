@@ -150,6 +150,7 @@ def run_s4_outer_equivalence() -> Mapping[str, object]:
                 fixture.policy,
                 fixture.solve_config,
                 outer_temporal_assembly=S4_TEMPORAL_ASSEMBLY,
+                inner_temporal_assembly="stepwise",
             )
         except _OuterCaptured:
             pass

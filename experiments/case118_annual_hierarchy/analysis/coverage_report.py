@@ -572,14 +572,17 @@ def main():
 
     settings = Settings()
     run = args.run_dir.resolve()
+    reproduction_root = (
+        ROOT / "experiments/case118_annual_hierarchy/results/reproductions/s5_coverage"
+    )
     output = (
         args.output
-        or ROOT
-        / "outputs/s5_coverage/reports"
+        or reproduction_root
         / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     ).resolve()
     if (
-        output.is_relative_to(ROOT / "experiments")
+        (output.is_relative_to(ROOT / "experiments")
+         and not output.is_relative_to(reproduction_root))
         or run.is_relative_to(output)
         or output.is_relative_to(run)
     ):

@@ -4,7 +4,7 @@ Replay 126 three-hour AC windows from the completed **toy** Case118 annual
 hierarchical study using time-vectorized construction. Compare with recorded
 stepwise timings; do not rerun stepwise or feed replay solutions forward.
 
-The frozen sample (`outputs/case118_vectorization_replay/sample.json`, seed
+The frozen sample (`experiments/case118_vectorization_replay/results/case118_vectorization_replay/sample.json`, seed
 20260920) contains 120 accepted primary winners and six accepted helper winners
 from the post-intervention `causal_first_speculative_v1` population. Operator
 insertions and shortened end-of-shard windows are excluded. Select eleven from
@@ -70,3 +70,6 @@ replay/analysis and original race/attempt/integration suite passed all 123 tests
 Ruff checks passed. The owner accepted the experiment and closed M14 on
 2026-09-20. The report retains the timing and numerical limitations; future
 Tracy runner-policy qualification is scoped in its separate study plan.
+
+See [result locations](RESULT_LOCATIONS.md) for the distinction between maintained
+tools, tracked selected evidence, and retained raw records.

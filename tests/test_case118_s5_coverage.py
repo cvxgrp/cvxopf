@@ -2,6 +2,9 @@
 
 import gzip
 import json
+import sys
+from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,6 +23,87 @@ from experiments.case118_annual_hierarchy.analysis.coverage_report import (
     snapshot_completed,
     window_stops,
 )
+
+
+class FixtureLoadReached(Exception):
+    """Stop the CLI after destination checks, before reading scientific data."""
+
+
+@pytest.fixture
+def coverage_cli(tmp_path, monkeypatch):
+    from experiments.case118_annual_hierarchy.analysis import coverage_report
+    from experiments.case118_annual_hierarchy import s4_fixture
+
+    monkeypatch.setattr(coverage_report, "ROOT", tmp_path)
+    run = tmp_path / "experiments/case118_annual_hierarchy/results/s4b_annual_ac"
+    monkeypatch.setattr(coverage_report, "DEFAULT_RUN", run)
+    now = datetime(2026, 9, 21, tzinfo=timezone.utc)
+    monkeypatch.setattr(coverage_report, "datetime", SimpleNamespace(now=lambda tz: now))
+    reproduction = tmp_path / "experiments/case118_annual_hierarchy/results/reproductions/s5_coverage"
+    destination = reproduction / now.strftime("%Y%m%dT%H%M%S%fZ")
+
+    def stop_before_loading():
+        raise FixtureLoadReached
+
+    monkeypatch.setattr(s4_fixture, "load_s4_fixture", stop_before_loading)
+
+    def invoke(*args):
+        monkeypatch.setattr(sys, "argv", ["coverage_report", *map(str, args)])
+        coverage_report.main()
+
+    return invoke, destination, run
+
+
+def test_default_output_passes_guard_without_loading_archives(coverage_cli):
+    invoke, destination, _ = coverage_cli
+    with pytest.raises(FixtureLoadReached):
+        invoke()
+    assert not destination.exists()
+
+
+def test_default_output_refuses_existing_directory(coverage_cli):
+    invoke, destination, _ = coverage_cli
+    destination.mkdir(parents=True)
+    marker = destination / "report.json"
+    marker.write_text("retained evidence")
+    with pytest.raises(ValueError, match="fresh report output"):
+        invoke()
+    assert marker.read_text() == "retained evidence"
+
+
+@pytest.mark.parametrize("relationship", ["ancestor", "same", "descendant"])
+def test_default_output_rejects_run_overlap(coverage_cli, relationship):
+    invoke, destination, _ = coverage_cli
+    run = {"ancestor": destination.parent, "same": destination,
+           "descendant": destination / "archive"}[relationship]
+    with pytest.raises(ValueError, match="separate from execution/scientific artifacts"):
+        invoke("--run-dir", run)
+
+
+@pytest.mark.parametrize("relative", [
+    "experiments/case118_annual_hierarchy/analysis/new-report",
+    "experiments/case118_annual_hierarchy/results/s5_coverage/new-report",
+    "experiments/case118_annual_hierarchy/results/reproductions/s5_coverage_other/new-report",
+])
+def test_other_experiment_outputs_remain_protected(coverage_cli, tmp_path, relative):
+    invoke, _, _ = coverage_cli
+    with pytest.raises(ValueError, match="separate from execution/scientific artifacts"):
+        invoke("--output", tmp_path / relative)
+
+
+def test_explicit_output_outside_experiments_remains_allowed(coverage_cli, tmp_path):
+    invoke, _, _ = coverage_cli
+    with pytest.raises(FixtureLoadReached):
+        invoke("--output", tmp_path / "fresh-report")
+
+
+def test_reproduction_symlink_cannot_bypass_archive_guard(coverage_cli):
+    invoke, destination, run = coverage_cli
+    run.mkdir(parents=True)
+    destination.parent.parent.mkdir(parents=True)
+    destination.parent.symlink_to(run, target_is_directory=True)
+    with pytest.raises(ValueError, match="separate from execution/scientific artifacts"):
+        invoke()
 
 
 def test_gap_sensitivity_is_monotone_and_ignores_completed():

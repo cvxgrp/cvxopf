@@ -48,6 +48,7 @@ from cvxopf._component_adapters import (
 )
 from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
+from cvxopf._cvxpy_dispatch import sparse_dispatch_policy, with_build_dispatch_policy
 
 
 TemporalAssembly = Literal["stepwise", "vectorized"]
@@ -105,6 +106,13 @@ class OPFOptions:
         explicit zero-fixing constraints. Use False for research comparison
         and timing measurements against the sparse path.
         AC only. Default True.
+    vectorize_pq : bool
+        If True (default), batch P/Q flow definitions across Ybus entries.
+        If False, build each entry's expression and equality separately,
+        including dense off-pattern zero constraints. Independent of sparse_pq
+        and temporal_assembly: time-vectorized builds still batch across time.
+        Does not change variable layouts, network physics, or branch-terminal
+        constraints. AC only.
 
     Notes
     -----
@@ -120,6 +128,7 @@ class OPFOptions:
     loss_weight: float = 1.0
     branch_limit_sentinel: float = 1e6
     sparse_pq: bool = True
+    vectorize_pq: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -237,13 +246,15 @@ class OPFBuild:
         stage cost is ``load_shedding_cost``; horizon expressions are
         ``energy_not_served_by_load`` and ``energy_not_served``.
     temporal_assembly : {"stepwise", "vectorized"}
-        Temporal graph representation retained as build provenance. Existing
-        single- and multistep builders use ``"stepwise"`` until the M14
-        horizon-vectorized implementation is selected explicitly.
+        Temporal graph representation retained as build provenance. Single-step
+        builds use ``"stepwise"``; multistep builds default to ``"vectorized"``.
     result_projections : ResultProjectionRegistry
         Immutable variable/expression schemas used only by vectorized result
         extraction to move time from the final internal axis to the first
         public axis. Stepwise extraction retains its existing list contract.
+    automatic_sparse_dispatch : bool
+        Build-time AC execution policy, retained for solving. False disables
+        CVXPY density dispatch within build/solve only. Convex builds ignore it.
     """
 
     prob: cp.Problem
@@ -256,6 +267,7 @@ class OPFBuild:
     result_projections: ResultProjectionRegistry = field(
         default_factory=ResultProjectionRegistry
     )
+    automatic_sparse_dispatch: bool = False
 
     @property
     def canonicalization_backend(self) -> CanonicalizationBackend:
@@ -312,7 +324,8 @@ class OPFBuild:
                 kwargs.setdefault("print_level", 0)
                 kwargs.setdefault("sb", "yes")
         kwargs.setdefault("verbose", False)
-        self.prob.solve(**kwargs)
+        with sparse_dispatch_policy(self.is_convex or self.automatic_sparse_dispatch):
+            self.prob.solve(**kwargs)
 
 
 def _finalize_temporal_assembly(
@@ -466,6 +479,7 @@ def _normalize_multistep_load_inputs(
 # ---------------------------------------------------------------------------
 
 
+@with_build_dispatch_policy
 def build_opf(
     case: dict[str, Any],
     *,
@@ -477,6 +491,7 @@ def build_opf(
     hvdc: list[HVDCLink] | None = None,
     generators: list[DispatchableGenerator] | None = None,
     loads: list[Load] | None = None,
+    automatic_sparse_dispatch: bool = False,
 ) -> OPFBuild:
     """
     Build a single time-step OPF problem.
@@ -503,6 +518,11 @@ def build_opf(
             not used in DC optimization.
     options : OPFOptions, optional
         Formulation and solver options. Defaults to OPFOptions().
+    automatic_sparse_dispatch : bool, optional
+        AC only. Default False temporarily sets CVXPY's density dispatch
+        threshold to zero for construction and solving. True uses the caller's
+        threshold. Sparse P/Q storage is independent. Unrelated concurrent
+        CVXPY calls must run in separate processes because this setting is global.
     storage : list[StorageUnitIdeal] | None, optional
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance.
@@ -563,6 +583,7 @@ def build_opf(
     )
 
 
+@with_build_dispatch_policy
 def build_opf_multistep(
     case: dict[str, Any],
     df_P: pd.DataFrame | None = None,
@@ -583,7 +604,8 @@ def build_opf_multistep(
     loads: list[Load] | None = None,
     df_load_p: pd.DataFrame | None = None,
     df_load_q: pd.DataFrame | None = None,
-    temporal_assembly: TemporalAssembly = "stepwise",
+    temporal_assembly: TemporalAssembly = "vectorized",
+    automatic_sparse_dispatch: bool = False,
 ) -> OPFBuild:
     """
     Build a T-step OPF problem as a single cp.Problem.
@@ -620,10 +642,14 @@ def build_opf_multistep(
         Number of time steps. Must equal the row count of every supplied load
         trajectory; static explicit-load fallback is broadcast to this length.
     temporal_assembly : {"stepwise", "vectorized"}, optional
-        Temporal graph representation. ``"stepwise"`` preserves the existing
-        per-interval builder and remains the compatibility default.
-        ``"vectorized"`` selects time-last assembly for all three formulations.
+        Temporal graph representation. Defaults to ``"vectorized"`` for all
+        formulations. Explicit ``"stepwise"``
+        retains per-interval variables; ``"vectorized"`` selects time-last
+        assembly for all three formulations.
         AC retains the DNLP/IPOPT solve path.
+    automatic_sparse_dispatch : bool, optional
+        AC only; default False. Same scoped density-dispatch compatibility
+        policy as build_opf. True uses the caller's CVXPY threshold.
     formulation : str
         Same options as build_opf, including "singlenode_dc"
         (single-node copper-plate DC dispatch; df_Q reporting-only).

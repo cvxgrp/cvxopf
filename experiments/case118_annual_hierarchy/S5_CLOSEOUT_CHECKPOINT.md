@@ -54,7 +54,7 @@ accepted result is published in `S5_RESULTS.json`. Builder checks confirm
 canonical bytes, the internal digest, equality with stdout, and exact agreement
 with all retained prior summary fields except the provenance-dependent digest.
 Logs and one-second RSS samples are
-retained in `outputs/s5_analysis/closeout-analysis-20260917T211119Z/`.
+retained in `experiments/case118_annual_hierarchy/results/s5_analysis/closeout-analysis-20260917T211119Z/`.
 The monitor enforces the 45-minute and 12 GiB aggregate bounds, including its
 own RSS as well as the analyzer and descendants. It records completion or the
 stop reason and performs no automatic retry.
@@ -110,7 +110,7 @@ Approved execution:
 - After success, independently review the result and its agreement with the
   report. Only then request owner closeout/commit approval.
 
-The command, from repository root, is:
+The historical command, from repository root, was:
 
 ```sh
 uv run --no-sync python -m experiments.case118_annual_hierarchy.s5_analysis \
@@ -119,6 +119,12 @@ uv run --no-sync python -m experiments.case118_annual_hierarchy.s5_analysis \
   --authority outputs/s5_authority/speculative-cutover/S5_GIT_DRIFT_NUMERICAL_EXECUTION_AUTHORITY.json \
   --promote experiments/case118_annual_hierarchy/S5_RESULTS.json
 ```
+
+Current location note (2026-09-21): the authority is now under
+`experiments/case118_annual_hierarchy/results/s5_authority/`; the closeout logs
+are under `results/s5_analysis/`. See [RESULT_LOCATIONS.md](RESULT_LOCATIONS.md).
+The command above records the original execution and does not authorize rerunning
+it or overwriting the accepted result.
 
 The governing plan explicitly says,
 “If a full pass is required, state its scope and cost and obtain execution

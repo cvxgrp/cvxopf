@@ -9,10 +9,11 @@ Verifies:
   - No effect on DC formulation
 """
 
+import cvxpy as cp
 import numpy as np
 import pytest
 
-from cvxopf.testcases import case9, case14
+from cvxopf.testcases import case9, case14, case118
 from cvxopf.problem import build_opf, build_opf_multistep, OPFOptions
 from cvxopf.results import extract_results
 
@@ -48,6 +49,114 @@ def _flat_load_dfs(case_fn, T):
     df_P = pd.DataFrame(np.tile(Pd_base, (T, 1)))
     df_Q = pd.DataFrame(np.tile(Qd_base, (T, 1)))
     return df_P, df_Q
+
+
+ASSEMBLY_HORIZONS = [
+    ("single", 1), ("stepwise", 1), ("stepwise", 3),
+    ("vectorized", 1), ("vectorized", 3),
+]
+
+
+def _build_pq_case(case_fn, sparse, assembly, horizon, vectorize_pq=True):
+    options = OPFOptions(sparse_pq=sparse, vectorize_pq=vectorize_pq)
+    if assembly == "single":
+        return build_opf(case_fn(), options=options)
+    df_P, df_Q = _flat_load_dfs(case_fn, horizon)
+    scales = np.linspace(0.8, 1.2, horizon)
+    return build_opf_multistep(
+        case_fn(), df_P.mul(scales, axis=0), df_Q.mul(scales, axis=0),
+        T=horizon, options=options,
+        temporal_assembly=assembly,
+    )
+
+
+@pytest.mark.parametrize("case_fn", [case9, case14, case118])
+@pytest.mark.parametrize("sparse", [True, False])
+@pytest.mark.parametrize("assembly,horizon", ASSEMBLY_HORIZONS)
+def test_pq_definitions_are_batched_over_all_spatial_entries(
+    case_fn, sparse, assembly, horizon,
+):
+    """Count P/Q defining objects, not total graph objects or scalar equations.
+
+    The former per-entry time-vectorized loop also had counts independent of
+    T, so horizon-invariance alone does not enforce spatial vectorization.
+    """
+    build = _build_pq_case(case_fn, sparse, assembly, horizon)
+    nnz = len(build.data["rows"])
+    shape = (nnz, horizon) if assembly == "vectorized" else (nnz,)
+    keys = ("P_vec", "Q_vec") if sparse else ("P", "Q")
+    for key in keys:
+        variables = build.variables[key]
+        if assembly != "stepwise":
+            variables = [variables]
+        assert len(variables) == (horizon if assembly == "stepwise" else 1)
+        for variable in variables:
+            definitions = [
+                constraint for constraint in build.prob.constraints
+                if isinstance(constraint, cp.constraints.Equality)
+                and {v.id for v in constraint.args[0].variables()} == {variable.id}
+                and not constraint.args[1].is_affine()
+            ]
+            assert len(definitions) == 1
+            assert definitions[0].shape == shape
+            if not sparse:
+                zeros = [
+                    constraint for constraint in build.prob.constraints
+                    if isinstance(constraint, cp.constraints.Equality)
+                    and {v.id for v in constraint.args[0].variables()} == {variable.id}
+                    and constraint.args[1].is_constant()
+                ]
+                assert len(zeros) == 1
+                zero_count = len(build.data["Z"][0])
+                assert zeros[0].shape == (
+                    (zero_count, horizon) if assembly == "vectorized"
+                    else (zero_count,)
+                )
+
+
+@pytest.mark.parametrize("case_fn,sparse", [
+    (case9, True), (case9, False), (case14, True), (case14, False),
+    (case118, True),
+])
+@pytest.mark.parametrize("assembly,horizon", ASSEMBLY_HORIZONS)
+@pytest.mark.parametrize("vectorize_pq", [True, False])
+def test_gather_flows_match_complex_power(case_fn, sparse, assembly, horizon, vectorize_pq):
+    """Audit repeated-index gathers against complex Ybus power, including shunts.
+
+    This exercises the DNLP derivative path behind CVXPY issue #3442 and
+    checks the solved P/Q entries independently of the trigonometric model.
+    """
+    build = _build_pq_case(case_fn, sparse, assembly, horizon, vectorize_pq)
+    build.solve(max_iter=400)
+    assert build.prob.status == "optimal"
+    rows, cols = build.data["rows"], build.data["cols"]
+    assert len(np.unique(rows)) < len(rows)
+    assert np.any(rows == cols)
+    result = extract_results(build)
+    voltage = np.atleast_2d(result["Vm"]) * np.exp(
+        1j * np.deg2rad(np.atleast_2d(result["Va_deg"]))
+    )
+    for t, phasor in enumerate(voltage):
+        power = phasor[:, None] * np.conj(build.data["Ybus"] * phasor[None, :])
+        keys = ("P_vec", "Q_vec") if sparse else ("P", "Q")
+        for key, expected in zip(keys, (power.real, power.imag), strict=True):
+            variable = build.variables[key]
+            if assembly == "stepwise":
+                actual = variable[t].value
+            elif assembly == "vectorized":
+                actual = variable.value[:, t]
+            else:
+                actual = variable.value
+            if sparse:
+                expected = expected[rows, cols]
+            else:
+                actual = actual.reshape(expected.shape)
+            np.testing.assert_allclose(actual, expected, atol=1e-6)
+        for key, expected in (("p_net", power.real), ("q_net", power.imag)):
+            np.testing.assert_allclose(
+                np.atleast_2d(result[key])[t],
+                build.data["baseMVA"] * expected.sum(axis=1), atol=1e-4,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +309,7 @@ class TestSparsePQMultistep:
         T          = 3
         df_P, df_Q = _flat_load_dfs(case9, T)
         build      = build_opf_multistep(
-            case9(), df_P, df_Q, T=T,
+            case9(), df_P, df_Q, T=T, temporal_assembly="stepwise",
             options=OPFOptions(sparse_pq=True),
         )
         assert "P_vec" in build.variables
@@ -212,7 +321,7 @@ class TestSparsePQMultistep:
         T          = 3
         df_P, df_Q = _flat_load_dfs(case9, T)
         build      = build_opf_multistep(
-            case9(), df_P, df_Q, T=T,
+            case9(), df_P, df_Q, T=T, temporal_assembly="stepwise",
             options=OPFOptions(sparse_pq=False),
         )
         assert "P" in build.variables

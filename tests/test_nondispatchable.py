@@ -595,14 +595,13 @@ class TestNondispatchableACMultistep:
             expected_max = unit.apparent_power_rating**2
             assert actual <= expected_max + APR_ATOL
 
-    def test_p_nd_variable_list_length_T(self):
+    def test_p_nd_variable_has_time_axis(self):
         unit = _default_nd_unit()
         T = 3
         df_P = pd.DataFrame(np.ones((T, 9)) * 50)
         df_Q = pd.DataFrame(np.ones((T, 9)) * 15)
         build, _ = _solve_ac_multistep_nd(T, df_P, df_Q, nondispatchable=[unit])
-        assert isinstance(build.variables["p_nd"], list)
-        assert len(build.variables["p_nd"]) == T
+        assert build.variables["p_nd"].shape == (1, T)
 
     def test_T1_matches_single_step_objective(self):
         unit = _default_nd_unit()

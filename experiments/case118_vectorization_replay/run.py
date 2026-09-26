@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from experiments.retained_paths import MANIFESTS, retained_operation
+
 from dataclasses import asdict
 from datetime import datetime, timezone
+from importlib.metadata import version
 import platform
 import signal
 import sys
@@ -27,10 +30,27 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
 from .sample import ROOT, OUT, read, checked, sha, ref
 
 
-def run():
-    manifest = read(OUT / "sample.json")
-    root = OUT / "run"
-    root.mkdir(exist_ok=False)
+def validate_versions(current, historical, allowed_changes=None):
+    """Permit only explicitly named historical -> current version pairs."""
+    allowed_changes = allowed_changes or {}
+    if current.keys() != historical.keys():
+        raise ValueError("Software version fields differ from the historical study")
+    for name, value in current.items():
+        if name in allowed_changes:
+            if (historical[name], value) != tuple(allowed_changes[name]):
+                raise ValueError(f"Unapproved software version transition: {name}")
+        elif value != historical[name]:
+            raise ValueError(f"Software versions differ from the historical study: {name}")
+
+
+@retained_operation()
+def run(output=None, *, allowed_version_changes=None, provenance=None,
+        additional_sources=(), execution_configuration=None):
+    from .worker import execution_configuration as validate_configuration
+    configuration = validate_configuration(execution_configuration)
+    output = OUT if output is None else output
+    manifest = read(output / "sample.json")
+    root = output / "run"
     source_paths = [
         p
         for base in (ROOT / "src", ROOT / "experiments/case118_annual_hierarchy")
@@ -40,25 +60,30 @@ def run():
         ROOT / "experiments/case118_vectorization_replay" / name
         for name in ("__init__.py", "sample.py", "worker.py", "run.py")
     )
+    source_paths.append(ROOT / "experiments/retained_paths.py")
+    source_paths.extend(ROOT / manifest for manifest in MANIFESTS)
+    source_paths.extend(additional_sources)
     sources = {str(p): sha(p) for p in source_paths}
     versions = _software_versions()
     for s in manifest["selected"]:
         historical_versions = checked(s["references"]["primary_request.json"])[
             "execution_context"
         ]["software_versions"]
-        if versions != historical_versions:
-            raise ValueError(
-                f"Software versions differ from the historical study: {versions} vs {historical_versions}"
-            )
+        validate_versions(versions, historical_versions, allowed_version_changes)
+    root.mkdir(exist_ok=False)
     atomic_immutable_json(
         root / "environment.json",
         dict(
             started_utc=datetime.now(timezone.utc).isoformat(),
-            sample=ref(OUT / "sample.json"),
+            sample=ref(output / "sample.json"),
             python=platform.python_version(),
             platform=platform.platform(),
             execution_sources=sources,
             software_versions=versions,
+            sparsediffpy_version=version("sparsediffpy"),
+            allowed_version_changes=allowed_version_changes or {},
+            provenance=provenance,
+            execution_configuration=configuration,
             policy="Unmodified SpeculativeSupervisor/WindowRace; two independent primary windows, one shared helper.",
             initialization="Frozen historical initial SoC, terminal target, and preceding controller; never another replay result.",
         ),
@@ -90,6 +115,7 @@ def run():
                 selected=selected[spec.window],
                 invocation=asdict(spec),
                 execution_sources=sources,
+                execution_configuration=configuration,
                 target_free_directory=str(free_dir)
                 if free_dir is not None and spec.source_slot in (2, 3, 4, 5)
                 else None,

@@ -24,6 +24,32 @@ The package is developed by the CVX Group at Stanford.
 
 ---
 
+## Owner's collaboration preferences
+
+These preferences apply to every task in this repository, including cleanup,
+documentation, experiments, and code changes.
+
+- Follow existing patterns and approved decisions. Read the relevant plans,
+  disposition records, and implementation before proposing changes. If intent,
+  scope, or an existing decision is unclear, ask the owner rather than guessing.
+- Stay within the authorized task. Do not push through ambiguity or "go the
+  extra mile" with adjacent cleanup, refactoring, or new features. If an
+  extension seems worthwhile, explain its purpose and consequences and obtain
+  permission before doing it. Approval of one change does not authorize a
+  broader reorganization.
+- The owner stages, commits, and pushes unless explicitly delegated otherwise;
+  follow **Owner's Git workflow** below. Implementation approval is not Git
+  approval.
+- Prioritize good science over shipping code quickly. Preserve evidence and
+  provenance, distinguish verified results from assumptions, and report
+  uncertainty or failed checks rather than working around them to declare
+  success.
+- The owner must be able to understand and explain the codebase to others.
+  Explain proposed features and design decisions in plain language, including
+  why they are needed, how they fit existing patterns, and their tradeoffs.
+  Obtain approval before implementing them. Reuse decisions already approved
+  for the task; seek approval again when the proposed scope or design changes.
+
 ## Design aesthetic (read this first)
 
 This project follows a specific engineering aesthetic, articulated by Stephen
@@ -313,7 +339,7 @@ capability explicitly on every component adapter.
 build_opf(case, *, formulation="ac", options=None,
           storage=None, delta=1.0,
           nondispatchable=None, hvdc=None, generators=None,
-          loads=None) -> OPFBuild
+          loads=None, automatic_sparse_dispatch=False) -> OPFBuild
 
 build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     options=None, coupling_constraints=None,
@@ -321,7 +347,9 @@ build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     nondispatchable=None, df_nd=None,
                     hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
                     generators=None, loads=None,
-                    df_load_p=None, df_load_q=None) -> OPFBuild
+                    df_load_p=None, df_load_q=None,
+                    temporal_assembly="vectorized",
+                    automatic_sparse_dispatch=False) -> OPFBuild
 ```
 
 ### Deprecated aliases (will be removed in a future release)
@@ -344,6 +372,7 @@ Both emit `DeprecationWarning` when called.
 | `loss_weight` | float | 1.0 | DC only |
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
+| `vectorize_pq` | bool | True | AC only; spatial P/Q expression/constraint batching |
 
 `delta` is not an `OPFOptions` field. It is a separate parameter on
 `build_opf` and `build_opf_multistep`. It must always be a finite, strictly
@@ -357,7 +386,7 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step or `list[cp.Variable]` multistep. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step or `list[cp.Variable]` multistep. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step, time-last arrays by default multistep, or lists in explicit stepwise mode. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
 | `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
 | `formulation` | str | `"ac"`, `"lossy_dc"`, or `"singlenode_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
@@ -742,7 +771,7 @@ their plans are not imported by this documentation-only addition.
 | 11 — SOCP (convex) network model | 🔲 Future | |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
 | 13 — Extend CVXPY parameterization for problem data | 🔲 Future | Faster repeated solves of the same graph over new data |
-| 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Stepwise remains the default; DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. See `plans/milestone-14-time-vectorization.md`. |
+| 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Time-vectorized multistep assembly is now the default across formulations; explicit stepwise assembly remains available. DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. The completed four-condition Case118 study supports combined AC vectorization with automatic sparse dispatch disabled; see `experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md`. See `plans/milestone-14-time-vectorization.md`. |
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | ✅ Complete | The capstone controller passes **identity-aligned SoC signposts only** (not other setpoints) from long-horizon `lossy_dc` planning into short AC-OPF windows, executes only residual-checked target-conditioned first actions, supports causal shifted initialization with audited recovery, and retains the complete plan/attempt tree. M17 fixes the validated `lossy_dc`→`ac` workflow; configurable formulations and additional layers are M21. See `plans/milestone-17-hierarchical-dc-ac.md`. |
@@ -761,7 +790,7 @@ their plans are not imported by this documentation-only addition.
 ### Runtime (installed with the package)
 | Package | Constraint | Reason |
 |---|---|---|
-| `cvxpy` | `>=1.9` | DNLP interface (`cp.nlp.cos`, `cp.nlp.sin`) introduced in 1.9 |
+| `cvxpy` | `>=1.9.3` | DNLP interface and sparse derivative fix for repeated array indices |
 | `numpy` | none | Array math, Ybus construction |
 | `pandas` | none | Time-series load input |
 | `cyipopt` | none | Python interface to IPOPT |
@@ -774,6 +803,41 @@ or `cyipopt` will fail to build with a linker error.
 ### Development extras
 `pytest`, `pytest-cov` — installed via `pip install -e ".[dev]"` or
 `uv run --extra dev`.
+
+### Hierarchical temporal assembly
+
+The public hierarchical controller defaults both `outer_temporal_assembly` and
+`inner_temporal_assembly` to `"vectorized"`, with independent `"stepwise"`
+overrides. Recovery transformations keep the historical logical coordinate
+order; `_ac_start_mapping.py` owns conversion shared with the replay worker.
+Do not build a second graph solely to transform a start. The initial SoC
+boundary is supplied from realized device-aligned state and is not perturbed.
+Complete canonical IPOPT x0 verification, recovery ordering, and acceptance
+criteria apply in both representations. See
+`plans/hierarchical-inner-vectorization.md` for bounded integration evidence.
+
+### Sparse P/Q vectorization
+
+By default, AC builds share P/Q flow expressions formed by array gathers over the
+Ybus pattern. Stepwise assembly uses two vector equalities per step;
+time-vectorized assembly uses two matrix equalities over all entries and
+times. Both sparse and dense P/Q storage use these expressions, and dense
+off-pattern zeros are constrained in batches.
+Public multistep builders default to `temporal_assembly="vectorized"` across all
+formulations. AC builders additionally default to `automatic_sparse_dispatch=False`: construction and solving temporarily set CVXPY’s density threshold to zero and restore the caller’s value afterward. This is independent of sparse P/Q storage. Explicit `automatic_sparse_dispatch=True` retains the caller’s threshold. cvxopf build/solve entry points serialize access to this process-global setting; unrelated concurrent CVXPY operations should use separate processes.
+
+Set `OPFOptions(vectorize_pq=False)` to construct each Ybus entry separately
+in either temporal representation and either storage layout. This includes
+per-entry dense zero constraints. Time-vectorized builds retain vectorization
+across time; stepwise builds use scalar P/Q equalities. The option changes
+expression/constraint assembly, not variables, physics, branch-terminal
+constraints, or result schemas. It has no effect on DC formulations.
+CVXPY issue #3442 required a scalar-loop workaround until the derivative
+fix in `sparsediffpy >= 0.6.0` became available in CVXPY **1.9.3**.
+CVXPY 1.9.2 still requires `sparsediffpy < 0.4.0` and is insufficient.
+The package and lockfile use released dependencies; no CVXPY Git source
+is needed. Variable layouts, initializations, and result schemas remain
+specific to each temporal representation.
 
 ---
 
@@ -809,7 +873,53 @@ docstring.
 
 ---
 
+## Experiment files
+
+- Keep everything related to a new experiment inside `experiments/<experiment>/`.
+- Migrating historical material requires explicit owner approval. The procedure
+  for new experiments is not permission to reorganize earlier studies.
+- Put raw solver records, logs, temporary checks, and other uncommitted run data
+  in that experiment's `results/`, excluded by its local `.gitignore`.
+- Keep plans, analysis code, reports, and selected compact evidence alongside
+  the experiment for owner review and commit. Raw runs are never committed.
+- Root `not-tracked/` is only for unrelated local material such as one-off
+  document exports. Do not use it for experiments or create a root `outputs/`
+  directory. Do not link experiment directories through either root folder.
+- Preserve historical evidence bytes/hashes when relocating data. Resolve old
+  paths in readers; do not rewrite hashed records or create compatibility links.
+
+## Owner's Git workflow
+
+- Work in the owner's existing checkout and current branch. Do not create a
+  worktree, use a separate checkout, or switch branches without explicit approval.
+- Before starting changes, summarize the proposed scope and state where the work
+  will happen. Stay within the approved scope and make any change of location or
+  approach clear before acting.
+- The owner reviews, stages, commits, and pushes. Leave changes unstaged unless
+  explicitly asked otherwise. Do not commit or push unless the owner explicitly
+  delegates that action; permission to implement or test is not permission to
+  commit or push.
+- When authorized to integrate another branch, update the checkout the owner is
+  using. Do not leave its local branch behind while updating only another
+  worktree or a remote branch. Report the resulting local state clearly.
+- Preserve existing untracked and ignored files, including research data,
+  presentations, and generated outputs. Their presence is not permission to
+  delete or stage them. Keep unrelated local material in ignored `not-tracked/`.
+- Put reviewable plans and experiment code in the appropriate repository
+  directory, not only in ignored outputs or conversation context. State which
+  files changed and what the owner will see in the current diff.
+- Proposed commit messages should be plain English and describe only the current
+  changes, without internal milestone labels or work from earlier commits.
+
+---
+
 ## Fresh coding sessions
+
+Before launching a long-running local computation, check that process monitoring
+(`ps`) and the intended thermal telemetry work with the execution permissions
+that will be used for the run. Obtain any required permissions before launching
+workers; a successful shell launch does not establish that its child processes
+can monitor the run. Do not edit tracked files while a source-bound run is active.
 
 1. Read `CLAUDE.md` before touching code.
 2. Inspect `git status --short` and preserve unrelated user changes.

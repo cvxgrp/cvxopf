@@ -46,6 +46,10 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
+      - name: Install minimum supported CVXPY
+        if: matrix.python-version == '3.11'
+        run: pip install "cvxpy==1.9.3"
+
       - name: Run Ruff
         if: matrix.python-version == '3.11'
         run: ruff check .

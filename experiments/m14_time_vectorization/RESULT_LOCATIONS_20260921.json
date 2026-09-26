@@ -1,0 +1,306 @@
+{
+  "created_utc": "2026-09-21T18:54:40.259631+00:00",
+  "note": "Exact byte-preserving relocation; historical paths inside records remain unchanged. No root compatibility links.",
+  "files": [
+    {
+      "old": "outputs/network_vectorization/__pycache__/analyze_stepwise_retry.cpython-311.pyc",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/__pycache__/analyze_stepwise_retry.cpython-311.pyc",
+      "bytes": 8748,
+      "sha256": "80423552f1c860e89be6e715a82bc009ae46f07ccdae986820258596bb30bbf5"
+    },
+    {
+      "old": "outputs/network_vectorization/__pycache__/run_stepwise_retry.cpython-311.pyc",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/__pycache__/run_stepwise_retry.cpython-311.pyc",
+      "bytes": 8251,
+      "sha256": "73fc23afd8793d3264f300a6d340f4dd026ff05472a7acc3a6ee0096fd2a3cb5"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_168.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_168.json",
+      "bytes": 301,
+      "sha256": "f8fa8bece421f3591a1229875fb382c9806449e5165685ef5f3eff0fc59f71ff"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_168_timeout.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_168_timeout.json",
+      "bytes": 301,
+      "sha256": "f8fa8bece421f3591a1229875fb382c9806449e5165685ef5f3eff0fc59f71ff"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_24.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_24.json",
+      "bytes": 69785,
+      "sha256": "f02857c89d039b117dc9bdadd2f5bf8fe31c1e1f9701daa2026e3de7e0a174be"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_24.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_24.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_3.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_3.json",
+      "bytes": 10207,
+      "sha256": "248483048ca9701306e09635f1e31eaf4729ebfe619f9df2a3055d1c0158ccfb"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_stepwise_3.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_stepwise_3.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_168.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_168.json",
+      "bytes": 478791,
+      "sha256": "3832cf3f9512468267a2936aec54c1d896dc7a8c27a036484f7e1401a01282a1"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_168.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_168.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_24.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_24.json",
+      "bytes": 69678,
+      "sha256": "4d37aa36eea9d4e03fa7870892bd971095f8d6d37a5beb3260edbce4a3ad3618"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_24.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_24.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_3.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_3.json",
+      "bytes": 10240,
+      "sha256": "e73fc6d51f50d25b230e2628bb64d5abacfe68bcbdf00052cd518ee3cdf256bc"
+    },
+    {
+      "old": "outputs/network_vectorization/ac_vectorized_3.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/ac_vectorized_3.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/analyze_stepwise_retry.py",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/analyze_stepwise_retry.py",
+      "bytes": 4645,
+      "sha256": "4b81ee87612759d8c5454a4d4387310c5b02f0883b1fa59eec3bc554a8c091e4"
+    },
+    {
+      "old": "outputs/network_vectorization/execution_metadata.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/execution_metadata.json",
+      "bytes": 1147,
+      "sha256": "f27f68ab9cd28a5c8f618ada77e4ccfe085a646481e5d66de8b19d0273469fe6"
+    },
+    {
+      "old": "outputs/network_vectorization/execution_source_hashes.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/execution_source_hashes.json",
+      "bytes": 2719,
+      "sha256": "e96839bdc5045ba014304c33e8fb7c92c942a08b2b3a9051eececf2d677dd43d"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_168.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_168.json",
+      "bytes": 163372,
+      "sha256": "e114d94a5a949cb5e7eadaf9a52cf996afdea8404fcb34a99640fcf3200a5cd0"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_168.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_168.log",
+      "bytes": 572,
+      "sha256": "2a7337d37c0e46261b9af52c2149ec6bd9ece72d3d7403fbba5e20eedae441e4"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_24.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_24.json",
+      "bytes": 24382,
+      "sha256": "2adf34236e80b3a8d6ed10743a1822f35d445734018ed5dbc83f6f85f3ebc69d"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_24.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_24.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_3.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_3.json",
+      "bytes": 4227,
+      "sha256": "37201d41faad4a8a897b0c0cf5e7ce7c159914221f2c93afc6cd6c4093351477"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_stepwise_3.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_stepwise_3.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_168.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_168.json",
+      "bytes": 142160,
+      "sha256": "bc41e556e236ca3e9d985ea7a69cada5f1f48b480297c1a60f1f8896142c09d7"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_168.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_168.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_24.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_24.json",
+      "bytes": 21571,
+      "sha256": "bc7e1d418bb80619618a870eea27906b249732727e64e878db5df553c704dd88"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_24.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_24.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_3.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_3.json",
+      "bytes": 3638,
+      "sha256": "1a3163d0115276c5b435f81371457c348cfb6316042251a0a6c9aa38470f245a"
+    },
+    {
+      "old": "outputs/network_vectorization/lossy_dc_vectorized_3.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/lossy_dc_vectorized_3.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/network_vectorization/run_stepwise_retry.py",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/run_stepwise_retry.py",
+      "bytes": 4429,
+      "sha256": "4487d5362f6a78aaf23785c777ce6e0f952d55c2bf0eee1b2077728c04a36457"
+    },
+    {
+      "old": "outputs/network_vectorization/runner_at_initial_execution.py",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/runner_at_initial_execution.py",
+      "bytes": 11852,
+      "sha256": "70b1b1f696324d952199ded4714e8a76b752a215f54c2768d7395a3ede39aea6"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/ac_stepwise_168.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/ac_stepwise_168.json",
+      "bytes": 201,
+      "sha256": "8c2338a9136e4d93d6e09f41de26849d325390a5d7367686fd39a62cb6925ef8"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/execution_metadata.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/execution_metadata.json",
+      "bytes": 5507,
+      "sha256": "770765dc6fadab5aba59864db4e898deeebc4b0e94ab438fd48384cc1288e21b"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/process_samples.jsonl",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/process_samples.jsonl",
+      "bytes": 7101,
+      "sha256": "2e11b517754315f6b020900e0a1e772e5cc02012bb4d932eed5162dd95081516"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/runner.py",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/runner.py",
+      "bytes": 14693,
+      "sha256": "b4f59f5bf9f8a937908ebece884ab33d1f8d24d60e3b167b45db67da4f59e472"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/stdout.json",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/stdout.json",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/network_vectorization/stepwise_retry_2026-09-20/worker.log",
+      "new": "experiments/m14_time_vectorization/results/network_vectorization/stepwise_retry_2026-09-20/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/battery_trajectories.png",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/battery_trajectories.png",
+      "bytes": 332804,
+      "sha256": "33c3b6f258323202c1ff5bd15c724b2a6bfa14dbbad567afdf604f54e79615aa"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/generator_dispatch_trajectories.png",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/generator_dispatch_trajectories.png",
+      "bytes": 384793,
+      "sha256": "4bfd8f152beb0ceb71fbe2f2557354daa39113896f50e4ddd26ea6a447aae919"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/inputs.npz",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/inputs.npz",
+      "bytes": 6401,
+      "sha256": "7ae0b74c7b41148bda7ef96fea8764aa66594ebc26d4869c05a38a00f413767e"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/renewable_curtailment_trajectories.png",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/renewable_curtailment_trajectories.png",
+      "bytes": 359827,
+      "sha256": "bfe8e9822910e9832cb3642b309890a70aa7f5f74e93292a8298e37ccb5eade9"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/tracy_week_inputs.png",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/tracy_week_inputs.png",
+      "bytes": 234876,
+      "sha256": "6f8c4a105faf405b24ded9d932fbda8ac69a4c2b50421be8ab1aa11dd4835092"
+    },
+    {
+      "old": "outputs/singlenode_vectorization/trajectory_capture.json",
+      "new": "experiments/m14_time_vectorization/results/singlenode_vectorization/trajectory_capture.json",
+      "bytes": 159372,
+      "sha256": "8da3d2e80f1a587ad954d47556b26232b9b05fd50286eb81282b98e90f2389df"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/comparison.json",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/comparison.json",
+      "bytes": 1775159,
+      "sha256": "690b453b844c94e9a7c374bf8b96f90de759b71ec445cb1f2f4aeb11bbd37a4f"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/lossy_dc_run/execution_metadata.json",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/execution_metadata.json",
+      "bytes": 3406,
+      "sha256": "4e951259c9b75002a8c9a45fec733c3e803abdec1c0aa976587cb11916b5b10a"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/lossy_dc_run/stepwise.json",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/stepwise.json",
+      "bytes": 273205,
+      "sha256": "c9616c36aaf725218d396499d9b5a639cb3f78327f4c8680d1e3ba5407904166"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/lossy_dc_run/stepwise.log",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/stepwise.log",
+      "bytes": 572,
+      "sha256": "2a7337d37c0e46261b9af52c2149ec6bd9ece72d3d7403fbba5e20eedae441e4"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/lossy_dc_run/vectorized.json",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/vectorized.json",
+      "bytes": 251987,
+      "sha256": "118e8514be050b1f5fe93e9a4ec295512b644c5f66b4acb6bde563aa2655c5b5"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/lossy_dc_run/vectorized.log",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/lossy_dc_run/vectorized.log",
+      "bytes": 337,
+      "sha256": "dd44293b8fb7c4bab2e4f0028ea1afb83aa97381e3c4539fb745aa5d4a8d4dee"
+    },
+    {
+      "old": "outputs/tracy_week_comparison/summary.csv",
+      "new": "experiments/m14_time_vectorization/results/tracy_week_comparison/summary.csv",
+      "bytes": 1170,
+      "sha256": "cb077fb7c3a26284f3d0ef932d84875a667ea9f61f67f240a257d903cf2f7240"
+    }
+  ]
+}

@@ -84,10 +84,9 @@ class TestSinglenodeDcMultistepReturnType:
     def test_is_convex_true(self):
         assert self._build().is_convex is True
 
-    def test_Pg_variable_list_length_T(self):
+    def test_Pg_variable_has_time_axis(self):
         build = self._build()
-        assert isinstance(build.variables["Pg"], list)
-        assert len(build.variables["Pg"]) == 3
+        assert build.variables["Pg"].shape == (3, 3)
 
     def test_data_contains_T(self):
         assert self._build().data["T"] == 3

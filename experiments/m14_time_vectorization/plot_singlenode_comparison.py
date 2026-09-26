@@ -3,7 +3,7 @@
 Run with ``uv run --extra notebook python -m
 experiments.m14_time_vectorization.plot_singlenode_comparison``.
 The original timing record omits trajectories, so this makes two fresh-process
-168-hour solves and saves their complete records separately under outputs/.
+168-hour solves and saves their complete records in this experiment's ignored results/ directory.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from experiments.m14_time_vectorization.run_m14d_singlenode import (
     sha,
 )
 
-OUT = ROOT / "outputs/singlenode_vectorization"
+OUT = ROOT / "experiments/m14_time_vectorization/results/singlenode_vectorization"
 RECORD = Path(__file__).with_name("M14D_SINGLENODE_RESULTS.json")
 BLUE, ORANGE = "#2666a3", "#d46a32"
 RESOURCE_STYLES = (

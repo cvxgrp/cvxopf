@@ -61,7 +61,7 @@ def main():
     run=ROOT/'experiments/case118_annual_hierarchy/results/s4b_annual_ac'
     snapshots=[(p,p.read_bytes()) for p in sorted(run.glob('shard-*/checkpoint.json'))]
     snap=datetime.now(timezone.utc)
-    dest=Path(os.environ.get('S5_DISPATCH_OUT', ROOT/'outputs/s5_analysis'/f'dispatch_changes_{snap:%Y%m%dT%H%M%SZ}'))
+    dest=Path(os.environ.get('S5_DISPATCH_OUT', ROOT/'experiments/case118_annual_hierarchy/results/reproductions'/f'dispatch_changes_{snap:%Y%m%dT%H%M%SZ}'))
     rows=[]; checkpoint_refs=[]; seen=set(); interventions=[]
     boundaries=manifest['boundary_indices']
     for path, raw in snapshots:

@@ -301,13 +301,15 @@ def test_hierarchical_x0_capture_is_isolated_from_ordinary_ac_solve(monkeypatch)
 
     def synchronized_solve(self, *args, **kwargs):
         receiver_types.append(type(self))
-        rendezvous.wait(timeout=10.0)
+        # cvxopf serializes scoped changes to CVXPY's global dispatch setting.
+        # Rendezvous at API entry, not inside the serialized solver section.
         with solver_lock:
             return original(self, *args, **kwargs)
 
     monkeypatch.setattr(IPOPT, "solve_via_data", synchronized_solve)
 
     def run_hierarchy():
+        rendezvous.wait(timeout=10.0)
         return solve_hierarchical_opf(
             _inputs(horizon_steps=1),
             HierarchicalPolicy(
@@ -316,6 +318,7 @@ def test_hierarchical_x0_capture_is_isolated_from_ordinary_ac_solve(monkeypatch)
         )
 
     def run_ordinary():
+        rendezvous.wait(timeout=10.0)
         ordinary.solve()
         return ordinary.prob.status
 

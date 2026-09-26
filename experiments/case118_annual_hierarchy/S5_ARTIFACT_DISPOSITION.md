@@ -9,6 +9,14 @@ The completed scientific closeout was committed separately as `9c26366`.
 This package preserves evidence and tools; it does not begin Stage 0c solves
 or Tracy input generation.
 
+The historical root paths below describe the original inventory. On 2026-09-21,
+the remaining local files moved into this experiment's ignored `results/`.
+See [current result locations](RESULT_LOCATIONS.md) and
+`RESULT_LOCATIONS_20260921.json`; no root aliases remain. The owner subsequently
+approved retaining these locations. This does not change the original promotion
+decisions: `analysis/` contains maintained tools, while the relocated original
+scripts are archival source and may depend on their former layout/environment.
+
 ## Inventory and exact promotion
 
 [output_inventory.csv](analysis/output_inventory.csv) records all 737 files
@@ -24,8 +32,9 @@ source-to-destination list: 51 selected sources, 25,484,474 original bytes
 (24.30 MiB). Of these, 47 are in `outputs/`; four presentation scripts are
 explicit transitive dependencies. Every entry records original and promoted
 bytes/hashes and any transformation. Original sources remain unchanged.
-Unlisted `outputs/` material remains in its original ignored location; nothing
-was deleted. There is no bulk output promotion or ignore-rule expansion.
+At promotion time, unlisted `outputs/` material remained in its original ignored
+location; nothing was deleted. The later relocation is recorded separately.
+There was no bulk output promotion or ignore-rule expansion in Stage 0b.
 
 The manifest covers scientific content and relocated code. New support files
 are this disposition, the analysis README, validation record, inventory, manifest, and package
@@ -42,7 +51,7 @@ in `tests/`. These are part of the same review package.
 | Full annual DC features from `20260915T173653331961Z` | Promote features and report as an exact pair. Ignore the old 5,525-interval membership in final views. Other coverage versions remain historical. | `coverage_report.py`, fixture, outer archive and manifest. All 8,760 feature rows align to final dispatch identities. |
 | Dispatch/stress/dashboard/coverage code and tests | Promote usable code; relocate paths and imports. Fixed data replaces discovery of newest ignored outputs. Remove live-refresh/deck publication and operator photo from promoted viewer. | Python, NumPy, pandas, matplotlib, marimo; archive extractors additionally need project imports and raw S4/S5 evidence. |
 | Presentation timing collectors and renderer | Promote three collectors exactly; relocate completion-band wrapper; extract saved-data renderer with explicit fresh output. Preserve historical timing definitions. | Collector environment variables and raw run receipts; saved renderer uses promoted tables/events only. No TeX or ignored presentation dependency. |
-| Other `outputs/analysis` and standalone plot scripts | Retain historical: interim timing views and superseded exploratory scripts, not current results. | Nearby `plot.py`, `render.py`, `analyze.py`, or named script where recoverable; original checkpoints/receipts and plotting environment. Unresolved provenance is labeled in the inventory. |
+| Other historical `outputs/analysis` (now `results/analysis`) and standalone plot scripts | Retain historical: interim timing views and superseded exploratory scripts, not current results. | Nearby `plot.py`, `render.py`, `analyze.py`, or named script where recoverable; original checkpoints/receipts and plotting environment. Unresolved provenance is labeled in the inventory. |
 | `s5_authority`, speculative cutover evidence, operator runbook | Retain archived authority, not instructions for new studies; large/raw records already referenced by accepted S5 artifacts. | S5 launcher/supervisor, process receipts, source fingerprints and checkpoint identities. Local ignored archive remains necessary for full reconstruction. |
 | Interval 2448/2450/6122 diagnostics | Retain archived recovery evidence; do not promote failed/diagnostic starts as accepted actions. | Retained replay/attempt code where present, exact source window, fixture and solver environment. |
 | Successful closeout analysis and startup failure | Promote completion/run/resource records, text logs, and archival supervisor source. Keep duplicate printed summaries/status views in archive. | `s5_analysis.py` invoked by the retained `supervise.py.txt`; latter is archival source, not a reusable launcher. `.log` bytes copied to `.txt` names. |

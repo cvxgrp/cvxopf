@@ -8,6 +8,9 @@ from pathlib import Path
 import time
 
 import numpy as np
+import cvxpy as cp
+
+from experiments.retained_paths import retained_operation, retained_path
 
 from experiments.case118_annual_hierarchy import streaming_runner as streaming
 from experiments.case118_annual_hierarchy.s4_fixture import load_s4_fixture
@@ -29,54 +32,37 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_immutable_json,
 )
 from .sample import read, checked, sha
+from cvxopf._ac_start_mapping import pack_start, unpack_values
 
 
-def pack_start(step_values, build, initial):
-    """Map original time-suffixed physical coordinates to time-last arrays."""
-    output = {}
-    used = set()
-    horizon = build.data["T"]
-    for name, variable in streaming.variables_by_name(build).items():
-        names = [f"{name}_{t}" for t in range(horizon)]
-        columns = [np.asarray(step_values[n], dtype=float).reshape(-1) for n in names]
-        used.update(names)
-        if name == "soc":
-            columns.insert(0, np.asarray(initial, dtype=float))
-        value = np.column_stack(columns)
-        if value.shape != variable.shape:
-            raise ValueError(
-                f"Unexpected packed shape for {name}: {value.shape} vs {variable.shape}"
-            )
-        output[name] = value
-    if used != set(step_values):
-        raise ValueError("Unmapped historical variables")
-    return output
-
-
-def unpack_values(values, template):
-    """Restore stepwise names for the existing deterministic helper initializer."""
-    result = {}
-    for name, original in template.items():
-        base, index = name.rsplit("_", 1)
-        column = int(index) + (base == "soc")
-        result[name] = np.asarray(values[base])[:, column].reshape(
-            np.asarray(original).shape
-        )
-    return result
+def execution_configuration(value=None):
+    """Validate explicit representation controls; preserve the original default."""
+    config = dict(temporal_assembly="vectorized", vectorize_pq=True,
+                  sparse_density_threshold=None) if value is None else dict(value)
+    if (set(config) != {"temporal_assembly", "vectorize_pq", "sparse_density_threshold"}
+            or config["temporal_assembly"] not in ("stepwise", "vectorized")
+            or type(config["vectorize_pq"]) is not bool
+            or (config["sparse_density_threshold"] is not None
+                and (type(config["sparse_density_threshold"]) not in (int, float)
+                     or config["sparse_density_threshold"] != 0.0))):
+        raise ValueError("Invalid replay execution configuration")
+    return config
 
 
 def prepare(directory, fixture, outer, request):
+    config = execution_configuration(request.get("execution_configuration"))
+    vectorized = config["temporal_assembly"] == "vectorized"
     selected = request["selected"]
     spec = invocation(request["invocation"])
     historical = checked(selected["references"]["primary_request.json"])
     retained = load_retained_start(
-        Path(selected["references"]["primary_start.json"]["path"])
+        retained_path(selected["references"]["primary_start.json"]["path"])
     )
     checked(selected["references"]["primary_start.json"])
     replay = (
         None
         if request["replay_start"] is None
-        else load_retained_start(Path(request["replay_start"]))
+        else load_retained_start(retained_path(request["replay_start"]))
     )
     initial = selected["initial_soc_mwh"]
     initial_array = [initial[k] for k in fixture.inputs.storage_device_ids]
@@ -96,10 +82,11 @@ def prepare(directory, fixture, outer, request):
                 initial=initial,
                 stop=spec.window.iteration + 3,
             ).target_free_source()
-            free = replace(
-                free,
-                solution_values=unpack_values(free.solution_values, retained.assigned),
-            )
+            if vectorized:
+                free = replace(
+                    free,
+                    solution_values=unpack_values(free.solution_values, retained.assigned),
+                )
         prepared_step = prepare_attempt(
             fixture.inputs,
             fixture.policy,
@@ -133,22 +120,25 @@ def prepare(directory, fixture, outer, request):
         selected["target_soc_mwh"] if spec.hard_target else None,
     )
     build = streaming.build_window(
-        fixture.inputs,
+        replace(fixture.inputs, options=replace(fixture.inputs.options,
+                                               vectorize_pq=config["vectorize_pq"])),
         "ac",
         spec.window.iteration,
         spec.window.iteration + 3,
         storage,
-        temporal_assembly="vectorized",
+        temporal_assembly=config["temporal_assembly"],
     )
     if replay is None:
-        raw = pack_start(prepared_step.raw, build, initial_array)
-        assigned = pack_start(prepared_step.assigned, build, initial_array)
+        raw = (pack_start(prepared_step.raw, build, initial_array)
+               if vectorized else prepared_step.raw)
+        assigned = (pack_start(prepared_step.assigned, build, initial_array)
+                    if vectorized else prepared_step.assigned)
         source_kind, source_id = (
             prepared_step.source_kind,
             prepared_step.source_attempt_id,
         )
         # Exact round trip for every named coordinate, including lifted branches.
-        roundtrip = unpack_values(assigned, prepared_step.assigned)
+        roundtrip = unpack_values(assigned, prepared_step.assigned) if vectorized else assigned
         assert all(
             np.array_equal(roundtrip[k], v) for k, v in prepared_step.assigned.items()
         )
@@ -161,7 +151,9 @@ def prepare(directory, fixture, outer, request):
         dict(
             historical_primary_start=selected["references"]["primary_start.json"],
             primary_named_start_exact=spec.order == 0,
-            named_coordinate_mapping="Each original family_t maps to family[:,t]; theta/v singleton axes removed; fixed initial SoC prepended.",
+            named_coordinate_mapping=("Each original family_t maps to family[:,t]; theta/v singleton axes removed; fixed initial SoC prepended."
+                                      if vectorized else "Identity mapping of original stepwise names."),
+            execution_configuration=config,
             initialization_preparation_seconds=preparation_seconds,
             retained_model_request_sha256=retained.request_sha256,
         ),
@@ -181,8 +173,15 @@ def prepare(directory, fixture, outer, request):
     )
 
 
+@retained_operation()
 def execute(directory):
     request = read(directory / "request.json")
+    config = execution_configuration(request.get("execution_configuration"))
+    if config["sparse_density_threshold"] is not None:
+        cp.settings.SPARSE_DENSITY_THRESHOLD = config["sparse_density_threshold"]
+    atomic_immutable_json(directory / "execution_configuration.json", dict(
+        **config, effective_sparse_density_threshold=getattr(cp.settings, "SPARSE_DENSITY_THRESHOLD", None),
+    ))
     for path, expected in request["execution_sources"].items():
         assert sha(path) == expected, path
     fixture, outer = load_s4_fixture(), _outer()

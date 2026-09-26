@@ -522,9 +522,33 @@ def _make_step_variables(
     return theta, v, PQ_P, PQ_Q, p, q
 
 
+def _pq_entry_expressions(theta_i, theta_j, voltage_i, voltage_j, g, b):
+    """The same P/Q equations for scalar entries or arrays of entries/times."""
+    angle = theta_i - theta_j
+    cosine, sine = cp.nlp.cos(angle), cp.nlp.sin(angle)
+    vv = cp.multiply(voltage_i, voltage_j)
+    return (
+        cp.multiply(vv, cp.multiply(g, cosine) + cp.multiply(b, sine)),
+        cp.multiply(vv, cp.multiply(g, sine) - cp.multiply(b, cosine)),
+    )
+
+
+def _pq_flow_expressions(theta, voltage, rows, cols, conductance, susceptance):
+    """Ybus-entry powers with shape (nnz, T), including T=1 stepwise builds.
+
+    Pair row/column gathers on the spatial axis and broadcast admittances
+    along time. CVXPY >= 1.9.3 includes the repeated-index derivative fix
+    needed by these gathers (cvxpy issue #3442).
+    """
+    return _pq_entry_expressions(
+        theta[rows, :], theta[cols, :], voltage[rows, :], voltage[cols, :],
+        conductance[:, None], susceptance[:, None],
+    )
+
+
 def _make_step_constraints(
     theta, v, PQ_P, PQ_Q, p, q,
-    G, B, E, Z,
+    E, Z,
     rows, cols, G_vec, B_vec, Rp,
     component_injection_p, component_injection_q,
     ref,
@@ -533,6 +557,7 @@ def _make_step_constraints(
     branch_flow_defining_constraints,
     network_operating_constraints,
     sparse_pq: bool,
+    vectorize_pq: bool = True,
 ) -> list:
     """
     Build the complete list of CVXPY constraints for one AC time step.
@@ -558,54 +583,29 @@ def _make_step_constraints(
     # ------------------------------------------------------------------
     # Section 2: Flow definitions — p and q from P/Q matrix
     # ------------------------------------------------------------------
+    if vectorize_pq:
+        p_flow, q_flow = _pq_flow_expressions(theta, v, rows, cols, G_vec, B_vec)
+        lhs_p, lhs_q = (PQ_P, PQ_Q) if sparse_pq else (PQ_P[E], PQ_Q[E])
+        constr += [lhs_p == p_flow[:, 0], lhs_q == q_flow[:, 0]]
+    else:
+        for k, (i, j) in enumerate(zip(rows, cols, strict=True)):
+            p_flow, q_flow = _pq_entry_expressions(
+                theta[i, 0], theta[j, 0], v[i, 0], v[j, 0], G_vec[k], B_vec[k],
+            )
+            lhs_p, lhs_q = (PQ_P[k], PQ_Q[k]) if sparse_pq else (PQ_P[i, j], PQ_Q[i, j])
+            constr += [lhs_p == p_flow, lhs_q == q_flow]
     if sparse_pq:
-        # TODO: vectorize once https://github.com/cvxpy/cvxpy/issues/3442 is
-        # resolved. The natural vectorised form:
-        #
-        #   C_vec  = cp.nlp.cos(theta[rows, 0] - theta[cols, 0])
-        #   S_vec  = cp.nlp.sin(theta[rows, 0] - theta[cols, 0])
-        #   vv_vec = cp.multiply(v[rows, 0], v[cols, 0])
-        #   constr += [PQ_P == cp.multiply(vv_vec, ...),
-        #              PQ_Q == cp.multiply(vv_vec, ...)]
-        #
-        # crashes inside init_hessian_coo_lower_tri because numpy array
-        # indexing of a CVXPY variable produces a compound gather expression
-        # that the DNLP Hessian sparsity analyser cannot handle. Scalar
-        # integer indexing in a loop works correctly.
-        nnz = len(rows)
-        for k in range(nnz):
-            i   = int(rows[k])
-            j   = int(cols[k])
-            C_k = cp.nlp.cos(theta[i, 0] - theta[j, 0])
-            S_k = cp.nlp.sin(theta[i, 0] - theta[j, 0])
-            vv_k = v[i, 0] * v[j, 0]
-            constr.append(
-                PQ_P[k] == vv_k * (float(G_vec[k]) * C_k + float(B_vec[k]) * S_k)
-            )
-            constr.append(
-                PQ_Q[k] == vv_k * (float(G_vec[k]) * S_k - float(B_vec[k]) * C_k)
-            )
-
         constr += [
             p == Rp @ PQ_P,
             q == Rp @ PQ_Q,
         ]
     else:
-        C   = cp.nlp.cos(theta - theta.T)
-        S   = cp.nlp.sin(theta - theta.T)
-        vvT = v @ v.T
-
+        if vectorize_pq:
+            constr += [PQ_P[Z] == 0.0, PQ_Q[Z] == 0.0]
+        else:
+            for i, j in zip(*Z, strict=True):
+                constr += [PQ_P[i, j] == 0.0, PQ_Q[i, j] == 0.0]
         constr += [
-            PQ_P[E] == cp.multiply(
-                vvT[E],
-                cp.multiply(G[E], C[E]) + cp.multiply(B[E], S[E])
-            ),
-            PQ_Q[E] == cp.multiply(
-                vvT[E],
-                cp.multiply(G[E], S[E]) - cp.multiply(B[E], C[E])
-            ),
-            PQ_P[Z] == 0.0,
-            PQ_Q[Z] == 0.0,
             p == cp.sum(PQ_P, axis=1),
             q == cp.sum(PQ_Q, axis=1),
         ]
@@ -706,7 +706,7 @@ def _build_ac_single(
 
     constr = _make_step_constraints(
         theta, v, PQ_P, PQ_Q, p, q,
-        d["G"], d["B"], d["E"], d["Z"],
+        d["E"], d["Z"],
         d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
         step_aggregate.injection.p_pu,
         step_aggregate.injection.q_pu,
@@ -716,6 +716,7 @@ def _build_ac_single(
         branch_flow_defining_constraints,
         network_operating_constraints,
         sparse_pq=options.sparse_pq,
+        vectorize_pq=options.vectorize_pq,
     )
 
     # Build the generic component stage cost.
@@ -805,9 +806,8 @@ def _build_ac_vectorized(
 ) -> "OPFBuild":
     """Build AC power flow with native spatial axes and time last.
 
-    Nonlinear network terms use basic bus indexing and vectorize over time.
-    This retains the lifted DNLP equations without compound spatial gathers in
-    their Hessians. Object counts depend on network size, not horizon length.
+    Ybus P/Q definitions batch across time and optionally across spatial
+    entries. Branch-terminal equations retain their separate lifted variables.
     """
     from cvxopf.problem import OPFBuild
 
@@ -843,25 +843,32 @@ def _build_ac_vectorized(
     )
 
     constraints = [theta[d["ref"]] == 0]
-    for k, (row, col) in enumerate(zip(d["rows"], d["cols"], strict=True)):
-        i, j = int(row), int(col)
-        angle = theta[i, :] - theta[j, :]
-        cosine, sine = cp.nlp.cos(angle), cp.nlp.sin(angle)
-        vv = cp.multiply(voltage[i, :], voltage[j, :])
-        target_p = PQ_P[k, :] if options.sparse_pq else PQ_P[i * nb + j, :]
-        target_q = PQ_Q[k, :] if options.sparse_pq else PQ_Q[i * nb + j, :]
-        constraints += [
-            target_p == cp.multiply(vv, float(d["G_vec"][k]) * cosine
-                                   + float(d["B_vec"][k]) * sine),
-            target_q == cp.multiply(vv, float(d["G_vec"][k]) * sine
-                                   - float(d["B_vec"][k]) * cosine),
-        ]
+    entries = d["rows"] * nb + d["cols"]
+    if options.vectorize_pq:
+        p_flow, q_flow = _pq_flow_expressions(
+            theta, voltage, d["rows"], d["cols"], d["G_vec"], d["B_vec"],
+        )
+        lhs_p, lhs_q = ((PQ_P, PQ_Q) if options.sparse_pq
+                        else (PQ_P[entries, :], PQ_Q[entries, :]))
+        constraints += [lhs_p == p_flow, lhs_q == q_flow]
+    else:
+        for k, (i, j) in enumerate(zip(d["rows"], d["cols"], strict=True)):
+            p_flow, q_flow = _pq_entry_expressions(
+                theta[i, :], theta[j, :], voltage[i, :], voltage[j, :],
+                d["G_vec"][k], d["B_vec"][k],
+            )
+            entry = k if options.sparse_pq else entries[k]
+            constraints += [PQ_P[entry, :] == p_flow, PQ_Q[entry, :] == q_flow]
     if options.sparse_pq:
         constraints += [p == d["Rp"] @ PQ_P, q == d["Rp"] @ PQ_Q]
     else:
-        for row, col in zip(*d["Z"], strict=True):
-            constraints += [PQ_P[int(row) * nb + int(col), :] == 0,
-                            PQ_Q[int(row) * nb + int(col), :] == 0]
+        zeros = d["Z"][0] * nb + d["Z"][1]
+        if len(zeros):
+            if options.vectorize_pq:
+                constraints += [PQ_P[zeros, :] == 0, PQ_Q[zeros, :] == 0]
+            else:
+                for entry in zeros:
+                    constraints += [PQ_P[entry, :] == 0, PQ_Q[entry, :] == 0]
         constraints += [p == np.kron(np.eye(nb), np.ones((1, nb))) @ PQ_P,
                         q == np.kron(np.eye(nb), np.ones((1, nb))) @ PQ_Q]
     constraints += defining
@@ -1034,7 +1041,7 @@ def _build_ac_multistep(
 
         step_constr = _make_step_constraints(
             theta_t, v_t, PQ_P_t, PQ_Q_t, p_t, q_t,
-            d["G"], d["B"], d["E"], d["Z"],
+            d["E"], d["Z"],
             d["rows"], d["cols"], d["G_vec"], d["B_vec"], d["Rp"],
             step_aggregate.injection.p_pu,
             step_aggregate.injection.q_pu,
@@ -1044,6 +1051,7 @@ def _build_ac_multistep(
             branch_flow_defining_constraints,
             network_operating_constraints,
             sparse_pq=options.sparse_pq,
+            vectorize_pq=options.vectorize_pq,
         )
 
         all_constr.extend(step_constr)

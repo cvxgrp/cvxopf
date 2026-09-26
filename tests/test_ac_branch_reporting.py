@@ -211,7 +211,7 @@ class TestACBranchBuildContract:
     def test_multistep_publishes_ordered_expression_lists(self):
         df_p, df_q = _flat_case9_load(2)
         build = build_opf_multistep(
-            case9(), df_p, df_q, T=2, formulation="ac"
+            case9(), df_p, df_q, T=2, formulation="ac", temporal_assembly="stepwise"
         )
 
         for name in BRANCH_EXPRESSION_KEYS:

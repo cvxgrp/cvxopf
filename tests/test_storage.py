@@ -1235,17 +1235,15 @@ class TestStorageACMultistep:
         assert np.all(r["soc"] >= -VAL_ATOL)
         assert np.all(r["soc"] <= 100.0 + VAL_ATOL)
 
-    def test_b_variable_list_length_T(self):
+    def test_b_variable_has_time_axis(self):
         df_P, df_Q = _flat_load_dfs(case9, T=3)
         build, _ = _solve_ac_multistep(3, df_P, df_Q, storage=[_default_unit()])
-        assert isinstance(build.variables["b"], list)
-        assert len(build.variables["b"]) == 3
+        assert build.variables["b"].shape == (1, 3)
 
-    def test_b_q_variable_list_length_T(self):
+    def test_b_q_variable_has_time_axis(self):
         df_P, df_Q = _flat_load_dfs(case9, T=3)
         build, _ = _solve_ac_multistep(3, df_P, df_Q, storage=[_default_unit()])
-        assert isinstance(build.variables["b_q"], list)
-        assert len(build.variables["b_q"]) == 3
+        assert build.variables["b_q"].shape == (1, 3)
 
     def test_T1_objective_matches_single_step(self):
         unit = _default_unit(aging_weight=0.0)

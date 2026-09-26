@@ -32,7 +32,10 @@ Tensor differences occupy the lower tab group; the weekday control is inside Ten
 Tab selection persists when the metric or weekday changes.
 Changing metric, weekday, rounding, or intervention controls uses this saved
 data. It does not read raw AC archives or run optimization. The original live
-refresh dashboard remains unchanged in ignored `outputs/s5_analysis/`.
+refresh dashboard is retained as archival source in ignored `../results/s5_analysis/`.
+Use the dashboard and tools in this `analysis/` directory as maintained entry
+points. Archived scripts may require their former layout/environment; they are
+not alternate supported tools. See [current result locations](../RESULT_LOCATIONS.md).
 
 The final correction snapshot is `20260917T152634.819559Z`, with 8,760 accepted
 first actions. Collectors captured timing/completion evidence separately; their
@@ -51,18 +54,21 @@ claim; inherited storage-state differences are explicitly retrospective.
 
 ## Reproduce plots and derived tables
 
-The saved timing renderer reads only promoted data and requires a new destination:
+The saved timing renderer reads only promoted data and requires a new destination.
+New reproductions are separate from the historical archive subtrees:
 
 ```sh
-uv run --extra notebook python experiments/case118_annual_hierarchy/analysis/render_saved_timing.py --output outputs/s5_timing_reproduction
+mkdir -p experiments/case118_annual_hierarchy/results/reproductions
+uv run --extra notebook python experiments/case118_annual_hierarchy/analysis/render_saved_timing.py --output experiments/case118_annual_hierarchy/results/reproductions/s5_timing_reproduction
 uv run --extra notebook python experiments/case118_annual_hierarchy/analysis/analyze_stress_correlations.py
 ```
 
-The latter writes a fresh timestamped directory under `outputs/s5_analysis`.
+The latter writes a fresh timestamped directory under `experiments/case118_annual_hierarchy/results/reproductions`.
 It also accepts explicit `--snapshot` and `--features` paths. Saved metadata
 keeps original paths/hashes; these document historical collection and are not
-runtime dependencies. The current code's transformation and byte hashes are in
-[promotion_manifest.json](promotion_manifest.json).
+runtime dependencies. Promotion-time transformations and byte hashes are in
+[promotion_manifest.json](promotion_manifest.json); they describe the promoted
+versions, not necessarily the current maintained source after later edits.
 
 `analyze_dispatch_changes.py` re-extracts accepted first actions from the raw
 study and verifies artifact hashes; `coverage_report.py` reconstructs DC
@@ -86,9 +92,10 @@ byte. Recreating its raw completion collection needs the historical archive;
 ## Verification and reuse
 
 ```sh
+mkdir -p experiments/case118_annual_hierarchy/results/reproductions
 uv run --extra dev --extra notebook pytest tests/test_case118_s5_coverage.py tests/test_case118_s5_dashboard.py
 uv run --extra notebook marimo check experiments/case118_annual_hierarchy/analysis/s5_dashboard.py
-uv run --extra notebook marimo export html experiments/case118_annual_hierarchy/analysis/s5_dashboard.py -o outputs/s5_dashboard_review.html
+uv run --extra notebook marimo export html experiments/case118_annual_hierarchy/analysis/s5_dashboard.py -o experiments/case118_annual_hierarchy/results/reproductions/s5_dashboard_review.html
 ```
 
 The dashboard tests skip when the optional plotting dependency is absent.
@@ -112,7 +119,8 @@ retained executed AC-minus-DC differences. No solve or archive scan occurs
 when opening these tabs. To reproduce the compact DC source in a new folder:
 
 ```sh
-uv run --extra dev python experiments/case118_annual_hierarchy/analysis/extract_dc_operating_totals.py --output outputs/dc_operating_totals_reproduction
+mkdir -p experiments/case118_annual_hierarchy/results/reproductions
+uv run --extra dev python experiments/case118_annual_hierarchy/analysis/extract_dc_operating_totals.py --output experiments/case118_annual_hierarchy/results/reproductions/dc_operating_totals_reproduction
 ```
 
 The extractor verifies the archive hash against the correction report and

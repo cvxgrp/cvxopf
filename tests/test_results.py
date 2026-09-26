@@ -818,7 +818,7 @@ class TestSheddableLoadResults:
 
     def test_partial_multistep_fraction_discards_complete_derived_arrays(self):
         build = build_opf_multistep(
-            case9(), T=2, formulation="ac", loads=_mixed_load_fleet()
+            case9(), temporal_assembly="stepwise", T=2, formulation="ac", loads=_mixed_load_fleet()
         )
         build.variables["load_shed_fraction"][0].value = [0.1, 0.2]
 

@@ -64,7 +64,8 @@ FULL_SCHEMA_DIGESTS = {
 }
 
 FULL_SOURCE_DIGESTS = {
-    "ac": "57854005fb90eebd02c5bb740c3d66d1e1f718bd8a98a755121696cbb54529c7",
+    # Sparse P/Q gathers reduce object counts without changing scalar equations.
+    "ac": "9f150ecd86487de6427921816c3191f32d0dd489a0763f328b9b23d6316a42cb",
     "lossy_dc": ("f1eaeb6880471a7cee874d3eba50524d00c1895c5a309686237701847560d87e"),
     "singlenode_dc": (
         "bcdc9b99da36a6e165875ddf11ba91bd3ab0a304ffb3e4edaaabcf0db842e846"

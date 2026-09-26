@@ -65,4 +65,4 @@ Maximum sampled RSS: 4.13 GiB per worker tree; 8.90 GiB aggregate including supe
 
 ![Paired timing and objective comparison](artifacts/comparison.png)
 
-The frozen selection, row-level comparison, and summary are in `artifacts/`. Raw phases, starts, results, lifecycle records, and source hashes are retained under `outputs/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` in the project environment. The sample seed is 20260920; see README.md for population definitions, allocation, and execution commands.
+The frozen selection, row-level comparison, and summary are in `artifacts/`. Raw phases, starts, results, lifecycle records, and source hashes are retained under `experiments/case118_vectorization_replay/results/case118_vectorization_replay/`. Recompute with `python -m experiments.case118_vectorization_replay.analyze` in the project environment. The sample seed is 20260920; see README.md for population definitions, allocation, and execution commands.

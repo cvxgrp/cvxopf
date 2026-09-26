@@ -200,7 +200,7 @@ Milestone 17 hierarchical controller above that boundary.
 
 | Key | Description | Convex | Solver |
 |---|---|---|---|
-| `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9`) | No | IPOPT |
+| `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9.3`) | No | IPOPT |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 | `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
 
@@ -520,11 +520,37 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
-Opt into vectorized assembly with `temporal_assembly="vectorized"` for
-`"ac"`, `"lossy_dc"`, or `"singlenode_dc"`. `build.solve()` selects SCIPY
+Time-vectorized assembly is the default for `"ac"`, `"lossy_dc"`, and
+`"singlenode_dc"`. `build.solve()` selects SCIPY
 canonicalization and CLARABEL for convex formulations; AC uses the same
 DNLP/IPOPT path as stepwise AC, with no CPP/SCIPY backend selection.
-The default assembly is still `"stepwise"`.
+Pass `temporal_assembly="stepwise"` to retain the per-interval graph and variable
+lists. Code that accesses `build.variables` must use the selected layout;
+extracted result shapes are unchanged.
+
+The hierarchical controller defaults to vectorized DC outer and AC inner
+graphs. `outer_temporal_assembly="stepwise"` and
+`inner_temporal_assembly="stepwise"` independently restore either legacy graph.
+Shifted preceding solutions, copied target-free solutions, and seeded recovery
+perturbations work in both representations. The initial SoC boundary is fixed
+from the identity-aligned realized state, and shrinking final windows retain
+chronological state reconstruction. Recovery ordering, acceptance criteria and
+extracted result schemas are unchanged; every native AC attempt retains complete
+IPOPT starting-vector verification, including canonicalization auxiliaries.
+
+AC also defaults to spatial P/Q batching and disables CVXPY's automatic
+density-based sparse derivative dispatch. This compatibility policy applies
+during construction and `build.solve()`, then restores the caller's CVXPY
+threshold, including on errors. It does not disable sparse P/Q variable storage.
+Pass `automatic_sparse_dispatch=True` to either builder to retain the caller's CVXPY
+dispatch setting explicitly. Because CVXPY stores this setting process-wide,
+cvxopf serializes its build/solve entry points; use separate processes for
+concurrent unrelated CVXPY calls. No setting changes merely by importing cvxopf.
+
+The default combines prior DC time-vectorization validation with the completed
+[Case118 AC comparison](experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md).
+It is a practical performance choice, not a universal speed guarantee or a
+claim of identical nonconvex AC operating points.
 
 Vectorized `build.variables` contain time-last CVXPY variables: for example,
 `Pg` has shape `(ng, T)` and storage `soc` has shape `(ns, T+1)`, including the
@@ -541,6 +567,31 @@ For example, reshape a solved `P.value` to `(nb, nb, T)` with NumPy's default
 C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
 shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
 explicit constraints.
+
+By default, P/Q flow definitions are vectorized across Ybus entries in both temporal
+representations, for sparse and dense P/Q storage. Stepwise assembly uses two
+defining vector equalities per step; time-vectorized assembly uses two matrix
+equalities over all entries and time steps. Dense off-pattern zeros are also
+constrained in batches.
+
+Set `OPFOptions(vectorize_pq=False)` to build each spatial P/Q entry separately,
+including dense off-pattern zeros. This switch is independent of
+`sparse_pq` (variable storage) and `temporal_assembly` (time representation):
+
+```python
+build = build_opf_multistep(
+    case, df_P, df_Q, T=T,
+    temporal_assembly="vectorized",
+    options=OPFOptions(vectorize_pq=False),
+)
+```
+
+This example retains vectorization across time while disabling it across Ybus
+entries. Use `temporal_assembly="stepwise"` to disable time vectorization too.
+The spatial switch also applies to `build_opf` and dense P/Q storage, and does
+not affect DC formulations. Variable layouts, initializations, network physics,
+branch-terminal constraints, and result schemas stay the same. Neither setting
+guarantees convergence of the nonconvex AC solve.
 
 ### Objective units and time discretization
 
@@ -879,7 +930,8 @@ package environment.
   all three time-vectorized formulations are reviewed and owner-accepted. M14a–c are complete and
   merged into `main` with the completed Case118 study. The vectorized lossy-DC
   path's conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
-  accepted. The retained stepwise builder remains the default. The historical
+  accepted. Time-vectorized multistep assembly is now the default; explicit
+  stepwise assembly remains available. The historical
   stepwise/CPP profiling
   mismatch and the certificate-backed tight-tolerance disposition are both
   tracked; vectorized/SCIPY with CLARABEL is the authoritative Case118 annual

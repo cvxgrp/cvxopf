@@ -21,7 +21,7 @@ from cvxopf.testcases import case9
 
 
 SOURCE_GRAPH_DIGESTS = {
-    "ac": "60df7473cf05f07b852406b6c98dea51af5491efd5d9970d2265b569f9862e07",
+    "ac": "4bfa73afbd3775bf7456e912858de675a9f9cb728af8d0c32ba362cd69d44041",
     "lossy_dc": "0f35650806830f468c1719afec5f3051331bb7a44820cc70b2a9e8b8044ee497",
     "singlenode_dc": (
         "7db1ad0a263a5b049221db2ffcccf1201d49e3677fcc2f86fee0d951e1894f27"
@@ -58,7 +58,9 @@ def _frames(T: int) -> tuple[pd.DataFrame, pd.DataFrame]:
 @pytest.mark.parametrize(
     ("formulation", "expected"),
     [
-        ("ac", (264, 254, 60, 24, 170)),
+        # Sparse P/Q gathers combine 54 scalar constraint objects into two
+        # per step; scalar equations and the public schema are unchanged.
+        ("ac", (264, 254, 60, 24, 66)),
         ("lossy_dc", (24, 18, 30, 4, 8)),
         ("singlenode_dc", (6, 2, 12, 2, 6)),
     ],
@@ -68,7 +70,8 @@ def test_stepwise_source_graph_baseline(formulation, expected):
     context = pytest.warns(UserWarning) if formulation != "ac" else nullcontext()
     with context:
         build = build_opf_multistep(
-            case9(), active, reactive, T=2, formulation=formulation
+            case9(), active, reactive, T=2, formulation=formulation,
+            temporal_assembly="stepwise",
         )
 
     record = characterize_source_graph(build)
@@ -132,14 +135,16 @@ def test_unregistered_vectorized_builder_does_not_fall_back_to_stepwise(
     with pytest.raises(NotImplementedError, match='registered vectorized formulations'):
         build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation,
                             temporal_assembly='vectorized')
-    stepwise = build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation)
+    stepwise = build_opf_multistep(case9(), active, reactive, T=1, formulation=formulation,
+                                 temporal_assembly='stepwise')
     assert stepwise.temporal_assembly == 'stepwise'
 
 
 @pytest.mark.parametrize("formulation", ["lossy_dc", "singlenode_dc"])
 def test_cpp_and_scipy_characterizations_retain_backend_identity(formulation):
     active, _reactive = _frames(2)
-    build = build_opf_multistep(case9(), active, T=2, formulation=formulation)
+    build = build_opf_multistep(case9(), active, T=2, formulation=formulation,
+                              temporal_assembly="stepwise")
 
     cpp = characterize_convex_canonicalization(build, backend="CPP")
     scipy = characterize_convex_canonicalization(build, backend="SCIPY")

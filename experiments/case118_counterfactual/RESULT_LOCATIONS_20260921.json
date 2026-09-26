@@ -1,0 +1,138 @@
+{
+  "created_utc": "2026-09-21T18:54:40.257092+00:00",
+  "note": "Exact byte-preserving relocation; historical paths inside records remain unchanged. No root compatibility links.",
+  "files": [
+    {
+      "old": "outputs/battery-excursion-screen-20260917",
+      "new": "experiments/case118_counterfactual/battery_operation/screening",
+      "kind": "removed_compatibility_link",
+      "target": "../experiments/case118_counterfactual/battery_operation/screening"
+    },
+    {
+      "old": "outputs/battery-mechanism-phase1-20260917",
+      "new": "experiments/case118_counterfactual/results/battery_operation_20260917",
+      "kind": "removed_compatibility_link",
+      "target": "../experiments/case118_counterfactual/results/battery_operation_20260917"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/__pycache__",
+      "new": "experiments/case118_counterfactual/battery_operation/__pycache__",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/__pycache__"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/implementation-checkpoint.md",
+      "new": "experiments/case118_counterfactual/battery_operation/implementation-checkpoint.md",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/implementation-checkpoint.md"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/check_results.py",
+      "new": "experiments/case118_counterfactual/battery_operation/check_results.py",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/check_results.py"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/protocol.json",
+      "new": "experiments/case118_counterfactual/battery_operation/protocol.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/protocol.json"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/verification.json",
+      "new": "experiments/case118_counterfactual/battery_operation/verification.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/verification.json"
+    },
+    {
+      "old": "outputs/battery-mechanism-preparation-20260917/phase1-results.md",
+      "new": "experiments/case118_counterfactual/battery_operation/REPORT.md",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/battery_operation/REPORT.md"
+    },
+    {
+      "old": "outputs/case118-counterfactual-ac-study.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/proposal-20260916.md",
+      "kind": "removed_compatibility_link",
+      "target": "../experiments/case118_counterfactual/ac_dispatch_adjustments/proposal-20260916.md"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch",
+      "kind": "removed_compatibility_link",
+      "target": "../experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917_failed_launch"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-20260917-r2",
+      "new": "experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917",
+      "kind": "removed_compatibility_link",
+      "target": "../experiments/case118_counterfactual/results/ac_dispatch_adjustments_20260917"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/inspect_context.py",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/inspect_context.py",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/inspect_context.py"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-results.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/REPORT.md"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/candidate-provenance.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/candidate-provenance.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/candidate-provenance.json"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-note.md",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/execution.md",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/execution.md"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/joint-episode",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/joint-episode",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/joint-episode"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/candidates.csv",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/candidates.csv",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/candidates.csv"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/context-summary.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/context-summary.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/context-summary.json"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/check_results.py",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/check_results.py",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/check_results.py"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/protocol.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/protocol.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/protocol.json"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/verification.json",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/verification.json",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/verification.json"
+    },
+    {
+      "old": "outputs/counterfactual-pilot-preparation-20260917/pilot-context.png",
+      "new": "experiments/case118_counterfactual/ac_dispatch_adjustments/context.png",
+      "kind": "removed_compatibility_link",
+      "target": "../../experiments/case118_counterfactual/ac_dispatch_adjustments/context.png"
+    }
+  ]
+}

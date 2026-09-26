@@ -493,7 +493,8 @@ the existing evidence; this report is not a replacement validation certificate.
 The earlier analyzer invocation printed only selected fields and its digest;
 the full result was not saved. Its exact retained summary is included as
 [prior_analysis_summary.json](s5_closeout/prior_analysis_summary.json), copied
-from `outputs/s5_analysis/completed-analysis-summary.json`. It records the
+from the historical `outputs/s5_analysis/completed-analysis-summary.json`
+(now archived at `results/s5_analysis/completed-analysis-summary.json`). It records the
 reported passed analysis but cannot substitute for the missing complete payload
 or be expanded into one by assuming omitted fields. The accepted merge is
 also retained in the [closeout package](s5_closeout/retained_merge.json).

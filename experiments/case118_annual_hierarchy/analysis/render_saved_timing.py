@@ -96,7 +96,7 @@ def render(snap, assets):
         save(fig, assets / name)
 
     fig, ax = plt.subplots(figsize=(12, 5.6))
-    # Match plot_notebook_solve_times in outputs/s5_analysis/s5_dashboard.py.
+    # Historical source: match plot_notebook_solve_times in experiments/case118_annual_hierarchy/results/s5_analysis/s5_dashboard.py.
     colors = {"Primary":"#0072B2", "Target-free":"#D55E00",
               "Copied target-free":"#009E73", "Perturbed starts":"#222222"}
     role_markers = {"Primary":"o", "Target-free":"s",

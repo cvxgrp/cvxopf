@@ -274,7 +274,7 @@ def test_multistep_builders_compose_generator_coupling_hook(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         build_opf_multistep(
-            case, df_P, df_Q, T=T, formulation=formulation, delta=0.5
+            case, df_P, df_Q, temporal_assembly="stepwise", T=T, formulation=formulation, delta=0.5
         )
 
     assert len(calls) == 1
@@ -308,7 +308,7 @@ def test_multistep_builders_compose_nd_coupling_hook(
             case,
             df_P,
             df_Q,
-            T=T,
+            temporal_assembly="stepwise", T=T,
             formulation=formulation,
             nondispatchable=units,
             df_nd=df_nd,
@@ -367,7 +367,7 @@ def test_builders_compose_storage_horizon_hooks_once(
                 case,
                 df_P,
                 df_Q,
-                T=T,
+                temporal_assembly="stepwise", T=T,
                 formulation=formulation,
                 storage=units,
                 delta=0.5,
@@ -417,7 +417,7 @@ def test_builders_compose_hvdc_coupling_hook_once(
                 case,
                 df_P,
                 df_Q,
-                T=T,
+                temporal_assembly="stepwise", T=T,
                 formulation=formulation,
                 hvdc=links,
                 df_hvdc_min=df_min.iloc[:T],
@@ -551,7 +551,7 @@ def test_dc_builders_compose_generator_network_hook(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         build_opf_multistep(
-            case, df_P, df_Q, T=T, formulation=formulation
+            case, df_P, df_Q, temporal_assembly="stepwise", T=T, formulation=formulation
         )
     assert len(calls) == T
 
@@ -609,7 +609,7 @@ def test_builders_retain_modeled_net_injection_expression(formulation):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         multi = build_opf_multistep(
-            case, df_P, df_Q, T=T, formulation=formulation
+            case, df_P, df_Q, temporal_assembly="stepwise", T=T, formulation=formulation
         )
 
     assert len(multi.expressions["p_net"]) == T

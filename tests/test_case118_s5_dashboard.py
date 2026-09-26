@@ -102,7 +102,7 @@ class ReproductionOutputTests(unittest.TestCase):
                 env=dict(os.environ, MPLBACKEND="Agg"),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            outputs = list((root / "outputs/s5_analysis").glob("stress_correlations_*"))
+            outputs = list((root / "experiments/case118_annual_hierarchy/results/reproductions").glob("stress_correlations_*"))
             self.assertEqual(len(outputs), 1)
             self.assertTrue(list(outputs[0].glob("*.json")))
             self.assertTrue(list(outputs[0].glob("*.png")))

@@ -8,7 +8,7 @@ import runpy
 
 ROOT = Path(__file__).resolve().parents[4]
 TZ = ZoneInfo('America/Los_Angeles')
-OUT = Path(os.environ.get('S5_COMPLETION_OUT', ROOT / 'outputs/analysis' / ('s5_completion_band_' + datetime.now(TZ).strftime('%Y%m%dT%H%M%S'))))
+OUT = Path(os.environ.get('S5_COMPLETION_OUT', ROOT / 'experiments/case118_annual_hierarchy/results/reproductions' / ('s5_completion_band_' + datetime.now(TZ).strftime('%Y%m%dT%H%M%S'))))
 OUT.mkdir(parents=True, exist_ok=False)
 os.environ['S5_REPO_ROOT'] = str(ROOT)
 os.environ['S5_PLOT_OUT'] = str(OUT)
