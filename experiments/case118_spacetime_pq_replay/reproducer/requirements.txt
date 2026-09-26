@@ -1,0 +1,5 @@
+cvxpy==1.9.3
+sparsediffpy==0.6.1
+cyipopt==1.7.0
+numpy==2.4.6
+scipy==1.17.1

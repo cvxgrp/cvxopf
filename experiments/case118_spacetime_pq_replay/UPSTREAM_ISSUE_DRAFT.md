@@ -1,127 +1,166 @@
-# Draft CVXPY issue
+# Draft CVXPY issue — not submitted
 
-Suggested destination: https://github.com/cvxpy/cvxpy/issues
+## Proposed title
 
-Title: DNLP/IPOPT convergence changes after 1.9.3 dense-constant sparse dispatch; matching derivative values at the initial point
+DNLP/IPOPT convergence changes with automatic sparse dispatch in CVXPY 1.9.3
 
-We have a reproducible convergence sensitivity in a three-hour, 118-bus AC optimal
-power flow model. Holding application code, inputs, initial point, native libraries,
-and numerical solver options fixed, CVXPY 1.9.2/sparsediffpy 0.3.0 converges in
-70 iterations, while 1.9.3/0.6.1 reaches IPOPT's 3,000-iteration limit.
+## Summary
 
-With **1.9.3/0.6.1 unchanged**, setting
-`cvxpy.settings.SPARSE_DENSITY_THRESHOLD = 0.0` in a fresh diagnostic process
-restores the old Jacobian structure and convergence in 70 iterations. The accepted
-solution matches every retained named variable and extracted result from the
-historical successful run exactly. We are not claiming an incorrect derivative:
-the tested values agree exactly, while the reported sparsity structure changes.
+CVXPY 1.9.3's automatic conversion of low-density dense constants to sparse
+operations can change IPOPT's termination. In the standalone synthetic example
+below, default dispatch produces a step-computation error; setting
+`cvxpy.settings.SPARSE_DENSITY_THRESHOLD = 0.0` produces successful termination.
+The model, starting point, dependencies, and solver options are otherwise
+identical.
 
-## Controlled results
+The example demonstrates convergence sensitivity, not an incorrect derivative.
+It has a deliberately degenerate constraint at the exact optimum. Its failure
+mode also differs from the motivating application's iteration-limit failure;
+a shared underlying mechanism has not been established.
 
-| CVXPY / sparsediffpy | Density dispatch | IPOPT result | Iterations | Stored Jacobian entries |
+## Standalone example
+
+The runnable [toy.py](reproducer/toy.py) contains no CVXOPF imports, grid data,
+input files, or application framework. Its mathematical construction is:
+
+```python
+import cvxpy as cp
+import numpy as np
+
+# Uncomment only for the control, in a separate fresh process:
+# cp.settings.SPARSE_DENSITY_THRESHOLD = 0.0
+
+n = 24
+x, z = cp.Variable(n), cp.Variable(n)
+x.value = np.random.default_rng(0).uniform(0, 1, n)
+z.value = np.full(n, 0.1)
+A = np.eye(n)  # Dense array with density 1/24 < 0.05.
+problem = cp.Problem(
+    cp.Minimize(cp.sum_squares(x - 2) + cp.sum_squares(z)),
+    [cp.power(1 - A @ x, 3) >= z, x >= 0, z >= 0],
+)
+problem.solve(solver=cp.IPOPT, nlp=True, print_level=5, sb="yes", max_iter=3000)
+print(problem.status, problem.value)
+```
+
+[Installation and execution instructions](reproducer/README.md) and
+[pinned Python dependencies](reproducer/requirements.txt) accompany the script.
+After installing the dependencies and native IPOPT library:
+
+```sh
+python toy.py
+python toy.py --dense-route
+```
+
+The first command is expected to raise CVXPY `SolverError` on the tested stack.
+The second prints `optimal`. [Optional instrumentation](reproducer/verify_toy.py)
+captures native termination even when CVXPY raises. It does not change the
+model, start, or numerical options.
+
+## Verified toy results
+
+Both conditions were run twice in fresh processes outside the repository, in
+an environment without CVXOPF installed. Each repeated result was identical.
+[Machine-readable evidence](reproducer/VERIFIED_RESULTS.json) includes full
+starting/final vectors, effective options, input/oracle hashes, and residuals.
+
+| Quantity | Default dispatch | Threshold zero |
+|---|---:|---:|
+| IPOPT termination | Error in step computation (`-3`) | Solve succeeded (`0`) |
+| CVXPY outcome | `SolverError` | `optimal` |
+| Iterations | 79 | 36 |
+| Native objective | 23.9951805503159 | 23.9641629586798 |
+| Maximum original constraint violation | 3.14802e-12 | 4.17848e-10 |
+| Unscaled dual infeasibility | 3.99833e7 | 7.26220e-4 |
+| IPOPT reported scaled overall NLP error | 8.75135e1 | 2.62765e-8 |
+| Stored Jacobian entries | 96 | 648 |
+| Numerical Jacobian nonzeros at the start | 96 | 96 |
+
+The complete starts, native bounds, and numerical options are identical.
+Objective, constraint values, gradient, normalized Jacobian, and the lower
+Lagrangian Hessian with all-one multipliers agree exactly at the start.
+Independent analytical checks of the initial constraints and derivatives pass
+at absolute/relative tolerance 1e-12. This is not a global derivative proof.
+
+### Interpretation of the toy
+
+The exact optimum is x=1, z=0, with objective 24. Feasibility implies x<=1,
+so every term (x_i-2)² is at least one. At that optimum the cubic constraint
+is flat, and the active constraint gradients fail the usual constraint
+qualification. This is a numerically difficult formulation of a simple problem.
+
+Small cubic residuals do not imply equally small errors in x. The default and
+control final iterates violate the implied bound x<=1 by approximately
+1.80556e-4 and 9.41577e-4, respectively. That explains objectives below 24.
+The control has successful **solver termination**, not superior primal accuracy
+or an exact optimum. This toy was selected to exhibit a termination difference;
+it does not estimate failure frequency or prove that sparse dispatch is
+generally worse.
+
+## Controlled application comparison
+
+The motivating application is [CVXOPF](https://github.com/cvxgrp/cvxopf), an
+optimal power flow modeling package built on CVXPY. A study comparing time and
+spatial vectorization exposed a convergence change in a previously successful
+three-hour, 118-bus AC problem.
+
+That diagnostic holds the earlier application model construction, inputs, and
+complete starting point fixed. It first changes the compatible dependency pair,
+then retains the new pair and disables only automatic sparse dispatch:
+
+| CVXPY / sparsediffpy | Dispatch | IPOPT outcome | Iterations | Stored Jacobian entries |
 |---|---|---|---:|---:|
-| 1.9.2 / 0.3.0 | historical behavior | optimal, accepted | 70 | 412,439 |
-| 1.9.3 / 0.6.1 | default | iteration limit, rejected | 3,000 | 36,167 |
-| 1.9.3 / 0.6.1 | diagnostic threshold 0 | optimal, accepted | 70 | 412,439 |
+| 1.9.2 / 0.3.0 | Historical behavior | Successful termination | 70 | 412,439 |
+| 1.9.3 / 0.6.1 | Default | Maximum iterations exceeded | 3,000 | 36,167 |
+| 1.9.3 / 0.6.1 | Threshold zero | Successful termination | 70 | 412,439 |
 
-After eliminating exact zeros at the starting point, all three Jacobians have
-the same 35,451 nonzero entries and exactly equal values. The density-disabled
-new-stack control also restores the exact old COO coordinate sequence and values.
-All three Hessian structures have 10,104 entries.
+The failed application attempt's unscaled constraint violation is
+1.3264780494637305e-3 and dual infeasibility is 3.8946565871375519e11.
+The threshold-zero solution exactly matches the retained old-stack solution.
+The native model has 9,124 variables and 10,601 constraints. Complete starts,
+bounds, ordered canonical expression fingerprints, and tested initial-point
+oracle values match across the application comparisons. The latter include
+three Lagrangian Hessians with zero, all-one, and seeded random multipliers.
 
-The model uses **time vectorization only**, sparse P/Q variables, and per-entry
-spatial P/Q equations. It has 9,124 native variables and 10,601 constraints.
-No spatial P/Q batching is involved in this comparison.
+The synthetic example removes the application dependency but is **not** an
+algebraic reduction of this model. It reproduces the broader termination
+sensitivity, not the specific 3,000-versus-70 iteration result. The application
+evidence and toy evidence should not be conflated.
 
-We verified the entire ordered canonical expression fingerprints (atom types,
-metadata, full constant/parameter values, and canonical variable positions),
-constraint block ordering, and native bounds. The objective, all constraint values,
-objective gradient, and coordinate-aligned Jacobian agree exactly at the same full
-initial vector. Three Lagrangian Hessians also agree exactly, using objective factor
-one and zero, all-one, and seeded random constraint multipliers. This is a bounded
-starting-point check, not a global derivative proof or finite-difference test.
+## Relevant conversion change
 
-## Relevant source change
+In CVXPY 1.9.3,
+`cvxpy/reductions/solvers/nlp_solvers/diff_engine/converters.py` automatically
+routes dense constant left-multiplication operands with density below
+`SPARSE_DENSITY_THRESHOLD` (default 0.05) to the sparse CSR binding. Threshold
+zero disables this automatic conversion, not explicitly sparse operands.
+The installed `ipopt_nlpif.py` and `nlp_solver.py` are byte-identical across the
+two tested CVXPY versions.
 
-### Follow-up with the current application and all four vectorization modes
+Changed structural zeros could affect factorization ordering or pivoting and
+thereby the nonlinear trajectory. Those internals have not been measured;
+this is a hypothesis, not a diagnosis of IPOPT/MUMPS. Matching derivatives at
+the tested points does not rule out a later-iterate derivative issue.
 
-We repeated the frozen interval with 1.9.3/0.6.1, setting the density threshold to
-zero in each fresh worker. All modes use sparse P/Q variables. Each full starting
-point/layout exactly matches its corresponding earlier default-dispatch run;
-core application source and numerical solver settings are unchanged.
+## Environment
 
-| Time vectorization | Spatial P/Q batching | Default-dispatch iterations/result | Threshold-zero iterations/result | Threshold-zero IPOPT seconds |
-|---|---|---|---|---:|
-| off | off | 3,000 / rejected | 339 / accepted | 212.517 |
-| on | off | 3,000 / rejected | 70 / accepted | 31.903 |
-| off | on | 3,000 / rejected | 190 / accepted | 98.332 |
-| on | on | 3,000 / rejected | 76 / accepted | 32.188 |
+- Python 3.11.15, macOS ARM64.
+- CVXPY 1.9.3, sparsediffpy 0.6.1, cyipopt 1.7.0.
+- IPOPT 3.14.19 with MUMPS 5.6.2; NumPy 2.4.6; SciPy 1.17.1.
+- Both toy conditions use the same environment/native libraries.
+- Effective IPOPT options: `mu_strategy=adaptive`, `tol=1e-7`,
+  `bound_relax_factor=0`, `hessian_approximation=exact`, `derivative_test=none`,
+  `least_square_init_duals=no`, `max_iter=3000`, `print_level=5`, `sb=yes`.
+- Native-library changes may change the observed termination. Threshold zero
+  is process-global and is not proposed as a general package default.
 
-Time-only again exactly matches the historical accepted solution. All four have
-close objectives (range 0.00781 around 266883.72), but reactive allocations differ;
-we do not claim identical solutions across vectorization modes. This is one
-observation per mode, not a general robustness or performance benchmark. The
-initial-point derivative comparison above is for time-only, not all four modes.
+## Questions
 
-### Installed package evidence
+1. Is there a supported per-problem or per-solve control for automatic
+   dense-constant-to-sparse dispatch, retaining explicitly sparse operands?
+2. What evidence would best distinguish sparse-factorization sensitivity
+   from a later-iterate derivative issue?
 
-The installed `ipopt_nlpif.py` and `nlp_solver.py` files are byte-identical between
-these CVXPY versions. In `diff_engine/converters.py`, 1.9.3 adds dispatch of dense
-constant left-multiplication operands with nonzero density below 0.05 to the sparse
-CSR binding. Related changes affect CSR array conversion and quadratic forms.
-The process-local threshold control implicates this conversion behavior; we have
-not isolated the subsequent mechanism inside IPOPT/MUMPS.
-
-One plausible explanation is that removing structurally reported zeros changes
-sparse factorization ordering and the nonlinear trajectory. We have not measured
-factorization permutations, pivoting, or inertia, so that remains a hypothesis.
-The initial derivative comparison provides no evidence of wrong derivative values
-at that point. Later-iterate correctness has not been established by this test.
-
-## Environment and settings
-
-- macOS ARM64; Python 3.11.15.
-- cyipopt 1.7.0, IPOPT 3.14.19, MUMPS 5.6.2.
-- NumPy 2.4.6, SciPy 1.17.1, pandas 3.0.3, CLARABEL 0.11.1.
-- Identical cyipopt extension and recursively linked Homebrew native binary hashes
-  across the paired environments; same host and recorded thread environment.
-- IPOPT: `mu_strategy=adaptive`, `tol=1e-7`, `bound_relax_factor=0`,
-  `hessian_approximation=exact`, `derivative_test=none`,
-  `least_square_init_duals=no`; `print_level=5`, `sb=yes` for retained logs.
-  No iteration-limit override, tuning, helpers, or recovery.
-
-New default-stack native termination values include unscaled constraint violation
-`1.3264780494637305e-3` and dual infeasibility `3.8946565871375519e11`.
-The attempt was rejected; its objective is not a feasible-cost comparison.
-
-## Small standalone demonstration and full reproducer limits
-
-Attached `reproduce_sparse_dispatch.py` demonstrates the structure change without
-the application or an IPOPT solve: minimize a sum of squares with `I @ X == 1`,
-where `I` is a dense 24-by-24 identity and `X` is 24-by-3. It verifies the exact
-analytical Jacobian and gradient and prints the number of stored Jacobian entries.
-Run with each compatible dependency pair, and on 1.9.3 also with `--dense-route`.
-
-Expected stored entries: 1,728 on the old stack, 72 on the new default stack, and
-1,728 on the new stack with the density control. The numerical Jacobian is the
-same identity in every case. **This small example demonstrates sparsity behavior;
-it is not a minimal reproduction of nonconvergence.**
-
-The convergence result currently requires our retained Case118 model, frozen causal
-start, and application harness. We have preserved the complete logs, starts,
-source hashes, derivative arrays, and accepted/rejected results. Those artifacts
-should be packaged and checked for portability before promising an independently
-runnable full issue attachment; the local reproduction uses retained experiment
-data and is not yet a standalone upstream bundle.
-
-## Questions for maintainers
-
-Is there a supported per-problem or per-solve way to preserve the dense derivative
-representation for selected constant matrix products? We would prefer that over
-relying on an internal global setting. Is this degree of IPOPT/MUMPS sensitivity
-an expected tradeoff of the new dispatch, and what targeted evidence would be most
-useful to distinguish ordering/pivoting sensitivity from a later-iterate issue?
-
-This is a draft for review, not a submitted issue. CVXPY is the suggested initial
-destination because its dispatch rule is the demonstrated trigger; no sparsediffpy
-defect has been established.
+Draft only; nothing has been posted. The toy does not yet satisfy the narrower
+request for a standalone reproduction of the application's iteration-limit
+failure. Its distinct failure mode is stated explicitly for review.
