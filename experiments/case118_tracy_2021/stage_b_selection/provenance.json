@@ -1,0 +1,81 @@
+{
+  "artifacts": {
+    "energy_minimum.png": "33ca0ddcf807f4690cc61fae249b35353d412dc0d90d643399a81d1efb5f2235",
+    "energy_peak.png": "b161a944d907c4cc261b5d25ce82e06b4cb91881af35bc6e5f62c2838f277811",
+    "labeled_weeks.json": "b24388071f0199976c00f55c331a1446d9a30ef4a3851645a5a8e9adc436358e",
+    "ordinary_candidates.csv": "22c23ac28a3d21b2b926126762d7c88b05ff4bb909233d9668e82d45dde778f9",
+    "ordinary_selection.json": "e1f419c84bd204c7a43678b0da627b0a0bdbb86b9b703761639f9a08b233574b",
+    "peak_minimum.png": "a71d45682e82db1afd6cd87d12bcb3404ff8c640d5a1a3def219c0d8b2de10ab",
+    "weekly_metrics.csv": "c21a59e701778a5de544abd7d83e9785100a844e7e1412959fd7d297d9aa1f80"
+  },
+  "input_sha256": "e46b573e7f263249e2228c421e4ef33f981a41ea8e63dffdcb6ca6d7467308db",
+  "ordinary_control": {
+    "candidates": 352,
+    "eligible_candidates": 194,
+    "feature_iqrs": {
+      "mean_absolute_net_ramp_mw": 280.6215556845864,
+      "mean_load_mw": 479.84599227722083,
+      "mean_net_load_mw": 3044.516258372695,
+      "peak_positive_net_load_mw": 844.3579221479322
+    },
+    "feature_medians": {
+      "mean_absolute_net_ramp_mw": 1443.8346801507641,
+      "mean_load_mw": 3395.2168911489125,
+      "mean_net_load_mw": -3208.4167371351887,
+      "peak_positive_net_load_mw": 4906.570977067061
+    },
+    "features": {
+      "mean_absolute_net_ramp_mw": 1391.7606057637174,
+      "mean_load_mw": 3501.0382878482474,
+      "mean_net_load_mw": -2562.329906698442,
+      "peak_positive_net_load_mw": 4935.276940498873
+    },
+    "omitted_zero_iqr_features": [],
+    "rule": "all-candidate medians/IQR; exclude half-open event overlaps; minimum squared distance; earliest start breaks ties",
+    "score": 0.1292597460725016,
+    "start": "2021-01-14T00:00:00-08:00",
+    "stop_exclusive": "2021-01-28T00:00:00-08:00"
+  },
+  "scale_factor": 3.0548333420396085,
+  "script_sha256": "baf6a60033092b27f86f709dc3db84b9b8d9cace870e4dc786a45dfd997131a1",
+  "semantics": "168-hour daily-start windows wholly contained in half-open candidate intervals",
+  "stage_a_manifest_sha256": "f5d13ee40db783683b996e7b7673e0c3ac9729b6a402c0cfc835913fe4a66a88",
+  "windows": [
+    {
+      "contained_weeks": 22,
+      "name": "Deficit",
+      "start": "2021-02-01",
+      "stop_exclusive": "2021-03-01"
+    },
+    {
+      "contained_weeks": 55,
+      "name": "Persistent surplus",
+      "start": "2021-04-01",
+      "stop_exclusive": "2021-06-01"
+    },
+    {
+      "contained_weeks": 8,
+      "name": "Gross-load peak",
+      "start": "2021-06-03",
+      "stop_exclusive": "2021-06-17"
+    },
+    {
+      "contained_weeks": 8,
+      "name": "Ramp",
+      "start": "2021-10-11",
+      "stop_exclusive": "2021-10-25"
+    },
+    {
+      "contained_weeks": 22,
+      "name": "Regional import",
+      "start": "2021-07-12",
+      "stop_exclusive": "2021-08-09"
+    },
+    {
+      "contained_weeks": 8,
+      "name": "Ordinary control",
+      "start": "2021-01-14",
+      "stop_exclusive": "2021-01-28"
+    }
+  ]
+}

@@ -1,0 +1,1304 @@
+{
+  "classification": "input_only_screen_not_solved_congestion",
+  "method": "four farthest-first graph Voronoi regions; initial seed 1; smallest ID ties",
+  "provenance": {
+    "coverage_csv_sha256": "dfc5eac4b2a3d51f1273e14a805c56bc328eeb346ce1ffe0f9160b4bc04f2588",
+    "hourly_output_sha256": "9e23eb042ec89458846ff3e4bd80083a563ed1e3d55d5c11f224e0682b2fd791",
+    "inputs": {
+      "results/stage_a_active_inputs/active_inputs.npz": "8c53037ad0d9a8058dc049d2704e5bd5dfe468521dab977d0be5b0a213dbb847",
+      "results/stage_a_active_inputs/aggregate_inputs.csv": "e46b573e7f263249e2228c421e4ef33f981a41ea8e63dffdcb6ca6d7467308db",
+      "stage_a/batteries.csv": "173a053b2ac810df0404e60e7fff27ec6123b95fc9d5f899ab5b3db8e186a68b",
+      "stage_a/buses.csv": "bb8cfde349fa7192647cd2bad64675cdb9631d30c4eb96720f8f3f716eee5d34",
+      "stage_a/generators.csv": "7e2cb7d8803fe735b3b7343e7103b7ea8d9dcd58528f1c17856fce0b05f53838",
+      "stage_a/renewables.csv": "bb46d3d49cd3f3e04c676930d317bed11b54cb87d3a57d674f959291c3232b14"
+    },
+    "network_sha256": "b1af0833849040c04babc3700631cff0d9afa66b79c5d3e13ae79bdf516cec78",
+    "script_sha256": "6a31995a8482e12824d3429f11c90dfb209d8884618e5007dbfe3e2f06cd164b",
+    "stage_a_manifest_sha256": "f5d13ee40db783683b996e7b7673e0c3ac9729b6a402c0cfc835913fe4a66a88",
+    "window_selection_sha256": "baf6a60033092b27f86f709dc3db84b9b8d9cace870e4dc786a45dfd997131a1"
+  },
+  "regions": [
+    {
+      "battery_capacity_mwh": 5319.552884005852,
+      "battery_power_mw": 1773.1842946686174,
+      "buses": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        36,
+        38,
+        113,
+        114,
+        115,
+        117
+      ],
+      "coverage": {
+        "export_after_charging": {
+          "annual_peak_mw": 3976.9327540839304,
+          "annual_peak_over_cut_rating": 1.7612633986199868,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-17T00:00:00-08:00",
+          "annual_week_stop": "2021-05-24T00:00:00-08:00",
+          "annual_weekly_mean_mw": 1148.0612144726958,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 3656.6467177360237,
+              "weekly_mean_max_mw": 632.6267945028741
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 3813.0365488692296,
+              "weekly_mean_max_mw": 1002.0044482269417
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 3380.7064465679805,
+              "weekly_mean_max_mw": 296.8484534010159
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 3976.9327540839304,
+              "weekly_mean_max_mw": 1148.0612144726958
+            },
+            "Ramp": {
+              "hourly_max_mw": 3463.6410408979336,
+              "weekly_mean_max_mw": 500.98778612776465
+            },
+            "Regional import": {
+              "hourly_max_mw": 2710.3884376628066,
+              "weekly_mean_max_mw": 419.0876369202853
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 80,
+          "positive_tail_threshold_mw": 3183.011267772652,
+          "selected_peak_mw": 3976.9327540839304,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 1148.0612144726958
+        },
+        "export_before_flex": {
+          "annual_peak_mw": 5750.117048752548,
+          "annual_peak_over_cut_rating": 2.5465531659665843,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-17T00:00:00-08:00",
+          "annual_week_stop": "2021-05-24T00:00:00-08:00",
+          "annual_weekly_mean_mw": 2486.8919174043035,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 5429.831012404641,
+              "weekly_mean_max_mw": 1535.3998933880594
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 5586.220843537847,
+              "weekly_mean_max_mw": 2302.831865841085
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 5153.890741236598,
+              "weekly_mean_max_mw": 1042.6002421201504
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 5750.117048752548,
+              "weekly_mean_max_mw": 2486.8919174043035
+            },
+            "Ramp": {
+              "hourly_max_mw": 5236.825335566551,
+              "weekly_mean_max_mw": 1420.8356334628822
+            },
+            "Regional import": {
+              "hourly_max_mw": 4483.572732331424,
+              "weekly_mean_max_mw": 1454.9783748991756
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 80,
+          "positive_tail_threshold_mw": 4956.195562441269,
+          "selected_peak_mw": 5750.117048752548,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 2486.8919174043035
+        },
+        "import_after_generation": {
+          "annual_peak_mw": 490.2037621808447,
+          "annual_peak_over_cut_rating": 0.21709644029266817,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-02-13T00:00:00-08:00",
+          "annual_week_stop": "2021-02-20T00:00:00-08:00",
+          "annual_weekly_mean_mw": 30.026751524408787,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 490.2037621808447,
+              "weekly_mean_max_mw": 30.026751524408787
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 139.28716836835292,
+              "weekly_mean_max_mw": 0.8290902879068627
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 224.39949060807453,
+              "weekly_mean_max_mw": 7.2662906309178
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 318.1428837613223,
+              "weekly_mean_max_mw": 7.579889686402073
+            },
+            "Ramp": {
+              "hourly_max_mw": 22.061284181693054,
+              "weekly_mean_max_mw": 0.13131716774817295
+            },
+            "Regional import": {
+              "hourly_max_mw": 407.81178416948615,
+              "weekly_mean_max_mw": 20.366429364664583
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 41,
+          "positive_tail_threshold_mw": 163.872589212861,
+          "selected_peak_mw": 490.2037621808447,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 30.026751524408787
+        },
+        "import_after_generation_and_discharge": {
+          "annual_peak_mw": 0.0,
+          "annual_peak_over_cut_rating": 0.0,
+          "annual_peak_time": null,
+          "annual_week_start": null,
+          "annual_week_stop": null,
+          "annual_weekly_mean_mw": 0.0,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            }
+          },
+          "earliest_peak_covered": null,
+          "positive_tail_hours": 0,
+          "positive_tail_hours_covered": 0,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 0.0,
+          "selected_to_annual_peak": null,
+          "selected_to_annual_weekly_mean": null,
+          "selected_weekly_mean_mw": 0.0
+        },
+        "import_before_flex": {
+          "annual_peak_mw": 1497.8783592644977,
+          "annual_peak_over_cut_rating": 0.6633650838195295,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-12-18T00:00:00-08:00",
+          "annual_week_stop": "2021-12-25T00:00:00-08:00",
+          "annual_weekly_mean_mw": 539.5899103656672,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 1497.8783592644977,
+              "weekly_mean_max_mw": 368.90360437015545
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 1146.961765452006,
+              "weekly_mean_max_mw": 48.501305966634106
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 1232.0740876917275,
+              "weekly_mean_max_mw": 303.74644323773657
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 1325.8174808449753,
+              "weekly_mean_max_mw": 178.00507122726233
+            },
+            "Ramp": {
+              "hourly_max_mw": 1029.735881265346,
+              "weekly_mean_max_mw": 276.0393122231165
+            },
+            "Regional import": {
+              "hourly_max_mw": 1415.4863812531391,
+              "weekly_mean_max_mw": 288.42398096978866
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 41,
+          "positive_tail_threshold_mw": 1171.547186296514,
+          "selected_peak_mw": 1497.8783592644977,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 0.6836740222220952,
+          "selected_weekly_mean_mw": 368.90360437015545
+        }
+      },
+      "cut_branches": [
+        {
+          "from_bus": 21,
+          "rateA": 178.0,
+          "source_row": 27,
+          "to_bus": 22
+        },
+        {
+          "from_bus": 23,
+          "rateA": 186.0,
+          "source_row": 30,
+          "to_bus": 25
+        },
+        {
+          "from_bus": 23,
+          "rateA": 158.0,
+          "source_row": 40,
+          "to_bus": 32
+        },
+        {
+          "from_bus": 35,
+          "rateA": 176.0,
+          "source_row": 45,
+          "to_bus": 36
+        },
+        {
+          "from_bus": 33,
+          "rateA": 154.0,
+          "source_row": 47,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 34,
+          "rateA": 159.0,
+          "source_row": 49,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 38,
+          "rateA": 783.0,
+          "source_row": 50,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 34,
+          "rateA": 167.0,
+          "source_row": 59,
+          "to_bus": 43
+        },
+        {
+          "from_bus": 38,
+          "rateA": 297.0,
+          "source_row": 95,
+          "to_bus": 65
+        }
+      ],
+      "cut_rateA_sum_mva": 2258.0,
+      "generator_pmax_mw": 1007.674597083653,
+      "region": "bus_1"
+    },
+    {
+      "battery_capacity_mwh": 6339.254798930581,
+      "battery_power_mw": 2113.0849329768607,
+      "buses": [
+        22,
+        23,
+        24,
+        35,
+        37,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        97,
+        116,
+        118
+      ],
+      "coverage": {
+        "export_after_charging": {
+          "annual_peak_mw": 9766.26213873348,
+          "annual_peak_over_cut_rating": 3.1915889342266275,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-17T00:00:00-08:00",
+          "annual_week_stop": "2021-05-24T00:00:00-08:00",
+          "annual_weekly_mean_mw": 3423.1762125495784,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 9019.168848111265,
+              "weekly_mean_max_mw": 1804.9511425111068
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 9498.634728652936,
+              "weekly_mean_max_mw": 3073.5521745324318
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 8712.412643133184,
+              "weekly_mean_max_mw": 1172.3301047100945
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 9766.26213873348,
+              "weekly_mean_max_mw": 3423.1762125495784
+            },
+            "Ramp": {
+              "hourly_max_mw": 8691.981344995707,
+              "weekly_mean_max_mw": 1655.9261679886833
+            },
+            "Regional import": {
+              "hourly_max_mw": 7224.197084789688,
+              "weekly_mean_max_mw": 1298.4801964596004
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 78,
+          "positive_tail_threshold_mw": 8147.025872200053,
+          "selected_peak_mw": 9766.26213873348,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 3423.1762125495784
+        },
+        "export_before_flex": {
+          "annual_peak_mw": 11879.347071710341,
+          "annual_peak_over_cut_rating": 3.882139565918412,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-01T00:00:00-08:00",
+          "annual_week_stop": "2021-05-08T00:00:00-08:00",
+          "annual_weekly_mean_mw": 5276.60310535624,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 11132.253781088126,
+              "weekly_mean_max_mw": 3267.979420444732
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 11611.719661629797,
+              "weekly_mean_max_mw": 4912.721764702891
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 10825.497576110045,
+              "weekly_mean_max_mw": 2300.899649876491
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 11879.347071710341,
+              "weekly_mean_max_mw": 5276.60310535624
+            },
+            "Ramp": {
+              "hourly_max_mw": 10805.066277972568,
+              "weekly_mean_max_mw": 2899.17729023117
+            },
+            "Regional import": {
+              "hourly_max_mw": 9337.282017766549,
+              "weekly_mean_max_mw": 2774.4831549043147
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 78,
+          "positive_tail_threshold_mw": 10260.110805176913,
+          "selected_peak_mw": 11879.347071710341,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 5276.60310535624
+        },
+        "import_after_generation": {
+          "annual_peak_mw": 264.87021029698644,
+          "annual_peak_over_cut_rating": 0.08655889225391714,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-02-13T00:00:00-08:00",
+          "annual_week_stop": "2021-02-20T00:00:00-08:00",
+          "annual_weekly_mean_mw": 5.475295125135758,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 264.87021029698644,
+              "weekly_mean_max_mw": 5.475295125135758
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 110.75562220849315,
+              "weekly_mean_max_mw": 0.6592596560029355
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 9,
+          "positive_tail_hours_covered": 9,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 264.87021029698644,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 5.475295125135758
+        },
+        "import_after_generation_and_discharge": {
+          "annual_peak_mw": 0.0,
+          "annual_peak_over_cut_rating": 0.0,
+          "annual_peak_time": null,
+          "annual_week_start": null,
+          "annual_week_stop": null,
+          "annual_weekly_mean_mw": 0.0,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            }
+          },
+          "earliest_peak_covered": null,
+          "positive_tail_hours": 0,
+          "positive_tail_hours_covered": 0,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 0.0,
+          "selected_to_annual_peak": null,
+          "selected_to_annual_weekly_mean": null,
+          "selected_weekly_mean_mw": 0.0
+        },
+        "import_before_flex": {
+          "annual_peak_mw": 3115.9830268741157,
+          "annual_peak_over_cut_rating": 1.0182951068216064,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-12-02T00:00:00-08:00",
+          "annual_week_stop": "2021-12-09T00:00:00-08:00",
+          "annual_weekly_mean_mw": 1114.4783182931521,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 3115.9830268741157,
+              "weekly_mean_max_mw": 716.9603324076907
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 2441.377431991411,
+              "weekly_mean_max_mw": 93.2780281851432
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 2563.039863252951,
+              "weekly_mean_max_mw": 582.3404261936413
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 2758.0509068002643,
+              "weekly_mean_max_mw": 343.6116079478189
+            },
+            "Ramp": {
+              "hourly_max_mw": 2142.122895587873,
+              "weekly_mean_max_mw": 565.4139068517264
+            },
+            "Regional import": {
+              "hourly_max_mw": 2961.8684387856224,
+              "weekly_mean_max_mw": 595.2651742148412
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 41,
+          "positive_tail_threshold_mw": 2423.7516411125343,
+          "selected_peak_mw": 3115.9830268741157,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 0.6433147425476442,
+          "selected_weekly_mean_mw": 716.9603324076907
+        }
+      },
+      "cut_branches": [
+        {
+          "from_bus": 21,
+          "rateA": 178.0,
+          "source_row": 27,
+          "to_bus": 22
+        },
+        {
+          "from_bus": 23,
+          "rateA": 186.0,
+          "source_row": 30,
+          "to_bus": 25
+        },
+        {
+          "from_bus": 23,
+          "rateA": 158.0,
+          "source_row": 40,
+          "to_bus": 32
+        },
+        {
+          "from_bus": 35,
+          "rateA": 176.0,
+          "source_row": 45,
+          "to_bus": 36
+        },
+        {
+          "from_bus": 33,
+          "rateA": 154.0,
+          "source_row": 47,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 34,
+          "rateA": 159.0,
+          "source_row": 49,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 38,
+          "rateA": 783.0,
+          "source_row": 50,
+          "to_bus": 37
+        },
+        {
+          "from_bus": 34,
+          "rateA": 167.0,
+          "source_row": 59,
+          "to_bus": 43
+        },
+        {
+          "from_bus": 38,
+          "rateA": 297.0,
+          "source_row": 95,
+          "to_bus": 65
+        },
+        {
+          "from_bus": 77,
+          "rateA": 141.0,
+          "source_row": 127,
+          "to_bus": 82
+        },
+        {
+          "from_bus": 80,
+          "rateA": 159.0,
+          "source_row": 147,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 80,
+          "rateA": 176.0,
+          "source_row": 151,
+          "to_bus": 98
+        },
+        {
+          "from_bus": 80,
+          "rateA": 140.0,
+          "source_row": 152,
+          "to_bus": 99
+        },
+        {
+          "from_bus": 96,
+          "rateA": 186.0,
+          "source_row": 156,
+          "to_bus": 97
+        }
+      ],
+      "cut_rateA_sum_mva": 3060.0,
+      "generator_pmax_mw": 2851.1128165771293,
+      "region": "bus_52"
+    },
+    {
+      "battery_capacity_mwh": 1547.9207940621818,
+      "battery_power_mw": 515.9735980207272,
+      "buses": [
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        96,
+        102
+      ],
+      "coverage": {
+        "export_after_charging": {
+          "annual_peak_mw": 500.20182609131166,
+          "annual_peak_over_cut_rating": 0.3677954603612586,
+          "annual_peak_time": "2021-05-01T20:00:00-08:00",
+          "annual_week_start": "2021-05-16T00:00:00-08:00",
+          "annual_week_stop": "2021-05-23T00:00:00-08:00",
+          "annual_weekly_mean_mw": 114.00499398959192,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 441.82797001562267,
+              "weekly_mean_max_mw": 51.66619768180765
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 480.9917531239513,
+              "weekly_mean_max_mw": 80.72004620268375
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 405.46863431290615,
+              "weekly_mean_max_mw": 52.50831132926698
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 500.20182609131166,
+              "weekly_mean_max_mw": 114.00499398959192
+            },
+            "Ramp": {
+              "hourly_max_mw": 449.21513322058695,
+              "weekly_mean_max_mw": 49.20033764701626
+            },
+            "Regional import": {
+              "hourly_max_mw": 399.7709845152277,
+              "weekly_mean_max_mw": 26.440051138308924
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 81,
+          "positive_tail_threshold_mw": 434.11819765397286,
+          "selected_peak_mw": 500.20182609131166,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 114.00499398959192
+        },
+        "export_before_flex": {
+          "annual_peak_mw": 1016.1754241120389,
+          "annual_peak_over_cut_rating": 0.7471878118470874,
+          "annual_peak_time": "2021-05-01T20:00:00-08:00",
+          "annual_week_start": "2021-05-01T00:00:00-08:00",
+          "annual_week_stop": "2021-05-08T00:00:00-08:00",
+          "annual_weekly_mean_mw": 435.0576935954374,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 957.8015680363499,
+              "weekly_mean_max_mw": 308.02756072316697
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 996.9653511446785,
+              "weekly_mean_max_mw": 355.496461242124
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 921.4422323336333,
+              "weekly_mean_max_mw": 236.38490922600838
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 1016.1754241120389,
+              "weekly_mean_max_mw": 435.0576935954374
+            },
+            "Ramp": {
+              "hourly_max_mw": 965.1887312413141,
+              "weekly_mean_max_mw": 197.37349202679368
+            },
+            "Regional import": {
+              "hourly_max_mw": 915.7445825359549,
+              "weekly_mean_max_mw": 144.62140385021124
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 81,
+          "positive_tail_threshold_mw": 950.0917956747,
+          "selected_peak_mw": 1016.1754241120389,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 435.0576935954374
+        },
+        "import_after_generation": {
+          "annual_peak_mw": 430.2530293328646,
+          "annual_peak_over_cut_rating": 0.3163625215682828,
+          "annual_peak_time": "2021-08-07T10:00:00-08:00",
+          "annual_week_start": "2021-07-13T00:00:00-08:00",
+          "annual_week_stop": "2021-07-20T00:00:00-08:00",
+          "annual_weekly_mean_mw": 81.55917086705247,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 169.6487596353101,
+              "weekly_mean_max_mw": 8.453946281140844
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 273.73580965318916,
+              "weekly_mean_max_mw": 11.664114446167915
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 51.42986264685402,
+              "weekly_mean_max_mw": 0.563362006818949
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 363.04691589551743,
+              "weekly_mean_max_mw": 20.436047656297536
+            },
+            "Ramp": {
+              "hourly_max_mw": 139.12115855724204,
+              "weekly_mean_max_mw": 2.618899452113199
+            },
+            "Regional import": {
+              "hourly_max_mw": 430.2530293328646,
+              "weekly_mean_max_mw": 81.55917086705247
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 57,
+          "positive_tail_threshold_mw": 260.172036151041,
+          "selected_peak_mw": 430.2530293328646,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 81.55917086705247
+        },
+        "import_after_generation_and_discharge": {
+          "annual_peak_mw": 0.0,
+          "annual_peak_over_cut_rating": 0.0,
+          "annual_peak_time": null,
+          "annual_week_start": null,
+          "annual_week_stop": null,
+          "annual_weekly_mean_mw": 0.0,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            }
+          },
+          "earliest_peak_covered": null,
+          "positive_tail_hours": 0,
+          "positive_tail_hours_covered": 0,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 0.0,
+          "selected_to_annual_peak": null,
+          "selected_to_annual_weekly_mean": null,
+          "selected_weekly_mean_mw": 0.0
+        },
+        "import_before_flex": {
+          "annual_peak_mw": 926.7994606452207,
+          "annual_peak_over_cut_rating": 0.6814701916508976,
+          "annual_peak_time": "2021-08-07T10:00:00-08:00",
+          "annual_week_start": "2021-07-13T00:00:00-08:00",
+          "annual_week_stop": "2021-07-20T00:00:00-08:00",
+          "annual_weekly_mean_mw": 408.39337175385816,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 666.1951909476662,
+              "weekly_mean_max_mw": 268.19631860761626
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 770.2822409655453,
+              "weekly_mean_max_mw": 133.51075949771192
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 547.9762939592101,
+              "weekly_mean_max_mw": 201.3358424905674
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 859.5933472078735,
+              "weekly_mean_max_mw": 166.05268543816737
+            },
+            "Ramp": {
+              "hourly_max_mw": 635.6675898695981,
+              "weekly_mean_max_mw": 249.99208131973072
+            },
+            "Regional import": {
+              "hourly_max_mw": 926.7994606452207,
+              "weekly_mean_max_mw": 408.39337175385816
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 57,
+          "positive_tail_threshold_mw": 756.7184674633971,
+          "selected_peak_mw": 926.7994606452207,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 408.39337175385816
+        }
+      },
+      "cut_branches": [
+        {
+          "from_bus": 77,
+          "rateA": 141.0,
+          "source_row": 127,
+          "to_bus": 82
+        },
+        {
+          "from_bus": 92,
+          "rateA": 151.0,
+          "source_row": 144,
+          "to_bus": 94
+        },
+        {
+          "from_bus": 93,
+          "rateA": 151.0,
+          "source_row": 145,
+          "to_bus": 94
+        },
+        {
+          "from_bus": 80,
+          "rateA": 159.0,
+          "source_row": 147,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 94,
+          "rateA": 149.0,
+          "source_row": 149,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 92,
+          "rateA": 98.0,
+          "source_row": 153,
+          "to_bus": 100
+        },
+        {
+          "from_bus": 95,
+          "rateA": 149.0,
+          "source_row": 155,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 96,
+          "rateA": 186.0,
+          "source_row": 156,
+          "to_bus": 97
+        },
+        {
+          "from_bus": 101,
+          "rateA": 176.0,
+          "source_row": 161,
+          "to_bus": 102
+        }
+      ],
+      "cut_rateA_sum_mva": 1360.0,
+      "generator_pmax_mw": 496.5464313123561,
+      "region": "bus_87"
+    },
+    {
+      "battery_capacity_mwh": 839.8293669911839,
+      "battery_power_mw": 279.9431223303946,
+      "buses": [
+        94,
+        95,
+        98,
+        99,
+        100,
+        101,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112
+      ],
+      "coverage": {
+        "export_after_charging": {
+          "annual_peak_mw": 1855.3178525203652,
+          "annual_peak_over_cut_rating": 1.5590906323700549,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-17T00:00:00-08:00",
+          "annual_week_stop": "2021-05-24T00:00:00-08:00",
+          "annual_weekly_mean_mw": 658.1569961329503,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 1710.6364673893186,
+              "weekly_mean_max_mw": 358.7799979215003
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 1808.3838625401777,
+              "weekly_mean_max_mw": 573.3200929766746
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 1649.7217500031195,
+              "weekly_mean_max_mw": 225.84345331173566
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 1855.3178525203652,
+              "weekly_mean_max_mw": 658.1569961329503
+            },
+            "Ramp": {
+              "hourly_max_mw": 1605.786148691784,
+              "weekly_mean_max_mw": 319.6565169692088
+            },
+            "Regional import": {
+              "hourly_max_mw": 1334.957068216254,
+              "weekly_mean_max_mw": 253.25105180118953
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 78,
+          "positive_tail_threshold_mw": 1521.6525416307793,
+          "selected_peak_mw": 1855.3178525203652,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 658.1569961329503
+        },
+        "export_before_flex": {
+          "annual_peak_mw": 2135.26097485076,
+          "annual_peak_over_cut_rating": 1.7943369536561007,
+          "annual_peak_time": "2021-05-01T15:00:00-08:00",
+          "annual_week_start": "2021-05-01T00:00:00-08:00",
+          "annual_week_stop": "2021-05-08T00:00:00-08:00",
+          "annual_weekly_mean_mw": 899.3090110098485,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 1990.579589719713,
+              "weekly_mean_max_mw": 527.0712403612562
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 2088.3269848705722,
+              "weekly_mean_max_mw": 811.2357532662863
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 1929.664872333514,
+              "weekly_mean_max_mw": 371.29901876337726
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 2135.26097485076,
+              "weekly_mean_max_mw": 899.3090110098485
+            },
+            "Ramp": {
+              "hourly_max_mw": 1885.7292710221786,
+              "weekly_mean_max_mw": 482.1910074594591
+            },
+            "Regional import": {
+              "hourly_max_mw": 1614.9001905466484,
+              "weekly_mean_max_mw": 446.24891810312624
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 78,
+          "positive_tail_threshold_mw": 1801.5956639611738,
+          "selected_peak_mw": 2135.26097485076,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 899.3090110098485
+        },
+        "import_after_generation": {
+          "annual_peak_mw": 75.27726788685891,
+          "annual_peak_over_cut_rating": 0.0632582083082848,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-02-13T00:00:00-08:00",
+          "annual_week_stop": "2021-02-20T00:00:00-08:00",
+          "annual_weekly_mean_mw": 1.8230394060065578,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 75.27726788685891,
+              "weekly_mean_max_mw": 1.8230394060065578
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 53.02635333366038,
+              "weekly_mean_max_mw": 0.31563305555750226
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 13,
+          "positive_tail_hours_covered": 11,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 75.27726788685891,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 1.0,
+          "selected_weekly_mean_mw": 1.8230394060065578
+        },
+        "import_after_generation_and_discharge": {
+          "annual_peak_mw": 0.0,
+          "annual_peak_over_cut_rating": 0.0,
+          "annual_peak_time": null,
+          "annual_week_start": null,
+          "annual_week_stop": null,
+          "annual_weekly_mean_mw": 0.0,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Ramp": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            },
+            "Regional import": {
+              "hourly_max_mw": 0.0,
+              "weekly_mean_max_mw": 0.0
+            }
+          },
+          "earliest_peak_covered": null,
+          "positive_tail_hours": 0,
+          "positive_tail_hours_covered": 0,
+          "positive_tail_threshold_mw": 0.0,
+          "selected_peak_mw": 0.0,
+          "selected_to_annual_peak": null,
+          "selected_to_annual_weekly_mean": null,
+          "selected_weekly_mean_mw": 0.0
+        },
+        "import_before_flex": {
+          "annual_peak_mw": 719.94342291372,
+          "annual_peak_over_cut_rating": 0.6049944730367395,
+          "annual_peak_time": "2021-02-19T03:00:00-08:00",
+          "annual_week_start": "2021-12-18T00:00:00-08:00",
+          "annual_week_stop": "2021-12-25T00:00:00-08:00",
+          "annual_weekly_mean_mw": 276.65415176974466,
+          "by_window": {
+            "Deficit": {
+              "hourly_max_mw": 719.94342291372,
+              "weekly_mean_max_mw": 184.64259186865704
+            },
+            "Gross-load peak": {
+              "hourly_max_mw": 575.3345105396443,
+              "weekly_mean_max_mw": 24.44302412266866
+            },
+            "Ordinary control": {
+              "hourly_max_mw": 592.186695594985,
+              "weekly_mean_max_mw": 150.35808138832388
+            },
+            "Persistent surplus": {
+              "hourly_max_mw": 637.2437183664706,
+              "weekly_mean_max_mw": 87.27304114122269
+            },
+            "Ramp": {
+              "hourly_max_mw": 494.93443207182355,
+              "weekly_mean_max_mw": 139.85697601431687
+            },
+            "Regional import": {
+              "hourly_max_mw": 697.6925083605215,
+              "weekly_mean_max_mw": 144.70646472531521
+            }
+          },
+          "earliest_peak_covered": true,
+          "positive_tail_hours": 88,
+          "positive_tail_hours_covered": 42,
+          "positive_tail_threshold_mw": 566.1425113286555,
+          "selected_peak_mw": 719.94342291372,
+          "selected_to_annual_peak": 1.0,
+          "selected_to_annual_weekly_mean": 0.6674130523164259,
+          "selected_weekly_mean_mw": 184.64259186865704
+        }
+      },
+      "cut_branches": [
+        {
+          "from_bus": 92,
+          "rateA": 151.0,
+          "source_row": 144,
+          "to_bus": 94
+        },
+        {
+          "from_bus": 93,
+          "rateA": 151.0,
+          "source_row": 145,
+          "to_bus": 94
+        },
+        {
+          "from_bus": 94,
+          "rateA": 149.0,
+          "source_row": 149,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 80,
+          "rateA": 176.0,
+          "source_row": 151,
+          "to_bus": 98
+        },
+        {
+          "from_bus": 80,
+          "rateA": 140.0,
+          "source_row": 152,
+          "to_bus": 99
+        },
+        {
+          "from_bus": 92,
+          "rateA": 98.0,
+          "source_row": 153,
+          "to_bus": 100
+        },
+        {
+          "from_bus": 95,
+          "rateA": 149.0,
+          "source_row": 155,
+          "to_bus": 96
+        },
+        {
+          "from_bus": 101,
+          "rateA": 176.0,
+          "source_row": 161,
+          "to_bus": 102
+        }
+      ],
+      "cut_rateA_sum_mva": 1190.0,
+      "generator_pmax_mw": 644.6661550268611,
+      "region": "bus_108"
+    }
+  ],
+  "windows": [
+    {
+      "name": "Deficit",
+      "start": "2021-02-01",
+      "stop_exclusive": "2021-03-01"
+    },
+    {
+      "name": "Persistent surplus",
+      "start": "2021-04-01",
+      "stop_exclusive": "2021-06-01"
+    },
+    {
+      "name": "Gross-load peak",
+      "start": "2021-06-03",
+      "stop_exclusive": "2021-06-17"
+    },
+    {
+      "name": "Ramp",
+      "start": "2021-10-11",
+      "stop_exclusive": "2021-10-25"
+    },
+    {
+      "name": "Regional import",
+      "start": "2021-07-12",
+      "stop_exclusive": "2021-08-09"
+    },
+    {
+      "name": "Ordinary control",
+      "start": "2021-01-14",
+      "stop_exclusive": "2021-01-28"
+    }
+  ]
+}

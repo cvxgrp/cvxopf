@@ -1,0 +1,27 @@
+{
+  "candidates": 352,
+  "eligible_candidates": 194,
+  "feature_iqrs": {
+    "mean_absolute_net_ramp_mw": 280.6215556845864,
+    "mean_load_mw": 479.84599227722083,
+    "mean_net_load_mw": 3044.516258372695,
+    "peak_positive_net_load_mw": 844.3579221479322
+  },
+  "feature_medians": {
+    "mean_absolute_net_ramp_mw": 1443.8346801507641,
+    "mean_load_mw": 3395.2168911489125,
+    "mean_net_load_mw": -3208.4167371351887,
+    "peak_positive_net_load_mw": 4906.570977067061
+  },
+  "features": {
+    "mean_absolute_net_ramp_mw": 1391.7606057637174,
+    "mean_load_mw": 3501.0382878482474,
+    "mean_net_load_mw": -2562.329906698442,
+    "peak_positive_net_load_mw": 4935.276940498873
+  },
+  "omitted_zero_iqr_features": [],
+  "rule": "all-candidate medians/IQR; exclude half-open event overlaps; minimum squared distance; earliest start breaks ties",
+  "score": 0.1292597460725016,
+  "start": "2021-01-14T00:00:00-08:00",
+  "stop_exclusive": "2021-01-28T00:00:00-08:00"
+}

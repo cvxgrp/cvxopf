@@ -1010,7 +1010,13 @@ from rho = 1/3 and battery regularization starting from 0.01. Include an
 explicitly specified almost-linear generator setting. Select a small set of
 comparisons and solve budget in the protocol, varying curvature and throughput
 weight separately and, where justified, together to examine their interaction.
-An exhaustive parameter grid is not required. Match windows, inherited linear
+The owner has now approved the complete six-setting grid: rho on = 1/3 or
+off = 0.001, crossed with lambda low = 1e-4, medium = 1e-2, or high = 1.
+“Off” denotes almost-linear, not zero quadratic cost. Run every setting on
+all six selected windows in both DC formulations: 72 convex solves, including
+the on/medium baseline. The shedding penalty remains fixed. See
+`experiments/case118_tracy_2021/STAGE_B_PROTOCOL.md` for the detailed design.
+Match windows, inherited linear
 costs, capacities, physical constraints, and storage endpoints. Compare
 generation leveling and marginal-cost variation,
 battery power/throughput and SOC, and generation, regularization, and other
