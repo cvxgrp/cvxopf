@@ -1,7 +1,8 @@
 # Time-vectorized inner AC controller integration
 
 Owner-authorized production integration of recovery capability exercised in the
-completed 120+6 replay. Implement in this checkout; no staging, commits or pushes.
+completed 120+6 replay. Implemented and committed in `00536b168`
+(`Enable vectorized inner AC recovery in hierarchical control`), now on `main`.
 
 ## Boundary
 
@@ -53,4 +54,5 @@ requirement. Stop at a clean reviewed checkpoint for the owner.
 - `cvxopf-review` independently passed all 19 new tests and returned CLEAN under
   scientific/public-API standards, including coordinate ordering, causality,
   initial boundaries, and duplicate-work review. No large study was launched.
-- All changes remain unstaged for owner review; no commit or push was performed.
+- The reviewed checkpoint was committed in `00536b168` and is included in
+  `main`; no implementation or commit handoff remains pending for this plan.

@@ -9,11 +9,13 @@ validate the realized mapping in Stage A.
 **Current handoff:** the analytical study and selected Stage 0c follow-ups are
 complete and committed. The annual S5 closeout and owner decision to omit S6
 are recorded in `3513284`; the Stage 0c findings are recorded in `0f3b392`.
-The toy horizon study remains deferred. The owner has since reported the
-`big-experiment` merge; M14 closeout and an additional independent Case118
-vectorization replay followed on `m14-time-vectorization`. Record the verified
-merged baseline and fresh Tracy branch at the transition gate below before
-beginning Stage A. No Tracy Case118 input generation has begun. The replay
+The toy horizon study remains deferred. The `big-experiment` merge is complete
+at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; its ancestry in local `main`
+was verified on 2026-09-28 at `b1df63b17`. M14 closeout, the additional Case118
+vectorization studies, and public vectorized defaults are also included in
+local `main`. The remaining transition gates are a fresh Tracy-study branch
+from verified `main` (record its actual baseline at creation) and owner
+authorization for Stage A. No Tracy Case118 input generation has begun. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -48,8 +50,8 @@ select the annual Tracy runner policy or authorize numerical execution.
    execution with the selected policy.
 
 Both old-study commits and the toy-follow-up disposition must precede the
-Stage 0c PR closeout and fresh-branch gate. This Tracy plan may merge with
-`big-experiment`: it documents future work and does not imply that Tracy input
+Stage 0c PR closeout and fresh-branch gate. This Tracy plan was included in the
+`big-experiment` merge: it documents future work and does not imply that Tracy input
 generation or execution has begun. Keep the new study's data, decisions, and
 results distinct from the analytical benchmark. Toy-data counterfactual AC
 studies can use the existing accepted toy DC archive; they do not depend on
@@ -750,8 +752,9 @@ toy-follow-up implementation or work package A.
 
 ### 0c. Selected toy-data studies and PR closeout gate
 
-Scientific work is complete; the Git transition and Stage A authorization
-remain outstanding. The completed-study disposition below supersedes the
+Scientific work and the merge/local-main verification are complete; the fresh
+Tracy-study branch and Stage A authorization remain outstanding. The
+completed-study disposition below supersedes the
 earlier design and launch checkpoints, which are retained in their protocols.
 
 The owner also selected a bounded
@@ -864,9 +867,11 @@ disposition does not launch Tracy input generation or numerical work.
   and numerical reviews are CLEAN; the reports retain read-only result
   verification and limitations. The final closeout changes are documentation
   only; existing numerical evidence is unchanged.
-- [ ] **User action, not agent action:** merge `big-experiment`, update local
-  `main`, and verify the merged state. Record the merged baseline commit and
-  verification outcome in the handoff.
+- [x] Merge `big-experiment`, update local `main`, and verify the merged state.
+  Merge commit `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b` is an ancestor of
+  local `main` at `b1df63b17`, verified on 2026-09-28. The working tree was
+  clean before this documentation refresh. This verifies Git state, not a new
+  numerical or regression run.
 - [ ] **User action, not agent action:** create a fresh Tracy-study branch
   from the verified local `main` before Stage A input generation. Record its
   branch name and baseline commit in the handoff.
@@ -1224,11 +1229,12 @@ above. No conclusion about Tracy is inherited from the analytical run.
 
 ## 7. Handoff and completion criteria
 
-Begin with **work package 0a: old-study scientific/Git closeout
-(commit 1)** and its **experimental-design pause**, followed by **0b: separate
-`outputs/` triage/promotion (commit 2)** and **0c: selected toy studies and the
-PR closeout gate**. The user performs the merge, local `main` update and merged
-state verification, and fresh Tracy-study branch creation. After those gates,
+Work packages **0a: old-study scientific/Git closeout (commit 1)** and its
+**experimental-design pause**, **0b: separate `outputs/` triage/promotion
+(commit 2)**, and the selected toy studies and PR merge in **0c** are complete.
+Local `main` contains the merged study. The remaining transition steps are
+owner-managed fresh Tracy-study branch creation from verified `main` and
+explicit Stage A authorization, as recorded in the checklist above. After those gates,
 hand off the new-study plan plus one compact list of the open operating choices in
 section 5. Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.

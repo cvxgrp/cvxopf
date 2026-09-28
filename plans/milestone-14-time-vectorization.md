@@ -15,8 +15,11 @@ merged into `main` at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; the
 2026-09-18. The accepted annual S4 solve already closes M14c's scaling gate.
 The single-node DC slice reuses the qualified vectorized device hooks and
 retains the public result shapes. AC now uses the shared horizon hooks and existing initialization helpers as
-described under M14d. The public default remains `stepwise`; all three
-formulations support explicit `vectorized` selection.
+described under M14d. Following M14 closeout, commit `e7ea4f19b` made
+`vectorized` the public multistep default for all three formulations;
+explicit `stepwise` selection remains supported. Commit `00536b168` added
+vectorized inner AC recovery to the public hierarchical controller, whose
+outer and inner temporal selectors independently default to `vectorized`.
 
 The frozen legacy Case9 and Case118 scaling ladders completed, and the formulation-
 specific leaf-bound gate passed. The typed horizon, one-call assembly,
@@ -173,11 +176,13 @@ coverage is completed. Selection is explicit and retained in `OPFBuild.data`,
 solve provenance, results, benchmarks, and experiment artifacts. There is no
 silent horizon-length heuristic that changes assembly mode.
 
-The current `stepwise` behavior remains the public compatibility default during
-M14. Changing a default later requires a separately reviewed API decision with
-release notes and equivalence evidence. The Case118 S4 annual outer explicitly
-selects `vectorized`; short M17/S3-style AC windows may continue to select
-`stepwise` unless direct profiling supports a different choice.
+During M14 implementation, `stepwise` remained the public compatibility default;
+changing it required a separate API decision and validation. That subsequent
+change is now committed in `e7ea4f19b`: public multistep builds default to
+`vectorized`, with explicit `stepwise` overrides. The hierarchical inner default
+and recovery integration followed in `00536b168`. Historical experiments retain
+their explicitly selected representations; these default changes do not alter
+their evidence.
 
 Temporal assembly and canonicalization route are recorded separately. For DCP,
 the intended pairings are `stepwise` + CPP and `vectorized` + SCIPY. M14d
@@ -567,7 +572,8 @@ existing vectorized component hooks and formulation-specific qualified bounds,
 one horizon-wide copper-plate balance, and typed result projections. Static
 load and renewable inputs retain broadcast provenance; device identities,
 terminal policies, time integration, and time-first public results are retained.
-The default remains stepwise. See
+At this initial checkpoint the default remained stepwise; the later public
+default change is recorded in the Status section above. See
 `experiments/m14_time_vectorization/M14D_SINGLENODE_REPORT.md` and the paired
 JSON record for the initial Tracy comparison. This is a bounded single-node
 checkpoint approved and committed at `6d02f09`. The subsequent AC implementation
