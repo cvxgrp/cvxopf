@@ -1,8 +1,4 @@
-# Draft CVXPY issue — not submitted
-
-## Proposed title
-
-DNLP/IPOPT convergence changes with automatic sparse dispatch in CVXPY 1.9.3
+# DNLP/IPOPT convergence changes with automatic sparse dispatch in CVXPY 1.9.3
 
 ## Summary
 
@@ -20,15 +16,20 @@ a shared underlying mechanism has not been established.
 
 ## Standalone example
 
-The runnable [toy.py](reproducer/toy.py) contains no CVXOPF imports, grid data,
-input files, or application framework. Its mathematical construction is:
+Save the following as `toy.py`. It requires no CVXOPF installation, grid data,
+input files, or application framework.
 
 ```python
+import argparse
+
 import cvxpy as cp
 import numpy as np
 
-# Uncomment only for the control, in a separate fresh process:
-# cp.settings.SPARSE_DENSITY_THRESHOLD = 0.0
+parser = argparse.ArgumentParser()
+parser.add_argument("--dense-route", action="store_true")
+args = parser.parse_args()
+if args.dense_route:
+    cp.settings.SPARSE_DENSITY_THRESHOLD = 0.0
 
 n = 24
 x, z = cp.Variable(n), cp.Variable(n)
@@ -43,26 +44,29 @@ problem.solve(solver=cp.IPOPT, nlp=True, print_level=5, sb="yes", max_iter=3000)
 print(problem.status, problem.value)
 ```
 
-[Installation and execution instructions](reproducer/README.md) and
-[pinned Python dependencies](reproducer/requirements.txt) accompany the script.
-After installing the dependencies and native IPOPT library:
+With Python 3.11 and the native IPOPT library/development headers and
+`pkg-config` installed, create an environment and run each condition in a
+fresh process:
 
 ```sh
-python toy.py
-python toy.py --dense-route
+python3.11 -m venv .venv
+.venv/bin/python -m pip install cvxpy==1.9.3 sparsediffpy==0.6.1 cyipopt==1.7.0 numpy==2.4.6 scipy==1.17.1
+.venv/bin/python toy.py
+.venv/bin/python toy.py --dense-route
 ```
 
-The first command is expected to raise CVXPY `SolverError` on the tested stack.
-The second prints `optimal`. [Optional instrumentation](reproducer/verify_toy.py)
-captures native termination even when CVXPY raises. It does not change the
-model, start, or numerical options.
+The default-dispatch solve is expected to raise CVXPY `SolverError` on the
+tested stack. The threshold-zero solve prints `optimal`. The Python package
+pins do not pin the native IPOPT/MUMPS libraries; the tested native versions
+are listed below.
 
 ## Verified toy results
 
 Both conditions were run twice in fresh processes outside the repository, in
 an environment without CVXOPF installed. Each repeated result was identical.
-[Machine-readable evidence](reproducer/VERIFIED_RESULTS.json) includes full
-starting/final vectors, effective options, input/oracle hashes, and residuals.
+Native termination and final iterates were captured before CVXPY handled the
+solver failure; original constraint violations were reconstructed from those
+iterates.
 
 | Quantity | Default dispatch | Threshold zero |
 |---|---:|---:|
@@ -124,8 +128,7 @@ three Lagrangian Hessians with zero, all-one, and seeded random multipliers.
 
 The synthetic example removes the application dependency but is **not** an
 algebraic reduction of this model. It reproduces the broader termination
-sensitivity, not the specific 3,000-versus-70 iteration result. The application
-evidence and toy evidence should not be conflated.
+sensitivity, not the specific 3,000-versus-70 iteration result.
 
 ## Relevant conversion change
 
@@ -160,7 +163,3 @@ the tested points does not rule out a later-iterate derivative issue.
    dense-constant-to-sparse dispatch, retaining explicitly sparse operands?
 2. What evidence would best distinguish sparse-factorization sensitivity
    from a later-iterate derivative issue?
-
-Draft only; nothing has been posted. The toy does not yet satisfy the narrower
-request for a standalone reproduction of the application's iteration-limit
-failure. Its distinct failure mode is stated explicitly for review.
