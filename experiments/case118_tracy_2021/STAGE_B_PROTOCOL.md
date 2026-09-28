@@ -1,12 +1,20 @@
 # Stage B — targeted DC studies
 
-Status: **runner implemented; paused for review before binding or execution**, opened after owner approval of
+Status: **initial run stopped; owner-approved iteration-budget revision pending commit**, opened after owner approval of
 Stage A at `39609190f`. The owner authorized beginning Stage B; the numerical
 72-solve comparison grid below is owner-approved. Remaining execution details
 are proposed for review, not a record of executed work.
 The runner and audit are implemented in `run_stage_b.py` and `stage_b.py`.
-No numerical solve has been started. Annual DC and all AC execution
-remain outside this stage.
+The initial run at `6d9a492dd` accepted arm 000 and stopped at arm 001, which
+returned `optimal_inaccurate` after 200 iterations despite passing every
+physical and accounting residual check. A separately authorized replay with
+`max_iter=1000` reached native `Solved` / public `optimal` at iteration 348
+in 26.4 solver seconds and passed the unchanged audit. The owner approved
+raising only the iteration limit on 2026-09-28. Original evidence remains in
+`results/stage_b/`; diagnostic evidence is in
+`results/diagnostics/arm001_maxiter1000_20260928/`. The diagnostic does not
+advance the study. No revised batch has started. Annual DC and all AC
+execution remain outside this stage.
 
 ## Questions
 
@@ -201,7 +209,7 @@ compare operating quantities and cost components with their coefficients explici
 
 The following settings are explicit for review, not inferred from solver defaults:
 
-- CLARABEL: `tol_gap_abs=tol_gap_rel=tol_feas=1e-10`, `max_iter=200`,
+- CLARABEL: `tol_gap_abs=tol_gap_rel=tol_feas=1e-10`, `max_iter=1000`,
   `max_threads=1`. Vectorized assembly, SCIPY canonicalization, `warm_start=False`.
   Other settings remain those of the installed CLARABEL version; its full default
   settings, dependency versions and thread environment are recorded in the binding.
@@ -240,13 +248,15 @@ Thermal telemetry remains external/contextual, not collected by this runner.
 
 ## Review, binding and commands
 
-This checkpoint implements the previously approved study but is **not running**.
-Review the implementation and settings, then the owner commits. On a clean tree,
-bind and launch by explicitly supplying that reviewed full commit:
+The study is **stopped**. Review the iteration-budget amendment, then the owner
+commits. A subsequent authorized launch must use a fresh output directory and
+the new clean execution commit; do not overwrite or resume the original batch.
+For example:
 
 ```bash
 uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b \
-  --commit FULL_REVIEWED_EXECUTION_COMMIT
+  --commit FULL_REVIEWED_EXECUTION_COMMIT \
+  --output experiments/case118_tracy_2021/results/stage_b_maxiter1000
 ```
 
 The default ignored destination is `results/stage_b/` inside this experiment.
@@ -268,7 +278,8 @@ orchestration overhead. Rejected arms retain available public failure results.
 After completion or a stop, independently reconstruct retained accepted arms:
 
 ```bash
-uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b --analyze
+uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b --analyze \
+  --output experiments/case118_tracy_2021/results/stage_b_maxiter1000
 ```
 
 This writes `analysis.json` once, retaining both execution and analyzer contexts;
@@ -278,6 +289,8 @@ Do not analyze into the live run directory while workers are writing. Missing
 or changed owner inputs fail without fallback. Catchable Ctrl-C/SIGTERM stops
 the active worker; an OS crash can leave partial files and requires inspection,
 not an automatic restart. The archive is written before the parent advances.
+The old batch retains its 200-iteration specification; use its original source
+version for its specification-bound analyzer rather than relabeling it.
 
 ## Required analysis and next gate
 

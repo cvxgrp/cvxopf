@@ -285,6 +285,9 @@ def test_worker_archive_and_offline_reconstruction(tmp_path, monkeypatch, solver
     assert runner.worker(tmp_path, 0) == int(solver_error)
     assert calls[0]["warm_start"] is False
     assert calls[0]["tol_feas"] == 1e-10
+    assert calls[0]["tol_gap_abs"] == calls[0]["tol_gap_rel"] == 1e-10
+    assert calls[0]["max_iter"] == 1000
+    assert calls[0]["max_threads"] == 1
     assert (arm_dir / "completion.json").exists()
     runner.atomic_json(
         arm_dir / "supervision.json",
