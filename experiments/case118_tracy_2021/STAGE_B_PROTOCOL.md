@@ -1,10 +1,11 @@
 # Stage B — targeted DC studies
 
-Status: **proposed pre-execution protocol**, opened after owner approval of
+Status: **runner implemented; paused for review before binding or execution**, opened after owner approval of
 Stage A at `39609190f`. The owner authorized beginning Stage B; the numerical
 72-solve comparison grid below is owner-approved. Remaining execution details
 are proposed for review, not a record of executed work.
-No runner or numerical solve has been started. Annual DC and all AC execution
+The runner and audit are implemented in `run_stage_b.py` and `stage_b.py`.
+No numerical solve has been started. Annual DC and all AC execution
 remain outside this stage.
 
 ## Questions
@@ -181,7 +182,7 @@ After reviewing all available outcomes, recommend annual economics. Do not
 select settings by comparing raw objectives across changed cost functions;
 compare operating quantities and cost components with their coefficients explicit.
 
-## Proposed execution limits
+## Execution settings for this implementation checkpoint
 
 - Sequential fresh-process solves; no concurrent arm competition or retries.
 - Exactly 72 planned arms in the approved grid; no additional diagnostic or
@@ -198,12 +199,85 @@ compare operating quantities and cost components with their coefficients explici
   solver settings, source identity and host context. Thermal telemetry is
   contextual evidence where available, not an extra scientific acceptance gate.
 
-Before implementation, specify CLARABEL tolerances and independent residual
-thresholds by reusing the relevant qualified DC audit conventions. Document
-them here explicitly rather than relying on mutable solver defaults. Acceptance
-requires usable finite primal values and independent checks, not status alone.
-No new elaborate execution framework: reuse suitable existing supervision and
-audit utilities after checking their applicability to this fleet.
+The following settings are explicit for review, not inferred from solver defaults:
+
+- CLARABEL: `tol_gap_abs=tol_gap_rel=tol_feas=1e-10`, `max_iter=200`,
+  `max_threads=1`. Vectorized assembly, SCIPY canonicalization, `warm_start=False`.
+  Other settings remain those of the installed CLARABEL version; its full default
+  settings, dependency versions and thread environment are recorded in the binding.
+- Accept only public status `optimal`, finite correctly shaped primal results,
+  and the independent audit. `optimal_inaccurate`, infeasibility and solver
+  exceptions stop the batch. No automatic retry or solver substitution.
+- Power balance and injection/reporting residuals: **1e-4 MW**, matching the
+  established 1e-6 pu balance scale on this 100 MVA base. Device and branch box
+  residuals: **2e-5 MW**; SoC box residual: **2e-5 MWh**, following the prior
+  full-bounds diagnostic. SoC recurrence: **1e-4 MWh**; terminal boundary:
+  **1e-3 MWh**, following the hierarchical audit. Shedding fractions: **1e-8**.
+- ENS reporting: **1e-4 MWh**. Each reconstructed cost and total objective:
+  **1e-4 + 1e-10 × abs(reconstructed value)** objective units. Costs include
+  generator constants, throughput, shedding, and (only for lossy DC) the
+  resistance-weighted per-unit squared-flow proxy with weight 1. No terminal
+  cost exists in this hard-equality design. Delta is applied once.
+- Arm order: shortest horizon first, then earliest calendar start. Within each
+  window: rho on then off; lambda medium, low, high; single-node then lossy DC
+  for each setting. All 72 explicit arm records are saved in the binding.
+- One-second RSS polling supervises the single worker process (native solver
+  threads share that process). The 30-minute clock covers its entire lifetime,
+  including imports, preparation, construction, solve, extraction and archiving.
+  RSS sampling is not an OS-enforced hard memory cap and can miss brief peaks.
+  Missing live-process RSS is a supervision failure. RSS has priority if both
+  sampled resource thresholds are exceeded together. Terminate/reap on limits
+  or catchable interruption; retain logs, last phase and partial progress.
+
+Atomic JSON/gzip publication, RSS measurement and process-group termination
+reuse existing Case118 utilities. The Tracy audit is independent of the built
+constraint graph and reconstructs input-aligned bounds, nodal/aggregate balance,
+SoC, reporting, ENS and costs. The worker audits before archive publication; the
+parent rechecks the retained archive before accepting an arm or advancing.
+No process is launched until source reconstruction, the clean-commit check and
+RSS preflight pass. No automatic resume: an existing output directory is refused.
+Thermal telemetry remains external/contextual, not collected by this runner.
+
+## Review, binding and commands
+
+This checkpoint implements the previously approved study but is **not running**.
+Review the implementation and settings, then the owner commits. On a clean tree,
+bind and launch by explicitly supplying that reviewed full commit:
+
+```bash
+uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b \
+  --commit FULL_REVIEWED_EXECUTION_COMMIT
+```
+
+The default ignored destination is `results/stage_b/` inside this experiment.
+`binding.json` fixes the ordered arms, settings, audit tolerances, commit, software,
+source/Stage A/protocol hashes and UTC start. Each fresh worker checks that context
+at entry and exit. Do not edit the source tree during execution. `arm-NNN/` contains
+the worker log, sampled RSS, latest phase, compressed public results plus availability
+and boundary SoC, named costs, solver statistics and immutable completion/supervision
+records. Source inputs and explicit device order remain bound to Stage A.
+
+The public SoC array contains post-step states; the saved boundary trajectory
+prepends the approved initial SoC. Preparation, construction, combined
+canonicalization/solve, extraction/audit and archive durations are separate.
+CVXPY compilation time and solver-reported solve time are diagnostic sub-timings,
+not additional durations to add to the combined solve clock. Supervisor wall
+includes interpreter startup and worker cleanup; parent reconstruction is additional
+orchestration overhead. Rejected arms retain available public failure results.
+
+After completion or a stop, independently reconstruct retained accepted arms:
+
+```bash
+uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b --analyze
+```
+
+This writes `analysis.json` once, retaining both execution and analyzer contexts;
+it does not solve or grant annual authority. An incomplete run is reported as
+partial. A failed arm stops reconstruction; later arms are not accepted past it.
+Do not analyze into the live run directory while workers are writing. Missing
+or changed owner inputs fail without fallback. Catchable Ctrl-C/SIGTERM stops
+the active worker; an OS crash can leave partial files and requires inspection,
+not an automatic restart. The archive is written before the parent advances.
 
 ## Required analysis and next gate
 

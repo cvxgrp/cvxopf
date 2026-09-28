@@ -54,7 +54,9 @@ are passed through their supported public fields. The public generators retain
 source order in every formulation.
 
 The active 5,000 MW cap, storage sizes, source and siting are approved. The
-Stage B window selection, sensitivity grid, loss-weight choice and compute
-budget still require review. `model_inputs()` applies the approved annual
+Stage B now has six approved windows and a 72-solve comparison grid. The
+[protocol](STAGE_B_PROTOCOL.md) documents the runner, explicit solver/audit
+settings, resource limits and launch/analysis commands. Implementation is paused
+for review; no study solves have started. `model_inputs()` applies the approved annual
 50% endpoints even to an inspection window; numerical short-window studies
 must explicitly select their boundary conditions before using it to solve.
