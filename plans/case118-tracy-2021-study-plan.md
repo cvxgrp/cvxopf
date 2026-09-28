@@ -22,9 +22,11 @@ The toy horizon study remains deferred. The `big-experiment` merge is complete
 at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; its ancestry in local `main`
 was verified on 2026-09-28 at `b1df63b17`. M14 closeout, the additional Case118
 vectorization studies, and public vectorized defaults are also included in
-local `main`. The remaining transition gates are a fresh Tracy-study branch
-from verified `main` (record its actual baseline at creation) and owner
-authorization for Stage A. No Tracy Case118 input generation has begun. The replay
+local `main`. The owner created `tracy-study` and authorized Stage A. Input
+preparation is based on committed plan checkpoint `abc1b7844`, following main
+baseline `b1df63b17` and the documentation refresh. The input-review candidate
+is at `experiments/case118_tracy_2021/STAGE_A_REPORT.md`; no OPF solves have run.
+User review 1 and Stage B authorization remain pending. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -479,9 +481,9 @@ override and show its operational consequences before carrying it into annual
 execution. Keep the selected generator and battery economics consistent
 between the DC planner and AC realization.
 
-### Optional last-resort load shedding
+### Approved last-resort load shedding
 
-The owner requests an option to shed any load using the existing cvxopf
+The owner approves enabling shedding for all loads using the existing cvxopf
 cost-based approach. Configure the identified `Load` devices, rather than
 introducing emergency injections or changing the network constraints. With
 the option enabled, all 99 positive-demand load channels are eligible for
@@ -495,10 +497,20 @@ Use explicit finite positive `shedding_cost_per_mwh` values to make shedding
 the last economic choice after available generation and storage. Retain the
 single optimization and existing load-cost implementation described in
 [Milestone 19](milestone-19-load-shedding.md). The input review must show the
-penalty, units, eligible devices and fraction limits. No numerical penalty or
-relative priority between load locations is assigned by this plan; specify
-them in the shorter-study protocol and explain their relation to the selected
-generator and storage costs.
+penalty, units, eligible devices and fraction limits. The owner-approved rule is
+
+    shedding_cost_per_mwh = 100 * max_i C_i'(G_i),
+
+computed once from the starting generator costs (rho = 1/3) and updated
+maximum powers. The pinned source gives a maximum starting marginal cost of
+207.63594 objective units/MWh, hence a uniform shedding penalty of
+**20,763.594 objective units/MWh**. Apply the same finite positive penalty to every load, with
+no customer-class or location priority. Freeze the resulting numeric value
+across the generator-curvature and battery-weight comparisons and use it in
+single-node DC, lossy DC, and AC. Do not recompute it for each sensitivity arm.
+This is a study penalty, not a calibrated value of lost load. Equal penalties
+do not imply equal shedding: network conditions and nonunique optima can
+determine its spatial distribution. Retain a disabled fixed-load comparison.
 
 Check last-resort behavior on the selected shorter windows for the cost
 settings being studied. A penalty above generator marginal cost alone does
@@ -524,13 +536,13 @@ year, scale, counts, seed, or storage choices.
 
 | Item | Proposed treatment / decision needed |
 | --- | --- |
-| Reactive load | Recommend Q_i(t) = (Qbase_i/Pbase_i) load_i(t), retaining signs and fixed shunts separately. This pinned case has no zero-P/nonzero-Q load buses. Confirm and record before AC qualification. |
-| Dispatchable reactive capability | Recommend retaining source Q limits, including reactive-only units; uniform active-Pmax scaling is not approval to scale Q. Make the decision explicit. |
-| Renewable inverter ratings | Choose and label a rating rule/headroom factor; an observed availability maximum is not a measured nameplate. Avoid unintended clipping of the approved source. |
-| Battery AC operating set | Resolve apparent MVA rating versus the approved E/3 active-power limit and reactive support. If MVA headroom is larger, do not accidentally enlarge the active limit. |
-| Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
+| Reactive load | Owner-approved: Q_i(t) = (Qbase_i/Pbase_i) load_i(t), retaining signs and fixed shunts separately. This pinned case has no zero-P/nonzero-Q load buses. |
+| Dispatchable reactive capability | Owner-approved: retain source Q limits, including reactive-only units; scale active Pmax only. |
+| Renewable inverter ratings | Owner-approved: each device's MVA rating is 1.1 times its full-year peak MW availability. This is assumed inverter headroom, not measured nameplate data; no availability clipping. |
+| Battery AC operating set | Owner-approved: MVA rating numerically equals the approved E/3 MW limit; reactive support shares that apparent-power circle. |
+| Storage dynamics and SOC | Owner-approved: existing ideal model, modeled usable SOC range [0, capacity], 50% initial and 50% annual terminal SOC. Short-window endpoint sensitivities remain part of Stage B. |
 | Economics | Apply the starting generator rule and default battery regularization above. Keep both curvature and battery weight configurable; select annual settings from shorter-study evidence. Explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
-| Load shedding | Provide the approved all-load option through existing `Load` settings. Review its enabled/disabled setting and explicit penalties before solving, and check its intended last-resort behavior alongside the generator/storage cost comparisons. |
+| Load shedding | Owner-approved: enabled on all 99 loads with full fractional eligibility and uniform penalty 20,763.594 objective units/MWh, fixed from the starting economics. Keep a disabled comparison and verify intended last-resort behavior in Stage B. |
 | Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy, two-primary/one-helper execution, and full recovery ladder. Stage D compares vectorized and stepwise AC assembly and alternative starts before selecting helper order, launch delay, and budgets for Tracy. Neither historical timings nor M14 replay results freeze the annual policy. |
 
 The intended primary study seeks full load service with rated branches and
@@ -761,8 +773,8 @@ toy-follow-up implementation or work package A.
 
 ### 0c. Selected toy-data studies and PR closeout gate
 
-Scientific work and the merge/local-main verification are complete; the fresh
-Tracy-study branch and Stage A authorization remain outstanding. The
+Scientific work, merge/local-main verification, the fresh `tracy-study` branch,
+and owner authorization for Stage A are complete. The
 completed-study disposition below supersedes the
 earlier design and launch checkpoints, which are retained in their protocols.
 
@@ -884,9 +896,12 @@ disposition does not launch Tracy input generation or numerical work.
 - [x] **User action, not agent action:** create a fresh Tracy-study branch
   from the verified local `main` before Stage A input generation. Record its
   branch name and baseline commit in the handoff.
+  Completed as `tracy-study`; Stage A begins from `abc1b7844` with
+  `b1df63b17` in its main ancestry.
 - [x] Obtain the owner's authorization to begin Stage A on that fresh branch.
   Closing the toy study and including this plan in the PR do not themselves
   launch Tracy work.
+  Explicit Stage A authorization received on 2026-09-28; no solve authorization.
 
 Exit: the toy-follow-up disposition and documentation/regression checks are
 complete, the owner approves the transition, and the user has completed the
@@ -1259,11 +1274,11 @@ above. No conclusion about Tracy is inherited from the analytical run.
 Work packages **0a: old-study scientific/Git closeout (commit 1)** and its
 **experimental-design pause**, **0b: separate `outputs/` triage/promotion
 (commit 2)**, and the selected toy studies and PR merge in **0c** are complete.
-Local `main` contains the merged study. The remaining transition steps are
-owner-managed fresh Tracy-study branch creation from verified `main` and
-explicit Stage A authorization, as recorded in the checklist above. After those gates,
-hand off the new-study plan plus one compact list of the open operating choices in
-section 5. Use the existing builder and independent reviewer for a scoped
+Local `main` contains the merged study. The owner created `tracy-study` and
+authorized input-only Stage A, as recorded in the checklist above. The next
+gate is user review 1 of the prepared inputs, followed by a bounded Stage B
+protocol resolving the remaining numerical-study choices in section 5.
+Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.
 
 For each implementation checkpoint, review source fidelity and scientific

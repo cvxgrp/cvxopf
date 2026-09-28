@@ -1,0 +1,60 @@
+# Tracy 2021 → Case118
+
+Stage A input-review candidate, prepared on `tracy-study` from `abc1b7844`.
+No OPF solve has run. No Stage B or annual execution is authorized.
+
+Start with [the input report](STAGE_A_REPORT.md), then the
+[study plan](../../plans/case118-tracy-2021-study-plan.md).
+
+## Reproduce the input package
+
+The source CSV is **owner-provided and Git-ignored**, not included in a fresh
+clone. Obtain it from the study owner and place it at
+`experiments/battery_terminal/data/9q9wtp_gen_and_load.csv` with SHA-256
+`45e11f061d736741b18334aea0e9525c355c1a13068c291c1db6ed2e614b1b6f`.
+Preparation refuses missing or substituted data; there is no synthetic fallback.
+The retained tables and figures can be inspected without this file, but full
+input regeneration and source-dependent integration tests require it.
+
+From the repository root, with the standard package environment and plotting extras:
+
+```sh
+uv sync --extra dev --extra notebook
+uv run --extra dev pytest tests/test_case118_tracy_inputs.py -q
+uv run --extra notebook python -m experiments.case118_tracy_2021.prepare \
+  --output experiments/case118_tracy_2021/results/my_inputs \
+  --review-output experiments/case118_tracy_2021/results/my_review
+uv run --extra notebook python -m experiments.case118_tracy_2021.render \
+  --output experiments/case118_tracy_2021/results/my_inputs \
+  --review-output experiments/case118_tracy_2021/results/my_review
+```
+
+Use fresh destinations: preparation refuses to overwrite an existing package.
+Defaults produce ignored `results/stage_a_active_inputs/` and the reviewable
+`stage_a/` package. Raw hourly device arrays remain in the ignored directory;
+they regenerate from the pinned owner-provided CSV and seeded mapping. Array digests
+use the existing shape-aware float64 hashing convention. Software/source hashes
+and the full realized mapping are retained, not just a seed.
+
+`prepare.py` prepares arrays and tables; `audit.py` independently reads source
+rows and reconstructs allocated channels and totals. `model_inputs.py` supplies
+one public-API device fleet to all formulations. Tests build three-hour models,
+including reordered input columns, but never canonicalize or solve them.
+Source-dependent tests explicitly skip when the owner CSV is absent; a present
+file with the wrong hash fails rather than skipping. Clone-ready parser tests
+use synthetic fixtures for valid calendars, missing/duplicate hours,
+negative/nonfinite values, and missing/substituted files. Synthetic data is
+test-only and is never used for the study's integration evidence.
+`render.py` reads saved arrays/tables and reuses the historical calendar layout.
+Historical inputs and evidence are read-only.
+
+Generation IDs in the review table identify source rows; the current public
+generator class does not expose `device_id`. Renewable/load/storage identities
+are passed through their supported public fields. The public generators retain
+source order in every formulation.
+
+The active 5,000 MW cap, storage sizes, source and siting are approved. The
+Stage B window selection, sensitivity grid, loss-weight choice and compute
+budget still require review. `model_inputs()` applies the approved annual
+50% endpoints even to an inspection window; numerical short-window studies
+must explicitly select their boundary conditions before using it to solve.

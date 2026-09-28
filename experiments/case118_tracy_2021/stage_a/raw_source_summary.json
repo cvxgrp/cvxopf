@@ -1,0 +1,8 @@
+{
+  "calendar": "2021 fixed UTC-08:00",
+  "dist_solar_mwh": 393989.8592498353,
+  "load_mwh": 10069931.231599998,
+  "role": "source context, not the Case118 model input",
+  "solar_mwh": 11219030.212085884,
+  "wind_mwh": 7649167.15
+}
