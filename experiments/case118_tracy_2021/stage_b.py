@@ -13,7 +13,7 @@ from .plot_window_selection import APPROVED_WINDOWS
 from .prepare import HERE, digest, prepare
 
 SOLVER_OPTIONS = dict(
-    tol_gap_abs=1e-10, tol_gap_rel=1e-10, tol_feas=1e-10, max_iter=1000, max_threads=1
+    tol_gap_abs=1e-10, tol_gap_rel=1e-10, tol_feas=1e-10, max_iter=5000, max_threads=1
 )
 LIMITS = dict(wall_seconds=1800.0, rss_mib=16384.0, poll_seconds=1.0)
 TOLERANCES = dict(

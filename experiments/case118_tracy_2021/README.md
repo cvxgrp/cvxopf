@@ -53,10 +53,12 @@ generator class does not expose `device_id`. Renewable/load/storage identities
 are passed through their supported public fields. The public generators retain
 source order in every formulation.
 
-The active 5,000 MW cap, storage sizes, source and siting are approved. The
+The active 5,000 MW cap, storage sizes, source and siting are approved.
 Stage B now has six approved windows and a 72-solve comparison grid. The
 [protocol](STAGE_B_PROTOCOL.md) documents the runner, explicit solver/audit
-settings, resource limits and launch/analysis commands. Implementation is paused
-for review; no study solves have started. `model_inputs()` applies the approved annual
+settings, resource limits and launch/analysis commands. Two batches stopped at
+iteration limits; the second retained 21 accepted arms. The owner-approved
+5,000-iteration cap and convergence logging are pending commit and a fresh
+launch; prior evidence is preserved. `model_inputs()` applies the approved annual
 50% endpoints even to an inspection window; numerical short-window studies
 must explicitly select their boundary conditions before using it to solve.

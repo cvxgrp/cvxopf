@@ -13,8 +13,17 @@ in 26.4 solver seconds and passed the unchanged audit. The owner approved
 raising only the iteration limit on 2026-09-28. Original evidence remains in
 `results/stage_b/`; diagnostic evidence is in
 `results/diagnostics/arm001_maxiter1000_20260928/`. The diagnostic does not
-advance the study. No revised batch has started. Annual DC and all AC
-execution remain outside this stage.
+advance the study. The revised batch at `054f4dad2` accepted 21 arms, then
+stopped at arm 021 (`optimal_inaccurate`, 1,000 iterations); every physical
+and accounting residual passed. A separate 5,000-iteration replay reached
+native `Solved` / public `optimal` at iteration 1,071 in 81.7 solver seconds,
+with relative gap 9.78e-11 and the unchanged audit passing. Evidence remains
+in `results/stage_b_maxiter1000/` and
+`results/diagnostics/arm021_maxiter5000_20260928/`.
+The owner approved a 5,000-iteration cap and retained convergence diagnostics
+for future Stage B work on 2026-09-28. This revision is pending commit;
+no 5,000-cap batch has started. Annual DC and all AC execution remain outside
+this stage.
 
 ## Questions
 
@@ -209,10 +218,17 @@ compare operating quantities and cost components with their coefficients explici
 
 The following settings are explicit for review, not inferred from solver defaults:
 
-- CLARABEL: `tol_gap_abs=tol_gap_rel=tol_feas=1e-10`, `max_iter=1000`,
+- CLARABEL: `tol_gap_abs=tol_gap_rel=tol_feas=1e-10`, `max_iter=5000`,
   `max_threads=1`. Vectorized assembly, SCIPY canonicalization, `warm_start=False`.
   Other settings remain those of the installed CLARABEL version; its full default
   settings, dependency versions and thread environment are recorded in the binding.
+- Enable verbose solver output in each retained `worker.log` for the iteration
+  history. Archive native CLARABEL status, primal/dual objectives, absolute and
+  relative gap, primal/dual residuals, iterations, solve time, and effective
+  settings alongside the public result. Capture available native diagnostics
+  even when solving raises; unavailable native state is `null`, and diagnostic
+  extraction errors are recorded without masking the original solve outcome.
+  These diagnostics do not replace or relax the existing acceptance gate.
 - Accept only public status `optimal`, finite correctly shaped primal results,
   and the independent audit. `optimal_inaccurate`, infeasibility and solver
   exceptions stop the batch. No automatic retry or solver substitution.
@@ -256,7 +272,7 @@ For example:
 ```bash
 uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b \
   --commit FULL_REVIEWED_EXECUTION_COMMIT \
-  --output experiments/case118_tracy_2021/results/stage_b_maxiter1000
+  --output experiments/case118_tracy_2021/results/stage_b_maxiter5000
 ```
 
 The default ignored destination is `results/stage_b/` inside this experiment.
@@ -279,7 +295,7 @@ After completion or a stop, independently reconstruct retained accepted arms:
 
 ```bash
 uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_b --analyze \
-  --output experiments/case118_tracy_2021/results/stage_b_maxiter1000
+  --output experiments/case118_tracy_2021/results/stage_b_maxiter5000
 ```
 
 This writes `analysis.json` once, retaining both execution and analyzer contexts;
@@ -289,8 +305,10 @@ Do not analyze into the live run directory while workers are writing. Missing
 or changed owner inputs fail without fallback. Catchable Ctrl-C/SIGTERM stops
 the active worker; an OS crash can leave partial files and requires inspection,
 not an automatic restart. The archive is written before the parent advances.
-The old batch retains its 200-iteration specification; use its original source
-version for its specification-bound analyzer rather than relabeling it.
+The old batches retain their 200- and 1,000-iteration specifications; use each
+original source version for its specification-bound analyzer rather than
+relabeling it. The runner still has no cross-version resume: the command above
+starts all 72 arms in a fresh directory, not just the outstanding arms.
 
 ## Required analysis and next gate
 

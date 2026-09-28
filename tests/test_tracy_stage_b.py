@@ -3,6 +3,7 @@
 from copy import deepcopy
 from dataclasses import replace
 import json
+import gzip
 import sys
 from types import SimpleNamespace
 
@@ -247,7 +248,10 @@ def test_parent_stops_at_first_failed_arm(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("solver_error", [False, True])
-def test_worker_archive_and_offline_reconstruction(tmp_path, monkeypatch, solver_error):
+@pytest.mark.parametrize("native_available", [False, True])
+def test_worker_archive_and_offline_reconstruction(
+    tmp_path, monkeypatch, solver_error, native_available
+):
     kwargs, result, named = fixture("singlenode_dc")
     ctx = dict(
         clean=True,
@@ -266,10 +270,26 @@ def test_worker_archive_and_offline_reconstruction(tmp_path, monkeypatch, solver
         if solver_error:
             raise RuntimeError("synthetic solver exception")
 
+    native_info = dict(
+        cost_primal=10.0,
+        cost_dual=9.999,
+        gap_abs=0.001,
+        gap_rel=0.0001,
+        res_primal=1e-12,
+        res_dual=2e-12,
+        iterations=3,
+        solve_time=0.2,
+        status="Solved" if not solver_error else "NumericalError",
+    )
+    native_solver = SimpleNamespace(
+        get_info=lambda: SimpleNamespace(**native_info),
+        get_settings=lambda: "retained effective settings",
+    )
     build = SimpleNamespace(
         solve=solve,
         expressions={k: SimpleNamespace(value=v) for k, v in named.items()},
         prob=SimpleNamespace(
+            _solver_cache={"CLARABEL": native_solver} if native_available else {},
             compilation_time=0.1,
             solver_stats=SimpleNamespace(
                 solver_name="CLARABEL", num_iters=3, solve_time=0.2, setup_time=None
@@ -286,9 +306,20 @@ def test_worker_archive_and_offline_reconstruction(tmp_path, monkeypatch, solver
     assert calls[0]["warm_start"] is False
     assert calls[0]["tol_feas"] == 1e-10
     assert calls[0]["tol_gap_abs"] == calls[0]["tol_gap_rel"] == 1e-10
-    assert calls[0]["max_iter"] == 1000
+    assert calls[0]["max_iter"] == 5000
     assert calls[0]["max_threads"] == 1
+    assert calls[0]["verbose"] is True
     assert (arm_dir / "completion.json").exists()
+    with gzip.open(arm_dir / "result.json.gz", "rt") as stream:
+        archived = json.load(stream)
+    diagnostics = archived["convergence_diagnostics"]
+    assert diagnostics["native_info"] == (native_info if native_available else None)
+    assert diagnostics["effective_native_settings"] == (
+        "retained effective settings" if native_available else None
+    )
+    assert archived["timings"]["canonicalization_and_solve_seconds"] >= 0
+    if solver_error:
+        assert "synthetic solver exception" in archived["exception"]
     runner.atomic_json(
         arm_dir / "supervision.json",
         dict(
@@ -315,3 +346,17 @@ def test_worker_archive_and_offline_reconstruction(tmp_path, monkeypatch, solver
         runner.atomic_json(arm_dir / "completion.json", completion)
         with pytest.raises(ValueError, match="hash"):
             runner.reconstruct_arm(tmp_path, 0, manifest, None)
+
+
+def test_native_diagnostic_error_is_retained_not_raised():
+    def broken_info():
+        raise RuntimeError("native statistics unavailable")
+
+    build = SimpleNamespace(
+        prob=SimpleNamespace(
+            _solver_cache={"CLARABEL": SimpleNamespace(get_info=broken_info)}
+        )
+    )
+    diagnostics = runner.convergence_diagnostics(build)
+    assert diagnostics["native_info"] is None
+    assert "native statistics unavailable" in diagnostics["diagnostic_exception"]

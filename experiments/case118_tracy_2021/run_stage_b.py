@@ -93,6 +93,38 @@ def verify_context(expected):
         raise ValueError("execution context changed or working tree is not clean")
 
 
+def convergence_diagnostics(build):
+    """Read the installed CVXPY/CLARABEL cache without masking solve failures.
+
+    CVXPY does not expose these native fields in SolverStats. Missing native
+    state (for example, a failure before solver construction) is explicit.
+    This diagnostic does not change the scientific acceptance gate.
+    """
+    diagnostics = dict(native_info=None, effective_native_settings=None)
+    try:
+        solver = build.prob._solver_cache.get("CLARABEL")
+        if solver is not None:
+            info = solver.get_info()
+            diagnostics["native_info"] = {
+                name: getattr(info, name)
+                for name in (
+                    "cost_primal",
+                    "cost_dual",
+                    "gap_abs",
+                    "gap_rel",
+                    "res_primal",
+                    "res_dual",
+                    "iterations",
+                    "solve_time",
+                )
+            }
+            diagnostics["native_info"]["status"] = str(info.status)
+            diagnostics["effective_native_settings"] = str(solver.get_settings())
+    except Exception as exc:
+        diagnostics["diagnostic_exception"] = f"{type(exc).__name__}: {exc}"
+    return diagnostics
+
+
 def worker(directory: Path, number: int) -> int:
     started = time.monotonic()
     manifest = json.loads((directory / "binding.json").read_text())
@@ -136,14 +168,19 @@ def worker(directory: Path, number: int) -> int:
         build = build_opf_multistep(**kwargs)
         timings["construction_seconds"] = time.monotonic() - phase_started
         phase("solve")
-        build.solve(
-            solver=cp.CLARABEL,
-            canon_backend=cp.SCIPY_CANON_BACKEND,
-            warm_start=False,
-            verbose=False,
-            **SOLVER_OPTIONS,
-        )
-        timings["canonicalization_and_solve_seconds"] = time.monotonic() - phase_started
+        try:
+            build.solve(
+                solver=cp.CLARABEL,
+                canon_backend=cp.SCIPY_CANON_BACKEND,
+                warm_start=False,
+                verbose=True,
+                **SOLVER_OPTIONS,
+            )
+        finally:
+            timings["canonicalization_and_solve_seconds"] = (
+                time.monotonic() - phase_started
+            )
+            payload["convergence_diagnostics"] = convergence_diagnostics(build)
         phase("extract_and_audit")
         result = extract_results(build)
         payload["renewable_available_mw"] = kwargs["df_nd"].to_numpy()
