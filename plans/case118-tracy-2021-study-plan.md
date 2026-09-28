@@ -6,6 +6,15 @@ economics and remaining operating choices. Battery regularization is selected
 through the shorter studies, not fixed for annual execution now. Generate and
 validate the realized mapping in Stage A.
 
+**Formulation roles:** single-node DC is a comparison arm alongside the
+network-aware solves, not a new layer of the hierarchical controller. The
+hierarchy remains **lossy-network DC → full-physics AC**, with the lossy-DC
+trajectory supplying the per-device SOC signposts and shard boundary states.
+Use the same prepared device fleet and shared device models in all three
+formulations; do not create a separately aggregated or retuned single-node
+fleet. Stage B provides matched shorter DC comparisons, and Stage C provides
+the full-year comparison.
+
 **Current handoff:** the analytical study and selected Stage 0c follow-ups are
 complete and committed. The annual S5 closeout and owner decision to omit S6
 are recorded in `3513284`; the Stage 0c findings are recorded in `0f3b392`.
@@ -872,10 +881,10 @@ disposition does not launch Tracy input generation or numerical work.
   local `main` at `b1df63b17`, verified on 2026-09-28. The working tree was
   clean before this documentation refresh. This verifies Git state, not a new
   numerical or regression run.
-- [ ] **User action, not agent action:** create a fresh Tracy-study branch
+- [x] **User action, not agent action:** create a fresh Tracy-study branch
   from the verified local `main` before Stage A input generation. Record its
   branch name and baseline commit in the handoff.
-- [ ] Obtain the owner's authorization to begin Stage A on that fresh branch.
+- [x] Obtain the owner's authorization to begin Stage A on that fresh branch.
   Closing the toy study and including this plan in the PR do not themselves
   launch Tracy work.
 
@@ -906,7 +915,7 @@ merged analytical benchmark as the recorded baseline.
    costs at zero/full output. Record actual battery weights and the complete
    objective with units, defaults, and explicit overrides. Independently check
    the starting one-third rule, each declared curvature setting, and resolved
-   battery default against the devices supplied to both formulations; an
+   battery default against the devices supplied to all three formulations; an
    unexpected override is a discrepancy to resolve. Include the load-shedding
    policy, actual penalties, fraction limits and eligible device identities.
 4. Produce annual/monthly summaries, annual and representative-week plots of
@@ -919,7 +928,9 @@ merged analytical benchmark as the recorded baseline.
    Include named source-to-prepared row checks and the Dec 18–21 M17 window.
 5. Independently reconstruct hourly aggregate channels and selected bus rows
    directly from the CSV and saved mapping, not by rerunning the same builder.
-   Check the actual arrays reaching both DC and AC model construction.
+   Check the actual arrays reaching single-node DC, lossy-network DC, and AC
+   model construction, including preservation of individual devices when
+   nodal balance is collapsed.
 6. Add focused tests for source identity, calendar, conservation, device
    alignment, random reproducibility, and rejection of silent substitution.
    Use ordinary repository test commands. Keep this stage's tests input-only;
@@ -962,8 +973,14 @@ control. Several criteria may select the same window. Do not substitute only
 isolated hours or short prefixes for these coupled studies, and do not use
 results from a not-yet-authorized annual solve to select them.
 
-Run the existing rated lossy-DC formulation on those windows with the same
-full-year-derived capacities, allocation weights, and physical/economic rules.
+Run the existing rated lossy-DC formulation and matched single-node DC
+comparisons on those windows with the same full-year-derived capacities,
+allocation weights, and shared physical/economic rules. Pair the two
+formulations at the baseline and proposed annual economic settings; declare
+any additional sensitivity pairs within the bounded solve budget rather than
+automatically doubling every sensitivity run. The single-node arm measures
+operation without network restrictions; it does not supply AC signposts or
+replace the network-aware qualification gate.
 Vary only the declared generator-curvature and battery-weight settings in
 matched comparisons; keep the load-shedding policy explicit and consistent
 unless its penalty is itself being checked. Do not resize resources to each
@@ -1016,10 +1033,20 @@ After the targeted-DC gate, run both **vectorized, full-year T=8760** problems:
 Use the same frozen Tracy 2021 hours, resource identities and capacities,
 available renewable channels, costs, shedding policy, time step, and per-device
 initial/terminal SOC policy. Preserve the individual generators, renewable
-devices, and batteries when collapsing network balance; do not replace them
+devices, loads, and batteries when collapsing network balance; do not replace them
 with a differently sized or priced aggregate fleet. The intentional model
 differences are network constraints and the lossy-DC loss proxy and its cost.
 Keep those objective components explicit in the comparison.
+
+Device parity means shared device implementations, identities, active-power
+capabilities, storage dynamics, terminal policies, and applicable costs—not
+invented reactive physics in a DC model. AC additionally enforces reactive
+capabilities and apparent-power limits; DC uses the corresponding active-power
+device constraints. Reactive load inputs remain aligned metadata in DC. If
+HVDC devices are introduced by a separately approved study change, their
+single-node capability remains explicitly null because both terminals collapse
+to the same node; do not add artificial internal-transfer losses or costs to
+the copper-plate model.
 
 Audit each solution against its own formulation and persist both full primal
 trajectories, complete analyses, source identities, and SOC trajectories under
