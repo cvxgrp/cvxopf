@@ -62,3 +62,27 @@ iteration limits; the second retained 21 accepted arms. The owner-approved
 launch; prior evidence is preserved. `model_inputs()` applies the approved annual
 50% endpoints even to an inspection window; numerical short-window studies
 must explicitly select their boundary conditions before using it to solve.
+
+## Explore retained comparison results
+
+Initial owner observations and implications for MPC and uncertainty studies
+are captured in [the Stage B discussion report](STAGE_B_REPORT.md).
+
+`results_notebook.py` is a read-only marimo explorer of the completed 72-arm
+`results/stage_b_maxiter5000/` batch. From the repository root:
+
+```sh
+uvx marimo run --sandbox experiments/case118_tracy_2021/results_notebook.py
+```
+
+The segment dropdown and three independent model multiselects control input,
+aggregate, and device-level time-series plots. Device selectors cover generation,
+storage, renewables, loads, branch flows, and nodal injections. Dates retain the
+source's fixed UTC−08:00 timezone; SoC includes the initial boundary.
+
+The notebook requires the ignored retained run directory and
+`results/stage_a_active_inputs/aggregate_inputs.csv`, along with the tracked
+Stage A tables and source network. It checks input/result hashes, does not solve
+models, and does not substitute data when artifacts are absent. Its dependencies
+are declared in the notebook and installed in an isolated environment by
+`--sandbox`; no project dependency changes are needed.
