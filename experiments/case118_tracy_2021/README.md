@@ -120,3 +120,16 @@ trajectory. The [boundary report](SHARD_BOUNDARIES.md) and
 [state manifest](SHARD_BOUNDARIES.json) record the resulting 13-shard partition,
 including its allowed 68-hour final shard. This calculation does not authorize
 AC execution or select an AC runner policy.
+
+## Bounded AC qualification (Stage D)
+
+The owner has opened Stage D after committing the shard calculation at
+`e09af9dc7`. The [qualification protocol](STAGE_D_PROTOCOL.md) starts with four
+periods (surplus, deficit, and both transition directions), six implemented
+hours each, at 1/3/6/12-step look-aheads: 96 controlling solves before recovery.
+Exact starts and budgets remain to be frozen. Then pause for owner evaluation
+before selecting the broader test set. The runner must checkpoint accepted
+actions and resume each trajectory from its own realized state and shifted-start
+source, skipping completed work; restart tests are required before execution.
+No Tracy AC solve or annual AC launch
+has occurred.

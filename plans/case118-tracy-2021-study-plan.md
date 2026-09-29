@@ -36,8 +36,11 @@ notebook are prepared in `experiments/case118_tracy_2021/`. The owner approved
 using the accepted lossy-DC trajectory for shard calculation; the reviewed
 rule produces 13 shards, recorded in
 `experiments/case118_tracy_2021/SHARD_BOUNDARIES.md` and its state manifest.
-**AC qualification remains separately gated**; boundary calculation does not
-authorize it or settle the remaining Stage D execution choices. The replay
+The owner subsequently committed the boundary calculation at `e09af9dc7` and
+authorized opening **Stage D, bounded AC qualification**. Its proposed protocol
+is `experiments/case118_tracy_2021/STAGE_D_PROTOCOL.md`; the initial numerical
+budget and implementation checkpoint remain to be approved before solves.
+Annual AC execution is not authorized. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -1203,6 +1206,38 @@ retune source channels, expand budgets, or jump to larger storage. The six-hour
 storage sensitivity is the declared next size, not a universal remedy.
 
 #### Runner-policy tests within the qualification budget
+
+**Owner-approved initial comparison:** select four periods—large surplus,
+large deficit, surplus → deficit, and deficit → surplus—and implement **six
+hours from each start**, for each horizon below. This is **24 controlling solves
+per horizon, 96 overall**, before recovery attempts. All horizons share the
+same initial DC SoC at each period start, then advance their own realized state.
+Provide data through t0+17 to avoid truncating W=12. This replaces the detached
+screen and proposed 12-hour rollouts. Freeze exact starts and numerical budgets;
+**pause after these four periods for owner evaluation before selecting the
+broader qualification set**. The following later policy studies are not
+automatic follow-on execution.
+
+The runner must support stopping and resuming this comparison without repeating
+accepted work. Checkpoint each trajectory's realized SoC, accepted AC solution
+for shifted initialization, and next hour; archive acceptance before advancing.
+Retain interrupted attempts and cumulative resource accounting across restarts.
+Verify stop/resume and archive/cursor reconciliation using lightweight fixtures
+before numerical execution; see D1's checkpoint/restart requirements.
+
+Compare inner horizons
+**W in {1, 3, 6, 12} hourly steps**, keeping `delta=1` and the execution stride
+at one hour. Include matched-initial-state first-action comparisons and bounded
+closed-loop trajectories, measuring implemented dispatch/P/Q, storage/SoC,
+curtailment, shedding, executed cost, and solve/total time including recovery.
+Use each horizon's annual lossy-DC target at t+W. W=1 hard ideal-storage endpoints
+fix the first-hour battery power; this is an intentional limiting case, not a
+time-resolution test. Do not compare raw objectives over unequal horizons or
+ignore differences in final stored energy. Keep physical/solver/start policy
+fixed while screening horizons; avoid a full Cartesian product with assembly
+and helper policies. Freeze separate compute
+budgets, and obtain an owner decision before changing the operational horizon.
+Details are in `experiments/case118_tracy_2021/STAGE_D_PROTOCOL.md`, D1.
 
 The [independent Case118 replay](../experiments/case118_vectorization_replay/REPORT.md)
 provides motivation, not Tracy calibration. Of 120 historical primary winners,
