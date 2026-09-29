@@ -2,9 +2,10 @@
 
 The source, active-power scaling, siting rules, and storage sizes in sections
 2–3 are approved design choices. Section 5 records the approved starting
-economics and remaining operating choices. Battery regularization is selected
-through the shorter studies, not fixed for annual execution now. Generate and
-validate the realized mapping in Stage A.
+economics and remaining operating choices. Following the shorter studies, the
+owner approved **medium battery throughput weight lambda = 0.01** and
+**generator curvature on, rho = 1/3**, for Stage C. The realized Stage A mapping
+and device fleet remain unchanged.
 
 **Formulation roles:** single-node DC is a comparison arm alongside the
 network-aware solves, not a new layer of the hierarchical controller. The
@@ -24,9 +25,13 @@ was verified on 2026-09-28 at `b1df63b17`. M14 closeout, the additional Case118
 vectorization studies, and public vectorized defaults are also included in
 local `main`. The owner created `tracy-study` and authorized Stage A. Input
 preparation is based on committed plan checkpoint `abc1b7844`, following main
-baseline `b1df63b17` and the documentation refresh. The input-review candidate
-is at `experiments/case118_tracy_2021/STAGE_A_REPORT.md`; no OPF solves have run.
-User review 1 and Stage B authorization remain pending. The replay
+baseline `b1df63b17` and the documentation refresh. The approved input package
+is at `experiments/case118_tracy_2021/STAGE_A_REPORT.md`. Stage B's 72-arm
+5,000-iteration-cap batch is complete; its results explorer and initial
+discussion are committed at `7ce2fb7a6`. The owner reviewed the comparison,
+selected on/medium economics, and authorized proceeding with Stage C. Prepare
+the bounded annual runner and analysis checkpoint for review before launch;
+no Stage C solve has run at this handoff. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -1046,6 +1051,20 @@ qualification checks.
 
 ### C. Single-node and lossy-network 8,760-hour DC solves and user review 2
 
+**Owner decision:** proceed with Stage C using generator curvature **rho = 1/3
+(on)** and battery throughput weight **lambda = 0.01 (medium)**. This is one
+matched annual pair, not another economic sensitivity grid. Preserve the
+approved shedding policy and all other prepared device and input settings.
+Reuse the Stage B preparation, physical audit, and supervised execution paths
+where applicable; do not duplicate the device models or rerun Stage B. Freeze
+annual resource limits and stopping rules in the Stage C implementation
+checkpoint before numerical execution. AC remains outside this authorization.
+
+The owner approved **four hours and 16 GiB worker RSS per solve**, sequentially,
+with stop-on-failure and no automatic retries. The implementation and launch
+contract are in
+[`STAGE_C_PROTOCOL.md`](../experiments/case118_tracy_2021/STAGE_C_PROTOCOL.md).
+
 After the targeted-DC gate, run both **vectorized, full-year T=8760** problems:
 
 - `singlenode_dc`: the copper-plate comparison with aggregate power balance.
@@ -1082,6 +1101,37 @@ DC result is an AC solution or an asserted bound on the AC objective or SOC.
 The lossy-network DC result remains the source of AC SOC signposts and shard
 boundary states. The single-node annual result is a required comparison;
 using its signposts for a separate AC rollout would be an additional experiment.
+
+#### Required results notebook
+
+Deliver a read-only **marimo notebook** alongside the Stage C report, extending
+the Stage B explorer's conventions and reusing loaders and plotting code where
+practical. It must read the retained annual results, never launch solves, and
+provide:
+
+- Full-year hours-by-days heatmaps of the actual scaled input channels (load,
+  utility solar, wind, distributed solar, and available net load).
+- Matched output heatmaps for copper plate and lossy DC: dispatchable and
+  renewable generation, curtailment, battery power and SoC, and load shedding.
+  Use common units and shared color limits for each matched quantity.
+- Full-year difference heatmaps with the explicit convention **lossy DC minus
+  copper plate**. Use zero-centered diverging scales and identity-aligned
+  quantities; do not normalize each formulation independently. Inputs are
+  shared: verify their equality rather than imply an input treatment effect.
+- Interactive time-series plots of inputs, outputs, and the same signed
+  differences, with date-range selection, formulation overlays, and aggregate
+  and individual-device views. Include network-only congestion/flow views,
+  without inventing copper-plate branch quantities or branch deltas.
+- The fixed source UTC−08:00 calendar, positive-discharge battery convention,
+  visible units, and correct distinction between 8,760 interval powers and
+  8,761 SoC boundaries. Retain all boundaries in time-series plots; explicitly
+  label which boundary supplies each hour's SoC heatmap value.
+
+Include annual/monthly summary tables and residuals, and identify the exact
+retained run/fixture behind the notebook. Keep raw results separate from
+display clipping or normalization, and explain numerical-scale shedding.
+The notebook and report are required parts of user review 2, not optional
+post-study visualization work.
 
 **User review 2 is an explicit stop after both Tracy annual DC solves, before
 any Tracy AC solve.** Re-present the data-generation choices with their
@@ -1281,9 +1331,11 @@ Work packages **0a: old-study scientific/Git closeout (commit 1)** and its
 **experimental-design pause**, **0b: separate `outputs/` triage/promotion
 (commit 2)**, and the selected toy studies and PR merge in **0c** are complete.
 Local `main` contains the merged study. The owner created `tracy-study` and
-authorized input-only Stage A, as recorded in the checklist above. The next
-gate is user review 1 of the prepared inputs, followed by a bounded Stage B
-protocol resolving the remaining numerical-study choices in section 5.
+authorized Stage A and Stage B, both now completed. Following review of the
+72-arm comparisons, the owner approved on/medium economics and proceeding
+with Stage C. The immediate checkpoint is the reviewed annual-pair runner,
+resource budget, audit, and required marimo analysis deliverables. After both
+annual solves, user review 2 remains an explicit stop before AC qualification.
 Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.
 

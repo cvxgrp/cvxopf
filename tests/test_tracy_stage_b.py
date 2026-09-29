@@ -232,7 +232,7 @@ def test_parent_stops_at_first_failed_arm(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "_child_rss_mib", lambda pid: 10.0)
     calls = []
 
-    def supervise(command, directory):
+    def supervise(command, directory, limits):
         calls.append(directory)
         return dict(classification="wall_limit")
 

@@ -1,5 +1,12 @@
 # Stage B — targeted DC studies
 
+**Current disposition:** the subsequent 5,000-iteration-cap batch at `bdaeda4b8`
+completed all 72 arms in `results/stage_b_maxiter5000/`. Its explorer and initial
+discussion were committed at `7ce2fb7a6`. The owner selected on/medium economics
+and approved proceeding with [Stage C](STAGE_C_PROTOCOL.md). The execution-status
+narrative below is retained as the historical pre-launch record, not current
+launch guidance.
+
 Status: **initial run stopped; owner-approved iteration-budget revision pending commit**, opened after owner approval of
 Stage A at `39609190f`. The owner authorized beginning Stage B; the numerical
 72-solve comparison grid below is owner-approved. Remaining execution details

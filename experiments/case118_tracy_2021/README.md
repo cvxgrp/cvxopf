@@ -1,7 +1,9 @@
 # Tracy 2021 → Case118
 
-Stage A input-review candidate, prepared on `tracy-study` from `abc1b7844`.
-No OPF solve has run. No Stage B or annual execution is authorized.
+Stage A inputs are approved and the 72-arm Stage B DC comparison is complete.
+The owner approved proceeding with Stage C at rho = 1/3 and lambda = 0.01.
+The annual-pair runner is prepared for review; no Stage C solve has run.
+AC execution remains separately gated.
 
 Start with [the input report](STAGE_A_REPORT.md), then the
 [study plan](../../plans/case118-tracy-2021-study-plan.md).
@@ -58,8 +60,9 @@ Stage B now has six approved windows and a 72-solve comparison grid. The
 [protocol](STAGE_B_PROTOCOL.md) documents the runner, explicit solver/audit
 settings, resource limits and launch/analysis commands. Two batches stopped at
 iteration limits; the second retained 21 accepted arms. The owner-approved
-5,000-iteration cap and convergence logging are pending commit and a fresh
-launch; prior evidence is preserved. `model_inputs()` applies the approved annual
+5,000-iteration-cap batch at `bdaeda4b8` subsequently completed all 72 arms in
+`results/stage_b_maxiter5000/`; prior evidence is preserved.
+`model_inputs()` applies the approved annual
 50% endpoints even to an inspection window; numerical short-window studies
 must explicitly select their boundary conditions before using it to solve.
 
@@ -86,3 +89,13 @@ Stage A tables and source network. It checks input/result hashes, does not solve
 models, and does not substitute data when artifacts are absent. Its dependencies
 are declared in the notebook and installed in an isolated environment by
 `--sandbox`; no project dependency changes are needed.
+
+## Annual DC pair (Stage C)
+
+The [Stage C protocol](STAGE_C_PROTOCOL.md) fixes the matched annual pair,
+unchanged input fleet and audit, and owner-approved **4-hour / 16-GiB per-worker
+limits**. `run_stage_c.py` reuses Stage B's sequential fresh-process runner;
+single-node runs first, then lossy DC, stopping on any rejected arm without retry.
+Review and commit this implementation before using the protocol's launch command.
+Both full-year results, their independent analysis, and the required annual
+heatmap/time-series marimo notebook form user review 2 before any AC work.

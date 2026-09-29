@@ -5,6 +5,7 @@ The analyzer can reconstruct retained accepted results without a numerical solve
 """
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import gzip
 from importlib.metadata import version
@@ -16,6 +17,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 
 import cvxpy as cp
 import clarabel
@@ -32,7 +34,6 @@ from .prepare import HERE, ROOT, SOURCE, digest
 from .stage_b import (
     Arm,
     LIMITS,
-    SOLVER_OPTIONS,
     audit_result,
     inputs_for_arm,
     study_spec,
@@ -61,7 +62,7 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
 
 
-def context():
+def context(protocol="STAGE_B_PROTOCOL.md"):
     return dict(
         commit=git("rev-parse", "HEAD"),
         clean=not git("status", "--porcelain"),
@@ -73,7 +74,7 @@ def context():
         },
         stage_a_manifest_sha256=digest(HERE / "stage_a/manifest.json"),
         source_sha256=digest(SOURCE),
-        protocol_sha256=digest(HERE / "STAGE_B_PROTOCOL.md"),
+        protocol_sha256=digest(HERE / protocol),
         clarabel_default_settings=str(clarabel.DefaultSettings()),
         thread_environment={
             k: os.environ.get(k)
@@ -91,6 +92,23 @@ def verify_context(expected):
     current = context()
     if not current["clean"] or current != expected:
         raise ValueError("execution context changed or working tree is not clean")
+
+
+@dataclass(frozen=True)
+class Study:
+    """Experiment-specific identity around the shared sequential execution path."""
+
+    specification: Callable[[], dict]
+    protocol: str
+    module: str
+
+    def context(self):
+        return context(self.protocol)
+
+    def verify_context(self, expected):
+        current = self.context()
+        if not current["clean"] or current != expected:
+            raise ValueError("execution context changed or working tree is not clean")
 
 
 def convergence_diagnostics(build):
@@ -125,7 +143,7 @@ def convergence_diagnostics(build):
     return diagnostics
 
 
-def worker(directory: Path, number: int) -> int:
+def worker(directory: Path, number: int, *, study: Study | None = None) -> int:
     started = time.monotonic()
     manifest = json.loads((directory / "binding.json").read_text())
     arm_dir = directory / f"arm-{number:03d}"
@@ -156,10 +174,12 @@ def worker(directory: Path, number: int) -> int:
         phase_history.append(dict(phase=name, elapsed_seconds=now - started))
 
     build = None
+    specification = study_spec if study is None else study.specification
+    check_context = verify_context if study is None else study.verify_context
     try:
-        if manifest["study"] != study_spec():
+        if manifest["study"] != specification():
             raise ValueError("binding study specification differs")
-        verify_context(manifest["context"])
+        check_context(manifest["context"])
         phase("prepare")
         p = verified_inputs()
         kwargs = inputs_for_arm(p, Arm(**payload["arm"]))
@@ -174,7 +194,7 @@ def worker(directory: Path, number: int) -> int:
                 canon_backend=cp.SCIPY_CANON_BACKEND,
                 warm_start=False,
                 verbose=True,
-                **SOLVER_OPTIONS,
+                **manifest["study"]["solver_options"],
             )
         finally:
             timings["canonicalization_and_solve_seconds"] = (
@@ -215,7 +235,7 @@ def worker(directory: Path, number: int) -> int:
         payload["classification"] = (
             "accepted" if payload["audit"]["passed"] else "rejected"
         )
-        verify_context(manifest["context"])
+        check_context(manifest["context"])
     except Exception as exc:
         payload["classification"] = "exception"
         payload["exception"] = f"{type(exc).__name__}: {exc}"
@@ -362,8 +382,13 @@ def interrupted(signum, frame):
     raise KeyboardInterrupt(f"received signal {signum}")
 
 
-def run(directory: Path, commit: str) -> dict:
-    ctx = context()
+def run(directory: Path, commit: str, *, study: Study | None = None) -> dict:
+    parent_started = time.monotonic()
+    get_context = context if study is None else study.context
+    check_context = verify_context if study is None else study.verify_context
+    specification = study_spec if study is None else study.specification
+    module = MODULE if study is None else study.module
+    ctx = get_context()
     if not ctx["clean"] or commit != ctx["commit"]:
         raise ValueError("requires clean tree and exact full approved execution commit")
     if directory.exists():
@@ -373,40 +398,53 @@ def run(directory: Path, commit: str) -> dict:
         raise RuntimeError("RSS preflight failed; fix permissions before launch")
     manifest = dict(
         context=ctx,
-        study=study_spec(),
+        study=specification(),
         bound_utc=datetime.now(timezone.utc).isoformat(),
         thermal_telemetry="external/contextual; not collected by this runner",
     )
     directory.mkdir(parents=True)
     atomic_immutable_json(directory / "binding.json", manifest)
     record = dict(
-        classification="running", accepted=[], attempts=[], annual_execution=False
+        classification="running",
+        accepted=[],
+        attempts=[],
+        annual_execution=manifest["study"]["annual_execution"],
+        parent_preflight_seconds=time.monotonic() - parent_started,
+        reconstruction_seconds=[],
     )
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
         for number in range(len(manifest["study"]["arms"])):
-            verify_context(ctx)
+            check_context(ctx)
             arm_dir = directory / f"arm-{number:03d}"
             arm_dir.mkdir()
             supervision = supervise(
                 [
                     sys.executable,
                     "-m",
-                    MODULE,
+                    module,
                     "--worker",
                     str(number),
                     "--output",
                     str(directory),
                 ],
                 arm_dir,
+                limits=manifest["study"]["limits"],
             )
             record["attempts"].append(dict(number=number, supervision=supervision))
+            reconstruction_started = time.monotonic()
             try:
                 accepted = reconstruct_arm(directory, number, manifest, p)
             except Exception as exc:
                 record.update(classification="stopped", reason=str(exc))
                 break
-            verify_context(ctx)
+            finally:
+                record["reconstruction_seconds"].append(
+                    dict(
+                        number=number, seconds=time.monotonic() - reconstruction_started
+                    )
+                )
+            check_context(ctx)
             record["accepted"].append(accepted)
             atomic_json(directory / "progress.json", record)
         else:
@@ -415,17 +453,20 @@ def run(directory: Path, commit: str) -> dict:
         record.update(classification="stopped", reason=f"{type(exc).__name__}: {exc}")
     finally:
         signal.signal(signal.SIGTERM, previous)
+        record["total_parent_wall_seconds"] = time.monotonic() - parent_started
         atomic_json(directory / "progress.json", jsonable(record))
         atomic_immutable_json(directory / "study-result.json", jsonable(record))
     return record
 
 
-def analyze(directory: Path) -> dict:
+def analyze(directory: Path, *, study: Study | None = None) -> dict:
+    specification = study_spec if study is None else study.specification
+    get_context = context if study is None else study.context
     manifest = json.loads((directory / "binding.json").read_text())
-    if manifest["study"] != study_spec():
+    if manifest["study"] != specification():
         raise ValueError("study specification differs from this analyzer")
     p = verified_inputs()
-    current = context()
+    current = get_context()
     for key in ("stage_a_manifest_sha256", "source_sha256"):
         if current[key] != manifest["context"][key]:
             raise ValueError("analyzer inputs differ from execution binding")
@@ -446,10 +487,10 @@ def analyze(directory: Path) -> dict:
     return dict(
         execution_context=manifest["context"],
         analyzer_context=current,
-        complete=len(accepted) == 72 and finalized,
+        complete=len(accepted) == len(manifest["study"]["arms"]) and finalized,
         accepted=accepted,
         stopped=stopped,
-        annual_execution=False,
+        annual_execution=manifest["study"]["annual_execution"],
     )
 
 
