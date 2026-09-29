@@ -275,4 +275,7 @@ for MPC and uncertainty-rich studies, but do not validate those controllers.
 The approved hierarchy remains lossy DC → AC. The next decision is owner
 acceptance or revision of the fixture in light of this annual comparison,
 followed by separately authorized bounded AC qualification. No AC solve or
-shard derivation is authorized by this report.
+shard derivation is authorized by this report alone. The owner subsequently
+approved lossy-DC shard calculation; see the separate
+[boundary report](SHARD_BOUNDARIES.md) for its partition and retained states.
+That approval does not authorize AC execution.

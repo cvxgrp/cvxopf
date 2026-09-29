@@ -114,3 +114,9 @@ the tracked input tables and network source; neither the owner CSV nor a
 solver installation is needed merely to view the retained results.
 Compact numerical evidence is tracked in `stage_c_summary/`; the shared
 read-only analysis lives in `annual_results.py`.
+
+The owner subsequently approved deriving shards from the accepted lossy-DC
+trajectory. The [boundary report](SHARD_BOUNDARIES.md) and
+[state manifest](SHARD_BOUNDARIES.json) record the resulting 13-shard partition,
+including its allowed 68-hour final shard. This calculation does not authorize
+AC execution or select an AC runner policy.

@@ -32,8 +32,12 @@ discussion are committed at `7ce2fb7a6`. The owner reviewed the comparison,
 selected on/medium economics, and authorized proceeding with Stage C. Both
 annual solves completed at clean execution commit `034ea6b9e5d9dd4276d6e742847f547c19a1047d`
 and passed independent reconstruction. The annual report and required marimo
-notebook are prepared in `experiments/case118_tracy_2021/`; **user review 2 is
-pending**, before any AC qualification or shard derivation. The replay
+notebook are prepared in `experiments/case118_tracy_2021/`. The owner approved
+using the accepted lossy-DC trajectory for shard calculation; the reviewed
+rule produces 13 shards, recorded in
+`experiments/case118_tracy_2021/SHARD_BOUNDARIES.md` and its state manifest.
+**AC qualification remains separately gated**; boundary calculation does not
+authorize it or settle the remaining Stage D execution choices. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
