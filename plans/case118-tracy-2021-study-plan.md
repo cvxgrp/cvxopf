@@ -29,9 +29,11 @@ baseline `b1df63b17` and the documentation refresh. The approved input package
 is at `experiments/case118_tracy_2021/STAGE_A_REPORT.md`. Stage B's 72-arm
 5,000-iteration-cap batch is complete; its results explorer and initial
 discussion are committed at `7ce2fb7a6`. The owner reviewed the comparison,
-selected on/medium economics, and authorized proceeding with Stage C. Prepare
-the bounded annual runner and analysis checkpoint for review before launch;
-no Stage C solve has run at this handoff. The replay
+selected on/medium economics, and authorized proceeding with Stage C. Both
+annual solves completed at clean execution commit `034ea6b9e5d9dd4276d6e742847f547c19a1047d`
+and passed independent reconstruction. The annual report and required marimo
+notebook are prepared in `experiments/case118_tracy_2021/`; **user review 2 is
+pending**, before any AC qualification or shard derivation. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -1333,9 +1335,9 @@ Work packages **0a: old-study scientific/Git closeout (commit 1)** and its
 Local `main` contains the merged study. The owner created `tracy-study` and
 authorized Stage A and Stage B, both now completed. Following review of the
 72-arm comparisons, the owner approved on/medium economics and proceeding
-with Stage C. The immediate checkpoint is the reviewed annual-pair runner,
-resource budget, audit, and required marimo analysis deliverables. After both
-annual solves, user review 2 remains an explicit stop before AC qualification.
+with Stage C. Both annual solves and independent reconstruction are complete;
+the report and required marimo analysis deliverables are prepared for review.
+User review 2 remains an explicit stop before AC qualification.
 Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.
 

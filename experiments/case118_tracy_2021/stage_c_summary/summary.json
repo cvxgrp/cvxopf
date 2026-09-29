@@ -1,0 +1,121 @@
+{
+  "execution_commit": "034ea6b9e5d9dd4276d6e742847f547c19a1047d",
+  "hashes": {
+    "binding.json": "f391437a9a375c4b3f8596917a580bc0f09818d64636fb73e18d5da176852a8c",
+    "study-result.json": "8048d31c82ce8e66c0d7adf99c3b032469289166ea87ef99c0551c075a6a74ea",
+    "analysis.json": "36e073463b473524574d050eb3037e675ed91823f3dd433893a404a07b918eac",
+    "arm-000/result.json.gz": "1615f702284b655fc754ec6d5f23ce36232310b6315044f9dd719694e2766660",
+    "arm-001/result.json.gz": "f984b690497d60dd983314f168be641063a933b0b1b0c717a94f0341d76e9991"
+  },
+  "annual": [
+    {
+      "formulation": "Copper plate",
+      "generation_mwh": 4279168.221414987,
+      "renewable_used_mwh": 26482793.456922468,
+      "curtailed_mwh": 32359978.30742317,
+      "energy_not_served_mwh": 2.063e-07,
+      "throughput_mwh": 8006597.439946197,
+      "generator_cost": 101079714.40070203,
+      "load_shedding_cost": 0.0042833217,
+      "storage_cost": 80065.974399462,
+      "objective": 101159780.37938483,
+      "generation_peak_mw": 3711.887128289,
+      "near_zero_generation_hours": 5954,
+      "solver_seconds": 58.965353208,
+      "iterations": 38,
+      "compilation_seconds": 3.3285717964,
+      "canonicalization_and_solve_seconds": 63.755357583,
+      "construction_seconds": 0.024297208,
+      "extraction_audit_seconds": 0.06256,
+      "preparation_seconds": 0.1196225,
+      "archive_seconds": 12.063721834,
+      "worker_seconds": 76.207618583,
+      "supervisor_seconds": 77.42804825,
+      "peak_sampled_rss_mib": 6520.75,
+      "dc_loss_cost": 0.0
+    },
+    {
+      "formulation": "Lossy DC",
+      "generation_mwh": 4732417.033543761,
+      "renewable_used_mwh": 26029544.64479302,
+      "curtailed_mwh": 32813227.11955262,
+      "energy_not_served_mwh": 6.677e-07,
+      "throughput_mwh": 8275077.677179678,
+      "generator_cost": 109380720.04585464,
+      "load_shedding_cost": 0.0138629471,
+      "storage_cost": 82750.7767717968,
+      "objective": 109472954.96679828,
+      "generation_peak_mw": 3711.890718288,
+      "near_zero_generation_hours": 4509,
+      "solver_seconds": 486.580870422,
+      "iterations": 204,
+      "compilation_seconds": 5.2845461369,
+      "canonicalization_and_solve_seconds": 494.462412708,
+      "construction_seconds": 0.029561292,
+      "extraction_audit_seconds": 0.090396666,
+      "preparation_seconds": 0.123222583,
+      "archive_seconds": 17.852974375,
+      "worker_seconds": 512.729892125,
+      "supervisor_seconds": 514.463104167,
+      "peak_sampled_rss_mib": 7861.703125,
+      "dc_loss_cost": 9484.130308895
+    }
+  ],
+  "comparison": {
+    "trajectories": {
+      "Dispatchable generation (MW)": {
+        "correlation": 0.9893597488221194,
+        "rms_difference": 132.5630571475932,
+        "mean_difference": 51.74073197817059
+      },
+      "Battery power (MW; + discharge)": {
+        "correlation": 0.9819020496062748,
+        "rms_difference": 234.06230484617348,
+        "mean_difference": -3.5040463681320007e-15
+      },
+      "SoC at interval start (MWh)": {
+        "correlation": 0.9847256948156139,
+        "rms_difference": 738.5472663620678,
+        "mean_difference": 181.41893723830188
+      }
+    },
+    "congestion": {
+      "threshold": 0.99999,
+      "hours_any_branch": 6248,
+      "distinct_branches": 76,
+      "maximum_utilization": 0.9999999999993567,
+      "top_branches": [
+        {
+          "row": 175,
+          "from_bus": 110,
+          "to_bus": 111,
+          "hours": 5754
+        },
+        {
+          "row": 133,
+          "from_bus": 86,
+          "to_bus": 87,
+          "hours": 2293
+        },
+        {
+          "row": 127,
+          "from_bus": 77,
+          "to_bus": 82,
+          "hours": 1934
+        },
+        {
+          "row": 152,
+          "from_bus": 80,
+          "to_bus": 99,
+          "hours": 1875
+        },
+        {
+          "row": 109,
+          "from_bus": 70,
+          "to_bus": 71,
+          "hours": 1838
+        }
+      ]
+    }
+  }
+}

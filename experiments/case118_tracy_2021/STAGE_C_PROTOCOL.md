@@ -1,6 +1,10 @@
 # Stage C — matched annual DC comparison
 
-Status: implementation in progress; no annual Tracy solves executed. The owner
+Status: **both annual DC solves completed and independently accepted** at clean
+execution commit `034ea6b9e5d9dd4276d6e742847f547c19a1047d`.
+See [the report](STAGE_C_REPORT.md) for results and retained evidence. User
+review 2 is pending; no AC execution is authorized. The following records the
+reviewed execution contract. The owner
 approved proceeding with Stage C at **rho = 1/3 (on)** and **lambda = 0.01
 (medium)**, and approved **4 hours / 16 GiB worker RSS per solve**. Review and
 commit the implementation checkpoint before binding and launching it. This

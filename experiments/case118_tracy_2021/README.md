@@ -2,8 +2,9 @@
 
 Stage A inputs are approved and the 72-arm Stage B DC comparison is complete.
 The owner approved proceeding with Stage C at rho = 1/3 and lambda = 0.01.
-The annual-pair runner is prepared for review; no Stage C solve has run.
-AC execution remains separately gated.
+Both annual DC solves are now complete and independently accepted. The
+[annual comparison report](STAGE_C_REPORT.md) and results notebook are ready
+for user review 2. AC execution remains separately gated.
 
 Start with [the input report](STAGE_A_REPORT.md), then the
 [study plan](../../plans/case118-tracy-2021-study-plan.md).
@@ -96,6 +97,20 @@ The [Stage C protocol](STAGE_C_PROTOCOL.md) fixes the matched annual pair,
 unchanged input fleet and audit, and owner-approved **4-hour / 16-GiB per-worker
 limits**. `run_stage_c.py` reuses Stage B's sequential fresh-process runner;
 single-node runs first, then lossy DC, stopping on any rejected arm without retry.
-Review and commit this implementation before using the protocol's launch command.
-Both full-year results, their independent analysis, and the required annual
-heatmap/time-series marimo notebook form user review 2 before any AC work.
+The accepted run is retained in `results/stage_c/` from execution commit
+`034ea6b9e5d9dd4276d6e742847f547c19a1047d`; do not rerun it to view results.
+Both full-year results, their independent analysis, and the annual notebook
+form user review 2 before any AC work.
+
+```sh
+uvx marimo run --sandbox experiments/case118_tracy_2021/annual_results_notebook.py
+```
+
+The notebook provides full-year input/output heatmaps, matched scales, signed
+network-minus-copper-plate differences, interactive date ranges and device
+time series, monthly totals, timing, congestion, and acceptance residuals.
+It requires the ignored Stage C archives and Stage A aggregate inputs, plus
+the tracked input tables and network source; neither the owner CSV nor a
+solver installation is needed merely to view the retained results.
+Compact numerical evidence is tracked in `stage_c_summary/`; the shared
+read-only analysis lives in `annual_results.py`.
