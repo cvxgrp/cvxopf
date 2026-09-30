@@ -35,6 +35,7 @@ from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_json,
 )
 from . import stage_d as model
+from . import stage_d_continuation as continuation
 from .prepare import HERE, ROOT, digest
 from .run_stage_b import jsonable
 from .stage_b import audit_result, verified_inputs
@@ -244,6 +245,22 @@ def verify_attempt(root, directory, request, prepared):
         if digest(directory / name) != completion[key]:
             raise ValueError(f"attempt artifact mismatch: {directory / name}")
     payload = model.read(directory / "result.json.gz")
+    record = continuation.load(root, verify_prefix=False)
+    historical = (
+        record is not None
+        and str((directory / "request.json").relative_to(root))
+        in record["historical_files"]
+    )
+    if (directory / "execution-context.json").exists():
+        expected_context = model.read(directory / "execution-context.json")
+        if payload.get("execution_context") != expected_context or expected_context != (
+            record["original_context"]
+            if historical
+            else continuation.execution_context(root)
+        ):
+            raise ValueError("attempt execution provenance mismatch")
+    elif record is not None and not historical:
+        raise ValueError("new continued attempt lacks execution provenance")
     start = model.read(directory / "start.json")
     raw_x0 = model.read(directory / "x0.json.gz")
     raw_x0.pop("iteration")
@@ -592,11 +609,13 @@ def interrupted(signum, frame):
     raise KeyboardInterrupt(f"signal {signum}")
 
 
-def run(root, commit, *, resume=False):
+def run(root, commit, *, resume=False, continue_from=None):
     invocation_started, invocation_utc = time.monotonic(), utc()
     for name in THREAD_KEYS:
         os.environ[name] = "1"
     current = model.context()
+    if continue_from is not None and not resume:
+        raise ValueError("audit continuation is only available with resume")
     if not current["clean"] or current["commit"] != commit:
         raise ValueError(
             "run/resume requires the exact clean reviewed execution commit"
@@ -612,7 +631,22 @@ def run(root, commit, *, resume=False):
             root / "binding.json", dict(context=current, study=study, created_utc=utc())
         )
     binding = model.read(root / "binding.json")
-    if binding["context"] != current or binding["study"] != study:
+    retained_continuation = continuation.load(root)
+    expected_context = (
+        retained_continuation["execution_context"]
+        if retained_continuation
+        else binding["context"]
+    )
+    if continue_from is not None:
+        if retained_continuation or continue_from != binding["context"]["commit"]:
+            raise ValueError(
+                "continuation must name original commit and cannot replace a record"
+            )
+        continuation.compatible(binding["context"], current)
+        continuation.source_check(commit)
+    if (continue_from is None and expected_context != current) or binding[
+        "study"
+    ] != study:
         raise ValueError(
             "resume source/environment/study differs from original binding"
         )
@@ -643,6 +677,10 @@ def run(root, commit, *, resume=False):
         try:
             with timing.span("resume_reconciliation"):
                 reconcile_interruptions(root)
+                if continue_from is not None:
+                    prefix = reconstruct(root, study, verify_once)
+                    record = continuation.prepare(root, current, prefix)
+                    atomic_immutable_json(root / continuation.RECORD, record)
                 if resume:
                     (root / "STOP").unlink(missing_ok=True)
             while True:
@@ -684,6 +722,7 @@ def run(root, commit, *, resume=False):
                     atomic_immutable_json(
                         directory / "request.json", upcoming["request"]
                     )
+                    atomic_immutable_json(directory / "execution-context.json", current)
                 with timing.span("worker_supervision", pending_action):
                     outcome = supervise(
                         [
@@ -717,6 +756,7 @@ def run(root, commit, *, resume=False):
 
 def analyze(root):
     binding = model.read(root / "binding.json")
+    retained_continuation = continuation.load(root)
     # Analysis can run from later clean/dirty documentation states; bind its own
     # context separately and reconstruct all physics from the original requests.
     if binding["study"] != model.specification():
@@ -735,6 +775,7 @@ def analyze(root):
     return dict(
         analysis_context=model.context(),
         execution_context=binding["context"],
+        continuation=retained_continuation,
         timing=timing_summary(root),
         **progress,
     )
@@ -748,12 +789,21 @@ def main():
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument("--commit")
     parser.add_argument("--attempt", type=Path)
+    parser.add_argument(
+        "--continue-from",
+        help="Explicit original commit for the reviewed audit-only continuation",
+    )
     args = parser.parse_args()
     root = args.output.resolve()
     if args.command in {"run", "resume"}:
         if not args.commit:
             parser.error("--commit is required")
-        run(root, args.commit, resume=args.command == "resume")
+        run(
+            root,
+            args.commit,
+            resume=args.command == "resume",
+            continue_from=args.continue_from,
+        )
     elif args.command == "worker":
         if args.attempt is None:
             parser.error("--attempt required for worker")

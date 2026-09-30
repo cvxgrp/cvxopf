@@ -78,6 +78,36 @@ proceeding. After an abrupt interruption, timing can be incomplete and is
 reported as a lower bound. An RSS or implementation failure is not automatically
 retried: review the reason before changing the execution procedure or source.
 
+### Audit-only continuation after the initial stop
+
+The initial run is bound to `f7aec7c562705749956adadd353216c780621a98`.
+After owner review and commit of the correction and continuation code, use:
+
+```bash
+uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_d resume \
+  --commit NEW_REVIEWED_FULL_COMMIT_ID \
+  --continue-from f7aec7c562705749956adadd353216c780621a98
+```
+
+This is a one-time, explicit continuation of this audit-only correction, not a
+general source-change override. The new clean commit must descend from the
+reviewed audit fix `828002a`; changes since the original execution are restricted
+to the runner/continuation plumbing, its tests and operator guide. Inputs,
+protocol, numerical environment and solver settings must remain unchanged.
+
+Before launch, the parent reaudits the retained prefix and writes an immutable
+`audit-continuation.json` containing both execution contexts, the original
+binding's hash, hashes of all historical attempt evidence, the accepted count,
+and the next request. The original `binding.json` and attempt files are not
+rewritten. The eighth archived solve is audited and reused, so the next request
+is trajectory 01, hour index 2 (third action), global hour 3326, W=3.
+New attempts retain their own execution context, checked by worker and analyzer.
+Subsequent same-commit resumes omit `--continue-from`; the existing continuation
+cannot be replaced. If binding succeeds but launch is interrupted, resume with
+that same new commit and omit the flag. No solve needs repeating merely because
+the source record was written. The analyzer reports original and continuation
+provenance separately and verifies that the historical files remain unchanged.
+
 ## Audit and retained evidence
 
 ```bash
@@ -100,8 +130,8 @@ The initial execution at `f7aec7c` stopped after seven accepted actions because
 exact audit equality rejected a load-reporting residual of zero versus
 `1.32e-23` MW in the eighth archived attempt. Both audits passed. This correction
 can validate that archive without another solve; it does not change its bytes
-or authorize a cross-version resume. A new execution source still requires an
-explicit continuation decision before restarting the retained study.
+or itself authorize a cross-version resume. The explicit one-time continuation
+command above records the separately approved source transition.
 
 - `binding.json`: original study specification and source/environment identity.
 - `trajectory-NN/hour-NN/attempt-NNN/`: request, source references, named start,

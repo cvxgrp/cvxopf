@@ -69,7 +69,8 @@ def test_retained_stage_d_roundoff_stop_reaudits_without_solve():
     assert payload["accepted"]
 
 
-def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch):
+@pytest.mark.parametrize("continued", [False, True])
+def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch, continued):
     kwargs, build, _, _ = fixture(1)
     request = dict(
         global_hour=0,
@@ -80,9 +81,19 @@ def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch):
         initial_soc_mwh=[5.0],
         storage_device_ids=["battery"],
     )
-    atomic_immutable_json(tmp_path / "binding.json", dict(context={}))
+    old, current = {}, {"commit": "continued"} if continued else {}
+    atomic_immutable_json(tmp_path / "binding.json", dict(context=old))
+    if continued:
+        monkeypatch.setattr(
+            runner.continuation,
+            "load",
+            lambda *a, **kw: dict(
+                original_context=old, execution_context=current, historical_files={}
+            ),
+        )
+        atomic_immutable_json(tmp_path / "execution-context.json", current)
     atomic_immutable_json(tmp_path / "request.json", request)
-    monkeypatch.setattr(model, "context", lambda: {})
+    monkeypatch.setattr(model, "context", lambda: current)
     monkeypatch.setattr(model, "verified_inputs", lambda: None)
     monkeypatch.setattr(model, "request_kwargs", lambda p, r: kwargs)
     monkeypatch.setattr(model, "build_opf_multistep", lambda **kw: build)
@@ -118,6 +129,13 @@ def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch):
     payload = runner.verify_attempt(tmp_path, tmp_path, request, None)
     assert payload["accepted"] and payload["next_soc_mwh"] == [5.0]
     assert "archive" in model.read(tmp_path / "completion.json")["phase_seconds"]
+    if continued:
+        assert model.read(tmp_path / "result.json.gz")["execution_context"] == current
+        monkeypatch.setattr(
+            runner.continuation, "execution_context", lambda root: {"commit": "wrong"}
+        )
+        with pytest.raises(ValueError, match="execution provenance"):
+            runner.verify_attempt(tmp_path, tmp_path, request, None)
 
 
 def test_stop_file_reaps_worker(tmp_path):

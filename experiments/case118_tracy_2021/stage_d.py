@@ -220,9 +220,17 @@ def prepare_start(build, kwargs, request, root):
 
 def worker(directory, root):
     """One fresh process, one attempt, archival before parent advancement."""
+    from .stage_d_continuation import execution_context
+
     start = time.monotonic()
     binding, request = read(root / "binding.json"), read(directory / "request.json")
-    if context() != binding["context"]:
+    expected_context = execution_context(root)
+    if (directory / "execution-context.json").exists():
+        if read(directory / "execution-context.json") != expected_context:
+            raise ValueError("attempt execution context differs from continuation")
+    elif expected_context != binding["context"]:
+        raise ValueError("continued worker lacks execution context")
+    if context() != expected_context:
         raise ValueError("worker execution context changed")
     timings = {}
     current_phase, phase_started = None, start
@@ -289,12 +297,13 @@ def worker(directory, root):
     logical = (
         stepwise_values(build, starts._solution_values(build)) if accepted else None
     )
-    if context() != binding["context"]:
+    if context() != expected_context:
         raise ValueError("worker execution context changed during solve")
     payload = jsonable(
         dict(
             iteration=request["global_hour"],
             request=request,
+            execution_context=expected_context,
             accepted=accepted,
             result=result,
             named_costs=named_costs,
