@@ -1,6 +1,7 @@
 """Real worker/archive and subprocess seams without numerical optimization."""
 
 import sys
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -12,6 +13,60 @@ from cvxopf.hierarchical import IPOPTStartEvidence
 from experiments.case118_annual_hierarchy.streaming_schema import atomic_immutable_json
 from experiments.case118_tracy_2021 import run_stage_d as runner, stage_d as model
 from tests.test_tracy_stage_d import fixture, tiny_study, fake_verify
+
+
+def test_audit_comparison_allows_only_roundoff():
+    audit = dict(
+        passed=True,
+        residuals={"load": 0.0},
+        limits={"load": 1e-4},
+        costs={"generation": 1000.0},
+        metrics={"ens": 1e-7},
+    )
+    retained = deepcopy(audit)
+    retained["residuals"]["load"] = 1.3234889800848443e-23
+    retained["costs"]["generation"] += 1e-10
+    runner.require_matching_audit(audit, retained)
+    for section, field, value in (
+        ("residuals", "load", 1e-8),
+        ("limits", "load", 2e-4),
+        ("costs", "generation", 1001),
+        ("metrics", "ens", float("nan")),
+    ):
+        changed = deepcopy(audit)
+        changed[section][field] = value
+        with pytest.raises(ValueError, match=section):
+            runner.require_matching_audit(audit, changed)
+    for changed in ({**audit, "passed": False}, {**audit, "reason": "new"}):
+        with pytest.raises(ValueError):
+            runner.require_matching_audit(audit, changed)
+    changed = deepcopy(audit)
+    changed["residuals"]["extra"] = 0
+    with pytest.raises(ValueError, match="schema"):
+        runner.require_matching_audit(audit, changed)
+    # Never hide a threshold crossing, even if another failing check means the
+    # overall acceptance is unchanged and the difference is below roundoff allowance.
+    audit.update(passed=False, residuals={"load": 1e-4}, limits={"load": 1e-4})
+    changed = deepcopy(audit)
+    changed["residuals"]["load"] += 1e-15
+    with pytest.raises(ValueError, match="acceptance"):
+        runner.require_matching_audit(audit, changed)
+
+
+def test_retained_stage_d_roundoff_stop_reaudits_without_solve():
+    root = model.HERE / "results/stage_d"
+    directory = root / "trajectory-01/hour-01/attempt-000"
+    from experiments.case118_tracy_2021.prepare import SOURCE
+
+    if not SOURCE.exists() or not (directory / "completion.json").exists():
+        pytest.skip("owner source or retained stopped attempt unavailable")
+    payload = runner.verify_attempt(
+        root,
+        directory,
+        model.read(directory / "request.json"),
+        runner.verified_inputs(),
+    )
+    assert payload["accepted"]
 
 
 def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch):

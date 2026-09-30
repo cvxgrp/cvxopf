@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -190,6 +191,46 @@ def make_request(trajectory, hour, role, initial, previous, causal, target_free,
     )
 
 
+def require_matching_audit(actual, retained):
+    """Compare audit reconstructions, not bitwise floating-point reductions.
+
+    These are roundoff allowances, not changes to scientific acceptance limits.
+    Every residual must retain its individual pass/fail decision, even when the
+    numerical difference is within the comparison allowance.
+    """
+
+    def mismatch(field):
+        raise ValueError(f"independent parent audit differs from worker audit: {field}")
+
+    if actual.keys() != retained.keys():
+        mismatch("schema")
+    numeric = {"residuals", "limits", "costs", "metrics"}
+    for section, value in actual.items():
+        saved = retained[section]
+        if section not in numeric:
+            if value != saved:
+                mismatch(section)
+            continue
+        if value.keys() != saved.keys():
+            mismatch(section + " schema")
+        for name, number in value.items():
+            # Limits are exact constants or cost-dependent scales: permit only
+            # relative roundoff there, never a blanket absolute relaxation.
+            atol = 0.0 if section == "limits" else 1e-12
+            if not math.isclose(number, saved[name], rel_tol=1e-12, abs_tol=atol):
+                mismatch(f"{section}.{name}")
+            if section == "residuals":
+                current_pass = (
+                    math.isfinite(number) and number <= actual["limits"][name]
+                )
+                saved_pass = (
+                    math.isfinite(saved[name])
+                    and saved[name] <= retained["limits"][name]
+                )
+                if current_pass != saved_pass:
+                    mismatch(f"{section}.{name} acceptance")
+
+
 def verify_attempt(root, directory, request, prepared):
     import numpy as np
     from cvxopf.hierarchical import IPOPTStartEvidence
@@ -225,8 +266,7 @@ def verify_attempt(root, directory, request, prepared):
         model.request_kwargs(prepared, request),
         payload["named_costs"],
     )
-    if jsonable(audit) != payload["audit"]:
-        raise ValueError("independent parent audit differs from worker audit")
+    require_matching_audit(jsonable(audit), payload["audit"])
     accepted = payload["exception"] is None and audit["passed"]
     if accepted != payload["accepted"]:
         raise ValueError("acceptance label contradicts reconstructed audit")

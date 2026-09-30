@@ -90,6 +90,19 @@ assigned values, and rebuilds state advancement and recovery ordering. It can
 describe a partial run without treating an active or unfinalized attempt as an
 accepted action. Its own context is recorded separately from execution context.
 
+Worker/parent numerical audit comparisons allow roundoff (`rtol=1e-12`,
+`atol=1e-12`; limits use relative tolerance only). Schema, acceptance labels,
+failure reasons and every residual's individual threshold decision must agree.
+The physical acceptance tolerances are unchanged. Mismatch errors identify the
+specific field rather than only reporting a generic audit disagreement.
+
+The initial execution at `f7aec7c` stopped after seven accepted actions because
+exact audit equality rejected a load-reporting residual of zero versus
+`1.32e-23` MW in the eighth archived attempt. Both audits passed. This correction
+can validate that archive without another solve; it does not change its bytes
+or authorize a cross-version resume. A new execution source still requires an
+explicit continuation decision before restarting the retained study.
+
 - `binding.json`: original study specification and source/environment identity.
 - `trajectory-NN/hour-NN/attempt-NNN/`: request, source references, named start,
   complete canonical x0, native log, phase events, resource samples, result,
