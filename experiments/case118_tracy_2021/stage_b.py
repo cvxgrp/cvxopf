@@ -156,7 +156,28 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
         load_shedding_cost=(),
     )
     dc = kwargs["formulation"] == "lossy_dc"
-    shape["p_net"] = (T, len(bus)) if dc else (T,)
+    ac = kwargs["formulation"] == "ac"
+    shape["p_net"] = (T, len(bus)) if dc or ac else (T,)
+    if ac:
+        shape.update(
+            Qg=(T, len(gen)),
+            b_q=(T, len(storage)),
+            q_nd=(T, len(nd)),
+            Vm=(T, len(bus)),
+            Va_deg=(T, len(bus)),
+            q_net=(T, len(bus)),
+            q_load_served=(T, len(loads)),
+            q_load_shed=(T, len(loads)),
+        )
+        for name in (
+            "branch_p_from",
+            "branch_p_to",
+            "branch_q_from",
+            "branch_q_to",
+            "branch_s_from",
+            "branch_s_to",
+        ):
+            shape[name] = (T, len(branch))
     if dc:
         shape["p_flows"] = (T, len(branch))
     try:
@@ -214,11 +235,15 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
         ),
         TOLERANCES["soc_mwh"],
     )
-    check(
-        "terminal_soc_mwh",
-        maximum(a["soc"][-1] - [s.terminal_soc for s in storage]),
-        TOLERANCES["endpoint_mwh"],
-    )
+    terminal = [j for j, s in enumerate(storage) if s.terminal_soc is not None]
+    if terminal:
+        check(
+            "terminal_soc_mwh",
+            maximum(
+                a["soc"][-1, terminal] - [storage[j].terminal_soc for j in terminal]
+            ),
+            TOLERANCES["endpoint_mwh"],
+        )
     injection = np.zeros((T, len(bus)))
     bus_index = {int(row[0]): i for i, row in enumerate(bus)}
     for devices, values in (
@@ -229,7 +254,7 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
     ):
         for j, device in enumerate(devices):
             injection[:, bus_index[device.bus]] += values[:, j]
-    reported = injection if dc else injection.sum(axis=1)
+    reported = injection if dc or ac else injection.sum(axis=1)
     check(
         "injection_reporting_mw", maximum(a["p_net"] - reported), TOLERANCES["power_mw"]
     )
@@ -243,7 +268,13 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
             balance[:, bus_index[int(row[0])]] -= a["p_flows"][:, j]
             balance[:, bus_index[int(row[1])]] += a["p_flows"][:, j]
         loss = float(dt * np.sum(branch[:, 2] * (a["p_flows"] / case["baseMVA"]) ** 2))
-    check("balance_mw", maximum(balance), TOLERANCES["power_mw"])
+    if ac:
+        # Shared device/accounting checks above remain identical to Stage B/C.
+        from .stage_d_physics import audit_ac_network
+
+        audit_ac_network(a, kwargs, injection, check, box)
+    else:
+        check("balance_mw", maximum(balance), TOLERANCES["power_mw"])
     costs = dict(
         generator_cost=float(
             dt
@@ -284,7 +315,8 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
         abs(float(a["energy_not_served"]) - ens.sum()),
         TOLERANCES["energy_mwh"],
     )
-    passed = result["status"] == "optimal" and all(
+    statuses = {"optimal", "optimal_inaccurate"} if ac else {"optimal"}
+    passed = result["status"] in statuses and all(
         np.isfinite(v) and v <= limits[k] for k, v in checks.items()
     )
     return dict(

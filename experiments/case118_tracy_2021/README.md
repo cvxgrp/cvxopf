@@ -135,3 +135,8 @@ actions and resume each trajectory from its own realized state and shifted-start
 source, skipping completed work; restart tests are required before execution.
 No Tracy AC solve or annual AC launch
 has occurred.
+
+The restartable runner is implemented for pre-execution review. See
+[Stage D operating instructions](STAGE_D_RUNNER.md) for start/status/stop/resume
+and offline audit commands. Implementation tests use analytic fixtures and
+intercept native solver entry; they do not execute the scientific AC study.

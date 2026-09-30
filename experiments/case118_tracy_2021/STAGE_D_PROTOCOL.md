@@ -1,9 +1,10 @@
 # Stage D — bounded Tracy AC qualification
 
-Status: **opened by owner authorization after shard checkpoint `e09af9dc7`**.
-The owner approved the initial design below. Exact start times, solver/start/
-recovery settings and the remaining execution details must be reviewed and frozen before
-execution. No Tracy AC solve has run. Annual AC execution remains separately gated.
+Status: **runner implementation prepared for review; no numerical execution**.
+The owner approved building from the selection/configuration checkpoint
+`503058a`. The implementation below now encodes that proposal. Review and commit
+the runner before separately authorizing its numerical launch. No Tracy AC
+solve has run. Annual AC execution remains separately gated.
 
 ## Fixed scientific configuration
 
@@ -65,7 +66,7 @@ context and freeze the exact selection rules, starts, tie-breaking and overlaps
 for owner review. Do not automatically reuse earlier three-hour extrema.
 These deliberately selected regimes are not an annual random sample.
 
-#### Proposed exact selection — awaiting owner review
+#### Exact selection encoded by the runner
 
 `select_stage_d.py` applies the rule in this fixed priority order: surplus,
 deficit, surplus → deficit, deficit → surplus. Each subsequent choice excludes
@@ -144,7 +145,7 @@ Balance rollout order across W and record host/cooling context. Do not cross
 this initial experiment with stepwise assembly or alternative helper policies.
 No numerical repeats without a declared budget.
 
-#### Proposed numerical configuration — awaiting owner review
+#### Numerical configuration encoded by the runner
 
 Use the existing named-variable cold/shift/copy/perturb transformations rather
 than a new initialization implementation. Shift the previous accepted prediction
@@ -153,20 +154,24 @@ project to destination leaf bounds and reconstruct SoC from realized initial
 state. Preserve the initial SoC exactly. W=1 must exercise this same transformation
 and padding path. Retain complete canonical x0, not just named model variables.
 
-Proposed sequential order, stopping at the first accepted controlling solve:
+Owner-approved sequential order, stopping at the first accepted controlling solve:
 
 1. Hard-target cold start (first hour) or shifted own accepted start (later hours).
 2. Three hard-target perturbations about that same causal start, scales
    `1e-4`, `1e-3`, `1e-2`, in that order.
-3. Target-free diagnostic from the unperturbed causal start.
-4. Hard-target copy of the accepted target-free solution, if available.
-5. Three hard-target perturbations about that accepted target-free solution,
+3. Hard-target flat start, using the fresh builder's cold initialization and
+   the same realized initial SoC. This deliberately repeats the cold primary
+   at the first hour if reached; it is distinct from the shifted primary later.
+4. Target-free diagnostic from the original unperturbed causal start, not the
+   failed flat attempt.
+5. Hard-target copy of the accepted target-free solution, if available.
+6. Three hard-target perturbations about that accepted target-free solution,
    using the same ascending scales, if available.
 
 This promotes the already implemented causal perturbations ahead of the
 target-free pair, without racing or adopting a new perturbation formula. It is
-a proposed study policy, not a claim that this order is optimal. At most nine
-solver calls per action (864 for 96 actions, excluding explicitly recorded
+an approved study policy, not a claim that this order is optimal. At most ten
+solver calls per action (960 for 96 actions, excluding explicitly recorded
 interruption retries); unavailable sources skip their dependent attempts.
 Target-free acceptance never advances the controller. No terminal softening.
 Use existing perturbation semantics: independent normal changes scaled by
@@ -185,7 +190,10 @@ verbose native iteration logs. Preserve the installed CVXPY IPOPT defaults:
 `cvxpy/reductions/solvers/nlp_solvers/ipopt_nlpif.py`; capture versions and
 effective options at preflight. Do not set `max_iter`, `max_cpu_time` or
 `max_wall_time`; retain IPOPT's built-in iteration limit and document its
-effective value before launch. No new acceptable-termination or linear-solver
+effective value before launch. The retained default is **3,000 iterations**, as
+documented in the [IPOPT options reference](https://coin-or.github.io/Ipopt/OPTIONS.html#OPT_max_iter).
+The runner records the native IPOPT version and CVXPY interface source hash and
+refuses a working-directory `ipopt.opt` override. No new acceptable-termination or linear-solver
 tuning. Set numerical-library thread limits to one consistently before imports;
 retain host/thermal context and do not claim perfectly controlled timing.
 
@@ -229,6 +237,13 @@ Use a fresh worker process per attempt, one at a time, sample worker-PID RSS
 every second, terminate/reap on a sample above 16 GiB, and stop the study.
 This sampled ceiling is not a guarantee against an unsampled transient peak.
 Retain parent timing separately; do not describe PID RSS as process-tree RSS.
+Each run/resume retains UTC-anchored invocation spans and an immutable orderly
+finish/stop record. Report worker effort, parent processing, startup replay and
+offline gaps separately. Per-action calendar latency runs from first preparation
+through accepted cursor publication and includes intervening downtime; active
+action spans exclude that downtime and separately reported invocation overhead.
+Unfinished invocation snapshots are lower bounds, with the unseen tail labeled
+unknown active work or downtime, not assigned to either by assumption.
 No wall-time, elapsed-study or automatic stall cutoff.
 
 ### Measurements
@@ -293,6 +308,24 @@ mid-attempt, a stop after acceptance but before cursor advancement, resumption
 mid-trajectory, and skipping a completed trajectory. Verify identical next-state
 and shifted-start inputs, exactly-once advancement, and cumulative accounting.
 No extra heavy AC solve is required merely to test restart mechanics.
+
+The implementation uses immutable per-attempt requests, starts, complete x0,
+results and supervisor outcomes as the restart journal. `progress.json` is a
+reconstructed cache, not the sole copy of accepted work. A completed result and
+normal worker exit can be reconstructed if cursor publication was interrupted.
+If exit recording was interrupted but the complete worker archive was durably
+published, first establish that the worker is no longer active, then independently
+audit the complete archive and retain its completed outcome. Without the complete
+archive, retain available evidence and retry the same policy slot under a new
+attempt identity. An RSS or implementation failure is not overridden by an archive.
+After a reboot, recorded pre-interruption sampled time is a **lower bound**,
+not zero or a complete runtime measurement. Any possibly live orphan worker
+must be inspected before resuming; the runner does not kill an unverified PID.
+
+Implementation entry point: `run_stage_d.py`; operator instructions are in
+[STAGE_D_RUNNER.md](STAGE_D_RUNNER.md). A source or environment change is not an
+ordinary resume and needs a separately reviewed decision. The runner does not
+automatically build a cross-version continuation mechanism.
 
 ### Budget, execution checkpoint and mandatory pause
 
