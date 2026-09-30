@@ -162,10 +162,12 @@ def test_accepted_worker_and_parent_reconstruction(
     if continued:
         monkeypatch.setattr(
             runner.continuation,
-            "load",
-            lambda *a, **kw: dict(
-                original_context=old, execution_context=current, historical_files={}
-            ),
+            "load_chain",
+            lambda *a, **kw: [
+                dict(
+                    original_context=old, execution_context=current, historical_files={}
+                )
+            ],
         )
         atomic_immutable_json(tmp_path / "execution-context.json", current)
     atomic_immutable_json(tmp_path / "request.json", request)
@@ -218,7 +220,7 @@ def test_accepted_worker_and_parent_reconstruction(
     if continued:
         assert model.read(tmp_path / "result.json.gz")["execution_context"] == current
         monkeypatch.setattr(
-            runner.continuation, "execution_context", lambda root: {"commit": "wrong"}
+            runner.continuation, "attempt_context", lambda *a: {"commit": "wrong"}
         )
         with pytest.raises(ValueError, match="execution provenance"):
             runner.verify_attempt(tmp_path, tmp_path, request, None)

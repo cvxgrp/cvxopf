@@ -255,21 +255,14 @@ def verify_attempt(root, directory, request, prepared):
         if digest(directory / name) != completion[key]:
             raise ValueError(f"attempt artifact mismatch: {directory / name}")
     payload = model.read(directory / "result.json.gz")
-    record = continuation.load(root, verify_prefix=False)
-    historical = (
-        record is not None
-        and str((directory / "request.json").relative_to(root))
-        in record["historical_files"]
-    )
+    expected_context = continuation.attempt_context(root, directory)
     if (directory / "execution-context.json").exists():
-        expected_context = model.read(directory / "execution-context.json")
-        if payload.get("execution_context") != expected_context or expected_context != (
-            record["original_context"]
-            if historical
-            else continuation.execution_context(root)
+        if (
+            payload.get("execution_context") != expected_context
+            or model.read(directory / "execution-context.json") != expected_context
         ):
             raise ValueError("attempt execution provenance mismatch")
-    elif record is not None and not historical:
+    elif expected_context != model.read(root / "binding.json")["context"]:
         raise ValueError("new continued attempt lacks execution provenance")
     start = model.read(directory / "start.json")
     raw_x0 = model.read(directory / "x0.json.gz")
@@ -619,13 +612,15 @@ def interrupted(signum, frame):
     raise KeyboardInterrupt(f"signal {signum}")
 
 
-def run(root, commit, *, resume=False, continue_from=None):
+def run(root, commit, *, resume=False, continue_from=None, preflight=False):
     invocation_started, invocation_utc = time.monotonic(), utc()
     for name in THREAD_KEYS:
         os.environ[name] = "1"
     current = model.context()
     if continue_from is not None and not resume:
         raise ValueError("audit continuation is only available with resume")
+    if preflight and not resume:
+        raise ValueError("preflight is only available for resume")
     if not current["clean"] or current["commit"] != commit:
         raise ValueError(
             "run/resume requires the exact clean reviewed execution commit"
@@ -641,22 +636,8 @@ def run(root, commit, *, resume=False, continue_from=None):
             root / "binding.json", dict(context=current, study=study, created_utc=utc())
         )
     binding = model.read(root / "binding.json")
-    retained_continuation = continuation.load(root)
-    expected_context = (
-        retained_continuation["execution_context"]
-        if retained_continuation
-        else binding["context"]
-    )
-    if continue_from is not None:
-        if retained_continuation or continue_from != binding["context"]["commit"]:
-            raise ValueError(
-                "continuation must name original commit and cannot replace a record"
-            )
-        continuation.compatible(binding["context"], current)
-        continuation.source_check(commit)
-    if (continue_from is None and expected_context != current) or binding[
-        "study"
-    ] != study:
+    needs_transition = continuation.transition_needed(root, current, continue_from)
+    if binding["study"] != study:
         raise ValueError(
             "resume source/environment/study differs from original binding"
         )
@@ -673,8 +654,21 @@ def run(root, commit, *, resume=False, continue_from=None):
             raise ValueError("immutable attempt request changed during invocation")
         return summary
 
+    if preflight:
+        # Read-only: no binding, invocation, cursor update or solver launch.
+        # Incomplete attempts require ordinary stopped-run reconciliation first.
+        with (root / "supervisor.lock").open("r") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            progress = reconstruct(root, study, verify_once, allow_partial=True)
+            if progress["blocking_failure"] or progress["active_attempt"]:
+                raise ValueError("preflight requires a fully audited stopped prefix")
+            if needs_transition:
+                continuation.prepare(root, current, progress)
+        return dict(transition_needed=needs_transition, **progress)
+
     with (root / "supervisor.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        needs_transition = continuation.transition_needed(root, current, continue_from)
         timing = InvocationTiming(root, invocation_started, invocation_utc, resume)
         finalized = {
             key
@@ -687,10 +681,10 @@ def run(root, commit, *, resume=False, continue_from=None):
         try:
             with timing.span("resume_reconciliation"):
                 reconcile_interruptions(root)
-                if continue_from is not None:
+                if needs_transition:
                     prefix = reconstruct(root, study, verify_once)
                     record = continuation.prepare(root, current, prefix)
-                    atomic_immutable_json(root / continuation.RECORD, record)
+                    atomic_immutable_json(continuation.next_record_path(root), record)
                 if resume:
                     (root / "STOP").unlink(missing_ok=True)
             while True:
@@ -786,6 +780,7 @@ def analyze(root):
         analysis_context=model.context(),
         execution_context=binding["context"],
         continuation=retained_continuation,
+        continuations=continuation.load_chain(root, verify_prefix=False),
         timing=timing_summary(root),
         **progress,
     )
@@ -794,26 +789,30 @@ def analyze(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=("run", "resume", "worker", "stop", "status", "analyze")
+        "command",
+        choices=("run", "resume", "preflight", "worker", "stop", "status", "analyze"),
     )
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument("--commit")
     parser.add_argument("--attempt", type=Path)
     parser.add_argument(
         "--continue-from",
-        help="Explicit original commit for the reviewed audit-only continuation",
+        help="Previous execution commit for a reviewed audit-only source transition",
     )
     args = parser.parse_args()
     root = args.output.resolve()
-    if args.command in {"run", "resume"}:
+    if args.command in {"run", "resume", "preflight"}:
         if not args.commit:
             parser.error("--commit is required")
-        run(
+        result = run(
             root,
             args.commit,
-            resume=args.command == "resume",
+            resume=args.command != "run",
             continue_from=args.continue_from,
+            preflight=args.command == "preflight",
         )
+        if args.command == "preflight":
+            print(json.dumps(result, indent=2))
     elif args.command == "worker":
         if args.attempt is None:
             parser.error("--attempt required for worker")

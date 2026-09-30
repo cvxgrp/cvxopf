@@ -1,8 +1,9 @@
 # Running and restarting the Tracy AC comparison
 
 This is the 16-trajectory, 96-action Stage D comparison, **not annual AC**.
-The implementation is awaiting review/commit and separate launch authorization.
-No commands below have been used to launch the study.
+The study has run and is currently stopped with 48 accepted actions. The
+successive audit-only continuation support requires review and commit before
+the next launch. This guide does not itself authorize execution.
 
 ## Before starting
 
@@ -78,35 +79,50 @@ proceeding. After an abrupt interruption, timing can be incomplete and is
 reported as a lower bound. An RSS or implementation failure is not automatically
 retried: review the reason before changing the execution procedure or source.
 
-### Audit-only continuation after the initial stop
+### Audit-only source changes and restart preflight
 
-The initial run is bound to `f7aec7c562705749956adadd353216c780621a98`.
-After owner review and commit of the correction and continuation code, use:
+The original run is bound to `f7aec7c562705749956adadd353216c780621a98`.
+Its first continuation is bound to `cdc63822c5b87a684e419f1b3757b07e7b82b360`.
+After owner review and commit of a correction, first check the exact restart
+command without launching workers or writing study records:
 
 ```bash
-uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_d resume \
+uv run --extra dev python -m experiments.case118_tracy_2021.run_stage_d preflight \
   --commit NEW_REVIEWED_FULL_COMMIT_ID \
-  --continue-from f7aec7c562705749956adadd353216c780621a98
+  --continue-from cdc63822c5b87a684e419f1b3757b07e7b82b360
 ```
 
-This is a one-time, explicit continuation of this audit-only correction, not a
-general source-change override. The new clean commit must descend from the
+For the currently stopped study, expect 48 accepted actions and the next request
+at global hour 8581, W=6, role `causal_1`, with no state advancement for the failed
+primary. Once preflight passes and restart is authorized, replace `preflight`
+with `resume` using the same arguments. The 16 GiB ceiling and native IPOPT
+iteration limit remain unchanged. Check cooling and power after moving the
+computer; a separate temperature logger must be restarted separately if wanted.
+
+This is an explicit audit-only continuation, not a general source-change
+override. The new clean commit must descend from the previous execution and the
 reviewed audit fix `828002a`; changes since the original execution are restricted
 to the runner/continuation plumbing, its tests and operator guide. Inputs,
 protocol, numerical environment and solver settings must remain unchanged.
 
-Before launch, the parent reaudits the retained prefix and writes an immutable
-`audit-continuation.json` containing both execution contexts, the original
-binding's hash, hashes of all historical attempt evidence, the accepted count,
-and the next request. The original `binding.json` and attempt files are not
-rewritten. The eighth archived solve is audited and reused, so the next request
-is trajectory 01, hour index 2 (third action), global hour 3326, W=3.
-New attempts retain their own execution context, checked by worker and analyzer.
-Subsequent same-commit resumes omit `--continue-from`; the existing continuation
-cannot be replaced. If binding succeeds but launch is interrupted, resume with
-that same new commit and omit the flag. No solve needs repeating merely because
-the source record was written. The analyzer reports original and continuation
-provenance separately and verifies that the historical files remain unchanged.
+Before launch, the parent reaudits the retained prefix. The first transition
+keeps `audit-continuation.json`; subsequent transitions append
+`audit-continuation-001.json`, `-002.json`, etc. Each links to its predecessor by
+hash and records the old/new execution contexts, original binding identity,
+historical evidence hashes, accepted count and next request. Existing binding,
+continuation and attempt files are never replaced. Interrupted attempts retain
+their evidence and retry the same policy slot in a new attempt directory.
+Worker and analyzer resolve each attempt to its own execution version, including
+all previous versions rather than treating the newest version as universal.
+
+For later corrections, `--continue-from` names the **latest bound execution
+commit**, not the original study commit. Ordinary same-commit resumes omit it.
+If binding succeeds but launch is interrupted, retrying the identical command
+is also safe: it reuses the existing binding and does not append another one.
+Preflight takes the supervisor lock and requires no active or blocking attempt;
+it does not reconcile an unfinalized attempt or remove a STOP marker. Ordinary
+resume performs stopped-run reconciliation. Analysis reports the original
+context, the latest continuation, and the complete ordered continuation list.
 
 ## Audit and retained evidence
 
@@ -146,8 +162,8 @@ old `1e-12` absolute allowance and stopped before recovery. Both residuals pass
 the unchanged `1e-4` MW check; the solve itself fails many other checks. The
 comparison and serialization correction allows read-only reconstruction to
 select `causal_1` without advancing this action or re-solving the primary.
-It does not authorize restart: the existing one-time continuation is already
-used, and a further reviewed source transition is required before execution.
+The successive-continuation procedure above preserves that failure and the
+earlier continuation while binding the reviewed correction before execution.
 
 - `binding.json`: original study specification and source/environment identity.
 - `trajectory-NN/hour-NN/attempt-NNN/`: request, source references, named start,
