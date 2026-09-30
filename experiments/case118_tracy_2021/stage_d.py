@@ -283,7 +283,10 @@ def worker(directory, root):
     )
     solved = starts._solve_ac_with_verified_x0(build, config, start_observer=observe)
     phase("extraction_and_audit")
-    result = extract_results(build)
+    # Audit the same list/scalar representation the parent reads from JSON.
+    # Otherwise NumPy's memory-layout-dependent reductions can disagree after
+    # serialization, especially for large infeasible iterates.
+    result = jsonable(extract_results(build))
     named_costs = {
         name: float(value.value)
         for name, value in build.expressions.items()

@@ -120,8 +120,14 @@ assigned values, and rebuilds state advancement and recovery ordering. It can
 describe a partial run without treating an active or unfinalized attempt as an
 accepted action. Its own context is recorded separately from execution context.
 
-Worker/parent numerical audit comparisons allow roundoff (`rtol=1e-12`,
-`atol=1e-12`; limits use relative tolerance only). Schema, acceptance labels,
+Workers audit the serialized list/scalar representation of the result, just
+as the parent does, so array memory layout cannot change summation order across
+the archive boundary. Worker/parent numerical audit comparisons allow roundoff
+(`rtol=1e-12`, `atol=1e-12`; limits use relative tolerance only). For residuals,
+the absolute comparison allowance is also at least 0.001% of the tighter
+physical limit, in that residual's units. This is a comparison-resolution
+choice, not a universal floating-point error bound. It accommodates retained
+pre-normalization audits without changing their evidence. Schema, acceptance labels,
 failure reasons and every residual's individual threshold decision must agree.
 The physical acceptance tolerances are unchanged. Mismatch errors identify the
 specific field rather than only reporting a generic audit disagreement.
@@ -132,6 +138,16 @@ exact audit equality rejected a load-reporting residual of zero versus
 can validate that archive without another solve; it does not change its bytes
 or itself authorize a cross-version resume. The explicit one-time continuation
 command above records the separately approved source transition.
+
+The continued run later stopped at hour 8581, W=6, after an iteration-limit
+failure. The worker correctly rejected the solve, but the parent compared a
+load-total reporting residual of `4.66e-10` MW with the worker's zero using the
+old `1e-12` absolute allowance and stopped before recovery. Both residuals pass
+the unchanged `1e-4` MW check; the solve itself fails many other checks. The
+comparison and serialization correction allows read-only reconstruction to
+select `causal_1` without advancing this action or re-solving the primary.
+It does not authorize restart: the existing one-time continuation is already
+used, and a further reviewed source transition is required before execution.
 
 - `binding.json`: original study specification and source/environment identity.
 - `trajectory-NN/hour-NN/attempt-NNN/`: request, source references, named start,

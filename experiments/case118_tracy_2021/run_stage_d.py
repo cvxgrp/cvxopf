@@ -218,6 +218,16 @@ def require_matching_audit(actual, retained):
             # Limits are exact constants or cost-dependent scales: permit only
             # relative roundoff there, never a blanket absolute relaxation.
             atol = 0.0 if section == "limits" else 1e-12
+            if section == "residuals":
+                # Compare residual reports at a small fraction of their own
+                # engineering-unit acceptance scale, not relative to a
+                # cancellation residual that may be exactly zero. Historical
+                # workers audited arrays before JSON normalized their layout.
+                # This allowance is 0.001% of the tighter physical limit;
+                # individual threshold decisions below still must agree.
+                atol = max(
+                    atol, 1e-5 * min(actual["limits"][name], retained["limits"][name])
+                )
             if not math.isclose(number, saved[name], rel_tol=1e-12, abs_tol=atol):
                 mismatch(f"{section}.{name}")
             if section == "residuals":

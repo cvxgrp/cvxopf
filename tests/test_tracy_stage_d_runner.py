@@ -1,5 +1,6 @@
 """Real worker/archive and subprocess seams without numerical optimization."""
 
+import json
 import sys
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -69,8 +70,83 @@ def test_retained_stage_d_roundoff_stop_reaudits_without_solve():
     assert payload["accepted"]
 
 
+def test_large_reduction_roundoff_and_canonical_representation():
+    # A diverged iterate is not bounded by the device's physical ratings.
+    # Reproduce the layout-dependent reduction without owner data or a solve.
+    values = np.array(np.random.default_rng(42).normal(-9000, 1000, (6, 99)), order="F")
+    totals = values.sum(axis=1)
+    serialized = runner.jsonable(values)
+    residual = float(np.max(np.abs(np.asarray(serialized).sum(axis=1) - totals)))
+    assert 1e-12 < residual < 1e-9
+    audit = dict(
+        passed=False,
+        residuals={"load_total": residual, "physics": 1e8},
+        limits={"load_total": 1e-4, "physics": 1e-6},
+        costs={},
+        metrics={},
+    )
+    retained = deepcopy(audit)
+    retained["residuals"]["load_total"] = 0.0
+    runner.require_matching_audit(audit, retained)
+    # Not a blanket relaxation: resolve small-unit checks at their own scale.
+    retained["limits"]["load_total"] = audit["limits"]["load_total"] = 1e-8
+    with pytest.raises(ValueError, match="residuals.load_total"):
+        runner.require_matching_audit(audit, retained)
+    # Serialization fixes reduction order even when raw operands grow further.
+    for scale in (1, 1e8):
+        a = runner.jsonable(values * scale)
+        b = json.loads(json.dumps(a))
+        np.testing.assert_array_equal(
+            np.asarray(a).sum(axis=1), np.asarray(b).sum(axis=1)
+        )
+
+
+def test_retained_iteration_limit_selects_recovery_without_advancement(tmp_path):
+    root = model.HERE / "results/stage_d"
+    directory = root / "trajectory-08/hour-00/attempt-000"
+    from experiments.case118_tracy_2021.prepare import SOURCE
+
+    if not SOURCE.exists() or not (directory / "completion.json").exists():
+        pytest.skip("owner source or retained failed attempt unavailable")
+    prepared = runner.verified_inputs()
+    payload = runner.verify_attempt(
+        root, directory, model.read(directory / "request.json"), prepared
+    )
+    assert not payload["accepted"] and payload["next_soc_mwh"] is None
+    saved = model.read(directory / "result.json.gz")
+    assert saved["result"]["status"] == "user_limit"
+    # Reconstruct only through the stopped attempt, so later authorized study
+    # progress does not invalidate this regression. No artifact is rewritten.
+    for name in ("binding.json", "audit-continuation.json"):
+        (tmp_path / name).symlink_to(root / name)
+    for index in range(8):
+        name = f"trajectory-{index:02d}"
+        (tmp_path / name).symlink_to(root / name, target_is_directory=True)
+    last = tmp_path / directory.relative_to(root)
+    last.parent.mkdir(parents=True)
+    last.symlink_to(directory, target_is_directory=True)
+    study = model.read(root / "binding.json")["study"]
+    progress = runner.reconstruct(
+        tmp_path,
+        study,
+        lambda d, q: runner.verify_attempt(tmp_path, d, q, prepared),
+        allow_partial=True,
+    )
+    assert progress["completed_hours"] == 48
+    assert not progress["blocking_failure"]
+    assert progress["next"]["request"]["role"] == "causal_1"
+    assert progress["next"]["request"]["global_hour"] == 8581
+    assert (
+        progress["next"]["request"]["initial_soc_mwh"]
+        == saved["request"]["initial_soc_mwh"]
+    )
+
+
 @pytest.mark.parametrize("continued", [False, True])
-def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch, continued):
+@pytest.mark.parametrize("accepted", [False, True])
+def test_accepted_worker_and_parent_reconstruction(
+    tmp_path, monkeypatch, continued, accepted
+):
     kwargs, build, _, _ = fixture(1)
     request = dict(
         global_hour=0,
@@ -99,6 +175,8 @@ def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch, contin
     monkeypatch.setattr(model, "build_opf_multistep", lambda **kw: build)
 
     def fake_solve(build, config, *, start_observer):
+        if not accepted:
+            build.prob._status = "user_limit"
         layout, vector = [], []
         for variable in build.prob.variables():
             values = variable.value.flatten(order="F").tolist()
@@ -125,9 +203,17 @@ def test_accepted_worker_and_parent_reconstruction(tmp_path, monkeypatch, contin
         return SimpleNamespace(evidence=evidence, exception=None, elapsed_seconds=0.01)
 
     monkeypatch.setattr(model.starts, "_solve_ac_with_verified_x0", fake_solve)
+    original_audit = model.audit_result
+
+    def serialized_audit(result, *args):
+        assert isinstance(result["Pg"], list)
+        return original_audit(result, *args)
+
+    monkeypatch.setattr(model, "audit_result", serialized_audit)
     model.worker(tmp_path, tmp_path)
     payload = runner.verify_attempt(tmp_path, tmp_path, request, None)
-    assert payload["accepted"] and payload["next_soc_mwh"] == [5.0]
+    assert payload["accepted"] is accepted
+    assert payload["next_soc_mwh"] == ([5.0] if accepted else None)
     assert "archive" in model.read(tmp_path / "completion.json")["phase_seconds"]
     if continued:
         assert model.read(tmp_path / "result.json.gz")["execution_context"] == current
