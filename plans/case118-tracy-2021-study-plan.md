@@ -1213,10 +1213,20 @@ hours from each start**, for each horizon below. This is **24 controlling solves
 per horizon, 96 overall**, before recovery attempts. All horizons share the
 same initial DC SoC at each period start, then advance their own realized state.
 Provide data through t0+17 to avoid truncating W=12. This replaces the detached
-screen and proposed 12-hour rollouts. Freeze exact starts and numerical budgets;
+screen and proposed 12-hour rollouts. Freeze exact starts and numerical settings;
 **pause after these four periods for owner evaluation before selecting the
 broader qualification set**. The following later policy studies are not
 automatic follow-on execution.
+
+For this initial comparison, the owner approved integrated six-hour net energy
+(MWh, not peak MW) for surplus/deficit selection and sequential cold/shifted
+initialization with deterministic recovery, not speculative racing. The memory
+ceiling is 16 GiB per worker; there are no added solve or study time limits.
+Retain IPOPT's built-in iteration limit and record its effective value. The
+owner may manually halt apparently stalled work. Exhausted numerical recovery
+ends only that trajectory; continue independent trajectories. Resource-ceiling
+violations, inconsistent artifacts and audit/implementation defects stop the
+study. Exact dates, recovery order and numerical settings remain to be frozen.
 
 The runner must support stopping and resuming this comparison without repeating
 accepted work. Checkpoint each trajectory's realized SoC, accepted AC solution
@@ -1235,8 +1245,9 @@ fix the first-hour battery power; this is an intentional limiting case, not a
 time-resolution test. Do not compare raw objectives over unequal horizons or
 ignore differences in final stored energy. Keep physical/solver/start policy
 fixed while screening horizons; avoid a full Cartesian product with assembly
-and helper policies. Freeze separate compute
-budgets, and obtain an owner decision before changing the operational horizon.
+and helper policies. Apply the initial comparison's resource policy above;
+later studies need separately approved budgets. Obtain an owner decision before
+changing the operational horizon.
 Details are in `experiments/case118_tracy_2021/STAGE_D_PROTOCOL.md`, D1.
 
 The [independent Case118 replay](../experiments/case118_vectorization_replay/REPORT.md)
