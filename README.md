@@ -4,7 +4,8 @@
 [![codecov](https://codecov.io/gh/cvxgrp/cvxopf/graph/badge.svg?token=f16a3ea1-bcfd-409e-8592-77d5bce001f5)](https://codecov.io/gh/cvxgrp/cvxopf)
 
 Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP),
-lossy DC OPF (convex QP), and single-node DC dispatch (convex QP).
+the sparse voltage-product SOCP relaxation, lossy DC OPF (convex QP), and
+single-node DC dispatch (convex QP).
 
 ## Motivation
 
@@ -380,6 +381,56 @@ order. The `branch_p_*` fields are MW, `branch_q_*` fields are MVAr, and
 and `(T, nl)` for a multistep result. Real and reactive powers are positive
 when entering a branch from the named terminal; apparent powers are
 nonnegative.
+
+**Sparse voltage-product SOCP relaxation:**
+
+```python
+from cvxopf import build_opf, extract_results, audit_socp_relaxation, recover_socp_voltage
+from cvxopf.testcases import case9
+
+build = build_opf(case9(), formulation="socp")
+build.solve()                       # CLARABEL, not IPOPT
+results = extract_results(build)    # lightweight; no recovery or audit
+audit = audit_socp_relaxation(build, results)
+recovery = recover_socp_voltage(build, results)
+print(results["status"], audit["feasible"], recovery["ac_feasible"])
+```
+
+SOCP uses squared voltage `w` and sparse edge products `W_re`, `W_im` (p.u.^2)
+with the existing transformer, shunt, charging, status, both-terminal rating,
+and device semantics. Multistep construction is time-vectorized by default;
+explicit stepwise construction remains available. P/Q devices, storage targets,
+HVDC and reactive shedding use the shared component models.
+
+`voltage_product_pairs` lists zero-based internal bus pairs `(i,j)`, `i<j`,
+oriented as `V[i] * conj(V[j])`. Branch mapping arrays retain MATPOWER row
+order. Edge arrays have shape `(npairs,)` or `(T,npairs)`; bus and device arrays
+follow the usual single-step/time-first conventions. `Vm_relaxed = sqrt(w)`
+is not an AC voltage solution, and no `Va_deg` is reported by extraction.
+Both-terminal powers use the same units/signs as AC; `branch_loss_mw` is their
+signed real-power sum. Empty edge/branch sets have empty arrays, not fictitious
+zero flows. Missing nonempty primal arrays remain `None`.
+
+Audit and recovery are separate, non-mutating operations. `SOCPAuditTolerances`
+declares physical and recovery thresholds separately. Audits recompute numeric
+network/device constraints; reports include signed determinant gaps, normalized
+gaps, cone violations, maxima, intervals and worst indices. Diagnostic arrays
+are always time-first, even for one interval. Recovery checks both edge tightness
+and cycle angles, retains the complete device primal, and independently checks
+the resulting AC candidate. It never solves or repairs. Near-zero edge phase,
+missing or nonfinite values produce an unavailable recovery, not fabricated
+voltages. Caller-supplied coupling constraints cannot be independently audited;
+full feasibility is then `None` unless a checked constraint already fails.
+
+`enforce_vset` and `enforce_branch_limits` apply. SOCP requires `sparsity_tol=0`
+even without branch limits. AC initialization/PQ-assembly options are inert.
+No DC loss-cost proxy is added; nondefault `loss_weight` is rejected (the
+default is inert). Solver status, relaxation feasibility and recovered AC
+feasibility are distinct. An SOCP primal objective is a numerical relaxation
+optimum estimate, **not a certified lower bound**. Cross-formulation comparisons
+require matched full-admittance AC physics, all devices/costs and temporal
+policies; no public bound certificate or automatic hierarchy acceptance is
+provided. See the [checkpoint plan](experiments/m11_socp/PLAN.md).
 
 **Lossy DC OPF:**
 
@@ -923,7 +974,8 @@ package environment.
 - [x] Nondispatchable generators
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
-- [ ] SOCP network model
+- [ ] SOCP network model — public builder, extraction and explicit audit/recovery
+  implemented; matched-comparison evidence and milestone closure remain pending.
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
 - [x] M14 agreed implementation, validation and bounded comparison requirements:
@@ -959,6 +1011,12 @@ package environment.
   formulations, and validate a future three-layer
   `singlenode_dc`→`socp`→`ac` workflow (see
   `plans/milestone-21-configurable-hierarchy.md`)
+- [ ] Model-independent hierarchies and aggregate signposts (M25, draft):
+  extend M21 with compatible model pairs, same-model shorter-horizon consistency
+  checks, and opt-in fleet storage-energy equality through shared cross-device
+  coupling assembly. Preserve M17 defaults and individual realized states;
+  distinguish objective equivalence from nonunique trajectory identity (see
+  [plan](plans/milestone-25-hierarchy-model-pairs-and-aggregate-signposts.md)).
 - [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
 - [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently

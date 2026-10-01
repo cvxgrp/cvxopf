@@ -12,6 +12,8 @@ supporting multiple formulations:
 
 - **AC-OPF** via CVXPY's disciplined nonlinear programming (DNLP) framework,
   solved via IPOPT (nonconvex)
+- **Sparse voltage-product SOCP** with shared AC-like devices, solved via CLARABEL;
+  relaxation auditing and voltage recovery are explicit, separate operations
 - **Lossy DC OPF** as a convex QP, solved via CLARABEL
 - **Single-node DC dispatch** as a convex copper-plate QP, solved via CLARABEL
 
@@ -152,6 +154,7 @@ Install with: `uv sync --extra dev --extra notebook`
 | `is_convex` | `formulation` | Solver default | `nlp` default |
 |---|---|---|---|
 | `False` | `"ac"` | `cp.IPOPT` | `True` |
+| `True` | `"socp"` | `cp.CLARABEL` | `False` |
 | `True` | `"lossy_dc"` | `cp.CLARABEL` | `False` |
 | `True` | `"singlenode_dc"` | `cp.CLARABEL` | `False` |
 
@@ -316,12 +319,19 @@ The default solver is CLARABEL (nlp=False).
 
 ### Future formulations
 
+`"socp"` is now publicly wired through both build entry points. It uses sparse
+voltage products and the same P/Q device bindings as AC, with convex solving.
+`extract_results` publishes lifted values and `Vm_relaxed`, never AC angles.
+`audit_socp_relaxation` and `recover_socp_voltage` are explicit non-solving,
+non-mutating operations in `socp_diagnostics.py`; no automatic AC acceptance or
+certified lower bound is provided. M11 matched-comparison evidence remains
+pending. See `experiments/m11_socp/REPORT.md` for the implementation checkpoint.
+
 The dispatch architecture in `problem.py` accepts new formulation keys
 without API changes. Planned future formulations:
 
 | Key | Description |
 |---|---|
-| `"socp"` | SOCP relaxation (convex) |
 | `"phase_angle_dc"` | Planned M24: lossless phase-angle DC OPF (convex QP); distinct from the existing `lossy_dc` network-flow model. See `plans/milestone-24-phase-angle-dc.md`. |
 
 To add a new formulation, follow the complete formulation-extension contract
@@ -365,11 +375,11 @@ Both emit `DeprecationWarning` when called.
 
 | Field | Type | Default | Applies to |
 |---|---|---|---|
-| `enforce_vset` | bool | False | AC only |
-| `sparsity_tol` | float | 0.0 | AC only |
+| `enforce_vset` | bool | False | AC and SOCP (squared binding) |
+| `sparsity_tol` | float | 0.0 | AC threshold; SOCP requires exactly zero, even without branch limits |
 | `init_flat` | bool | True | AC only |
-| `enforce_branch_limits` | bool | True | AC two-terminal `rateA` limits; requires `sparsity_tol=0` |
-| `loss_weight` | float | 1.0 | DC only |
+| `enforce_branch_limits` | bool | True | AC/SOCP two-terminal `rateA` limits; requires `sparsity_tol=0` |
+| `loss_weight` | float | 1.0 | DC only; SOCP default is inert and nondefault values are rejected |
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
 | `vectorize_pq` | bool | True | AC only; spatial P/Q expression/constraint batching |
@@ -547,7 +557,7 @@ reporting so objective terms are not reimplemented in `results.py`.
 
 Disciplined Convex Programming (DCP) is the ruleset CVXPY uses to certify a
 problem is convex. The convex formulations here (`lossy_dc`, `singlenode_dc`,
-future `socp`) are DCP-valid end to end. The `ac` formulation bypasses the
+`socp`) are DCP-valid end to end. The `ac` formulation bypasses the
 whole-problem DCP check with `nlp=True` and uses DNLP via IPOPT — but this
 bypass exists for **one reason only** (see the boundary invariant below).
 
@@ -768,7 +778,7 @@ their plans are not imported by this documentation-only addition.
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC retains separate availability and apparent-power-rating bounds; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
-| 11 — SOCP (convex) network model | 🔲 Future | Proposed sparse voltage-product bus-injection relaxation, time-vectorized with shared AC-like device channels, explicit relaxation/recovery diagnostics, and matched-objective bound semantics. See `plans/milestone-11-socp.md`. |
+| 11 — SOCP (convex) network model | In progress | Public sparse voltage-product builders, shared extraction and explicit audit/recovery implemented for review. Matched-comparison validation/evidence and closure remain pending. See `plans/milestone-11-socp.md` and `experiments/m11_socp/REPORT.md`. |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
 | 13 — Extend CVXPY parameterization for problem data | 🔲 Future | Faster repeated solves of the same graph over new data |
 | 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Time-vectorized multistep assembly is now the default across formulations; explicit stepwise assembly remains available. DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. The completed four-condition Case118 study supports combined AC vectorization with automatic sparse dispatch disabled; see `experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md`. See `plans/milestone-14-time-vectorization.md`. |
@@ -782,6 +792,7 @@ their plans are not imported by this documentation-only addition.
 | 22 — Nonconvex load-group penalties | 🔲 Future | Add identity-aligned interactions among groups of sheddable loads, beginning with mutually exclusive customer-group shedding and soft bilinear joint-shedding penalties. Use convex-hull or McCormick relaxation, typed deterministic rounding, and fixed-policy physical polishing; validate with exact small references, congested lossy-DC cases, and AC realization. See `plans/milestone-22-nonconvex-load-group-penalties.md`. |
 | 23 — Unit commitment | 🔲 Future | Add opt-in relaxed generator commitment to `lossy_dc` and `singlenode_dc`, use a deterministic relax–partial-round–resolve–final-round–polish procedure, and pass the resulting fixed commitment schedule plus polished SoC signposts into an explicitly configured AC realization. The MVP omits startup/shutdown logic, minimum-up/down times, reserves, and mixed-integer global-optimality claims. See `plans/milestone-23-unit-commitment.md`. |
 | 24 — Phase-angle DC optimal power flow | 🔲 Future | Add explicit `phase_angle_dc` alongside existing formulations, with affine angle/flow equations, fixed transformers, island references, shared devices, and independent DC-OPF validation. Preserve existing models/defaults. See `plans/milestone-24-phase-angle-dc.md`. |
+| 25 — Model-independent hierarchies and aggregate signposts | 🔲 Draft | Extend M21 with compatible model pairs, including same-model shorter-horizon consistency checks, and opt-in fleet storage-energy equality through shared cross-device coupling assembly. Preserve M17 defaults and individual realized states; distinguish objective equivalence from nonunique trajectory identity. See [plan](plans/milestone-25-hierarchy-model-pairs-and-aggregate-signposts.md). |
 
 ---
 
@@ -940,8 +951,9 @@ can monitor the run. Do not edit tracked files while a source-bound run is activ
 - Do not regenerate fixture files in CI
 - Do not pin `numpy` in `pyproject.toml` — the pin exists only in the fixture
   generation script
-- Do not remove the `validate_case` call from `_parse_case` (`ac_problem.py`)
-  or `_parse_dc_case` (`dc_problem.py`)
+- Preserve the `validate_case` call in shared AC/SOCP preparation
+  (`_admittance_preparation.py`, imported by AC as `_parse_case`) and in
+  `_parse_dc_case` (`dc_problem.py`)
 - Do not import `ac_problem` from `dc_problem` or vice versa
 - Do not import a component data class (`StorageUnitIdeal`,
   `NondispatchableUnit`, `HVDCLink`) from `problem.py` inside `ac_problem.py`
