@@ -125,6 +125,7 @@ def _adapter(
         metadata=_metadata,
         formulations={
             "ac": null,
+            "socp": FormulationAdapter(capability=FormulationCapability.UNSUPPORTED),
             "lossy_dc": _active() if binding is None else binding,
             "singlenode_dc": null,
         },

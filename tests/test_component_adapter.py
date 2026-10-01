@@ -67,6 +67,7 @@ def _adapter():
         metadata=_metadata,
         formulations={
             "ac": _active(),
+            "socp": _active(),
             "lossy_dc": _active(),
             "singlenode_dc": FormulationAdapter(
                 capability=FormulationCapability.NULL
@@ -156,7 +157,7 @@ def test_component_adapter_name_must_be_nonempty():
             metadata=_metadata,
             formulations={
                 formulation: _active()
-                for formulation in ("ac", "lossy_dc", "singlenode_dc")
+                for formulation in ("ac", "socp", "lossy_dc", "singlenode_dc")
             },
         )
 
@@ -311,6 +312,7 @@ def test_step_context_rejects_inconsistent_network_state(
 def test_prepared_data_and_formulation_registry_are_read_only_copies():
     formulations = {
         "ac": _active(),
+        "socp": _active(),
         "lossy_dc": _active(),
         "singlenode_dc": FormulationAdapter(
             capability=FormulationCapability.NULL

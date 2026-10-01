@@ -1,9 +1,9 @@
 # M11 — Sparse voltage-product SOCP relaxation
 
 Status: implementation started, 2026-10-01. Gate A's sparse network-map increment
-is implemented and algebraically tested; no public SOCP builder or optimization
-results are available yet. The Tracy study remains on hold; this milestone does
-not authorize restarting it.
+and Gate B's shared-device capability groundwork are implemented and tested;
+no public SOCP builder or optimization results are available yet. The Tracy study
+remains on hold; this milestone does not authorize restarting it.
 
 ### Implementation checkpoint — Sparse network maps
 
@@ -23,6 +23,30 @@ environment emits its existing CVXOPT/CyIpopt OpenMP import warning; these tests
 do not invoke either solver. Actual branch-limit enforcement, public option
 rejection (including `sparsity_tol`), component assembly, diagnostics, and the
 first-complete-builder architectural checkpoint remain pending.
+
+### Implementation checkpoint — Shared-device capability groundwork
+
+The closed formulation registry now declares SOCP on all five component families,
+reusing their existing AC device bindings. `supports_reactive_power()` separates
+P/Q channel support from solver class. A typed `SquaredVoltageNetworkState`
+prevents substituting AC magnitude state for lifted squared voltage. Generator
+setpoint selection is shared, with only its affine constant binding differing.
+The bound registry explicitly records `socp_explicit_policy` for applicable
+device box families; no new leaf-bound qualification is claimed. The reactive
+vectorized device path checks those registry decisions.
+
+`tests/test_socp_components.py` adds 27 checks of stepwise/vectorized contribution
+parity, all five device registrations, hard/soft storage terminal policies,
+reactive shedding, costs, shared publication/projection, network-state type
+rejection, setpoint selection, and bound policy. A focused 14-file regression run
+passes 507 tests, including existing AC/DC vectorized builds, component contracts,
+generator tests, bound qualification, and result projection tests. Configured
+mypy checks and lint on changed source/new tests pass. The broader tests exercise
+existing AC/DC solves only; no SOCP optimization or Tracy execution is claimed.
+
+This is not the first-complete-builder checkpoint. Neutral network preparation,
+public SOCP dispatch and option validation, network cone assembly, common result
+extraction integration, and separate audit/recovery operations remain to be wired.
 
 ## 1. Decision and scope
 

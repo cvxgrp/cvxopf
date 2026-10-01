@@ -192,6 +192,7 @@ TOY_ADAPTER = ComponentAdapter[_ToyUnit, None](
     metadata=_toy_metadata,
     formulations={
         "ac": _toy_formulation(),
+        "socp": _toy_formulation(),
         "lossy_dc": _toy_formulation(),
         "singlenode_dc": _toy_formulation(),
     },

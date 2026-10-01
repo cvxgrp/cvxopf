@@ -104,7 +104,30 @@ class DCNetworkState:
     """Explicit empty network state for DC component constraints."""
 
 
-NetworkState = ACNetworkState | DCNetworkState
+@dataclass(frozen=True)
+class SquaredVoltageNetworkState:
+    """Lifted network voltage state; device power channels remain P and Q."""
+
+    voltage_squared: cp.Variable
+    controlled_buses: tuple[int, ...]
+    enforce_vset: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "controlled_buses", tuple(self.controlled_buses))
+
+
+NetworkState = ACNetworkState | SquaredVoltageNetworkState | DCNetworkState
+
+
+def _validate_network_state(formulation: Formulation, state: NetworkState) -> None:
+    expected = {
+        "ac": ACNetworkState,
+        "socp": SquaredVoltageNetworkState,
+        "lossy_dc": DCNetworkState,
+        "singlenode_dc": DCNetworkState,
+    }[formulation]
+    if not isinstance(state, expected):
+        raise ValueError(f"formulation={formulation!r} requires {expected.__name__}")
 
 
 @dataclass(frozen=True)
@@ -123,13 +146,7 @@ class StepContext:
         if self.step < 0:
             raise ValueError("step must be a nonnegative integer")
         _validate_positive_real("base_mva", self.base_mva)
-        if self.formulation == "ac":
-            if not isinstance(self.network_state, ACNetworkState):
-                raise ValueError("formulation='ac' requires ACNetworkState")
-        elif not isinstance(self.network_state, DCNetworkState):
-            raise ValueError(
-                f"formulation={self.formulation!r} requires DCNetworkState"
-            )
+        _validate_network_state(self.formulation, self.network_state)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -171,13 +188,7 @@ class VectorizedContext:
             raise ValueError("horizon_steps must be a positive integer")
         _validate_positive_real("delta", self.delta)
         _validate_positive_real("base_mva", self.base_mva)
-        if self.formulation == "ac":
-            if not isinstance(self.network_state, ACNetworkState):
-                raise ValueError("formulation='ac' requires ACNetworkState")
-        elif not isinstance(self.network_state, DCNetworkState):
-            raise ValueError(
-                f"formulation={self.formulation!r} requires DCNetworkState"
-            )
+        _validate_network_state(self.formulation, self.network_state)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -493,7 +504,7 @@ class ComponentAdapter(Generic[UnitT, InputT]):
             or not self.cost_expression_name
         ):
             raise ValueError("component cost expression name must be a nonempty string")
-        expected = {"ac", "lossy_dc", "singlenode_dc"}
+        expected = {"ac", "socp", "lossy_dc", "singlenode_dc"}
         if set(self.formulations) != expected:
             raise ValueError(
                 "component adapter formulations must contain exactly "

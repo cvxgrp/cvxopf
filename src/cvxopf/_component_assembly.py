@@ -37,6 +37,7 @@ from cvxopf._temporal_assembly import (
     HorizonVariableSpec,
     ResultProjectionRegistry,
     ResultProjectionSpec,
+    supports_reactive_power,
 )
 
 
@@ -197,7 +198,7 @@ def _validate_injection_contribution(
     expected_shape: tuple[int, ...],
 ) -> None:
     """Enforce exact nodal-channel shapes and formulation channel support."""
-    if formulation != "ac" and contribution.q_pu is not None:
+    if not supports_reactive_power(formulation) and contribution.q_pu is not None:
         raise ValueError(
             f"component {component_name!r} returned a reactive injection "
             f"for formulation {formulation!r}; q_pu must be None"

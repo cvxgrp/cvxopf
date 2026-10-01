@@ -610,18 +610,39 @@ def ac_network_constraints(
     When multiple active generators share a controlled bus, the first device
     in list order supplies the setpoint, matching the historical builder rule.
     """
-    if not enforce_vset:
-        return []
+    return voltage_setpoint_constraints(
+        generators, v, ext_to_int, controlled_buses, enforce_vset=enforce_vset,
+    )
 
+
+def voltage_setpoints(generators: list, ext_to_int: dict, controlled_buses) -> dict:
+    """Select the first active generator's setpoint at each controlled bus."""
     controlled = {int(bus) for bus in controlled_buses}
-    constraints = []
-    pinned = set()
+    selected = {}
     for generator in generators:
         bus = int(ext_to_int[generator.bus])
-        if generator.status == 1 and bus in controlled and bus not in pinned:
-            constraints.append(v[bus] == float(generator.vg))
-            pinned.add(bus)
-    return constraints
+        if generator.status == 1 and bus in controlled and bus not in selected:
+            selected[bus] = float(generator.vg)
+    return selected
+
+
+def voltage_setpoint_constraints(
+    generators: list, voltage: cp.Variable, ext_to_int: dict, controlled_buses,
+    *, enforce_vset: bool, squared: bool = False,
+) -> list:
+    """Bind one shared selection of constants to v or squared magnitude w."""
+    if not enforce_vset:
+        return []
+    selected = voltage_setpoints(generators, ext_to_int, controlled_buses)
+    if squared:
+        for bus, value in selected.items():
+            if value < 0:
+                raise ValueError(
+                    "Squared-voltage binding requires a nonnegative selected "
+                    f"voltage setpoint; internal bus {bus} has vg={value}."
+                )
+    return [voltage[bus] == (value**2 if squared else value)
+            for bus, value in selected.items()]
 
 
 def dc_network_constraints(
