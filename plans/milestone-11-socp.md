@@ -1,8 +1,28 @@
 # M11 — Sparse voltage-product SOCP relaxation
 
-Status: proposed implementation plan, 2026-10-01. No M11 implementation or
-numerical results are claimed here. The Tracy study remains on hold; this
-milestone does not authorize restarting it.
+Status: implementation started, 2026-10-01. Gate A's sparse network-map increment
+is implemented and algebraically tested; no public SOCP builder or optimization
+results are available yet. The Tracy study remains on hold; this milestone does
+not authorize restarting it.
+
+### Implementation checkpoint — Sparse network maps
+
+`src/cvxopf/_voltage_product.py` consumes the existing `BranchAdmittance` and
+full Ybus outputs, providing deterministic pair/orientation metadata and real
+CSR maps for nodal and both-terminal powers. The maps apply directly to the
+time-batched lifted state without constructing a graph per interval. No device
+orchestration, admittance formulas, result extraction, or solver path is copied.
+SciPy is declared as a direct dependency (already transitively required by
+CVXPY); the offline lock refresh changes no package versions.
+
+Verification: `uv run --extra dev pytest tests/test_voltage_product.py
+tests/test_network.py -q` passes 90 tests (20 new, 70 existing). These tests
+compare direct complex-voltage physics, not optimized dispatch, and cover the
+Gate A topology/transformer/shunt cases, terminal units, and time batching. The
+environment emits its existing CVXOPT/CyIpopt OpenMP import warning; these tests
+do not invoke either solver. Actual branch-limit enforcement, public option
+rejection (including `sparsity_tol`), component assembly, diagnostics, and the
+first-complete-builder architectural checkpoint remain pending.
 
 ## 1. Decision and scope
 
