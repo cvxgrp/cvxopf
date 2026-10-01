@@ -183,10 +183,21 @@ def test_annual_worker_and_analyzer_use_real_shared_audit(
     assert len(analysis["accepted"]) == (0 if failure else 2)
 
 
-def test_stage_c_protocol_identity_is_separate():
+def test_stage_c_protocol_identity_is_separate(tmp_path, monkeypatch):
+    # Context hashes the source, but this test only needs protocol identity;
+    # never depend on the Git-ignored owner CSV for this clone-ready check.
+    source = tmp_path / "synthetic-source.csv"
+    source.write_text("hour,load_mw\n0,1\n", encoding="utf-8")
+    monkeypatch.setattr(shared, "SOURCE", source)
+
+    annual_context = annual.STUDY.context()
+    shared_context = shared.context()
     assert (
-        annual.STUDY.context()["protocol_sha256"] != shared.context()["protocol_sha256"]
+        annual_context["source_sha256"]
+        == shared_context["source_sha256"]
+        == shared.digest(source)
     )
+    assert annual_context["protocol_sha256"] != shared_context["protocol_sha256"]
 
 
 def test_wrong_stage_binding_rejected_before_model(tmp_path, monkeypatch):
