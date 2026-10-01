@@ -444,6 +444,7 @@ def prepare_box_bounds(
 class VariableBoxFamily(Enum):
     """Closed set of independently represented elementwise operating boxes."""
 
+    SOCP_VOLTAGE_SQUARED = "socp_voltage_squared"
     DISPATCHABLE_P = "dispatchable_p"
     DISPATCHABLE_Q = "dispatchable_q"
     AC_VOLTAGE = "ac_voltage"
@@ -490,6 +491,7 @@ _BOX_REPRESENTATIONS: Mapping[
         **{
             ("socp", family): _decision("explicit", "socp_explicit_policy")
             for family in (
+                VariableBoxFamily.SOCP_VOLTAGE_SQUARED,
                 VariableBoxFamily.DISPATCHABLE_P,
                 VariableBoxFamily.DISPATCHABLE_Q,
                 VariableBoxFamily.STORAGE_SOC,

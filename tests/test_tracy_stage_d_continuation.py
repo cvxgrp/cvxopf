@@ -291,7 +291,7 @@ def test_interrupted_attempt_can_cross_a_reviewed_source_transition(
     assert runner.reconstruct(tmp_path, study, fake_verify) == progress
 
 
-def test_retained_two_era_prefix_and_pending_start_rehearsal(tmp_path):
+def test_retained_two_era_prefix_and_pending_start_rehearsal(tmp_path, monkeypatch):
     """Real records, physics, context routing and start construction; no solve."""
     from experiments.case118_tracy_2021.prepare import SOURCE
     from cvxopf import build_opf_multistep
@@ -300,6 +300,12 @@ def test_retained_two_era_prefix_and_pending_start_rehearsal(tmp_path):
     failed = source / "trajectory-08/hour-00/attempt-000"
     if not SOURCE.exists() or not (failed / "completion.json").exists():
         pytest.skip("owner source or retained stopped prefix unavailable")
+    recorded = model.read(source / "audit-continuation-001.json")
+
+    def forbid_live_context():
+        pytest.fail("historical rehearsal must use its recorded continuation context")
+
+    monkeypatch.setattr(model, "context", forbid_live_context)
     for name in ("binding.json", continuation.RECORD):
         (tmp_path / name).symlink_to(source / name)
     for index in range(8):
@@ -316,9 +322,11 @@ def test_retained_two_era_prefix_and_pending_start_rehearsal(tmp_path):
 
     before = runner.reconstruct(tmp_path, study, verify, allow_partial=True)
     assert before["completed_hours"] == 48
-    # A simulated reviewed context is used only in this disposable test journal.
-    # Production preflight still refuses a dirty tree; no real binding is written.
-    current = {**model.context(), "clean": True}
+    # Replay the actual reviewed transition, not today's HEAD/environment.
+    # All production compatibility, source and ancestry checks remain active;
+    # only the disposable test journal receives a newly prepared record.
+    current = recorded["execution_context"]
+    assert recorded["previous_context"] == continuation.execution_context(tmp_path)
     previous = continuation.execution_context(tmp_path)["commit"]
     assert continuation.transition_needed(tmp_path, current, previous)
     record = continuation.prepare(tmp_path, current, before)

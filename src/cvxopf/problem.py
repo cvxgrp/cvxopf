@@ -69,18 +69,19 @@ class OPFOptions:
     ----------
     enforce_vset : bool
         If True, pin PV and slack bus voltage magnitudes to the Vg setpoint
-        declared in the gen table. AC only. Default False.
+        declared in the gen table. AC and SOCP (squared binding). Default False.
     sparsity_tol : float
         Entries of Ybus with |G| <= tol AND |B| <= tol are treated as
         structural zeros and excluded from DNLP trig constraints.
-        AC only. Default 0.0 (exact sparsity).
+        AC only. Default 0.0 (exact sparsity). SOCP requires exactly zero,
+        including when branch limits are disabled.
     init_flat : bool
         If True, initialise theta = 0 and v = 1 (flat start) before
         returning. AC only. Default True.
     enforce_branch_limits : bool
         If True, enforce MATPOWER rateA as an apparent-power limit at both
         terminals of every in-service branch with a finite positive rating.
-        AC only. Requires sparsity_tol=0. Default True. Set False as an
+        AC and SOCP. Requires sparsity_tol=0. Default True. Set False as an
         explicit compatibility escape hatch when ratings should remain inert.
     loss_weight : float
         Weighting factor lambda for line losses in the lossy DC objective:
@@ -91,7 +92,8 @@ class OPFOptions:
         regularizer, not a calibrated physical loss price.
         Reference: Convex Optimization with Smart Grid Examples,
         https://doi.org/10.2172/3018252
-        DC only. Default 1.0.
+        DC only. Default 1.0. SOCP adds no loss proxy and rejects nondefault
+        values rather than silently changing the AC-matched device objective.
     branch_limit_sentinel : float
         Substitute value (MW) used when a branch has rateA=0 in the
         MATPOWER case (meaning no limit is defined). A UserWarning is
@@ -215,10 +217,10 @@ class OPFBuild:
 
     formulation : str
         The formulation used to build this problem.
-        One of: "ac", "lossy_dc", "singlenode_dc".
+        One of: "ac", "socp", "lossy_dc", "singlenode_dc".
 
     is_convex : bool
-        True for convex formulations (lossy_dc, singlenode_dc); False for
+        True for convex formulations (socp, lossy_dc, singlenode_dc); False for
         nonconvex (ac). Controls solver defaults in solve().
     expressions : dict
         Named modeled CVXPY expressions used for solved-value reporting.
@@ -342,11 +344,13 @@ def _finalize_temporal_assembly(
 
 
 def _get_single_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.socp_problem import _build_socp_single
     from cvxopf.ac_problem import _build_ac_single
     from cvxopf.dc_problem import _build_lossy_dc_single
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_single
 
     return {
+        "socp": _build_socp_single,
         "ac": _build_ac_single,
         "lossy_dc": _build_lossy_dc_single,
         "singlenode_dc": _build_singlenode_dc_single,
@@ -354,11 +358,13 @@ def _get_single_builders() -> dict[str, Callable[..., OPFBuild]]:
 
 
 def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.socp_problem import _build_socp_multistep
     from cvxopf.ac_problem import _build_ac_multistep
     from cvxopf.dc_problem import _build_lossy_dc_multistep
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_multistep
 
     return {
+        "socp": _build_socp_multistep,
         "ac": _build_ac_multistep,
         "lossy_dc": _build_lossy_dc_multistep,
         "singlenode_dc": _build_singlenode_dc_multistep,
@@ -366,11 +372,13 @@ def _get_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
 
 
 def _get_vectorized_multistep_builders() -> dict[str, Callable[..., OPFBuild]]:
+    from cvxopf.socp_problem import _build_socp_vectorized
     from cvxopf.ac_problem import _build_ac_vectorized
     from cvxopf.dc_problem import _build_lossy_dc_vectorized
     from cvxopf.singlenode_dc_problem import _build_singlenode_dc_vectorized
 
     return {
+        "socp": _build_socp_vectorized,
         "ac": _build_ac_vectorized,
         "lossy_dc": _build_lossy_dc_vectorized,
         "singlenode_dc": _build_singlenode_dc_vectorized,
@@ -414,8 +422,8 @@ def _normalize_multistep_load_inputs(
                 "imported-load mode requires df_P; alternatively provide "
                 "explicit loads and df_load_p/df_load_q"
             )
-        if formulation == "ac" and df_Q is None:
-            raise ValueError("imported-load AC mode requires df_Q")
+        if formulation in {"ac", "socp"} and df_Q is None:
+            raise ValueError(f"imported-load {formulation.upper()} mode requires df_Q")
         p_pu, q_pu = load_timeseries_from_dataframe(df_P, df_Q, case)
         if p_pu.shape[0] != T:
             raise ValueError(
@@ -505,6 +513,10 @@ def build_opf(
     formulation : str
         "ac"
             Full AC-OPF via DNLP (nonconvex). Solved by IPOPT.
+        "socp"
+            Sparse voltage-product relaxation with AC-like device channels.
+            Convex conic problem solved by CLARABEL. Relaxed voltages are not
+            an AC solution; use the separate audit/recovery APIs explicitly.
         "lossy_dc"
             Lossy DC OPF (convex QP). Solved by CLARABEL.
             Reference: Convex Optimization with Smart Grid Examples,
@@ -645,7 +657,7 @@ def build_opf_multistep(
         Temporal graph representation. Defaults to ``"vectorized"`` for all
         formulations. Explicit ``"stepwise"``
         retains per-interval variables; ``"vectorized"`` selects time-last
-        assembly for all three formulations.
+        assembly for all formulations.
         AC retains the DNLP/IPOPT solve path.
     automatic_sparse_dispatch : bool, optional
         AC only; default False. Same scoped density-dispatch compatibility

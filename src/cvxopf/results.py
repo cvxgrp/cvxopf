@@ -49,7 +49,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from cvxopf._temporal_assembly import ResultProjectionSpec
+from cvxopf._temporal_assembly import ResultProjectionSpec, supports_reactive_power
 from cvxopf.hvdc import _loss_values
 from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
@@ -144,6 +144,9 @@ def _objective_value(build: OPFBuild) -> float:
 def _initialize_results(build: OPFBuild) -> dict[str, Any]:
     """Initialize the public schema from the built model, before values."""
     core_fields = {
+        "socp": ("Pg", "Qg", "w", "W_re", "W_im", "Vm_relaxed", "p_net", "q_net",
+                 "branch_p_from", "branch_q_from", "branch_p_to", "branch_q_to",
+                 "branch_s_from", "branch_s_to", "branch_loss_mw"),
         "ac": (
             "Pg",
             "Qg",
@@ -200,11 +203,11 @@ def _initialize_results(build: OPFBuild) -> dict[str, Any]:
         results["p_load"] = None
         results["q_load"] = None
         results["p_load_served"] = None
-        if build.formulation == "ac":
+        if supports_reactive_power(build.formulation):
             results["q_load_served"] = None
         if int(build.data["nsheddable"]) > 0:
             results["p_load_shed"] = None
-            if build.formulation == "ac":
+            if supports_reactive_power(build.formulation):
                 results["q_load_shed"] = None
             results["load_shed_fraction"] = None
             results["p_load_shed_total"] = None
@@ -300,7 +303,7 @@ def _add_load_results(results: dict[str, Any], build: OPFBuild) -> None:
     results["q_load"] = _solved_expression_values(build, "q_load")
     if int(build.data["nsheddable"]) == 0:
         results["p_load_served"] = _solved_expression_values(build, "p_load_served")
-        if build.formulation == "ac":
+        if supports_reactive_power(build.formulation):
             results["q_load_served"] = _solved_expression_values(build, "q_load_served")
         return
 
@@ -310,7 +313,7 @@ def _add_load_results(results: dict[str, Any], build: OPFBuild) -> None:
         build, "load_shed_fraction"
     )
     results["p_load_shed_total"] = _solved_expression_values(build, "p_load_shed_total")
-    if build.formulation == "ac":
+    if supports_reactive_power(build.formulation):
         results["q_load_served"] = _solved_expression_values(build, "q_load_served")
         results["q_load_shed"] = _solved_expression_values(build, "q_load_shed")
     results["energy_not_served_by_load"] = _solved_expression_values(
@@ -330,8 +333,13 @@ def _add_device_results(results: dict[str, Any], build: OPFBuild) -> None:
     _add_load_results(results, build)
 
 
-def _add_ac_branch_results(results: dict[str, Any], build: OPFBuild) -> None:
-    """Add signed AC branch-terminal powers and derived magnitudes."""
+def _add_branch_results(results: dict[str, Any], build: OPFBuild) -> None:
+    """Add representation-independent terminal powers and magnitudes."""
+    if build.data.get("nl") == 0:
+        shape = (build.data["T"], 0) if "T" in build.data else (0,)
+        for channel in ("p_from", "q_from", "p_to", "q_to", "s_from", "s_to"):
+            results["branch_" + channel] = np.empty(shape)
+        return
     base_mva = float(build.data["baseMVA"])
     signed = {
         "branch_p_from": _scaled_values(
@@ -405,6 +413,16 @@ def extract_results(build: OPFBuild) -> dict[str, Any]:
         ``branch_s_*`` is in MVA in both modes. objective is total integrated
         horizon cost.
 
+        SOCP adds the same generator, device, nodal and branch power fields,
+        but replaces Vm/Va_deg with w (squared magnitude), W_re/W_im (oriented
+        edge products, p.u.^2), and Vm_relaxed = sqrt(w). Edge arrays are
+        (npairs,) or (T, npairs); voltage_product_pairs contains internal
+        zero-based (i,j), i<j identities. Branch pair/orientation arrays map
+        original branch rows to those pairs (-1/0 for inactive or self-loops).
+        branch_loss_mw is the sum of signed terminal real powers. Extraction
+        never audits or recovers voltages; call audit_socp_relaxation and
+        recover_socp_voltage separately. Negative w is not silently clipped.
+
         DC single-step keys:
             status      str          CVXPY solve status
             objective   float        Optimal interval cost (objective units)
@@ -430,9 +448,9 @@ def extract_results(build: OPFBuild) -> dict[str, Any]:
 
         First-class loads always add ``p_load``, ``q_load``, and
         ``p_load_served`` in MW/MVAr with shape ``(nload,)`` or
-        ``(T, nload)``. AC also adds ``q_load_served``. When one or more
+        ``(T, nload)``. AC/SOCP also add ``q_load_served``. When one or more
         loads are sheddable, ``p_load_shed`` and ``load_shed_fraction`` have
-        shape ``(nsheddable,)`` or ``(T, nsheddable)``; AC also adds signed
+        shape ``(nsheddable,)`` or ``(T, nsheddable)``; AC/SOCP also add signed
         ``q_load_shed``. ``p_load_shed_total`` is scalar or ``(T,)``.
         ``energy_not_served_by_load`` is a horizon ``(nsheddable,)`` MWh
         vector; ``energy_not_served`` and ``load_shedding_cost`` are horizon
@@ -450,7 +468,9 @@ def extract_results(build: OPFBuild) -> dict[str, Any]:
         If build.formulation is not one of 'ac', 'lossy_dc',
         'singlenode_dc'.
     """
-    if build.formulation == "ac":
+    if build.formulation == "socp":
+        return _extract_socp_results(build)
+    elif build.formulation == "ac":
         return _extract_ac_results(build)
     elif build.formulation == "lossy_dc":
         return _extract_dc_results(build)
@@ -548,7 +568,7 @@ def _extract_ac_results(build: OPFBuild) -> dict[str, Any]:
         if build.temporal_assembly == "vectorized" or (
             voltage is not None and angle is not None
         ):
-            _add_ac_branch_results(results, build)
+            _add_branch_results(results, build)
         _add_device_results(results, build)
         return results
 
@@ -580,7 +600,7 @@ def _extract_ac_results(build: OPFBuild) -> dict[str, Any]:
     if build.temporal_assembly == "vectorized" or (
         voltage is not None and angle is not None
     ):
-        _add_ac_branch_results(results, build)
+        _add_branch_results(results, build)
     _add_device_results(results, build)
     return results
 
@@ -662,5 +682,34 @@ def _extract_singlenode_dc_results(build: OPFBuild) -> dict[str, Any]:
         p_net=_scaled_values(_solved_expression_values(build, "p_net"), baseMVA),
     )
 
+    _add_device_results(results, build)
+    return results
+
+
+def _extract_socp_results(build: OPFBuild) -> dict[str, Any]:
+    """Read lifted values only. Auditing and voltage recovery are explicit APIs."""
+    results = _initialize_results(build)
+    results["objective"] = _objective_value(build)
+    base = build.data["baseMVA"]
+    for key in ("Pg", "Qg"):
+        results[key] = _scaled_values(_variable_values(build, key), base)
+    for key in ("p_net", "q_net"):
+        results[key] = _scaled_values(_solved_expression_values(build, key), base)
+    results["w"] = _variable_values(build, "w")
+    for key in ("W_re", "W_im"):
+        if len(build.data["voltage_product_pairs"]):
+            results[key] = _variable_values(build, key)
+        else:
+            shape = (build.data["T"], 0) if "T" in build.data else (0,)
+            results[key] = np.empty(shape)
+    if results["w"] is not None:
+        with np.errstate(invalid="ignore"):
+            results["Vm_relaxed"] = np.sqrt(results["w"])
+    results["voltage_product_pairs"] = build.data["voltage_product_pairs"].copy()
+    results["branch_voltage_product_pair"] = build.data["branch_voltage_product_pair"].copy()
+    results["branch_voltage_product_orientation"] = build.data["branch_voltage_product_orientation"].copy()
+    _add_branch_results(results, build)
+    if results["branch_p_from"] is not None and results["branch_p_to"] is not None:
+        results["branch_loss_mw"] = results["branch_p_from"] + results["branch_p_to"]
     _add_device_results(results, build)
     return results

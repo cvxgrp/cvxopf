@@ -2,10 +2,16 @@
 
 Status: implementation started, 2026-10-01. Gate A's sparse network-map increment
 and Gate B's shared-device capability groundwork are implemented and tested;
-no public SOCP builder or optimization results are available yet. The Tracy study
-remains on hold; this milestone does not authorize restarting it.
+the public builder, common extraction, and explicit numerical audit/recovery
+slice is now implemented for review. The bounded evidence and architectural
+checkpoint are in [the report](../experiments/m11_socp/REPORT.md). Matched-pair
+comparison validation/evidence and milestone closure remain pending. The Tracy
+study remains on hold; this milestone does not authorize restarting it.
 
-### Implementation checkpoint — Sparse network maps
+The two checkpoints below preserve the earlier increment history; their pending
+items are superseded where noted by the current builder/diagnostics report.
+
+### Historical implementation checkpoint — Sparse network maps
 
 `src/cvxopf/_voltage_product.py` consumes the existing `BranchAdmittance` and
 full Ybus outputs, providing deterministic pair/orientation metadata and real
@@ -24,7 +30,7 @@ do not invoke either solver. Actual branch-limit enforcement, public option
 rejection (including `sparsity_tol`), component assembly, diagnostics, and the
 first-complete-builder architectural checkpoint remain pending.
 
-### Implementation checkpoint — Shared-device capability groundwork
+### Historical implementation checkpoint — Shared-device capability groundwork
 
 The closed formulation registry now declares SOCP on all five component families,
 reusing their existing AC device bindings. `supports_reactive_power()` separates

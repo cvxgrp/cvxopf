@@ -58,6 +58,9 @@ from cvxopf.problem import (
     TemporalAssembly,
 )
 from cvxopf.results import extract_results, compare_to_reference
+from cvxopf.socp_diagnostics import (
+    SOCPAuditTolerances, audit_socp_relaxation, recover_socp_voltage,
+)
 from cvxopf.storage import StorageUnitIdeal
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, hvdc_from_dcline
@@ -102,6 +105,9 @@ __all__ = [
     "TemporalAssembly",
     "extract_results",
     "compare_to_reference",
+    "SOCPAuditTolerances",
+    "audit_socp_relaxation",
+    "recover_socp_voltage",
     "StorageUnitIdeal",
     "NondispatchableUnit",
     "HVDCLink",
