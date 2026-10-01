@@ -4,9 +4,11 @@ Status: implementation started, 2026-10-01. Gate A's sparse network-map incremen
 and Gate B's shared-device capability groundwork are implemented and tested;
 the public builder, common extraction, and explicit numerical audit/recovery
 slice is now implemented for review. The bounded evidence and architectural
-checkpoint are in [the report](../experiments/m11_socp/REPORT.md). Matched-pair
-comparison validation/evidence and milestone closure remain pending. The Tracy
-study remains on hold; this milestone does not authorize restarting it.
+checkpoint are in [the report](../experiments/m11_socp/REPORT.md). The next slice
+is a small standard suite with analytic and independent SOCP references, followed
+by matched AC/SOCP comparison validation/evidence. Both and milestone closure
+remain pending. The Tracy study remains on hold; this milestone does not
+authorize restarting it.
 
 The two checkpoints below preserve the earlier increment history; their pending
 items are superseded where noted by the current builder/diagnostics report.
@@ -413,6 +415,11 @@ of Tracy's unresolved W=1 failure.
 
 ## 7. Implementation sequence and acceptance gates
 
+After review of the current builder/diagnostics checkpoint, complete Gate E1's
+standard reference suite before expanding into Gate E2's matched device/horizon
+comparisons. Independent network validation and internal AC/SOCP containment
+answer different questions; neither substitutes for the other.
+
 ### Gate A — Network identities and topology
 
 Implement coefficient maps and lift known voltage vectors without optimization.
@@ -473,15 +480,90 @@ must fail exact-recovery classification for the correct reason. Perturb balance,
 ratings, targets, and cone feasibility to exercise each residual. Cover undefined
 phases, nonfinite/missing values, and inaccurate solver outcomes.
 
-### Gate E — Small matched AC/SOCP evidence
+### Gate E1 — Small standard SOCP reference suite
 
-Use public small cases and deterministic synthetic device/horizon cases; no
-private Tracy files are required in CI. Lift feasible AC candidates to verify
+Establish a stable, public, Python-CI-compatible suite before the matched-pair
+evidence slice. Keep its initial scope to the following fixtures:
+
+| Fixture | Reference and acceptance purpose |
+| --- | --- |
+| Deterministic two-bus case | Derive the optimum independently of the builder, with declared assumptions and physical loss accounting. Choose and verify a case whose optimal lifted point supports successful voltage recovery; do not assume exactness merely because it is radial. |
+| Existing repository Case9 | Generate an independent, explicitly matched PowerModels reference for meshed-network objective and relaxation feasibility. |
+| Existing repository Case14 | Generate an independent, explicitly matched PowerModels reference covering its transformer/shunt data and meshed-network diagnostics. |
+| Existing synthetic triangle controls | Retain Gate D's tight-but-cycle-inconsistent and cycle-consistent-but-slack controls. Each must fail exact recovery for the correct reason; these are diagnostic controls, not external optimum oracles. |
+
+Use PowerModels.jl's `SOCWRConicPowerModel` as the independent implementation of
+the squared-voltage/complex-product cone model. Its stock OPF is not automatically
+the same relaxation: default angle-difference constraints, associated cuts, and
+angle-derived voltage-product bounds must be explicitly excluded from the
+reference construction to match this first version. Retain voltage bounds, edge
+cones, physical admittances, generator P/Q boxes and costs, and both-terminal
+apparent-power ratings. Do not strengthen or otherwise change the production
+SOCP model to match a reference default.
+
+Before generating references, record an inspectable model-matching checklist:
+exact case arrays and baseMVA, bus/branch identities and product orientation,
+status and zero/unrated branch conventions, taps/phases/shunts/charging, voltage
+bounds and setpoint policy, generator limits/costs, demand, units and objective
+scaling. Use the exact repository Case9/14 inputs rather than similarly named
+PGLib variants, and record any external parser normalization; unreviewed input
+changes invalidate the comparison. No shedding, extra devices, DC loss-cost
+proxy, or reference-only regularizer in these network-reference cases.
+
+Generate references offline in an isolated, pinned environment. Commit compact
+fixtures under `tests/fixtures/` with input hashes, PowerModels/Julia/solver
+versions, reference-construction settings, solver tolerances and termination,
+objective/components, complete lifted network and generator primal, and signed
+both-terminal powers with identities and units. Keep generation code,
+reproducible commands, matching notes and the evidence report in
+`experiments/m11_socp/`; raw logs remain in its ignored `results/`. CI reads the
+committed fixtures and runs the Python implementation; it neither installs Julia
+nor downloads or regenerates references. No new runtime dependency is required.
+
+Predeclare objective and physical-residual tolerances before inspecting numerical
+agreement. Independently reconstruct reference and returned-primal balance,
+voltage/device/rating constraints, cone feasibility and objective accounting;
+compare optimum estimates within the declared objective tolerance. Compare
+individual dispatch/voltage values only where uniqueness is established, not as
+a default golden-array requirement. Record edge tightness, cycle inconsistency
+and recovered AC residuals separately; a meshed reference need not recover an
+AC-feasible point. Neither solver success nor objective agreement alone passes
+the gate, and no numerical primal objective is labeled a certified lower bound.
+
+Predeclare solver settings, maximum solves, per-solve limits, a small total
+generation/diagnostic budget and stopping criteria before execution. Stop for
+review after this suite; do not expand cases, retry indefinitely or relax
+tolerances to obtain agreement. Report unavailable references and discrepancies
+explicitly. PGLib's three-bus `case3_lmbd` is a possible later extension, not
+required in this first slice; published rounded SOC gaps are sanity checks,
+not precise golden fixtures.
+
+Primary reference implementation and benchmark sources:
+
+- [PowerModels network formulations](https://lanl-ansi.github.io/PowerModels.jl/stable/formulations/)
+  and [voltage-product cone implementation](https://github.com/lanl-ansi/PowerModels.jl/blob/master/src/form/wr.jl).
+- [Default OPF assembly](https://github.com/lanl-ansi/PowerModels.jl/blob/master/src/prob/opf.jl)
+  and [shared angle constraints/cuts](https://github.com/lanl-ansi/PowerModels.jl/blob/master/src/form/shared.jl).
+- [PGLib cases](https://github.com/power-grid-lib/pglib-opf) and
+  [published baseline](https://github.com/power-grid-lib/pglib-opf/blob/master/BASELINE.md).
+
+Pin exact source revisions in generated-fixture provenance; the links above
+identify the implementation, not a frozen regeneration environment.
+
+### Gate E2 — Small matched AC/SOCP evidence
+
+Build on the accepted standard suite with Case9/14 and one deterministic small
+multistep storage/shedding fixture. Validate matching of network/options, device
+inputs and costs, shedding permissions, horizon/delta, initial storage state and
+terminal policies before comparing objectives. Reject thresholded AC references
+and unsupported caller coupling as specified in Section 6. No private Tracy
+files are required in CI. Lift independently feasible AC candidates to verify
 containment and identical objective components. Solve the matched relaxation,
-report residuals, objective estimate/available dual evidence, rank and cycle
-diagnostics, and recovered AC residuals. Include a mesh; do not require its
-relaxation to be exact. Use objective tolerances rather than identical dispatch
-where multiple optima exist.
+report physical losses, shedding, objective components and estimate/available
+dual evidence, residuals, rank and cycle diagnostics, and recovered AC residuals.
+Retain the complete device primal in the lift. Include a mesh; do not require
+its relaxation to be exact. Use objective tolerances rather than identical
+dispatch where multiple optima exist.
 
 Before execution, predeclare the fixture list, solver settings, per-solve and
 total diagnostic budgets, and stopping criteria. No automatic expansion into a
