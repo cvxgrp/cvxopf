@@ -350,12 +350,18 @@ def derive_boundary_rounds(
     storage_power_mw: np.ndarray,
     capacities_mwh: np.ndarray,
     power_ratings_mw: np.ndarray,
+    *,
+    storage_device_count: int = len(STORAGE_DEVICE_IDS),
 ) -> tuple[list[int], list[dict[str, object]]]:
     """Apply the frozen lexicographic rule and retain every candidate input."""
-    if boundary_soc_mwh.shape != (HORIZON_STEPS + 1, len(STORAGE_DEVICE_IDS)):
+    if boundary_soc_mwh.shape != (HORIZON_STEPS + 1, storage_device_count):
         raise ValueError("boundary SoC has the wrong shape")
-    if storage_power_mw.shape != (HORIZON_STEPS, len(STORAGE_DEVICE_IDS)):
+    if storage_power_mw.shape != (HORIZON_STEPS, storage_device_count):
         raise ValueError("storage power has the wrong shape")
+    if capacities_mwh.shape != (storage_device_count,) or power_ratings_mw.shape != (
+        storage_device_count,
+    ):
+        raise ValueError("storage ratings have the wrong shape")
     for values, label in (
         (boundary_soc_mwh, "boundary SoC"),
         (storage_power_mw, "storage power"),

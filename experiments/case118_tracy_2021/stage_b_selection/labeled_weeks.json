@@ -1,0 +1,74 @@
+[
+  {
+    "label": "Energy low",
+    "minimum_net_load_mw": -20698.343499972503,
+    "net_energy_gwh": -1496.5284684829521,
+    "peak_net_load_mw": 3827.1574505660487,
+    "start": "2021-05-01T00:00:00-08:00",
+    "stop_exclusive": "2021-05-08T00:00:00-08:00"
+  },
+  {
+    "label": "Energy median",
+    "minimum_net_load_mw": -13491.750224513691,
+    "net_energy_gwh": -501.95505764540667,
+    "peak_net_load_mw": 4648.145826382051,
+    "start": "2021-07-23T00:00:00-08:00",
+    "stop_exclusive": "2021-07-30T00:00:00-08:00"
+  },
+  {
+    "label": "Energy high",
+    "minimum_net_load_mw": -9710.5603535392,
+    "net_energy_gwh": 270.8866913460283,
+    "peak_net_load_mw": 4578.982257833433,
+    "start": "2021-12-17T00:00:00-08:00",
+    "stop_exclusive": "2021-12-24T00:00:00-08:00"
+  },
+  {
+    "label": "Peak low",
+    "minimum_net_load_mw": -19262.25809233629,
+    "net_energy_gwh": -1288.9837129486511,
+    "peak_net_load_mw": 2279.73933718059,
+    "start": "2021-06-09T00:00:00-08:00",
+    "stop_exclusive": "2021-06-16T00:00:00-08:00"
+  },
+  {
+    "label": "Peak median",
+    "minimum_net_load_mw": -15867.20429573942,
+    "net_energy_gwh": -351.022483247492,
+    "peak_net_load_mw": 4557.588954455796,
+    "start": "2021-01-24T00:00:00-08:00",
+    "stop_exclusive": "2021-01-31T00:00:00-08:00"
+  },
+  {
+    "label": "Peak high",
+    "minimum_net_load_mw": -18072.05453743624,
+    "net_energy_gwh": -647.1845067186063,
+    "peak_net_load_mw": 6000.0,
+    "start": "2021-02-13T00:00:00-08:00",
+    "stop_exclusive": "2021-02-20T00:00:00-08:00"
+  },
+  {
+    "label": "Deepest surplus",
+    "minimum_net_load_mw": -20698.343499972503,
+    "net_energy_gwh": -1043.0180683161263,
+    "peak_net_load_mw": 3545.0766625701353,
+    "start": "2021-04-25T00:00:00-08:00",
+    "stop_exclusive": "2021-05-02T00:00:00-08:00"
+  },
+  {
+    "label": "Shallowest minimum",
+    "minimum_net_load_mw": -5633.161377370376,
+    "net_energy_gwh": 196.17783091757016,
+    "peak_net_load_mw": 4743.869331336695,
+    "start": "2021-01-01T00:00:00-08:00",
+    "stop_exclusive": "2021-01-08T00:00:00-08:00"
+  },
+  {
+    "label": "Energy balance",
+    "minimum_net_load_mw": -16575.707588055768,
+    "net_energy_gwh": -1.25649288662448,
+    "peak_net_load_mw": 5394.753812508382,
+    "start": "2021-12-22T00:00:00-08:00",
+    "stop_exclusive": "2021-12-29T00:00:00-08:00"
+  }
+]

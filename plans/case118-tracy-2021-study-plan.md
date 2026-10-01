@@ -2,9 +2,19 @@
 
 The source, active-power scaling, siting rules, and storage sizes in sections
 2–3 are approved design choices. Section 5 records the approved starting
-economics and remaining operating choices. Battery regularization is selected
-through the shorter studies, not fixed for annual execution now. Generate and
-validate the realized mapping in Stage A.
+economics and remaining operating choices. Following the shorter studies, the
+owner approved **medium battery throughput weight lambda = 0.01** and
+**generator curvature on, rho = 1/3**, for Stage C. The realized Stage A mapping
+and device fleet remain unchanged.
+
+**Formulation roles:** single-node DC is a comparison arm alongside the
+network-aware solves, not a new layer of the hierarchical controller. The
+hierarchy remains **lossy-network DC → full-physics AC**, with the lossy-DC
+trajectory supplying the per-device SOC signposts and shard boundary states.
+Use the same prepared device fleet and shared device models in all three
+formulations; do not create a separately aggregated or retuned single-node
+fleet. Stage B provides matched shorter DC comparisons, and Stage C provides
+the full-year comparison.
 
 **Current handoff:** the analytical study and selected Stage 0c follow-ups are
 complete and committed. The annual S5 closeout and owner decision to omit S6
@@ -13,9 +23,24 @@ The toy horizon study remains deferred. The `big-experiment` merge is complete
 at `351025ac8073df1ba2ac4c2f0b19fdca1dcf5c5b`; its ancestry in local `main`
 was verified on 2026-09-28 at `b1df63b17`. M14 closeout, the additional Case118
 vectorization studies, and public vectorized defaults are also included in
-local `main`. The remaining transition gates are a fresh Tracy-study branch
-from verified `main` (record its actual baseline at creation) and owner
-authorization for Stage A. No Tracy Case118 input generation has begun. The replay
+local `main`. The owner created `tracy-study` and authorized Stage A. Input
+preparation is based on committed plan checkpoint `abc1b7844`, following main
+baseline `b1df63b17` and the documentation refresh. The approved input package
+is at `experiments/case118_tracy_2021/STAGE_A_REPORT.md`. Stage B's 72-arm
+5,000-iteration-cap batch is complete; its results explorer and initial
+discussion are committed at `7ce2fb7a6`. The owner reviewed the comparison,
+selected on/medium economics, and authorized proceeding with Stage C. Both
+annual solves completed at clean execution commit `034ea6b9e5d9dd4276d6e742847f547c19a1047d`
+and passed independent reconstruction. The annual report and required marimo
+notebook are prepared in `experiments/case118_tracy_2021/`. The owner approved
+using the accepted lossy-DC trajectory for shard calculation; the reviewed
+rule produces 13 shards, recorded in
+`experiments/case118_tracy_2021/SHARD_BOUNDARIES.md` and its state manifest.
+The owner subsequently committed the boundary calculation at `e09af9dc7` and
+authorized opening **Stage D, bounded AC qualification**. Its proposed protocol
+is `experiments/case118_tracy_2021/STAGE_D_PROTOCOL.md`; the initial numerical
+budget and implementation checkpoint remain to be approved before solves.
+Annual AC execution is not authorized. The replay
 motivates the runner-policy qualification now planned in Stage D; it does not
 select the annual Tracy runner policy or authorize numerical execution.
 
@@ -470,9 +495,9 @@ override and show its operational consequences before carrying it into annual
 execution. Keep the selected generator and battery economics consistent
 between the DC planner and AC realization.
 
-### Optional last-resort load shedding
+### Approved last-resort load shedding
 
-The owner requests an option to shed any load using the existing cvxopf
+The owner approves enabling shedding for all loads using the existing cvxopf
 cost-based approach. Configure the identified `Load` devices, rather than
 introducing emergency injections or changing the network constraints. With
 the option enabled, all 99 positive-demand load channels are eligible for
@@ -486,10 +511,20 @@ Use explicit finite positive `shedding_cost_per_mwh` values to make shedding
 the last economic choice after available generation and storage. Retain the
 single optimization and existing load-cost implementation described in
 [Milestone 19](milestone-19-load-shedding.md). The input review must show the
-penalty, units, eligible devices and fraction limits. No numerical penalty or
-relative priority between load locations is assigned by this plan; specify
-them in the shorter-study protocol and explain their relation to the selected
-generator and storage costs.
+penalty, units, eligible devices and fraction limits. The owner-approved rule is
+
+    shedding_cost_per_mwh = 100 * max_i C_i'(G_i),
+
+computed once from the starting generator costs (rho = 1/3) and updated
+maximum powers. The pinned source gives a maximum starting marginal cost of
+207.63594 objective units/MWh, hence a uniform shedding penalty of
+**20,763.594 objective units/MWh**. Apply the same finite positive penalty to every load, with
+no customer-class or location priority. Freeze the resulting numeric value
+across the generator-curvature and battery-weight comparisons and use it in
+single-node DC, lossy DC, and AC. Do not recompute it for each sensitivity arm.
+This is a study penalty, not a calibrated value of lost load. Equal penalties
+do not imply equal shedding: network conditions and nonunique optima can
+determine its spatial distribution. Retain a disabled fixed-load comparison.
 
 Check last-resort behavior on the selected shorter windows for the cost
 settings being studied. A penalty above generator marginal cost alone does
@@ -515,13 +550,13 @@ year, scale, counts, seed, or storage choices.
 
 | Item | Proposed treatment / decision needed |
 | --- | --- |
-| Reactive load | Recommend Q_i(t) = (Qbase_i/Pbase_i) load_i(t), retaining signs and fixed shunts separately. This pinned case has no zero-P/nonzero-Q load buses. Confirm and record before AC qualification. |
-| Dispatchable reactive capability | Recommend retaining source Q limits, including reactive-only units; uniform active-Pmax scaling is not approval to scale Q. Make the decision explicit. |
-| Renewable inverter ratings | Choose and label a rating rule/headroom factor; an observed availability maximum is not a measured nameplate. Avoid unintended clipping of the approved source. |
-| Battery AC operating set | Resolve apparent MVA rating versus the approved E/3 active-power limit and reactive support. If MVA headroom is larger, do not accidentally enlarge the active limit. |
-| Storage dynamics and SOC | Confirm ideal-storage reuse versus separately scoped lossy storage, usable versus nameplate energy, SOC bounds, initial and annual terminal SOC. Proposed default: the existing ideal model and 50%-initial/50%-terminal convention. |
+| Reactive load | Owner-approved: Q_i(t) = (Qbase_i/Pbase_i) load_i(t), retaining signs and fixed shunts separately. This pinned case has no zero-P/nonzero-Q load buses. |
+| Dispatchable reactive capability | Owner-approved: retain source Q limits, including reactive-only units; scale active Pmax only. |
+| Renewable inverter ratings | Owner-approved: each device's MVA rating is 1.1 times its full-year peak MW availability. This is assumed inverter headroom, not measured nameplate data; no availability clipping. |
+| Battery AC operating set | Owner-approved: MVA rating numerically equals the approved E/3 MW limit; reactive support shares that apparent-power circle. |
+| Storage dynamics and SOC | Owner-approved: existing ideal model, modeled usable SOC range [0, capacity], 50% initial and 50% annual terminal SOC. Short-window endpoint sensitivities remain part of Stage B. |
 | Economics | Apply the starting generator rule and default battery regularization above. Keep both curvature and battery weight configurable; select annual settings from shorter-study evidence. Explicitly document curtailment treatment and the remaining objective terms, including the DC loss proxy. |
-| Load shedding | Provide the approved all-load option through existing `Load` settings. Review its enabled/disabled setting and explicit penalties before solving, and check its intended last-resort behavior alongside the generator/storage cost comparisons. |
+| Load shedding | Owner-approved: enabled on all 99 loads with full fractional eligibility and uniform penalty 20,763.594 objective units/MWh, fixed from the starting economics. Keep a disabled comparison and verify intended last-resort behavior in Stage B. |
 | Controller and execution | Provisional baseline: the reviewed three-hour AC/one-hour-stride hierarchy, two-primary/one-helper execution, and full recovery ladder. Stage D compares vectorized and stepwise AC assembly and alternative starts before selecting helper order, launch delay, and budgets for Tracy. Neither historical timings nor M14 replay results freeze the annual policy. |
 
 The intended primary study seeks full load service with rated branches and
@@ -752,8 +787,8 @@ toy-follow-up implementation or work package A.
 
 ### 0c. Selected toy-data studies and PR closeout gate
 
-Scientific work and the merge/local-main verification are complete; the fresh
-Tracy-study branch and Stage A authorization remain outstanding. The
+Scientific work, merge/local-main verification, the fresh `tracy-study` branch,
+and owner authorization for Stage A are complete. The
 completed-study disposition below supersedes the
 earlier design and launch checkpoints, which are retained in their protocols.
 
@@ -872,12 +907,15 @@ disposition does not launch Tracy input generation or numerical work.
   local `main` at `b1df63b17`, verified on 2026-09-28. The working tree was
   clean before this documentation refresh. This verifies Git state, not a new
   numerical or regression run.
-- [ ] **User action, not agent action:** create a fresh Tracy-study branch
+- [x] **User action, not agent action:** create a fresh Tracy-study branch
   from the verified local `main` before Stage A input generation. Record its
   branch name and baseline commit in the handoff.
-- [ ] Obtain the owner's authorization to begin Stage A on that fresh branch.
+  Completed as `tracy-study`; Stage A begins from `abc1b7844` with
+  `b1df63b17` in its main ancestry.
+- [x] Obtain the owner's authorization to begin Stage A on that fresh branch.
   Closing the toy study and including this plan in the PR do not themselves
   launch Tracy work.
+  Explicit Stage A authorization received on 2026-09-28; no solve authorization.
 
 Exit: the toy-follow-up disposition and documentation/regression checks are
 complete, the owner approves the transition, and the user has completed the
@@ -906,7 +944,7 @@ merged analytical benchmark as the recorded baseline.
    costs at zero/full output. Record actual battery weights and the complete
    objective with units, defaults, and explicit overrides. Independently check
    the starting one-third rule, each declared curvature setting, and resolved
-   battery default against the devices supplied to both formulations; an
+   battery default against the devices supplied to all three formulations; an
    unexpected override is a discrepancy to resolve. Include the load-shedding
    policy, actual penalties, fraction limits and eligible device identities.
 4. Produce annual/monthly summaries, annual and representative-week plots of
@@ -919,7 +957,9 @@ merged analytical benchmark as the recorded baseline.
    Include named source-to-prepared row checks and the Dec 18–21 M17 window.
 5. Independently reconstruct hourly aggregate channels and selected bus rows
    directly from the CSV and saved mapping, not by rerunning the same builder.
-   Check the actual arrays reaching both DC and AC model construction.
+   Check the actual arrays reaching single-node DC, lossy-network DC, and AC
+   model construction, including preservation of individual devices when
+   nodal balance is collapsed.
 6. Add focused tests for source identity, calendar, conservation, device
    alignment, random reproducibility, and rejection of silent substitution.
    Use ordinary repository test commands. Keep this stage's tests input-only;
@@ -962,8 +1002,14 @@ control. Several criteria may select the same window. Do not substitute only
 isolated hours or short prefixes for these coupled studies, and do not use
 results from a not-yet-authorized annual solve to select them.
 
-Run the existing rated lossy-DC formulation on those windows with the same
-full-year-derived capacities, allocation weights, and physical/economic rules.
+Run the existing rated lossy-DC formulation and matched single-node DC
+comparisons on those windows with the same full-year-derived capacities,
+allocation weights, and shared physical/economic rules. Pair the two
+formulations at the baseline and proposed annual economic settings; declare
+any additional sensitivity pairs within the bounded solve budget rather than
+automatically doubling every sensitivity run. The single-node arm measures
+operation without network restrictions; it does not supply AC signposts or
+replace the network-aware qualification gate.
 Vary only the declared generator-curvature and battery-weight settings in
 matched comparisons; keep the load-shedding policy explicit and consistent
 unless its penalty is itself being checked. Do not resize resources to each
@@ -978,7 +1024,13 @@ from rho = 1/3 and battery regularization starting from 0.01. Include an
 explicitly specified almost-linear generator setting. Select a small set of
 comparisons and solve budget in the protocol, varying curvature and throughput
 weight separately and, where justified, together to examine their interaction.
-An exhaustive parameter grid is not required. Match windows, inherited linear
+The owner has now approved the complete six-setting grid: rho on = 1/3 or
+off = 0.001, crossed with lambda low = 1e-4, medium = 1e-2, or high = 1.
+“Off” denotes almost-linear, not zero quadratic cost. Run every setting on
+all six selected windows in both DC formulations: 72 convex solves, including
+the on/medium baseline. The shedding penalty remains fixed. See
+`experiments/case118_tracy_2021/STAGE_B_PROTOCOL.md` for the detailed design.
+Match windows, inherited linear
 costs, capacities, physical constraints, and storage endpoints. Compare
 generation leveling and marginal-cost variation,
 battery power/throughput and SOC, and generation, regularization, and other
@@ -1008,6 +1060,20 @@ qualification checks.
 
 ### C. Single-node and lossy-network 8,760-hour DC solves and user review 2
 
+**Owner decision:** proceed with Stage C using generator curvature **rho = 1/3
+(on)** and battery throughput weight **lambda = 0.01 (medium)**. This is one
+matched annual pair, not another economic sensitivity grid. Preserve the
+approved shedding policy and all other prepared device and input settings.
+Reuse the Stage B preparation, physical audit, and supervised execution paths
+where applicable; do not duplicate the device models or rerun Stage B. Freeze
+annual resource limits and stopping rules in the Stage C implementation
+checkpoint before numerical execution. AC remains outside this authorization.
+
+The owner approved **four hours and 16 GiB worker RSS per solve**, sequentially,
+with stop-on-failure and no automatic retries. The implementation and launch
+contract are in
+[`STAGE_C_PROTOCOL.md`](../experiments/case118_tracy_2021/STAGE_C_PROTOCOL.md).
+
 After the targeted-DC gate, run both **vectorized, full-year T=8760** problems:
 
 - `singlenode_dc`: the copper-plate comparison with aggregate power balance.
@@ -1016,10 +1082,20 @@ After the targeted-DC gate, run both **vectorized, full-year T=8760** problems:
 Use the same frozen Tracy 2021 hours, resource identities and capacities,
 available renewable channels, costs, shedding policy, time step, and per-device
 initial/terminal SOC policy. Preserve the individual generators, renewable
-devices, and batteries when collapsing network balance; do not replace them
+devices, loads, and batteries when collapsing network balance; do not replace them
 with a differently sized or priced aggregate fleet. The intentional model
 differences are network constraints and the lossy-DC loss proxy and its cost.
 Keep those objective components explicit in the comparison.
+
+Device parity means shared device implementations, identities, active-power
+capabilities, storage dynamics, terminal policies, and applicable costs—not
+invented reactive physics in a DC model. AC additionally enforces reactive
+capabilities and apparent-power limits; DC uses the corresponding active-power
+device constraints. Reactive load inputs remain aligned metadata in DC. If
+HVDC devices are introduced by a separately approved study change, their
+single-node capability remains explicitly null because both terminals collapse
+to the same node; do not add artificial internal-transfer losses or costs to
+the copper-plate model.
 
 Audit each solution against its own formulation and persist both full primal
 trajectories, complete analyses, source identities, and SOC trajectories under
@@ -1034,6 +1110,37 @@ DC result is an AC solution or an asserted bound on the AC objective or SOC.
 The lossy-network DC result remains the source of AC SOC signposts and shard
 boundary states. The single-node annual result is a required comparison;
 using its signposts for a separate AC rollout would be an additional experiment.
+
+#### Required results notebook
+
+Deliver a read-only **marimo notebook** alongside the Stage C report, extending
+the Stage B explorer's conventions and reusing loaders and plotting code where
+practical. It must read the retained annual results, never launch solves, and
+provide:
+
+- Full-year hours-by-days heatmaps of the actual scaled input channels (load,
+  utility solar, wind, distributed solar, and available net load).
+- Matched output heatmaps for copper plate and lossy DC: dispatchable and
+  renewable generation, curtailment, battery power and SoC, and load shedding.
+  Use common units and shared color limits for each matched quantity.
+- Full-year difference heatmaps with the explicit convention **lossy DC minus
+  copper plate**. Use zero-centered diverging scales and identity-aligned
+  quantities; do not normalize each formulation independently. Inputs are
+  shared: verify their equality rather than imply an input treatment effect.
+- Interactive time-series plots of inputs, outputs, and the same signed
+  differences, with date-range selection, formulation overlays, and aggregate
+  and individual-device views. Include network-only congestion/flow views,
+  without inventing copper-plate branch quantities or branch deltas.
+- The fixed source UTC−08:00 calendar, positive-discharge battery convention,
+  visible units, and correct distinction between 8,760 interval powers and
+  8,761 SoC boundaries. Retain all boundaries in time-series plots; explicitly
+  label which boundary supplies each hour's SoC heatmap value.
+
+Include annual/monthly summary tables and residuals, and identify the exact
+retained run/fixture behind the notebook. Keep raw results separate from
+display clipping or normalization, and explain numerical-scale shedding.
+The notebook and report are required parts of user review 2, not optional
+post-study visualization work.
 
 **User review 2 is an explicit stop after both Tracy annual DC solves, before
 any Tracy AC solve.** Re-present the data-generation choices with their
@@ -1099,6 +1206,49 @@ retune source channels, expand budgets, or jump to larger storage. The six-hour
 storage sensitivity is the declared next size, not a universal remedy.
 
 #### Runner-policy tests within the qualification budget
+
+**Owner-approved initial comparison:** select four periods—large surplus,
+large deficit, surplus → deficit, and deficit → surplus—and implement **six
+hours from each start**, for each horizon below. This is **24 controlling solves
+per horizon, 96 overall**, before recovery attempts. All horizons share the
+same initial DC SoC at each period start, then advance their own realized state.
+Provide data through t0+17 to avoid truncating W=12. This replaces the detached
+screen and proposed 12-hour rollouts. Freeze exact starts and numerical settings;
+**pause after these four periods for owner evaluation before selecting the
+broader qualification set**. The following later policy studies are not
+automatic follow-on execution.
+
+For this initial comparison, the owner approved integrated six-hour net energy
+(MWh, not peak MW) for surplus/deficit selection and sequential cold/shifted
+initialization with deterministic recovery, not speculative racing. The memory
+ceiling is 16 GiB per worker; there are no added solve or study time limits.
+Retain IPOPT's built-in iteration limit and record its effective value. The
+owner may manually halt apparently stalled work. Exhausted numerical recovery
+ends only that trajectory; continue independent trajectories. Resource-ceiling
+violations, inconsistent artifacts and audit/implementation defects stop the
+study. Exact dates, recovery order and numerical settings remain to be frozen.
+
+The runner must support stopping and resuming this comparison without repeating
+accepted work. Checkpoint each trajectory's realized SoC, accepted AC solution
+for shifted initialization, and next hour; archive acceptance before advancing.
+Retain interrupted attempts and cumulative resource accounting across restarts.
+Verify stop/resume and archive/cursor reconciliation using lightweight fixtures
+before numerical execution; see D1's checkpoint/restart requirements.
+
+Compare inner horizons
+**W in {1, 3, 6, 12} hourly steps**, keeping `delta=1` and the execution stride
+at one hour. Include matched-initial-state first-action comparisons and bounded
+closed-loop trajectories, measuring implemented dispatch/P/Q, storage/SoC,
+curtailment, shedding, executed cost, and solve/total time including recovery.
+Use each horizon's annual lossy-DC target at t+W. W=1 hard ideal-storage endpoints
+fix the first-hour battery power; this is an intentional limiting case, not a
+time-resolution test. Do not compare raw objectives over unequal horizons or
+ignore differences in final stored energy. Keep physical/solver/start policy
+fixed while screening horizons; avoid a full Cartesian product with assembly
+and helper policies. Apply the initial comparison's resource policy above;
+later studies need separately approved budgets. Obtain an owner decision before
+changing the operational horizon.
+Details are in `experiments/case118_tracy_2021/STAGE_D_PROTOCOL.md`, D1.
 
 The [independent Case118 replay](../experiments/case118_vectorization_replay/REPORT.md)
 provides motivation, not Tracy calibration. Of 120 historical primary winners,
@@ -1232,11 +1382,13 @@ above. No conclusion about Tracy is inherited from the analytical run.
 Work packages **0a: old-study scientific/Git closeout (commit 1)** and its
 **experimental-design pause**, **0b: separate `outputs/` triage/promotion
 (commit 2)**, and the selected toy studies and PR merge in **0c** are complete.
-Local `main` contains the merged study. The remaining transition steps are
-owner-managed fresh Tracy-study branch creation from verified `main` and
-explicit Stage A authorization, as recorded in the checklist above. After those gates,
-hand off the new-study plan plus one compact list of the open operating choices in
-section 5. Use the existing builder and independent reviewer for a scoped
+Local `main` contains the merged study. The owner created `tracy-study` and
+authorized Stage A and Stage B, both now completed. Following review of the
+72-arm comparisons, the owner approved on/medium economics and proceeding
+with Stage C. Both annual solves and independent reconstruction are complete;
+the report and required marimo analysis deliverables are prepared for review.
+User review 2 remains an explicit stop before AC qualification.
+Use the existing builder and independent reviewer for a scoped
 build-review loop at each work package.
 
 For each implementation checkpoint, review source fidelity and scientific

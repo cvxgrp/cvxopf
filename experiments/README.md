@@ -18,7 +18,15 @@ problem and initialization. Their file requirements differ.
 | [Battery terminal policies](battery_terminal/README.md) | Requires the owner-provided, ignored `battery_terminal/data/9q9wtp_gen_and_load.csv`. |
 | [M17 hierarchical battery resilience](hierarchical_battery_resilience/README.md) | Prepared Tracy-derived scenario inputs are tracked. Running that frozen scenario does not require the original raw CSV; reproducing historical comparisons also requires the referenced local result archives. |
 | [Case118 annual hierarchy](case118_annual_hierarchy/RESULT_LOCATIONS.md) | Network source and deterministic synthetic-profile generation are tracked. This annual scenario is **not Tracy-derived**. Historical analysis and downstream replays require retained outer plans, signposts, and execution records. |
+| [Tracy 2021 Case118 study](case118_tracy_2021/README.md) | Stage A input-review candidate; no OPF solves yet. The mapping, preparation code, compact tables, and figures are provided. Regenerating the hourly device arrays requires the owner-provided, ignored Tracy CSV at the path and SHA-256 documented in the study README. This is a separate scenario from the completed analytical-profile annual study. |
 | [Case118 vectorization replays](case118_vectorization_replay/README.md) | Exact historical windows depend on retained sample selections, physical states, targets, initialization artifacts, and source results. See also the [space/time replay](case118_spacetime_pq_replay/README.md). |
+
+For the Tracy 2021 Case118 study, source-dependent integration tests explicitly
+skip when the owner CSV is absent; clone-ready validation tests use synthetic
+fixtures. Passing those tests without the source does **not** verify the actual
+Tracy inputs. Production preparation rejects missing or substituted source data
+and never falls back to synthetic data. The [Stage A report](case118_tracy_2021/STAGE_A_REPORT.md)
+is the current input-review entry point, not a solved-network result.
 
 ## What the owner should provide for full reproduction
 

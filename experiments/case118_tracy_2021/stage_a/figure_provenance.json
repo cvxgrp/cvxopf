@@ -1,0 +1,9 @@
+{
+  "figures": {
+    "input_heatmaps.png": "e7a5fbc7861e4591d42cef17967dacb96f770c84a827dde312152c39cf8fc2bd",
+    "input_timeseries.png": "5bb9db5f179b7211d20190d296ea93dbd20982707be0016c292fd08c6f7e291a",
+    "network_roles.png": "f91ba9967dd3f4abcf123cb7fa806498eb20aa3179283dc1a92cd1588d34f328"
+  },
+  "input_manifest_sha256": "f5d13ee40db783683b996e7b7673e0c3ac9729b6a402c0cfc835913fe4a66a88",
+  "renderer_sha256": "e90f8b1ee6ceadf8f3039a6ed45e687a157f36cfee4a21faa9dc2c2cb1e3a96e"
+}

@@ -14,7 +14,7 @@ from importlib.metadata import PackageNotFoundError, version
 import json
 import re
 from time import perf_counter
-from typing import Any, Literal, Mapping, cast
+from typing import Any, Callable, Literal, Mapping, Protocol, cast
 import warnings
 
 import cvxpy as cp
@@ -367,7 +367,8 @@ def _layout_signature(layout: tuple[Mapping[str, object], ...]) -> str:
 
 
 def _solve_ac_with_verified_x0(
-    build: OPFBuild, solve_config: HierarchicalSolveConfig
+    build: OPFBuild, solve_config: HierarchicalSolveConfig,
+    *, start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
 ) -> _X0Run:
     """Solve through a build-local IPOPT instance and retain its exact x0."""
     assigned = _complete_start(build)
@@ -423,6 +424,18 @@ def _solve_ac_with_verified_x0(
             and originals_match
         ):
             raise RuntimeError("assigned CVXPY values do not match IPOPT x0")
+        if start_observer is not None:
+            model_count = sum(
+                cast(int, item["stop"]) - cast(int, item["start"])
+                for item in captured_layout if bool(item["is_original_variable"])
+            )
+            start_observer(IPOPTStartEvidence(
+                complete_x0=captured_x0, layout=captured_layout,
+                layout_signature=_layout_signature(captured_layout),
+                model_coordinate_count=model_count,
+                auxiliary_coordinate_count=captured_x0.size - model_count,
+                object_ids_before=before, object_ids_after=_object_ids(build),
+            ))
         return IPOPT.solve_via_data(
             self, data, warm_start, verbose, solver_opts, solver_cache
         )
@@ -897,10 +910,20 @@ def _values_by_step(
     return stepped, unsuffixed
 
 
+class _ShiftState(Protocol):
+    """Only physical identity and time resolution are needed to shift a start."""
+
+    @property
+    def delta(self) -> float: ...
+
+    @property
+    def storage_device_ids(self) -> tuple[str, ...]: ...
+
+
 def _shifted_start(
     preceding: Mapping[str, np.ndarray],
     destination: OPFBuild,
-    snapshot: _ExecutionInputs,
+    snapshot: _ShiftState,
     policy: HierarchicalPolicy,
     realized_soc: Mapping[str, float],
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
