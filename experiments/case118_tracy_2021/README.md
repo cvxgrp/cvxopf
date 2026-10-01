@@ -1,10 +1,17 @@
 # Tracy 2021 → Case118
 
-Stage A inputs are approved and the 72-arm Stage B DC comparison is complete.
-The owner approved proceeding with Stage C at rho = 1/3 and lambda = 0.01.
-Both annual DC solves are now complete and independently accepted. The
-[annual comparison report](STAGE_C_REPORT.md) and results notebook are ready
-for user review 2. AC execution remains separately gated.
+**Study on hold by owner decision, 2026-10-01.** The current evidence checkpoint
+is closed in preparation for M11 implementation. See the
+[closing evidence checkpoint](EVIDENCE_CHECKPOINT.md) for results, limitations,
+and retained artifacts. Further Tracy solves, retries, policy changes and
+study resumption require new owner authorization.
+
+Stage A inputs are approved, the 72-arm Stage B DC comparison is complete,
+and both Stage C annual DC solves are independently accepted. Stage D execution
+finished with 90 of 96 accepted control actions and 15 of 16 full trajectories;
+the upramp W=1 case remains unresolved. The bounded soft-target diagnostics
+are also finished. Historical commands below are reference instructions, not
+authorization to run while the study is on hold.
 
 Start with [the input report](STAGE_A_REPORT.md), then the
 [study plan](../../plans/case118-tracy-2021-study-plan.md).
@@ -123,20 +130,18 @@ AC execution or select an AC runner policy.
 
 ## Bounded AC qualification (Stage D)
 
-The owner has opened Stage D after committing the shard calculation at
-`e09af9dc7`. The [qualification protocol](STAGE_D_PROTOCOL.md) starts with four
-periods (surplus, deficit, and both transition directions), six implemented
-hours each, at 1/3/6/12-step look-aheads: 96 controlling solves before recovery.
-The owner approved sequential recovery, a 16 GiB worker RSS ceiling, IPOPT's
-built-in iteration limit and no additional time cutoffs. Exact starts and
-numerical/recovery settings remain to be frozen. Then pause for owner evaluation
-before selecting the broader test set. The runner must checkpoint accepted
-actions and resume each trajectory from its own realized state and shifted-start
-source, skipping completed work; restart tests are required before execution.
-No Tracy AC solve or annual AC launch
-has occurred.
+The [qualification protocol](STAGE_D_PROTOCOL.md) covers four periods
+(surplus, deficit, and both transition directions), six implemented hours each,
+at 1/3/6/12-step look-aheads: 96 controlling solves before recovery. The retained
+run in `results/stage_d/` finished with 90 accepted actions; trajectory 15
+(upramp, W=1) exhausted recovery at its first hour, global hour 2452. Execution
+finished, but qualification is not complete. No annual Tracy AC run was launched.
 
-The restartable runner is implemented for pre-execution review. See
-[Stage D operating instructions](STAGE_D_RUNNER.md) for start/status/stop/resume
-and offline audit commands. Implementation tests use analytic fixtures and
-intercept native solver entry; they do not execute the scientific AC study.
+The [soft-target report](SOFT_TARGET_SWEEP.md) records the separate quadratic
+penalty sweep, bounded continuation, full-primal handoff and failed hard-target
+retry. These diagnostics did not advance or replace Stage D control actions
+and do not prove hard-target infeasibility.
+
+The [Stage D operating instructions](STAGE_D_RUNNER.md) remain available for
+historical reference and read-only inspection. The progress monitor is paused;
+do not start or resume execution while the owner hold is in force.
