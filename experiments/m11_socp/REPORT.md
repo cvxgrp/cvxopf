@@ -135,6 +135,9 @@ no new skip was added. Both continuation and runner test modules pass: **27
 passed** in 23.17 seconds. The full-suite counts above describe the preceding
 run; the full suite was not rerun after this test-only correction.
 
+The subsequent standard analytic/independent reference suite is recorded in
+[the E1 report](E1_REPORT.md); it does not replace this earlier checkpoint.
+
 Still pending for M11: matched AC/SOCP comparison validation (including rejection
 of thresholded AC references), matched objective-component/containment evidence,
 and owner review/acceptance. This checkpoint makes no matched-bound, globally

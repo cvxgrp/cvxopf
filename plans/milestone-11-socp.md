@@ -4,9 +4,10 @@ Status: implementation started, 2026-10-01. Gate A's sparse network-map incremen
 and Gate B's shared-device capability groundwork are implemented and tested;
 the public builder, common extraction, and explicit numerical audit/recovery
 slice is now implemented for review. The bounded evidence and architectural
-checkpoint are in [the report](../experiments/m11_socp/REPORT.md). The next slice
-is a small standard suite with analytic and independent SOCP references, followed
-by matched AC/SOCP comparison validation/evidence. Both and milestone closure
+checkpoint are in [the report](../experiments/m11_socp/REPORT.md). Gate E1's
+analytic two-bus and matched independent Case9/14 reference suite is now
+implemented for review; see [its report](../experiments/m11_socp/E1_REPORT.md).
+Gate E2's matched AC/SOCP comparison validation/evidence and milestone closure
 remain pending. The Tracy study remains on hold; this milestone does not
 authorize restarting it.
 
@@ -514,8 +515,10 @@ Generate references offline in an isolated, pinned environment. Commit compact
 fixtures under `tests/fixtures/` with input hashes, PowerModels/Julia/solver
 versions, reference-construction settings, solver tolerances and termination,
 objective/components, complete lifted network and generator primal, and signed
-both-terminal powers with identities and units. Keep generation code,
-reproducible commands, matching notes and the evidence report in
+both-terminal powers with identities and units. Keep reusable generation code
+and its pinned environment under `scripts/socp_reference/`, and analytic cases
+and independent test-oracle helpers under `tests/`. Matching notes, execution
+plans, experiment-specific analysis and evidence reports stay in
 `experiments/m11_socp/`; raw logs remain in its ignored `results/`. CI reads the
 committed fixtures and runs the Python implementation; it neither installs Julia
 nor downloads or regenerates references. No new runtime dependency is required.

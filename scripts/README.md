@@ -1,15 +1,15 @@
 # `scripts/` — developer/maintenance scripts
 
 These are **maintenance scripts**, not part of the `cvxopf` package. Each is a
-self-contained [uv](https://docs.astral.sh/uv/) *inline-dependency script*: it
-declares its own pins in a `# /// script` header and runs in an isolated
-environment. Always run them with `uv run` from the repo root, e.g.
+[uv](https://docs.astral.sh/uv/) *inline-dependency script* unless documented
+otherwise: it declares its own pins in a `# /// script` header and runs in an
+isolated environment. Always run them with `uv run` from the repo root, e.g.
 
 ```bash
 uv run scripts/generate_testcases.py
 ```
 
-Do **not** run them against the main package environment, and do **not** run
+Do **not** run inline-dependency scripts against the main package environment, and do **not** run
 them in CI — CI consumes their committed output artifacts, it does not
 regenerate them.
 
@@ -19,6 +19,12 @@ regenerate them.
 | `generate_pypower_fixtures.py` | Run Pypower AC-OPF to produce reference fixtures | `tests/fixtures/*_pypower_reference.json` |
 | `generate_examples_readme.py` | Build `examples/README.md` from example docstrings/output | `examples/README.md` |
 | `_probe_dcline_transform.py` | **Throwaway** validation probe for the DC-line transform (Gate 0b-iii) | none (asserts) |
+| [`socp_reference/`](socp_reference/README.md) | Export inputs, run independently pinned Julia/PowerModels, audit and accept SOCP references | `tests/fixtures/*_socp_powermodels_reference.json` |
+
+SOCP's Python tooling uses `uv run --extra dev python -m ...` in the project
+environment; the independent solver uses the separate pinned Julia environment.
+Raw-output paths are explicit and supplied by the caller; generation is offline,
+never part of CI.
 
 > **Why Pypower is pinned to `numpy==2.2.6`.** `pypower==5.1.19` uses
 > `numpy.in1d`, removed in numpy 2.3. The pin lives only in these scripts'
