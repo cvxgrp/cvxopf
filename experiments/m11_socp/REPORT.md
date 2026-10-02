@@ -138,7 +138,8 @@ run; the full suite was not rerun after this test-only correction.
 The subsequent standard analytic/independent reference suite is recorded in
 [the E1 report](E1_REPORT.md); it does not replace this earlier checkpoint.
 
-Still pending for M11: matched AC/SOCP comparison validation (including rejection
-of thresholded AC references), matched objective-component/containment evidence,
-and owner review/acceptance. This checkpoint makes no matched-bound, globally
-optimal AC, hierarchy-integration, or Tracy completion claim.
+The subsequent matched AC/SOCP validation, objective-component and containment
+checks are now implemented and executed for review in [the E2 report](E2_REPORT.md),
+including rejection of thresholded AC references. Owner review/acceptance and
+M11 closure remain pending. This earlier checkpoint itself makes no matched-bound,
+globally optimal AC, hierarchy-integration, or Tracy completion claim.

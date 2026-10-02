@@ -5,11 +5,18 @@ and Gate B's shared-device capability groundwork are implemented and tested;
 the public builder, common extraction, and explicit numerical audit/recovery
 slice is now implemented for review. The bounded evidence and architectural
 checkpoint are in [the report](../experiments/m11_socp/REPORT.md). Gate E1's
-analytic two-bus and matched independent Case9/14 reference suite is now
-implemented for review; see [its report](../experiments/m11_socp/E1_REPORT.md).
-Gate E2's matched AC/SOCP comparison validation/evidence and milestone closure
-remain pending. The Tracy study remains on hold; this milestone does not
-authorize restarting it.
+analytic two-bus and matched independent Case9/14 reference suite was accepted
+and committed at `5dd963bb8`; see [its report](../experiments/m11_socp/E1_REPORT.md).
+Gate E2's matched AC/SOCP comparison validation/evidence is now implemented and
+executed for review; see [its report](../experiments/m11_socp/E2_REPORT.md).
+All four pairs passed containment and independent accounting; direct recovery
+of the optimized meshed points remains unsuccessful, as reported rather than
+required for this gate. The full suite passes 3389 tests and six subtests.
+Owner review/acceptance of E2 remains pending. On 2026-10-02 the owner inserted
+Gate E3: a matched 24-hour, four-formulation Tracy/Case118 resilience comparison,
+specified below. Window/boundary selection and a bounded execution protocol
+precede that study's numerical launch. The existing Tracy rolling-horizon and
+annual AC execution remain on hold; this plan update does not restart them.
 
 The two checkpoints below preserve the earlier increment history; their pending
 items are superseded where noted by the current builder/diagnostics report.
@@ -575,12 +582,153 @@ solve time, and solver termination separately. Finish with a compact experiment
 report, reproducible commands, and a full regression test run appropriate to the
 changed interfaces. No milestone closure from solver status alone.
 
+### Gate E3 — Matched 24-hour Tracy resilience comparison
+
+**Owner-directed insertion, 2026-10-02; design approved in principle, execution
+not yet authorized.** After E2 review, compare `singlenode_dc`, `lossy_dc`,
+`socp`, and `ac` on four fixed Tracy/Case118 periods. Each arm solves one complete
+24-hour multistep OPF at hourly resolution: **16 primary problems**, not an MPC
+rollout, hierarchy, sequence of one-hour controls, or sharded execution. All
+interior decisions are optimized jointly. The annual DC trajectory supplies
+window-selection context only, not intermediate SoC targets or fixed dispatch.
+
+The scientific question is what network-model fidelity changes about resilience
+outcomes and their limiting mechanisms. Direct voltage reconstruction is a
+supporting diagnostic, not the primary success criterion. A formulation can
+provide useful evidence about resource adequacy, shedding, storage or network
+limitations even when its returned point cannot be directly realized in AC.
+The troublesome W=1 hard-endpoint AC case does not establish that these longer,
+jointly optimized problems are difficult or infeasible; do not use it to predict
+their outcome. Diagnosing that exact failed problem remains a separate question.
+
+#### Select the four windows without new optimization
+
+Reuse the already selected Stage D event anchors, rather than selecting new
+events from SOCP/AC results. Original times use the source's **fixed UTC−08:00**
+calendar, not daylight-saving local time:
+
+| Existing event | Original six-hour start | Global hour t0 |
+| --- | --- | ---: |
+| Large surplus | 2021-05-19 12:00 | 3324 |
+| Large deficit | 2021-02-19 01:00 | 1177 |
+| Surplus → deficit | 2021-12-24 13:00 | 8581 |
+| Deficit → surplus | 2021-04-13 04:00 | 2452 |
+
+Source identities, selection scores and the 27 storage IDs are retained in
+[the original selection](../experiments/case118_tracy_2021/stage_d_selection/selection.json).
+Use the accepted Stage C lossy-DC annual archive identified there, not a new
+annual solve, the old analytical/synthetic study, or substitute Tracy inputs.
+
+For each anchor, inspect 24-hour candidates `[s,s+24)` containing the entire
+original event `[t0,t0+6)`, with integer `t0-18 <= s <= t0`, clipped to the year.
+The old look-ahead padding is context, not an implemented interval or a binding
+new-window requirement. These standalone problems need not fit inside a
+historical execution shard. Preserve all 24 input intervals and 25 SoC boundary
+indices; never wrap the year or truncate a window silently.
+
+Use the annual per-device SoC trajectories to identify candidates reasonably
+aligned with 50%-to-50% operation while preserving the event's meaning. Show
+input/net-load plots, all device SoC fractions and capacity-weighted fleet SoC,
+including each candidate's start/end deviations from 50%. Fleet averages must
+not conceal batteries at opposite extremes. Predeclare the endpoint-closeness
+score, device weighting and deterministic tie-break before automatic ranking;
+review the selected dates and event placement with the owner before freezing.
+No selection based on new formulation objectives, feasibility, or solve speed.
+These are four deliberately selected events, not an annual representative sample.
+
+#### Common physical inputs and energy boundaries
+
+Primary design: each battery starts at **50% of its own modeled usable energy
+capacity** and has a hard terminal equality at **50% at boundary 24**. This is
+per-device equality, not a fleet sum. Intermediate SoC is unconstrained except
+by ordinary device bounds/dynamics; do not import the annual interior trajectory.
+
+If an event is poorly represented by this 24-hour energy-neutral design, present
+that mismatch using the annual/input context. The owner may approve a separately
+labeled boundary-condition leg, such as net depletion during scarcity or net
+accumulation during surplus. Freeze its explicit identity-aligned initial/final
+vectors and rationale; apply the same vectors to all four formulations. Do not
+silently replace or pool primary and alternative legs, change only a failed
+arm, or force a scenario into an inappropriate 50%-to-50% interpretation.
+Every added leg adds four primary problems and needs an explicit budget update.
+
+Retain the approved Stage A data mapping/fleet and Stage C economics
+(generator curvature on, rho=1/3; battery throughput lambda=0.01), source
+identities, costs, shedding permissions/prices, ratings and delta=1 h. Match
+the physical device inputs and identities across all four models. Preserve
+their intentional semantics: copper plate has no network; DC has no reactive
+optimization; AC/SOCP use P/Q capability and voltage/apparent-power limits.
+Do not invent reactive outputs or branch flows for a model that omits them.
+Keep existing null-device capabilities, including single-node HVDC elimination
+if applicable. AC/SOCP must use full admittances and matched physical options.
+No resource resizing, new regularizer, or formulation-specific retuning.
+
+#### Outcomes and interpretation
+
+Report time- and identity-aligned overlays/tables of:
+
+- Served demand, shedding and ENS: timing, duration, magnitude, and location;
+  include any configured customer distinctions without introducing new classes.
+- Per-device and fleet SoC, charge/discharge power, throughput, depleted/full
+  states, and whether replenishment is achieved by the end of the window.
+- Available/used renewables and curtailment, dispatchable generation and headroom.
+- Common economic costs by component, with the lossy-DC resistance/flow proxy
+  reported separately. Raw objectives with different terms are not AC gaps.
+- Formulation-specific branch congestion, physical terminal losses where
+  represented, voltage/reactive margins and binding device constraints.
+  Distinguish the DC proxy from physical energy withdrawal.
+- Solver status, independently audited primal feasibility, and computational
+  effort. For SOCP retain rank/cycle diagnostics and recovered AC residuals
+  separately; failed reconstruction does not negate its relaxation results.
+
+Ask which resilience conclusions persist across formulations and which change
+when network or reactive/voltage physics enters. Do not assume monotonic ENS,
+cost or storage changes across the four models, or unique dispatch at equal
+cost. Attribute differing outcomes to the actual model differences, not to a
+single omitted mechanism without further controlled evidence. A feasible AC
+point is a local feasible reference, not a certified global optimum. A matched
+SOCP infeasibility claim needs adequate numerical infeasibility evidence; a
+failed solve, timeout, or failed voltage recovery is not that evidence.
+
+The comparison may identify prospective screening indicators near operating
+regime transitions (shedding onset, storage depletion, generator/network limits).
+Four selected events do not validate a rule for skipping AC, annual prevalence,
+or dynamic/voltage stability. Record these as hypotheses for subsequent testing.
+
+#### Implementation, execution and review sequence
+
+1. Review E2; prepare the four-window selection and any proposed boundary legs
+   from retained inputs/annual DC states, with no OPF solve required.
+2. Obtain owner acceptance of exact windows and boundary policies. Freeze a
+   dedicated protocol under `experiments/case118_tracy_2021/`, cross-linked here:
+   settings/initialization per solver, tolerances, per-arm wall/iteration/RSS
+   limits, total attempt budget, run order, and failure/retry rules. Baseline is
+   16 primary solves; recovery or sensitivity attempts are not implicit.
+3. Implement using public vectorized multistep builders, existing Tracy input
+   preparation and independent audits. Reuse E2 matching/accounting checks where
+   applicable; extend shared helpers rather than copy device or network models.
+   Use existing resource supervision as appropriate, not the MPC rollout or
+   speculative-recovery scheduler. Keep permanent test support under `tests/`
+   and experiment-specific reporting in the experiment directory.
+4. Review and commit the bounded runner/protocol before separately authorizing
+   execution. Keep raw primals, logs and numerical diagnostics in its ignored
+   `results/` subdirectory; retain exact source/input/settings identities and
+   incomplete outcomes. No tuning or expanded run matrix without review.
+5. Report the 16-arm disposition and resilience comparisons, with missing AC
+   answers left explicitly unresolved. Bounded computational failures are
+   reportable outcomes, not a reason for indefinite retries or suppression of
+   useful other-model evidence. Stop for scientific review and the next-step
+   decision; this study neither resumes the old rollout nor authorizes annual AC.
+
 ## 8. Explicit non-goals
 
-- No Tracy continuation, penalty sweep, or claim that its study is complete.
+- No resumption of the held Tracy rolling-horizon run, annual AC execution,
+  penalty sweep, or claim that its study is complete. Gate E3 is a separate
+  standalone matched-window study with its own pre-execution review.
 - No generic hierarchy rewrite or SOCP-to-AC automatic control-action acceptance.
 - No new storage, HVDC, shedding, or reactive capability physics.
-- No DC loss proxy, hidden regularizer, or unmatched cross-formulation bound.
+- No DC loss proxy added to SOCP, hidden regularizer, or unmatched
+  cross-formulation bound. E3 retains the existing lossy-DC proxy separately.
 - No dense/chordal SDP, cycle strengthening, angle-bound strengthening, or
   automatic relaxation tightening in this first implementation.
 - No assertion of radial or meshed exactness merely from topology or solver success.

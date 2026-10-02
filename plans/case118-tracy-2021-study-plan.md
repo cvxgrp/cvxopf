@@ -46,6 +46,19 @@ select the annual Tracy runner policy or authorize numerical execution.
 
 ## Execution order
 
+**2026-10-02 insertion:** before returning to the held Stage D rolling-horizon
+work, prepare the standalone matched 24-hour study in
+[M11 Gate E3](milestone-11-socp.md#gate-e3--matched-24-hour-tracy-resilience-comparison).
+Reuse the four already selected Stage D event anchors and accepted annual
+lossy-DC trajectory to place the windows. Compare single-node, lossy DC, SOCP
+and AC in 16 joint multistep problems, primarily with per-device 50%-to-50%
+energy boundaries. Owner-approved alternative boundary legs remain separately
+labeled and matched across formulations. SOCP is a fourth comparison arm here,
+not a newly configured hierarchy layer. This is not an MPC rollout or a change
+to the historical Stage D protocol. The new gate defines the selection,
+outcomes and pre-execution review sequence; this insertion launches no solves
+and grants no annual AC authority.
+
 1. Close out the completed analytical 8,760-hour study scientifically and in
    Git, including the required data description, heatmaps, and summaries.
    Review and commit this scientific record as **commit 1**.
