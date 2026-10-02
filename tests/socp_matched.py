@@ -6,6 +6,7 @@ is deliberately conservative, and unsupported caller coupling is rejected.
 
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
+from datetime import date, datetime
 import hashlib
 import json
 
@@ -32,6 +33,8 @@ DEVICE_KEYS = ("Pg", "Qg", "b", "b_q", "soc", "p_nd", "q_nd",
 
 def json_value(value):
     """Stable, inspectable identity for the exact comparison inputs."""
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
     if isinstance(value, pd.DataFrame):
         return dict(columns=json_value(value.columns.tolist()),
                     index=json_value(value.index.tolist()), values=json_value(value.to_numpy()))

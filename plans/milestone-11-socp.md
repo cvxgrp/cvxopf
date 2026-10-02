@@ -603,6 +603,13 @@ their outcome. Diagnosing that exact failed problem remains a separate question.
 
 #### Select the four windows without new optimization
 
+The no-solve selection checkpoint is prepared in the
+[selection plan](../experiments/case118_tracy_2021/E3_SELECTION_PLAN.md) and
+[proposal report](../experiments/case118_tracy_2021/e3_selection/REPORT.md).
+The owner accepted its ranked dates; the selection checkpoint itself is not
+execution authorization. The [bounded protocol](../experiments/case118_tracy_2021/E3_PROTOCOL.md)
+and restartable runner are implemented for review, not yet committed/executed.
+
 Reuse the already selected Stage D event anchors, rather than selecting new
 events from SOCP/AC results. Original times use the source's **fixed UTC−08:00**
 calendar, not daylight-saving local time:
@@ -651,6 +658,14 @@ vectors and rationale; apply the same vectors to all four formulations. Do not
 silently replace or pool primary and alternative legs, change only a failed
 arm, or force a scenario into an inappropriate 50%-to-50% interpretation.
 Every added leg adds four primary problems and needs an explicit budget update.
+
+**Owner boundary decision, 2026-10-02:** add a separately labeled large-deficit
+leg with **60% initial and hard 25% terminal SoC per device**, identically across
+all four formulations. Retain the 16 energy-neutral arms and add four depletion
+arms: **20 proposed problems total**, with no implicit retries or recovery
+solves. See the [boundary decision record](../experiments/case118_tracy_2021/E3_BOUNDARY_DECISIONS.md).
+Exact window dates are owner-accepted. The bounded numerical protocol remains
+subject to review and budget acceptance; this decision is not execution authorization.
 
 Retain the approved Stage A data mapping/fleet and Stage C economics
 (generator curvature on, rho=1/3; battery throughput lambda=0.01), source
@@ -703,7 +718,9 @@ or dynamic/voltage stability. Record these as hypotheses for subsequent testing.
    dedicated protocol under `experiments/case118_tracy_2021/`, cross-linked here:
    settings/initialization per solver, tolerances, per-arm wall/iteration/RSS
    limits, total attempt budget, run order, and failure/retry rules. Baseline is
-   16 primary solves; recovery or sensitivity attempts are not implicit.
+   16 energy-neutral solves plus the four owner-selected deficit-depletion arms;
+   the 20-problem protocol must budget them explicitly. Further recovery or
+   sensitivity attempts are not implicit.
 3. Implement using public vectorized multistep builders, existing Tracy input
    preparation and independent audits. Reuse E2 matching/accounting checks where
    applicable; extend shared helpers rather than copy device or network models.
@@ -714,7 +731,8 @@ or dynamic/voltage stability. Record these as hypotheses for subsequent testing.
    execution. Keep raw primals, logs and numerical diagnostics in its ignored
    `results/` subdirectory; retain exact source/input/settings identities and
    incomplete outcomes. No tuning or expanded run matrix without review.
-5. Report the 16-arm disposition and resilience comparisons, with missing AC
+5. Report the 20-arm disposition, keeping boundary legs separate, and resilience
+   comparisons, with missing AC
    answers left explicitly unresolved. Bounded computational failures are
    reportable outcomes, not a reason for indefinite retries or suppression of
    useful other-model evidence. Stop for scientific review and the next-step
