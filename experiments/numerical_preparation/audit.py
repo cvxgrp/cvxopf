@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import fields
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
@@ -125,14 +126,42 @@ def transformation_check(call, kwargs, evidence, captured_start=None):
     return dict(passed=bool(good), expected_fixed=expected, actual_fixed=int(fixed.size))
 
 
+def canonical_ac_accounting(native, common):
+    """Check retained IPOPT cost, including smooth auxiliaries, not prob.value.
+
+    The AC bridge evaluates the original canonical objective directly: there
+    is no substitution offset to add. CVXPY reevaluates its public objective
+    from restored physical variables, which can hide slack in canonical cost
+    auxiliaries. Keep that existing physical/component audit and independently
+    enforce the protocol's total-cost gate on the retained native objective.
+    This also supports non-solving inspection of older, immutable archives.
+    """
+    canonical = native.get("obj_val")
+    costs = list(common["costs"].values())
+    if not costs or any(isinstance(v, bool) or not isinstance(v, Real) or not np.isfinite(v)
+                        for v in [canonical, *costs]):
+        return dict(available=False, passed=False, reason="finite canonical/physical AC costs required")
+    physical = sum(float(v) for v in costs)
+    if not np.isfinite(physical):
+        return dict(available=False, passed=False, reason="finite physical AC total required")
+    difference = abs(float(canonical) - physical)
+    limit = 1e-4 + 1e-10 * abs(physical)
+    return dict(available=True, passed=bool(difference <= limit),
+                canonical_objective=float(canonical), physical_objective=physical,
+                difference=difference, limit=limit)
+
+
 def audit_record(call, kwargs, build, record, captured_start=None):
     common, relaxation = physical_audit(build, record["result"], kwargs, record["named_costs"])
     native = record.get("native", {})
     full = native.get("status") == (0 if call.formulation == "ac" else "Solved")
     structure = transformation_check(call, kwargs, record.get("preparation_evidence"), captured_start)
-    accepted = record.get("exception") is None and full and common["passed"] and structure["passed"]
+    accounting = canonical_ac_accounting(native, common) if call.formulation == "ac" else None
+    accepted = (record.get("exception") is None and full and common["passed"] and structure["passed"]
+                and (accounting is None or accounting["passed"]))
     return dict(accepted=bool(accepted), native_full_convergence=bool(full),
-                common=common, relaxation=relaxation, transformation=structure)
+                common=common, relaxation=relaxation, transformation=structure,
+                **({"canonical_accounting": accounting} if accounting is not None else {}))
 
 
 def pair_check(baseline, prepared):

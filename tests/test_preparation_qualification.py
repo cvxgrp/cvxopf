@@ -94,7 +94,8 @@ def test_prospective_total_gate_does_not_relax_components():
 def test_native_ac_gate_and_observer_snapshot(monkeypatch, status, accepted):
     kwargs, build, result, named = ac_fixture(1)
     call = replace(f.calls()[17], T=1)
-    record = dict(result=result, named_costs=named, native=dict(status=status), exception=None, preparation_evidence=None)
+    record = dict(result=result, named_costs=named, native=dict(status=status, obj_val=result["objective"]),
+                  exception=None, preparation_evidence=None)
     assert a.audit_record(call, kwargs, build, record)["accepted"] == accepted
     original = {}
     def native(self, data, *args, **kwargs):
@@ -109,6 +110,52 @@ def test_native_ac_gate_and_observer_snapshot(monkeypatch, status, accepted):
     _solve_ac_with_verified_x0(build, None, solver_options=dict(verbose=False), native_observer=observe)
     assert observed == [status] and original["status"] == status
     assert not np.all(original["x"] == 123)
+
+
+@pytest.mark.parametrize("difference", [-2e-4, 2e-4])
+def test_native_ac_cost_cannot_hide_behind_reevaluated_physical_objective(difference):
+    kwargs, build, result, named = ac_fixture(1)
+    record = dict(result=result, named_costs=named,
+                  native=dict(status=0, obj_val=result["objective"] + difference),
+                  exception=None, preparation_evidence=None)
+    before = deepcopy(record)
+    audit = a.audit_record(f.calls()[17], kwargs, build, record)
+    assert audit["common"]["passed"] and audit["native_full_convergence"]
+    assert not audit["accepted"] and not audit["canonical_accounting"]["passed"]
+    assert record["native"] == before["native"]
+    np.testing.assert_array_equal(record["result"]["Pg"], before["result"]["Pg"])
+
+
+@pytest.mark.parametrize("canonical", [None, True, float("nan"), float("inf"),
+                                      {"nonfinite": "nan"}, "1.0"])
+def test_canonical_ac_cost_requires_finite_retained_native_value(canonical):
+    assert not a.canonical_ac_accounting(dict(obj_val=canonical), dict(costs=dict(generator_cost=1.)))["passed"]
+    assert not a.canonical_ac_accounting({}, dict(costs=dict(generator_cost=1.)))["passed"]
+
+
+def test_canonical_ac_gate_preserves_relative_tolerance_and_components():
+    common = dict(costs=dict(generator_cost=1e6, storage_cost=2.))
+    physical = sum(common["costs"].values())
+    limit = 1e-4 + 1e-10 * abs(physical)
+    assert a.canonical_ac_accounting(dict(obj_val=physical + limit / 2), common)["passed"]
+    assert not a.canonical_ac_accounting(dict(obj_val=physical + 2 * limit), common)["passed"]
+    assert common == dict(costs=dict(generator_cost=1e6, storage_cost=2.))
+
+
+@pytest.mark.parametrize("costs", [{}, {"total": float("nan")},
+                                  {"total": {"nonfinite": "inf"}}, {"a": 1e308, "b": 1e308}])
+def test_canonical_ac_gate_rejects_missing_nonfinite_or_overflowed_physical_cost(costs):
+    assert not a.canonical_ac_accounting(dict(obj_val=1.), dict(costs=costs))["passed"]
+
+
+@pytest.mark.parametrize("canonical,physical,difference", [
+    (185502.63483757776, 185493.526807319, 9.108030258765211),
+    (121.19033950718658, 5.3140009149983936, 115.87633859218819)])
+def test_retained_tracy_ac_accounting_regression(canonical, physical, difference):
+    gate = a.canonical_ac_accounting(dict(obj_val=canonical), dict(costs=dict(total=physical)))
+    assert gate["available"] and not gate["passed"]
+    assert gate["difference"] == pytest.approx(difference)
+    assert gate["limit"] == 1e-4 + 1e-10 * abs(physical)
 
 
 def test_serialized_preparation_map_and_unchanged_free_start():
