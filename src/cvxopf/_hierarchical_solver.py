@@ -367,8 +367,9 @@ def _layout_signature(layout: tuple[Mapping[str, object], ...]) -> str:
 
 
 def _solve_ac_with_verified_x0(
-    build: OPFBuild, solve_config: HierarchicalSolveConfig,
+    build: OPFBuild, solve_config: HierarchicalSolveConfig | None,
     *, start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
+    solver_options: Mapping[str, Any] | None = None,
 ) -> _X0Run:
     """Solve through a build-local IPOPT instance and retain its exact x0."""
     assigned = _complete_start(build)
@@ -436,6 +437,11 @@ def _solve_ac_with_verified_x0(
                 auxiliary_coordinate_count=captured_x0.size - model_count,
                 object_ids_before=before, object_ids_after=_object_ids(build),
             ))
+        if build.numerical_preparation.enabled:
+            from cvxopf._ac_preparation import solve_at_verified_boundary
+            return solve_at_verified_boundary(
+                build, self, cast(Any, data), inverse_data, verbose, solver_opts
+            )
         return IPOPT.solve_via_data(
             self, data, warm_start, verbose, solver_opts, solver_cache
         )
@@ -443,7 +449,12 @@ def _solve_ac_with_verified_x0(
     exception: str | None = None
     started = perf_counter()
     try:
-        options = dict(solve_config.ac.options)
+        if solver_options is not None:
+            options = dict(solver_options)
+        elif solve_config is not None:
+            options = dict(solve_config.ac.options)
+        else:
+            raise ValueError("AC solve options are required")
         warm_start = bool(options.pop("warm_start", False))
         verbose = bool(options.pop("verbose", False))
         if not verbose:
@@ -472,7 +483,9 @@ def _solve_ac_with_verified_x0(
                 solver_opts=options,
                 solver_cache=None,
             )
-            build.prob.unpack_results(solution, chain, inverse_data)
+            if (not build.numerical_preparation.enabled
+                    or cast(Any, solution)["status"] in (0, 1, 6)):
+                build.prob.unpack_results(solution, chain, inverse_data)
     except Exception as exc:
         exception = f"{type(exc).__name__}: {exc}"
     elapsed = perf_counter() - started

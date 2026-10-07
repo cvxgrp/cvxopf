@@ -196,15 +196,20 @@ def test_exact_bindings_follow_original_variables_units_and_order(
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)
 @pytest.mark.parametrize("assembly", ASSEMBLIES)
-def test_options_are_build_time_snapshot_and_prepared_solve_fails_closed(
+def test_options_are_build_time_snapshot_and_prepared_solve_uses_local_bridge(
     monkeypatch, formulation, assembly
 ):
     build = _build(formulation, assembly, NumericalPreparation(exact_fixed_boxes=True))
     monkeypatch.setattr(
         cp.Problem, "solve", lambda *a, **k: pytest.fail("no numerical call")
     )
-    with pytest.raises(NotImplementedError, match="solver-coordinate bridges"):
-        build.solve()
+    import cvxopf._convex_preparation as convex
+    import cvxopf._ac_preparation as ac
+    calls = []
+    monkeypatch.setattr(convex, "solve_prepared_convex", lambda b, k: calls.append((b, k)))
+    monkeypatch.setattr(ac, "solve_prepared_ac", lambda b, k: calls.append((b, k)))
+    build.solve()
+    assert calls == [(build, {})]
     with pytest.raises(AttributeError):
         build.numerical_preparation = NumericalPreparation()
     options = OPFOptions(

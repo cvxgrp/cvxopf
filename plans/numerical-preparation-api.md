@@ -2,27 +2,30 @@
 
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
-approved API/protocol design with assembly implementation progress recorded
+approved API/protocol design with implementation progress recorded
 below. Qualification and execution remain separately authorized gates under the
 [qualification protocol](../experiments/numerical_preparation/QUALIFICATION_PROTOCOL.md).
 
 ## Assembly implementation checkpoint
 
-The first production implementation checkpoint implements the immutable public
+The committed assembly checkpoint `ea2d8939c` introduced the immutable public
 policy, formulation validation, component-owned normalized device limits,
 explicit exact-box identities, and their propagation through all standalone
-assembly modes. Public variables and result projections remain intact. The
-disabled solver path remains unchanged; **every enabled preparation policy
-raises `NotImplementedError` from `OPFBuild.solve()` before a numerical call**.
-Direct `build.prob.solve()` bypasses that wrapper and is not a supported
-prepared execution path. This is an assembly foundation, not completed
-numerical preparation or qualification.
+assembly modes. At that checkpoint every enabled policy raised
+`NotImplementedError` from `OPFBuild.solve()` before a numerical call. Public
+variables, result projections and the disabled solver path remain intact.
+Direct `build.prob.solve()` bypasses the supported preparation boundary.
 
-The next implementation checkpoint must add the fixed-coordinate map, both
-build-local solver bridges, start and restoration evidence, failure cleanup,
-and their production tests before removing this guard. The bounded
-qualification matrix, prospective E3 changes, and execution remain subsequent
-gates. Prepared hierarchy remains rejected before any layer build, including
+The solver-boundary checkpoint adds exact coordinate maps, a build-local stock
+CLARABEL bridge with optional joint scaling, and a stock IPOPT oracle wrapper
+at the shared verified-start boundary. It restores original-dimensional
+solutions before CVXPY inversion and publishes immutable native and restoration
+diagnostics through `OPFBuild.preparation_evidence`. Enabled standalone solving
+is available through these boundaries; defaults remain disabled. Unit and
+regression tests are not the bounded scientific qualification matrix.
+
+Qualification, prospective E3 changes, and execution remain subsequent gates.
+Prepared hierarchy remains rejected before any layer build, including
 when mutable hierarchical options have changed after input construction;
 its layer-specific policy work remains in Milestone 21. The existing streaming
 hierarchy fingerprint omits only the new disabled field to preserve frozen

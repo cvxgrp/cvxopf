@@ -50,7 +50,7 @@ from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 from cvxopf._cvxpy_dispatch import sparse_dispatch_policy, with_build_dispatch_policy
 from cvxopf._numerical_preparation import (
-    ExactBoxBinding, NumericalPreparation, validate_preparation,
+    ExactBoxBinding, NumericalPreparation, PreparationEvidence, validate_preparation,
 )
 
 
@@ -120,15 +120,15 @@ class OPFOptions:
         constraints. AC only.
     numerical_preparation : NumericalPreparation
         Immutable opt-in representation policy, disabled by default. Snapshot
-        at build time; changing OPFOptions requires rebuilding. Enabled solves
-        are not available at this assembly-only implementation checkpoint.
+        at build time; changing OPFOptions requires rebuilding. Prepared solving
+        supports stock CLARABEL and exact-Hessian IPOPT with diagnostic evidence.
 
     Notes
     -----
     Only numerical_preparation affects the 'singlenode_dc' formulation.
     Preparation is an immutable build-time choice, disabled by default.
-    Enabled graphs can currently be inspected but not solved: the local solver
-    bridges and restoration evidence are a subsequent implementation checkpoint.
+    Prepared execution is opt-in and retains native/restoration diagnostics;
+    qualification and any default adoption are separate decisions.
     """
 
     enforce_vset: bool = False
@@ -281,6 +281,12 @@ class OPFBuild:
     automatic_sparse_dispatch: bool = False
     _numerical_preparation: NumericalPreparation = field(default_factory=NumericalPreparation, repr=False)
     _exact_boxes: tuple[ExactBoxBinding, ...] = field(default=(), repr=False)
+    _preparation_evidence: PreparationEvidence | None = field(default=None, init=False, repr=False)
+
+    @property
+    def preparation_evidence(self) -> PreparationEvidence | None:
+        """Latest immutable native/restoration diagnostics; not qualification."""
+        return self._preparation_evidence
 
     @property
     def numerical_preparation(self) -> NumericalPreparation:
@@ -320,10 +326,14 @@ class OPFBuild:
         build.solve(verbose=True)      # show solver output
         """
         if self.numerical_preparation.enabled:
-            raise NotImplementedError(
-                "prepared solving awaits solver-coordinate bridges and restoration; "
-                "rebuild with disabled NumericalPreparation to use baseline solving"
-            )
+            from cvxopf._convex_preparation import solve_prepared_convex
+            from cvxopf._ac_preparation import solve_prepared_ac
+            with sparse_dispatch_policy(self.is_convex or self.automatic_sparse_dispatch):
+                if self.is_convex:
+                    solve_prepared_convex(self, kwargs)
+                else:
+                    solve_prepared_ac(self, kwargs)
+            return
         if self.is_convex:
             kwargs.setdefault("solver", cp.CLARABEL)
             kwargs.setdefault("nlp", False)

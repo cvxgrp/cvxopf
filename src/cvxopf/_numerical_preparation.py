@@ -1,13 +1,14 @@
 """Build-time numerical representation policy and component-owned box evidence.
 
-Solver-coordinate transformations are deliberately not enabled by this assembly
-checkpoint. No variable names or arbitrary user equalities select fixed boxes.
+No variable names or arbitrary user equalities select fixed boxes. Solver
+transformations retain this provenance through the canonical inverse chain.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Any, Literal, Mapping, Sequence
+from types import MappingProxyType
 
 import cvxpy as cp
 import numpy as np
@@ -24,8 +25,8 @@ from cvxopf._temporal_assembly import (
 class NumericalPreparation:
     """Opt-in, build-time policy; all production defaults remain disabled.
 
-    Enabled graphs are inspectable, but prepared solving is unavailable until
-    the solver-boundary checkpoint implements restoration and attempt evidence.
+    Prepared solves retain native and original-space diagnostic evidence;
+    numerical qualification and any default adoption remain separate gates.
     """
 
     normalize_device_limits: bool = False
@@ -188,3 +189,179 @@ def emit_exact_box(
     if free.size and representation == "explicit":
         constraints.extend((flat[free] >= lower[free], flat[free] <= upper[free]))
     return OperatingSetContribution(tuple(constraints), bindings)
+
+
+def finite_vector(value: Any, size: int, label: str) -> np.ndarray:
+    array = np.asarray(value, dtype=float)
+    if array.shape != (size,) or not np.isfinite(array).all():
+        raise ValueError(f"invalid {label} shape or nonfinite values")
+    return array
+
+
+@dataclass(frozen=True)
+class FixedCoordinateMap:
+    """Exact substitution x[free]=y, x[fixed]=values and retained row order."""
+
+    full_size: int
+    row_count: int
+    fixed: np.ndarray
+    values: np.ndarray
+    dropped: np.ndarray
+    _free: np.ndarray = field(init=False, repr=False)
+    _kept: np.ndarray = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if type(self.full_size) is not int or type(self.row_count) is not int:
+            raise ValueError("solver dimensions must be integers")
+        if self.full_size <= 0 or self.row_count < 0:
+            raise ValueError("invalid solver dimensions")
+        for name, bound in (("fixed", self.full_size), ("dropped", self.row_count)):
+            indices = np.asarray(getattr(self, name))
+            if (indices.ndim != 1 or indices.dtype.kind not in "iu"
+                    or np.any(indices < 0) or np.any(indices >= bound)
+                    or np.unique(indices).size != indices.size):
+                raise ValueError(f"invalid {name} indices")
+            object.__setattr__(self, name, _readonly_copy(indices))
+        if self.dropped.size != self.fixed.size:
+            raise ValueError("one defining row is required per fixed coordinate")
+        object.__setattr__(self, "values", _readonly_copy(
+            finite_vector(self.values, self.fixed.size, "fixed values")))
+        if self.fixed.size == self.full_size:
+            raise ValueError("empty solver coordinate space is unsupported")
+        object.__setattr__(self, "_free", _readonly_copy(np.setdiff1d(np.arange(self.full_size), self.fixed)))
+        object.__setattr__(self, "_kept", _readonly_copy(np.setdiff1d(np.arange(self.row_count), self.dropped)))
+
+    @property
+    def free(self) -> np.ndarray:
+        return self._free
+
+    @property
+    def kept(self) -> np.ndarray:
+        return self._kept
+
+    def expand(self, reduced: np.ndarray) -> np.ndarray:
+        full = np.zeros(self.full_size)
+        full[self.free] = finite_vector(reduced, self.free.size, "reduced primal")
+        full[self.fixed] = self.values
+        return full
+
+    def select(self, full: np.ndarray) -> np.ndarray:
+        return finite_vector(full, self.full_size, "full primal")[self.free].copy()
+
+
+def resolve_fixed_map(
+    bindings: Sequence[ExactBoxBinding], inverse_data: Sequence[Any],
+    variable_inverse: Any, constraints: Sequence[Any], full_size: int,
+    row_count: int,
+) -> FixedCoordinateMap:
+    """Follow reduction identities; never select arbitrary unary equality rows."""
+    rows: dict[int, np.ndarray] = {}
+    offset = 0
+    for constraint in constraints:
+        rows[constraint.id] = np.arange(offset, offset + constraint.size)
+        offset += constraint.size
+    if offset != row_count:
+        raise RuntimeError("canonical constraint layout changed")
+    fixed, values, dropped = [], [], []
+    for binding in bindings:
+        variable_id, equality_id = binding.variable_id, binding.equality_id
+        for inverse in inverse_data:
+            cons_map = getattr(inverse, "cons_id_map", {})
+            if isinstance(inverse, tuple) and len(inverse) == 3:
+                new_variables, _, cons_map = inverse
+                if variable_id in new_variables:
+                    variable_id = new_variables[variable_id].id
+            equality_id = cons_map.get(equality_id, equality_id)
+        if (variable_id not in variable_inverse.var_offsets
+                or variable_inverse.var_shapes[variable_id] != binding.variable_shape
+                or equality_id not in rows):
+            raise RuntimeError("selected box identity lost during canonicalization")
+        selected_rows = rows[equality_id]
+        if selected_rows.size != binding.fixed_indices.size:
+            raise RuntimeError("defining equality dimensions changed")
+        fixed.extend(variable_inverse.var_offsets[variable_id] + binding.fixed_indices)
+        values.extend(binding.bounds.lower.ravel(order="F")[binding.fixed_indices])
+        dropped.extend(selected_rows)
+    return FixedCoordinateMap(full_size, row_count, np.array(fixed, dtype=int),
+                              np.array(values, dtype=float), np.array(dropped, dtype=int))
+
+
+def frozen_record(record: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Defensive immutable diagnostics, never a live native solver object."""
+    def freeze(value: Any) -> Any:
+        if isinstance(value, np.ndarray):
+            return _readonly_copy(value)
+        if isinstance(value, Mapping):
+            return frozen_record(value)
+        if isinstance(value, (list, tuple)):
+            return tuple(freeze(item) for item in value)
+        return value
+    return MappingProxyType({name: freeze(value) for name, value in record.items()})
+
+
+@dataclass(frozen=True)
+class PreparationEvidence:
+    coordinates: FixedCoordinateMap
+    native: Mapping[str, Any]
+    checks: Mapping[str, Any]
+    variable_scale: np.ndarray
+    row_scale: np.ndarray
+    objective_offset: float = 0.0
+    assigned_x0: np.ndarray | None = None
+    adjusted_x0: np.ndarray | None = None
+    reduced_x0: np.ndarray | None = None
+    start_layout: tuple[tuple[int, tuple[int, ...], int, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "native", frozen_record(self.native))
+        object.__setattr__(self, "checks", frozen_record(self.checks))
+        for name in ("variable_scale", "row_scale", "assigned_x0", "adjusted_x0", "reduced_x0"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _readonly_copy(np.asarray(value)))
+        for name, size in (("variable_scale", self.coordinates.free.size),
+                           ("row_scale", self.coordinates.kept.size)):
+            values = finite_vector(getattr(self, name), size, name)
+            if np.any(values <= 0):
+                raise ValueError("preparation scales must be positive")
+        for name, size in (("assigned_x0", self.coordinates.full_size),
+                           ("adjusted_x0", self.coordinates.full_size),
+                           ("reduced_x0", self.coordinates.free.size)):
+            if getattr(self, name) is not None:
+                finite_vector(getattr(self, name), size, name)
+        if not np.isfinite(self.objective_offset):
+            raise ValueError("nonfinite preparation offset")
+
+
+def clear_prepared_result(build: Any) -> None:
+    """Keep Parameters/assigned starts intact until captured; clear publications."""
+    for variable in build.prob.variables():
+        variable.save_value(None)
+    for constraint in build.prob.constraints:
+        for dual in constraint.dual_variables:
+            dual.save_value(None)
+    build.prob._value = None
+    build.prob._status = None
+    build.prob._solution = None
+    build.prob._solver_stats = None
+
+
+def prepared_options(build: Any, kwargs: Mapping[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """Closed preflight at the supported stock solver boundaries."""
+    options = dict(kwargs)
+    expected = cp.CLARABEL if build.is_convex else cp.IPOPT
+    if options.pop("solver", expected) != expected:
+        raise ValueError(f"prepared execution requires {expected}")
+    if options.pop("nlp", not build.is_convex) is not (not build.is_convex):
+        raise ValueError("prepared execution requires the formulation's nlp mode")
+    for name in ("best_of", "accept_unknown"):
+        if name in options:
+            raise ValueError(f"prepared execution does not support {name}")
+    if options.pop("warm_start", False):
+        raise ValueError("prepared warm starts are unsupported")
+    if options.get("warm_start_init_point", "no") != "no":
+        raise ValueError("prepared IPOPT warm starts are unsupported")
+    if not build.is_convex and options.get("hessian_approximation", "exact") != "exact":
+        raise ValueError("prepared AC requires exact Hessians")
+    verbose = bool(options.pop("verbose", False))
+    return verbose, options
