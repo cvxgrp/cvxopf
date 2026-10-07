@@ -21,9 +21,11 @@ The milestone must support, at minimum:
 2. retaining the validated `lossy_dc`→`ac` M17 workflow without behavioral or
    numerical drift;
 3. composing three named layers, with the reference candidate
-   `singlenode_dc`→`socp`→`ac`; and
+   `singlenode_dc`→`socp`→`ac`;
 4. adding a supported formulation without rewriting orchestration in every
-   existing layer.
+   existing layer; and
+5. selecting numerical preparation independently for each layer, with explicit
+   formulation compatibility and qualification before enabling a configuration.
 
 This is not permission to treat arbitrary optimization problems as
 interchangeable. A formulation participates only through a reviewed typed
@@ -66,6 +68,7 @@ Introduce an ordered, immutable layer specification with explicit fields for:
 - supported formulation ID;
 - temporal horizon and advancement policy;
 - typed solver configuration;
+- typed numerical-preparation policy local to that layer;
 - accepted-status and formulation-specific residual policy;
 - declared inputs received from the preceding layer; and
 - declared outputs offered to the following layer.
@@ -122,6 +125,51 @@ Every layer-to-layer edge receives its own retained handoff record. A
 three-layer result must make it possible to determine whether failure arose in
 the coarse planner, intermediate screen, final realization, handoff mapping,
 or numerical solver.
+
+### 3.5 Numerical preparation per layer
+
+Prepared hierarchical execution deferred by the
+[standalone numerical-preparation design](numerical-preparation-api.md)
+belongs to M21. The current M17 implementation passes the same
+`HierarchicalInputs.options` to DC and AC builds. A shared preparation selection
+cannot represent prepared outer DC and normalized inner AC under the proposed
+standalone policy: DC rejects device normalization, while AC rejects convex
+canonical scaling. Until this layer-local
+contract is implemented and qualified, reject enabled preparation at hierarchy
+entry before any layer build or solve; retain the disabled M17 behavior.
+
+Reuse the standalone typed preparation policy and production solver boundaries,
+not experiment monkey-patching or a second transformation implementation. Freeze
+the exact public selection/migration API in S1. Each named layer must receive
+its own declared preparation policy, separate from its solver tolerances,
+acceptance gates and physical inputs. Validate every layer's formulation,
+preparation and solver combination before the first build or numerical call.
+Do not broadcast one policy across layers, silently drop inapplicable fields,
+or infer preparation from an upstream layer's selection. Compatibility mode
+keeps all preparation disabled unless independently qualified and explicitly
+selected; no default migration follows standalone qualification.
+
+Retain each attempt's resolved layer policy, transformation maps, native solver
+evidence, restored physical results and independent acceptance audits. AC must
+preserve causal initialization, complete verified canonical IPOPT starts,
+reduced-coordinate mappings and the unperturbed realized initial SoC boundary.
+Only restored, identity-aligned physical quantities enter handoffs; numerical
+coordinate scales are not state or target payloads. Reconstruction failures and
+numerical rejection remain layer-attributed failures, never accepted actions.
+
+Require standalone formulation qualification as a prerequisite, not proof of
+hierarchical qualification. Before enabling a prepared hierarchy, freeze a
+separate bounded matched protocol comparing disabled and explicitly selected
+layer policies, including prepared convex/unprepared AC and unprepared
+convex/prepared AC cases, then both prepared where supported. Check causal
+starts, state/target alignment, repeated and truncated windows, recovery
+attempts, failure retention, accounting and checkpoint/resume provenance.
+Preserve native convergence and independent physical/component gates; report
+outcomes and explicit supported/not-qualified dispositions rather than assume
+speedup or AC recovery improvement. Protocol budgets and acceptance settings
+require owner review before execution. This work does not expand the
+[standalone 25-call matrix](../experiments/numerical_preparation/QUALIFICATION_PROTOCOL.md)
+or authorize resuming original E3 or held Stage D.
 
 ## 4. Compatibility requirements
 
@@ -221,14 +269,14 @@ an AC-feasibility recovery or exactness test establishes that claim.
 
 | Stage | Outcome |
 |---|---|
-| S0 | Characterize the completed M17 implementation and M11 SOCP API; inventory formulation-specific build, result, residual, and state-transfer contracts. |
-| S1 | Freeze typed layer, capability, handoff, and generalized audit schemas; define the exact M17 compatibility mapping. |
+| S0 | Characterize the completed M17 implementation, M11 SOCP API and standalone preparation qualification; inventory formulation-specific build, result, residual, preparation and state-transfer contracts. |
+| S1 | Freeze typed layer, capability, handoff, layer-local preparation and generalized audit schemas; define the exact disabled M17 compatibility mapping. |
 | S2 | Refactor M17 orchestration behind the ordered-layer engine without changing its two-layer behavior. |
-| S3 | Add selectable `singlenode_dc`, `lossy_dc`, and—when available—`socp` planning adapters with negative capability tests. |
+| S3 | Add selectable `singlenode_dc`, `lossy_dc`, and—when available—`socp` planning adapters and independent per-layer preparation selection, with negative capability tests before any build or solve. |
 | S4 | Implement retained edge handoffs, per-layer failure attribution, and independent residual audits. |
-| S5 | Prove two-layer configurability and exact M17 regression equivalence. |
+| S5 | Prove two-layer configurability, exact disabled M17 regression equivalence, and correct preparation isolation and verified starts across layers. |
 | S6 | Implement and test the reference three-layer `singlenode_dc`→`socp`→`ac` hierarchy. |
-| S7 | Run the predeclared scientific comparison and decide whether any hierarchy beyond M17 merits a recommended configuration. |
+| S7 | Run the predeclared scientific comparison and separately bounded matched preparation qualification; record supported configurations before deciding whether any hierarchy beyond M17 merits a recommendation. |
 | S8 | Document extension, performance, limitations, and a test-only formulation adapter that proves orchestration extension without builder edits. |
 
 Each stage stops at a clean, reviewed commit. S2 cannot remove the dedicated
@@ -245,6 +293,13 @@ scientific meaning and residual checks are frozen.
 - failure and construction-error retention at every layer and edge;
 - `T=1`, truncated final windows, and different adjacent-layer horizons;
 - deterministic initialization and retry provenance;
+- independent layer preparation, including mixed enabled/disabled policies and
+  invalid solver/formulation/preparation combinations rejected before any build
+  or solve;
+- disabled preparation equivalence, restored physical handoffs, complete AC
+  start/reduction evidence, and repeated-solve/failure cleanup;
+- preparation policy and map provenance retained through recovery attempts and
+  checkpoint/resume, without cross-layer leakage;
 - single-node omissions represented explicitly in capabilities;
 - SOCP relaxation residuals and AC recovery/exactness diagnostics;
 - three-layer accounting without objective or energy double counting; and
@@ -272,6 +327,10 @@ M21 is complete only when:
 3. a three-layer hierarchy runs through the same generic orchestration and
    retains complete per-layer and per-edge provenance;
 4. unsupported formulation/handoff combinations fail before solving;
-5. the scientific comparison reports both benefits and failure modes; and
+5. the scientific comparison reports both benefits and failure modes;
 6. documentation explains how to add a formulation adapter without modifying
-   every existing layer or component.
+   every existing layer or component; and
+7. layer-local preparation selection and disabled compatibility pass their
+   tests, and separately bounded qualification establishes which enabled
+   configurations may be selected, retaining unqualified outcomes without
+   silently enabling them or changing defaults.
