@@ -103,12 +103,18 @@ def inputs_for_arm(p, arm: Arm) -> dict:
     return kwargs
 
 
-def audit_result(result: dict, kwargs: dict, named_costs: dict, *, network_audit=None) -> dict:
+def audit_result(result: dict, kwargs: dict, named_costs: dict, *, network_audit=None,
+                 total_cost_relative_tolerance=None) -> dict:
     """Reconstruct physics/accounting from input devices, not build expressions.
 
     This audit is deliberately specific to the approved ideal-storage, all-loads
     sheddable, no-HVDC fleet. It refuses missing/nonfinite/misshaped payloads.
+    The optional prospective SOCP total-cost gate is distinct from the unchanged
+    component-cost gates. Omitting it preserves historical audit behavior.
     """
+    if total_cost_relative_tolerance is not None:
+        if kwargs["formulation"] != "socp" or total_cost_relative_tolerance != 1e-6:
+            raise ValueError("only the prospective SOCP total-cost gate is supported")
     checks = {}
     limits = {}
 
@@ -308,7 +314,11 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict, *, network_audit
         check(
             key + "_accounting",
             residual,
-            TOLERANCES["cost_abs"] + TOLERANCES["cost_rel"] * abs(expected),
+            TOLERANCES["cost_abs"] + (
+                total_cost_relative_tolerance
+                if key == "objective" and total_cost_relative_tolerance is not None
+                else TOLERANCES["cost_rel"]
+            ) * abs(expected),
         )
     ens = dt * a["p_load_shed"].sum(axis=0)
     check(

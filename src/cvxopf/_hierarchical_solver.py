@@ -370,6 +370,7 @@ def _solve_ac_with_verified_x0(
     build: OPFBuild, solve_config: HierarchicalSolveConfig | None,
     *, start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
     solver_options: Mapping[str, Any] | None = None,
+    native_observer: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> _X0Run:
     """Solve through a build-local IPOPT instance and retain its exact x0."""
     assigned = _complete_start(build)
@@ -483,6 +484,10 @@ def _solve_ac_with_verified_x0(
                 solver_opts=options,
                 solver_cache=None,
             )
+            if native_observer is not None:
+                # Snapshot before inversion; observers cannot mutate the result
+                # that the stock adapter will restore into public variables.
+                native_observer(deepcopy(cast(Mapping[str, Any], solution)))
             if (not build.numerical_preparation.enabled
                     or cast(Any, solution)["status"] in (0, 1, 6)):
                 build.prob.unpack_results(solution, chain, inverse_data)
