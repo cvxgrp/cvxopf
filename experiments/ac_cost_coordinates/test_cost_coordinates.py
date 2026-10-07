@@ -18,6 +18,7 @@ from experiments.numerical_preparation import fixture as f, run_qualification as
 from experiments.numerical_preparation.audit import serializable
 from experiments.ac_cost_coordinates import model as m, run as r
 from experiments.ac_cost_coordinates.analyze import soc_boundaries
+from experiments.ac_cost_coordinates import analyze as a
 
 
 def fixture(delta=1., treatment="baseline"):
@@ -198,3 +199,27 @@ def test_worker_archives_start_and_failure_without_invoking_optimizer(monkeypatc
     assert record["captured"] == q.read(directory/"x0.json.gz")
     for name, sha in completion["artifacts"].items():
         assert q.digest(directory/name) == sha
+
+
+def test_analysis_uses_actual_common_residual_schema(monkeypatch, tmp_path):
+    """Exercise the summary path, including canonical x0, with no optimizer."""
+    call, kwargs, build, _ = fixture()
+    view = m.transform(build, kwargs["delta"], False)
+    data, _ = m.canonical_data(build)
+    captured = serializable(dict(complete_x0=data["x0"]))
+    checks = dict(accounting={}, common=dict(costs={}, residuals={"balance": 1e-9}),
+                  transformation={}, result={})
+    attempt = dict(arm=1, historical_call=24, scaled=False, checks=checks)
+    directory = tmp_path/"call-001"
+    directory.mkdir()
+    (directory/"worker.log").touch()
+    monkeypatch.setattr(a.r, "status", lambda _: dict(attempts=[attempt]))
+    monkeypatch.setattr(a.q, "read", lambda path: (
+        dict(outcome="matrix_complete") if path.name == "invocation-finish.json" else
+        dict(captured=captured, preparation_evidence=None)))
+    monkeypatch.setattr(a.m, "construct", lambda *_: (call, kwargs, view, None))
+    monkeypatch.setattr(a, "compare", lambda *args: {})
+    monkeypatch.setattr(a, "plots", lambda *args: None)
+    summaries = a.analyze(tmp_path)
+    assert summaries[0]["residuals"] == {"balance": 1e-9}
+    assert (tmp_path/"analysis.json").exists()

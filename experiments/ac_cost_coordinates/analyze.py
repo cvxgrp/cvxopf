@@ -41,7 +41,7 @@ def analyze(root):
         if "checks" in attempt:
             checks = attempt["checks"]
             summary.update(accounting=checks["accounting"], costs=checks["common"]["costs"],
-                           residuals=checks["common"]["checks"], transformation=checks["transformation"])
+                           residuals=checks["common"]["residuals"], transformation=checks["transformation"])
             record = q.read(directory/"result.json.gz")
             call, kwargs, view, _ = m.construct(attempt["historical_call"], attempt["scaled"])
             data, _ = m.canonical_data(view.solver)
