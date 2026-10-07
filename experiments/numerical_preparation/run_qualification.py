@@ -5,6 +5,14 @@ After owner review/commit and separate execution permission, use
 ``--authorize-execution --commit <full SHA>``. ``--status`` independently
 replays retained evidence without solving. A STOP or interrupted worker consumes
 its call; explicit resume can advance only finalized supervision, never retry it.
+
+The one-time ``--resume --adopt-replay-fix`` transition is specific to the
+retained call-001 replay-metadata failure. It appends an immutable context for
+calls 002–025, allowing changes only to this runner and its infrastructure test.
+The original binding, protocol, call-001 evidence, and invocation stay intact.
+Numerical inputs/settings, installed packages, production sources, and budgets
+must match exactly. Subsequent resumes use that recorded context without another
+transition. This is not a general cross-source resume mechanism.
 """
 # ruff: noqa: E402 -- thread limits precede all numerical imports.
 
@@ -46,6 +54,13 @@ from .audit import (serializable, evidence_record, single_step_result, audit_rec
                     pair_check, historical_control)
 
 MODULE = "experiments.numerical_preparation.run_qualification"
+REPLAY_FIX_ORIGIN = "bd936f3ac9367ae2e37b5cc68b80f8cddd69706b"
+REPLAY_FIX_BINDING_SHA256 = "6b7e8fe8126f9ced99efd0ed6c4c94d322dab15e85ad02192acacf6adf0c587c"
+REPLAY_FIX_INVOCATION = "invocation-1791386299438779000"
+REPLAY_FIX_SOURCES = frozenset(("experiments/numerical_preparation/run_qualification.py",
+                               "tests/test_preparation_qualification.py"))
+REPLAY_FIX_FILES = frozenset(("request.json", "launch.json", "phase.json", "resources.jsonl",
+                            "worker.log", "supervision.json", "completion.json", "result.json.gz"))
 
 
 def utc():
@@ -107,6 +122,86 @@ def monitoring_preflight():
     return dict(utc=utc(), thermal=thermal, battery=battery)
 
 
+def replay_fix_changes(original, continued):
+    """Allow only the reviewed runner/test transition, never numerical changes."""
+    if (original["commit"] != REPLAY_FIX_ORIGIN or original["clean"] is not True or
+        continued["clean"] is not True or len(continued["commit"]) != 40 or
+        any(c not in "0123456789abcdef" for c in continued["commit"]) or
+        continued["commit"] == original["commit"]):
+        raise ValueError("replay-fix transition requires its original and new clean commits")
+    if ({k: v for k, v in original.items() if k not in {"commit", "sources"}} !=
+        {k: v for k, v in continued.items() if k not in {"commit", "sources"}}):
+        raise ValueError("replay-fix transition changed numerical environment/protocol")
+    before, after = original["sources"], continued["sources"]
+    if set(before) != set(after):
+        raise ValueError("replay-fix transition added or removed bound sources")
+    changed = {p: dict(before=before[p], after=after[p]) for p in before if before[p] != after[p]}
+    if set(changed) != REPLAY_FIX_SOURCES:
+        raise ValueError("replay-fix transition permits only the runner and its test")
+    return changed
+
+
+def preserved_replay_failure(root):
+    """Hash the original completed call and failed invocation without rewriting."""
+    directory = root / "call-001"
+    if {p.name for p in directory.iterdir()} != REPLAY_FIX_FILES:
+        raise ValueError("replay-fix call-001 evidence set differs")
+    invocation = root / "invocations" / REPLAY_FIX_INVOCATION
+    if read(invocation / "finish.json")["outcome"] != "failure":
+        raise ValueError("replay-fix origin is not the recorded failed invocation")
+    paths = sorted(directory.iterdir()) + [invocation / "start.json", invocation / "finish.json"]
+    return {str(p.relative_to(root)): digest(p) for p in paths}
+
+
+def replay_fix_transition(root, binding, candidate=None):
+    """Validate the sole additive transition; reading it never adopts a change."""
+    path = root / "replay-fix-transition.json"
+    transition = candidate if candidate is not None else (read(path) if path.exists() else None)
+    if transition is None:
+        return None
+    if (transition["kind"] != "replay-fix-v1" or transition["first_call"] != 2 or
+        digest(root / "binding.json") != REPLAY_FIX_BINDING_SHA256 or
+        transition["original_binding"] != reference(root / "binding.json", root) or
+        transition["protocol"] != reference(root / "protocol.json", root) or
+        read(root / "protocol.json") != dict(protocol=LIMITS)):
+        raise ValueError("replay-fix transition origin/protocol mismatch")
+    if transition["source_changes"] != replay_fix_changes(binding["context"], transition["context"]):
+        raise ValueError("replay-fix transition source hashes mismatch")
+    if transition["preserved"] != preserved_replay_failure(root):
+        raise ValueError("replay-fix preserved evidence changed")
+    return transition
+
+
+def binding_for_call(binding, transition, call_id):
+    if transition is not None and call_id >= transition["first_call"]:
+        return dict(binding, context=transition["context"])
+    return binding
+
+
+def request_for_call(root, call_id, wall, transition):
+    request = dict(call_id=call_id, role="primary", protocol=reference(root / "protocol.json", root), wall_seconds=wall)
+    if transition is not None and call_id >= transition["first_call"]:
+        request["source_transition"] = reference(root / "replay-fix-transition.json", root)
+    return request
+
+
+def prepare_replay_fix_transition(root, original, continued):
+    """Construct, but do not publish, the one-time call-002 continuation."""
+    if sorted(p.name for p in root.glob("call-*")) != ["call-001"]:
+        raise ValueError("replay-fix adoption requires exactly the completed first call")
+    if {k: v for k, v in original.items() if k != "context"} != {k: v for k, v in continued.items() if k != "context"}:
+        raise ValueError("replay-fix transition changed frozen inputs/settings/budgets")
+    candidate = dict(kind="replay-fix-v1", first_call=2, adopted_utc=utc(),
+        original_binding=reference(root / "binding.json", root), protocol=reference(root / "protocol.json", root),
+        context=continued["context"], source_changes=replay_fix_changes(original["context"], continued["context"]),
+        preserved=preserved_replay_failure(root))
+    replay_fix_transition(root, original, candidate)
+    progress, _ = replay(root, transition=candidate)
+    if progress["disposed"] != 1 or progress["accepted"] != 1 or progress["next_call"] != 2:
+        raise ValueError("replay-fix origin must be independently accepted and supervised")
+    return candidate
+
+
 def physical_start(build, kwargs):
     """One deterministic stock start, with exact entries assigned in every arm."""
     _complete_start(build)
@@ -138,6 +233,8 @@ def worker(root, directory):
     binding = read(root / "binding.json")
     request = read(directory / "request.json")
     call = calls()[request["call_id"] - 1]
+    transition = replay_fix_transition(root, binding)
+    binding = binding_for_call(binding, transition, call.id)
     frozen = binding["calls"][call.id - 1]
     began, build = time.monotonic(), None
     record = dict(iteration=call.id, request=request, exception=None, optimizer_calls=0,
@@ -155,6 +252,8 @@ def worker(root, directory):
         launch = read(directory / "launch.json")
         if launch["pid"] != os.getpid() or (directory / "supervision.json").exists() or (root / "STOP").exists():
             raise ValueError("worker is not the live authorized launch")
+        if request != request_for_call(root, call.id, request["wall_seconds"], transition):
+            raise ValueError("worker request/source-transition mismatch")
         phase("prepare")
         if context() != binding["context"]:
             raise ValueError("worker source/environment differs from binding")
@@ -318,12 +417,14 @@ def resource_evidence(directory, supervision):
     return bool(samples and launch and peak <= LIMITS["rss_mib"])
 
 
-def replay(root, *, auditor=None):
+def replay(root, *, auditor=None, transition=None):
     """Report unfinished tails, but never accept them or offer a next call."""
     binding = read(root / "binding.json")
     if binding["limits"] != LIMITS or len(binding["calls"]) != 25:
         raise ValueError("qualification binding matrix/limits mismatch")
-    if auditor is None and context() != binding["context"]:
+    transition = replay_fix_transition(root, binding, transition)
+    active = binding_for_call(binding, transition, 2)
+    if auditor is None and context() != active["context"]:
         raise ValueError("independent replay requires the bound source/environment")
     dirs = sorted(root.glob("call-*"))
     if len(dirs) > 25:
@@ -341,7 +442,7 @@ def replay(root, *, auditor=None):
             break
         request = read(directory / "request.json")
         wall = request["wall_seconds"]
-        if request != dict(call_id=call.id, role="primary", protocol=reference(root / "protocol.json", root), wall_seconds=wall) or isinstance(wall, bool) or not 0 < wall <= min(180., 4500.-used):
+        if request != request_for_call(root, call.id, wall, transition) or isinstance(wall, bool) or not 0 < wall <= min(180., 4500.-used):
             raise ValueError("invalid request/call/budget")
         if read(root / "protocol.json") != dict(protocol=LIMITS):
             raise ValueError("protocol reference mismatch")
@@ -357,7 +458,7 @@ def replay(root, *, auditor=None):
         accepted = False
         if (directory / "completion.json").exists():
             record = (auditor(call, directory) if auditor is not None else
-                      independent_record(call, binding, directory, prepared))
+                      independent_record(call, binding_for_call(binding, transition, call.id), directory, prepared))
             accepted = (classification == "exited" and sup["returncode"] == 0 and
                         resources_ok and elapsed <= wall and record["audit"]["accepted"])
             # Pair gates cannot use even an accepted worker archive when its
@@ -366,6 +467,7 @@ def replay(root, *, auditor=None):
         elif classification == "exited" and sup["returncode"] == 0:
             raise ValueError("successful worker exit lacks completion")
         attempts.append(dict(call_id=call.id, classification=classification, accepted=bool(accepted),
+                             execution_commit=binding_for_call(binding, transition, call.id)["context"]["commit"],
                              wall_seconds=elapsed, peak_sampled_rss_mib=sup["peak_sampled_rss_mib"],
                              resource_evidence_available=resources_ok, wall_ceiling_exceeded=elapsed > wall))
     unfinished = bool(attempts and attempts[-1]["classification"] == "unfinished")
@@ -376,7 +478,7 @@ def replay(root, *, auditor=None):
                 next_call=None if unfinished or disposed == 25 or used >= 4500 else disposed+1), records
 
 
-def qualification_report(binding, progress, records):
+def qualification_report(binding, progress, records, transition=None):
     pairs = {}
     for left, right in ((6, 7), (8, 9), (10, 11), (12, 13), (14, 15), (16, 17),
                         (18, 19), (18, 20), (21, 22), (21, 23), (24, 25)):
@@ -410,16 +512,19 @@ def qualification_report(binding, progress, records):
             disposition = "qualified"
         dispositions[formulation] = disposition
     outcomes = {str(i): dict(classification=r["classification"], exception=r["exception"],
+                            execution_commit=r["execution_context"]["commit"],
                             native={k: v for k, v in r.get("native", {}).items() if k not in
                                     {"x", "s", "z", "g", "mult_g", "mult_x_L", "mult_x_U"}},
                             audit=r["audit"], preparation_checks=(r.get("preparation_evidence") or {}).get("checks"))
                 for i, r in records.items()}
     return serializable(dict(progress=progress, pairs=pairs, historical=historical, qualification=dispositions,
                              outcomes=outcomes, execution_commit=binding["context"]["commit"],
+                             continuation_commit=None if transition is None else transition["context"]["commit"],
+                             source_transition=transition,
                              note="Numerical rejection/timeout is not proof of infeasibility; AC comparison is local-start only. No default or speedup claim."))
 
 
-def run(commit, *, resume=False, acknowledge_stop=False):
+def run(commit, *, resume=False, acknowledge_stop=False, adopt_replay_fix=False):
     binding = frozen_binding()
     if len(commit or "") != 40 or not binding["context"]["clean"] or binding["context"]["commit"] != commit:
         raise ValueError("reviewed clean full execution commit required")
@@ -428,20 +533,29 @@ def run(commit, *, resume=False, acknowledge_stop=False):
     telemetry = monitoring_preflight()
     if acknowledge_stop and not resume:
         raise ValueError("STOP acknowledgement requires explicit resume")
+    if adopt_replay_fix and not resume:
+        raise ValueError("replay-fix adoption requires explicit resume")
     if not resume:
         OUTPUT.mkdir(parents=True, exist_ok=False)
         atomic_immutable_json(OUTPUT / "binding.json", binding)
         atomic_immutable_json(OUTPUT / "protocol.json", dict(protocol=LIMITS))
     with (OUTPUT / "supervisor.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if read(OUTPUT / "binding.json") != binding:
-            raise ValueError("resume binding differs; no source transition")
+        original = read(OUTPUT / "binding.json")
+        transition = replay_fix_transition(OUTPUT, original)
+        if adopt_replay_fix and transition is None:
+            transition = prepare_replay_fix_transition(OUTPUT, original, binding)
+            atomic_immutable_json(OUTPUT / "replay-fix-transition.json", transition)
+        if binding_for_call(original, transition, 2) != binding:
+            raise ValueError("resume binding differs; explicit replay-fix adoption required")
         if acknowledge_stop and (OUTPUT / "STOP").exists():
             target = OUTPUT / "stops" / f"stop-{time.time_ns()}.json"
             target.parent.mkdir(exist_ok=True)
             (OUTPUT / "STOP").rename(target)
         invocation = OUTPUT / "invocations" / f"invocation-{time.time_ns()}"
-        atomic_immutable_json(invocation / "start.json", dict(utc=utc(), resume=resume, telemetry=telemetry))
+        atomic_immutable_json(invocation / "start.json", dict(utc=utc(), resume=resume, telemetry=telemetry,
+            execution_context=binding["context"], source_transition=None if transition is None else
+            reference(OUTPUT / "replay-fix-transition.json", OUTPUT)))
         outcome = "failure"
         try:
             while True:
@@ -462,8 +576,7 @@ def run(commit, *, resume=False, acknowledge_stop=False):
                 call_id = progress["next_call"]
                 directory = OUTPUT / f"call-{call_id:03d}"
                 directory.mkdir()
-                request = dict(call_id=call_id, role="primary", protocol=reference(OUTPUT / "protocol.json", OUTPUT),
-                               wall_seconds=min(180., 4500.-progress["worker_seconds"]))
+                request = request_for_call(OUTPUT, call_id, min(180., 4500.-progress["worker_seconds"]), transition)
                 atomic_immutable_json(directory / "request.json", request)
                 sup = supervise([sys.executable, "-m", MODULE, "--worker", directory.name], directory, OUTPUT, request)
                 if sup["classification"] in {"interrupted", "supervisor_failure", "rss_limit"} or (
@@ -475,7 +588,7 @@ def run(commit, *, resume=False, acknowledge_stop=False):
                     break
             progress, records = replay(OUTPUT)
             atomic_json(OUTPUT / "progress.json", progress)
-            atomic_json(OUTPUT / "report.json", qualification_report(binding, progress, records))
+            atomic_json(OUTPUT / "report.json", qualification_report(original, progress, records, transition))
         except KeyboardInterrupt:
             outcome = "operator_stop"
         finally:
@@ -495,9 +608,14 @@ def main():
     parser.add_argument("--commit")
     parser.add_argument("--authorize-execution", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--adopt-replay-fix", action="store_true",
+                        help="explicit one-time metadata-fix context transition for remaining calls")
     parser.add_argument("--acknowledge-stop", action="store_true")
     parser.add_argument("--worker", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.adopt_replay_fix and (not args.resume or not args.authorize_execution or
+                                args.worker or args.status or args.stop or args.preflight):
+        parser.error("replay-fix adoption requires --authorize-execution --resume")
     if args.worker:
         directory = (OUTPUT / args.worker).resolve()
         if directory.parent != OUTPUT.resolve() or not directory.name.startswith("call-"):
@@ -509,7 +627,8 @@ def main():
         print(json.dumps(result, indent=2, allow_nan=False))
     elif args.status:
         progress, records = replay(OUTPUT)
-        print(json.dumps(qualification_report(read(OUTPUT / "binding.json"), progress, records), indent=2, allow_nan=False))
+        binding = read(OUTPUT / "binding.json")
+        print(json.dumps(qualification_report(binding, progress, records, replay_fix_transition(OUTPUT, binding)), indent=2, allow_nan=False))
     elif args.stop:
         if not (OUTPUT / "binding.json").exists():
             parser.error("no qualification run to stop")
@@ -519,7 +638,8 @@ def main():
             parser.error("execution requires separate owner authorization and --authorize-execution")
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, interrupted)
-        print(json.dumps(run(args.commit, resume=args.resume, acknowledge_stop=args.acknowledge_stop), indent=2))
+        print(json.dumps(run(args.commit, resume=args.resume, acknowledge_stop=args.acknowledge_stop,
+                             adopt_replay_fix=args.adopt_replay_fix), indent=2))
 
 
 if __name__ == "__main__":

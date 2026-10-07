@@ -146,7 +146,8 @@ def test_prepared_start_must_match_capture_not_just_its_own_roundtrip():
 
 
 @pytest.mark.parametrize("solver_raises", [False, True])
-def test_no_primal_native_failure_is_rejected_and_replayable(tmp_path, monkeypatch, solver_raises):
+@pytest.mark.parametrize("use_source_transition", [False, True])
+def test_no_primal_native_failure_is_rejected_and_replayable(tmp_path, monkeypatch, solver_raises, use_source_transition):
     call = f.calls()[7]  # Multistep DC baseline; use two storage units below.
     kwargs = f.kwargs_for_call(call)
     kwargs["storage"].append(replace(kwargs["storage"][0], bus=5, device_id="battery5"))
@@ -164,14 +165,23 @@ def test_no_primal_native_failure_is_rejected_and_replayable(tmp_path, monkeypat
     binding["calls"][call.id-1] = frozen
     atomic_immutable_json(tmp_path / "binding.json", binding)
     directory = tmp_path / f"call-{call.id:03d}"
-    atomic_immutable_json(directory / "request.json", dict(call_id=call.id))
+    transition = None
+    if use_source_transition:
+        continued = dict(context, commit="b"*40)
+        transition = dict(first_call=2, context=continued)
+        atomic_immutable_json(tmp_path / "replay-fix-transition.json", transition)
+        monkeypatch.setattr(r, "replay_fix_transition", lambda *args: transition)
+    atomic_immutable_json(tmp_path / "protocol.json", dict(protocol=f.LIMITS))
+    atomic_immutable_json(directory / "request.json", r.request_for_call(tmp_path, call.id, 180., transition))
     atomic_immutable_json(directory / "launch.json", dict(pid=os.getpid()))
-    monkeypatch.setattr(r, "context", lambda: context)
+    monkeypatch.setattr(r, "context", lambda: r.binding_for_call(binding, transition, call.id)["context"])
     monkeypatch.setattr(r, "kwargs_for_call", lambda *args: kwargs)
     monkeypatch.setattr(r, "build_for_call", lambda *args: build)
     monkeypatch.setattr(r, "convergence_diagnostics", lambda build: dict(native_info=dict(status="PrimalInfeasible")))
     assert r.worker(tmp_path, directory) == "rejected"
-    record = r.independent_record(call, binding, directory, None)
+    record = r.independent_record(call, r.binding_for_call(binding, transition, call.id), directory, None)
+    assert record["execution_context"]["commit"] == ("b"*40 if use_source_transition else "a"*40)
+    assert r.read(tmp_path / "binding.json") == binding
     assert record["result"]["soc"] is None and record["boundary_soc_mwh"] is None
     assert not record["audit"]["accepted"] and record["native"]["status"] == "PrimalInfeasible"
 
@@ -362,7 +372,7 @@ def synthetic_runner(monkeypatch, root, outcomes):
     monkeypatch.setattr(r, "frozen_binding", lambda: binding)
     monkeypatch.setattr(r, "monitoring_preflight", lambda: {})
     replay = r.replay
-    monkeypatch.setattr(r, "replay", lambda root: replay(root, auditor=synthetic_auditor))
+    monkeypatch.setattr(r, "replay", lambda root, **kwargs: replay(root, auditor=synthetic_auditor, **kwargs))
     monkeypatch.setattr(r, "qualification_report", lambda *args: {})
     launched = []
     def supervise(command, directory, root, request):
@@ -393,6 +403,128 @@ def test_explicit_resume_consumes_interrupted_call_not_retry(tmp_path, monkeypat
     assert launched == [1]
     assert r.run("a"*40, resume=True)["outcome"] == "matrix_complete"
     assert launched == list(range(1, 26))
+
+
+def replay_fix_fixture(monkeypatch, root):
+    """Synthetic original/continued contexts and evidence; never solve."""
+    launched = synthetic_runner(monkeypatch, root, {})
+    continued = r.frozen_binding()
+    continued["context"].update(sources={p: "new" for p in r.REPLAY_FIX_SOURCES}, installed={"native": "same"})
+    continued["context"]["sources"]["src/cvxopf/problem.py"] = "unchanged"
+    original = deepcopy(continued)
+    original["context"]["commit"] = r.REPLAY_FIX_ORIGIN
+    for p in r.REPLAY_FIX_SOURCES:
+        original["context"]["sources"][p] = "old"
+    atomic_immutable_json(root / "binding.json", original)
+    atomic_immutable_json(root / "protocol.json", dict(protocol=f.LIMITS))
+    directory = append(root)
+    atomic_gzip_json(directory / "result.json.gz", dict(iteration=1))
+    atomic_immutable_json(directory / "phase.json", dict(phase="complete"))
+    invocation = root / "invocations" / r.REPLAY_FIX_INVOCATION
+    atomic_immutable_json(invocation / "start.json", dict(resume=False))
+    atomic_immutable_json(invocation / "finish.json", dict(outcome="failure"))
+    monkeypatch.setattr(r, "REPLAY_FIX_BINDING_SHA256", digest(root / "binding.json"))
+    return original, continued, launched
+
+
+def test_replay_fix_adoption_is_additive_and_remaining_calls_only(tmp_path, monkeypatch):
+    root = tmp_path / "qualification"
+    original, continued, launched = replay_fix_fixture(monkeypatch, root)
+    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    candidate = r.prepare_replay_fix_transition(root, original, continued)
+    assert not (root / "replay-fix-transition.json").exists()
+    assert before == {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    assert r.run("a"*40, resume=True, adopt_replay_fix=True)["outcome"] == "matrix_complete"
+    assert launched == list(range(2, 26))
+    assert all(p.read_bytes() == content for p, content in before.items())
+    transition = r.replay_fix_transition(root, original)
+    assert transition["preserved"] == candidate["preserved"]
+    assert transition["source_changes"] == candidate["source_changes"]
+    assert r.binding_for_call(original, transition, 1) == original
+    assert r.binding_for_call(original, transition, 2) == continued
+    request = r.read(root / "call-002/request.json")
+    assert request["source_transition"] == reference(root / "replay-fix-transition.json", root)
+    assert "source_transition" not in r.read(root / "call-001/request.json")
+    progress, _ = r.replay(root)
+    assert progress["worker_seconds"] == 50. and progress["accepted"] == 25
+    assert progress["attempts"][0]["execution_commit"] == r.REPLAY_FIX_ORIGIN
+    assert all(a["execution_commit"] == "a"*40 for a in progress["attempts"][1:])
+    transition_bytes = (root / "replay-fix-transition.json").read_bytes()
+    assert r.run("a"*40, resume=True)["outcome"] == "matrix_complete"
+    assert launched == list(range(2, 26))
+    assert (root / "replay-fix-transition.json").read_bytes() == transition_bytes
+    continued["context"]["commit"] = "b"*40
+    with pytest.raises(ValueError, match="adoption required"):
+        r.run("b"*40, resume=True, adopt_replay_fix=True)
+    assert launched == list(range(2, 26))
+    assert (root / "replay-fix-transition.json").read_bytes() == transition_bytes
+
+
+@pytest.mark.parametrize("change", ["production", "added_source", "removed_source", "installed", "protocol", "dirty", "same_commit", "wrong_origin", "no_changes"])
+def test_replay_fix_context_rejects_unrelated_changes(tmp_path, monkeypatch, change):
+    original, continued, _ = replay_fix_fixture(monkeypatch, tmp_path)
+    current = deepcopy(continued["context"])
+    if change == "production":
+        current["sources"]["src/cvxopf/problem.py"] = "changed"
+    elif change == "added_source":
+        current["sources"]["new.py"] = "added"
+    elif change == "removed_source":
+        current["sources"].pop("src/cvxopf/problem.py")
+    elif change == "installed":
+        current["installed"]["native"] = "changed"
+    elif change == "protocol":
+        current["protocol_sha256"] = "changed"
+    elif change == "dirty":
+        current["clean"] = False
+    elif change == "same_commit":
+        current["commit"] = r.REPLAY_FIX_ORIGIN
+    elif change == "wrong_origin":
+        original["context"]["commit"] = "b"*40
+    else:
+        current["sources"] = deepcopy(original["context"]["sources"])
+    with pytest.raises(ValueError, match="replay-fix"):
+        r.replay_fix_changes(original["context"], current)
+
+
+@pytest.mark.parametrize("field", ["calls", "limits", "raw_inputs"])
+def test_replay_fix_rejects_input_settings_and_budget_changes(tmp_path, monkeypatch, field):
+    original, continued, _ = replay_fix_fixture(monkeypatch, tmp_path)
+    changed = deepcopy(continued)
+    changed[field] = {"changed": True}
+    with pytest.raises(ValueError, match="frozen inputs/settings/budgets"):
+        r.prepare_replay_fix_transition(tmp_path, original, changed)
+
+
+@pytest.mark.parametrize("failure", ["unadopted", "unfinished", "extra_call", "tampered", "wrong_binding", "wrong_transition_hash"])
+def test_replay_fix_refuses_missing_or_changed_evidence(tmp_path, monkeypatch, failure):
+    original, continued, launched = replay_fix_fixture(monkeypatch, tmp_path)
+    if failure == "unadopted":
+        with pytest.raises(ValueError, match="adoption required"):
+            r.run("a"*40, resume=True)
+    elif failure == "unfinished":
+        (tmp_path / "call-001/supervision.json").rename(tmp_path / "saved-supervision.json")
+        with pytest.raises(ValueError, match="evidence set"):
+            r.prepare_replay_fix_transition(tmp_path, original, continued)
+    elif failure == "extra_call":
+        append(tmp_path, call_id=2)
+        with pytest.raises(ValueError, match="exactly"):
+            r.prepare_replay_fix_transition(tmp_path, original, continued)
+    elif failure == "wrong_binding":
+        monkeypatch.setattr(r, "REPLAY_FIX_BINDING_SHA256", "wrong")
+        with pytest.raises(ValueError, match="origin/protocol"):
+            r.prepare_replay_fix_transition(tmp_path, original, continued)
+    else:
+        candidate = r.prepare_replay_fix_transition(tmp_path, original, continued)
+        atomic_immutable_json(tmp_path / "replay-fix-transition.json", candidate)
+        if failure == "tampered":
+            (tmp_path / "call-001/worker.log").write_text("changed")
+            with pytest.raises(ValueError, match="preserved evidence"):
+                r.replay(tmp_path)
+        else:
+            append(tmp_path, call_id=2)  # Missing mandatory transition reference.
+            with pytest.raises(ValueError, match="request/call/budget"):
+                r.replay(tmp_path)
+    assert not launched
 
 
 def test_terminal_dispositions_do_not_count_unavailable_pairs(monkeypatch):
