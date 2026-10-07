@@ -51,7 +51,14 @@ class Coordinates:
         return replace(self.physical, prob=self.solver.prob)
 
 
-def transform(build, delta, scaled):
+def transform(build, delta, scaled, *, components=("b", "load_shed_fraction")):
+    """Substitute the selected cost coordinates; default preserves both maps.
+
+    Component selection supports prospective ablations. Historical four-arm
+    construction still uses the original Boolean selection and both components.
+    """
+    if not components or len(set(components)) != len(components) or not set(components) <= {"b", "load_shed_fraction"}:
+        raise ValueError("select cycling and/or shedding coordinates without duplicates")
     if not scaled:
         return Coordinates(build, build, {}, {})
     if build.temporal_assembly != "vectorized" or build.formulation != "ac":
@@ -63,8 +70,9 @@ def transform(build, delta, scaled):
     indices = np.asarray(build.data["sheddable_load_indices"], int)
     demand = np.asarray(build.data["load_p_source_mw"]).T[indices]
     voll = np.asarray(build.data["load_shedding_cost_per_mwh"])[indices, None]
-    scales = {"b": np.broadcast_to(delta * weights, build.variables["b"].shape).copy(),
-              "load_shed_fraction": delta * voll * demand}
+    candidates = {"b": np.broadcast_to(delta * weights, build.variables["b"].shape).copy(),
+                  "load_shed_fraction": delta * voll * demand}
+    scales = {name: candidates[name] for name in components}
     leaves, substitutions = {}, {}
     for name, scale in scales.items():
         original = build.variables[name]
@@ -77,8 +85,10 @@ def transform(build, delta, scaled):
         leaf.save_value(original.value * scale)
         leaves[name] = leaf
         substitutions[id(original)] = cp.multiply(1 / scale, leaf)
-    objective = (build.expressions["generator_cost"] + cp.sum(cp.abs(leaves["b"]))
-                 + cp.sum(leaves["load_shed_fraction"]))
+    objective = (build.expressions["generator_cost"]
+                 + (cp.sum(cp.abs(leaves["b"])) if "b" in leaves else build.expressions["storage_cost"])
+                 + (cp.sum(leaves["load_shed_fraction"]) if "load_shed_fraction" in leaves
+                    else build.expressions["load_shedding_cost"]))
     constraints = [c.tree_copy(substitutions) for c in build.prob.constraints]
     solver = replace(build, prob=cp.Problem(cp.Minimize(objective), constraints),
                      variables=build.variables | leaves)
@@ -138,10 +148,10 @@ def accounting(view, native, evidence, captured, common):
         raise ValueError("expected exactly one automatic cycling-cost auxiliary")
     item = auxiliaries[0]
     t = x[item["start"]:item["stop"]].reshape(shape, order="F")
-    weights = (np.ones(shape) if view.scales else
+    weights = (np.ones(shape) if "b" in view.scales else
                np.broadcast_to(view.physical.data["storage_delta"] *
                                np.asarray(view.physical.data["storage_aging_weight"])[:, None], shape))
-    actual = abs(view.leaves["b"].value if view.scales else view.physical.variables["b"].value)
+    actual = abs(view.leaves["b"].value if "b" in view.scales else view.physical.variables["b"].value)
     excess = float(np.sum(weights * (t-actual)))
     physical = float(sum(common["costs"].values()))
     canonical = float(native["obj_val"])
