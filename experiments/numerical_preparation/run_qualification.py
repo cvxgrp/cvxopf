@@ -236,6 +236,22 @@ def worker(root, directory):
     return record["classification"]
 
 
+def replayable_audit(audit):
+    """Compare physical evidence, not statistics from the original solve.
+
+    A replay build is deliberately unsolved, so it cannot reproduce the live
+    build's solver statistics. Keep those diagnostics in the hashed archive;
+    exclude only that field from comparison, without changing either audit.
+    Native convergence, physical residuals, and transformation checks still
+    require exact agreement.
+    """
+    relaxation = audit.get("relaxation")
+    if relaxation is None:
+        return audit
+    return dict(audit, relaxation={k: v for k, v in relaxation.items()
+                                  if k != "solver_statistics"})
+
+
 def independent_record(call, binding, directory, prepared):
     """Read manifests before independently recomputing original-unit gates."""
     completion = read(directory / "completion.json")
@@ -275,7 +291,7 @@ def independent_record(call, binding, directory, prepared):
         if serializable(expected) != record["physical_start"] or record["physical_start"] != read(directory / "start.json")["assigned_start"]:
             raise ValueError("physical start differs from deterministic input start")
     audit = serializable(audit_record(call, kwargs, build, record, captured))
-    if audit != record["audit"] or audit["accepted"] != (record["classification"] == "accepted"):
+    if replayable_audit(audit) != replayable_audit(record["audit"]) or audit["accepted"] != (record["classification"] == "accepted"):
         raise ValueError("independent audit/archive mismatch")
     expected_soc = (None if record["result"].get("soc") is None else
                    np.vstack(([s.initial_soc for s in kwargs["storage"]], record["result"]["soc"])))

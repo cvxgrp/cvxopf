@@ -279,6 +279,62 @@ def test_completed_manifest_tampering_rejected_before_audit(tmp_path):
         r.independent_record(f.calls()[0], binding, directory, None)
 
 
+@pytest.mark.parametrize("difference", [None, "residual", "solver_status", "native", "transformation", "accepted"])
+def test_solved_socp_archive_replays_without_solver_statistics_only(tmp_path, monkeypatch, difference):
+    kwargs, result, named = dc_fixture("singlenode_dc")
+    audit = dict(accepted=True, native_full_convergence=True, common=dict(passed=True),
+        transformation=dict(passed=True), relaxation=dict(solver_status="optimal",
+            residuals=dict(p_balance=dict(maximum=0., passed=True)),
+            solver_statistics=dict(solver_name="CLARABEL", num_iters=32,
+                                   solve_time=.75, extra_stats=None)))
+    replayed = deepcopy(audit)
+    replayed["relaxation"]["solver_statistics"] = None
+    if difference == "residual":
+        replayed["relaxation"]["residuals"]["p_balance"]["maximum"] = 1e-12
+    elif difference == "solver_status":
+        replayed["relaxation"]["solver_status"] = "optimal_inaccurate"
+    elif difference == "native":
+        replayed["native_full_convergence"] = False
+    elif difference == "transformation":
+        replayed["transformation"]["passed"] = False
+    elif difference == "accepted":
+        replayed["accepted"] = False
+    context = dict(clean=True, commit="a"*40)
+    frozen = dict(mathematical_input_sha256="same")
+    binding = dict(context=context, calls=[frozen] + [{} for _ in f.calls()[1:]])
+    directory = tmp_path / "call-001"
+    request = dict(call_id=1)
+    record = a.serializable(dict(iteration=1, request=request, classification="accepted", exception=None,
+        execution_context=context, mathematical_input_sha256="same", optimizer_calls=1,
+        result=result, named_costs=named, native=dict(status="Solved"), audit=audit,
+        boundary_soc_mwh=np.vstack(([s.initial_soc for s in kwargs["storage"]], result["soc"]))))
+    atomic_immutable_json(directory / "request.json", request)
+    atomic_gzip_json(directory / "result.json.gz", record)
+    atomic_immutable_json(directory / "completion.json", dict(classification="accepted", artifacts={
+        n: digest(directory / n) for n in ("request.json", "result.json.gz")}))
+    monkeypatch.setattr(r, "kwargs_for_call", lambda *args: kwargs)
+    monkeypatch.setattr(r, "call_binding", lambda *args: frozen)
+    monkeypatch.setattr(r, "build_for_call", lambda *args: None)
+    monkeypatch.setattr(r, "audit_record", lambda *args: replayed)
+    before = {p: p.read_bytes() for p in directory.iterdir()}
+    if difference is None:
+        retained = r.independent_record(f.calls()[0], binding, directory, None)
+        assert retained == record
+        assert retained["audit"]["relaxation"]["solver_statistics"] == audit["relaxation"]["solver_statistics"]
+    else:
+        with pytest.raises(ValueError, match="independent audit/archive mismatch"):
+            r.independent_record(f.calls()[0], binding, directory, None)
+    assert before == {p: p.read_bytes() for p in directory.iterdir()}
+    assert replayed["relaxation"]["solver_statistics"] is None
+
+
+def test_replay_comparison_keeps_non_socp_audits_and_other_diagnostics():
+    assert r.replayable_audit(dict(accepted=True, relaxation=None)) == dict(accepted=True, relaxation=None)
+    retained = dict(relaxation=dict(solver_statistics=dict(num_iters=32), other_diagnostic=1))
+    assert r.replayable_audit(retained) == dict(relaxation=dict(other_diagnostic=1))
+    assert retained["relaxation"]["solver_statistics"] == dict(num_iters=32)
+
+
 def test_run_refuses_dirty_wrong_commit_and_missing_monitoring(monkeypatch):
     binding = dict(context=dict(clean=False, commit="a"*40))
     monkeypatch.setattr(r, "frozen_binding", lambda: binding)
