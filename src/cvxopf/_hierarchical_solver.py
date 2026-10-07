@@ -1541,6 +1541,8 @@ def solve_hierarchical_opf(
     """
     if not isinstance(inputs, HierarchicalInputs):
         raise TypeError("inputs must be HierarchicalInputs")
+    from cvxopf._numerical_preparation import reject_hierarchical_preparation
+    reject_hierarchical_preparation(inputs.options.numerical_preparation)
     if not isinstance(policy, HierarchicalPolicy):
         raise TypeError("policy must be HierarchicalPolicy")
     if not isinstance(solve_config, HierarchicalSolveConfig):

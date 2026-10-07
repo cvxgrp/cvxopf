@@ -1,5 +1,11 @@
 # SOCP conditioning investigation transfer and integration plan
 
+Current status: preservation is recorded in
+[integration closeout](../experiments/socp_conditioning/INTEGRATION_CLOSEOUT.md),
+and production extraction follows the approved
+[numerical preparation API design](numerical-preparation-api.md). The inventory
+checkpoint below retains its original scope and checkout identities.
+
 Prepared 2026-10-06 for the owner’s `socp` checkout. This checkpoint inventories
 the isolated investigation and specifies its transfer, production extraction,
 qualification, and prospective E3 changes. Only this plan and its two inventory
@@ -187,7 +193,7 @@ framework.
 
 | Transformation | Exact extraction source | Production destinations and constraints |
 | --- | --- | --- |
-| Device-rating normalization | `diagnostic.py`: `unit_cones`, `nd_cones`, `storage_cones` | Device-owned helpers in `storage.py` and `nondispatchable.py`; selection through `_component_adapters.py`. SOCP uses normalized SOC constraints; AC uses smooth normalized squared inequalities. DC does not acquire artificial capability cones. |
+| Device-rating normalization | `diagnostic.py`: `unit_cones`, `nd_cones`, `storage_cones` | Device-owned helpers in `storage.py` and `nondispatchable.py`; selection through `_component_adapters.py`. SOCP preserves the direct `cp.SOC(...)` representation, not a norm epigraph; AC uses smooth normalized squared inequalities. DC does not acquire artificial capability cones. |
 | Exactly fixed boxes | `diagnostic.py`: `exact_box`, `generator_fixed_boxes`, `nd_fixed_boxes` | Shared typed box handling selected by generator/ND adapters. Exact equality only; no tolerance-based near-fixed elimination. Keep dimensions, engineering-unit public fields and component ownership explicit. |
 | Fixed-coordinate reduction | `fixed_substitution.py`: `Reduction` mathematics | Convex reduction/inverse maps: affine substitution, retained/free indices, objective offset and reconstructed equality multipliers. Support zero fixed coordinates as a no-op. Select coordinates through typed metadata, not experiment variable-name heuristics. |
 | Joint scaling | `joint_scaling.py`: `joint_scales`; `cone_scaling.py`: `transform`, `mapped_solution`, `verify_mapping` | Five simultaneous infinity-norm square-root passes on canonical `P,A,b,c`, cumulative positive scales clipped to `[1e-6,1e6]`, a common row scale per SOC, no global objective multiplier. Restore `x=D*xhat`, `s=shat/R`, `z=R*zhat` and offsets before public extraction. |

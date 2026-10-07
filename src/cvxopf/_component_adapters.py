@@ -31,7 +31,14 @@ from cvxopf._component_adapter import (
     VectorizedModelContribution,
 )
 from cvxopf._component_assembly import ComponentRequest
+from cvxopf._numerical_preparation import (
+    EXACT_BOX_FAMILIES,
+    OperatingSetContribution,
+    emit_exact_box,
+    prepared_leaf_bounds,
+)
 from cvxopf._temporal_assembly import (
+    PreparedBoxBounds,
     HorizonVariableSpec,
     TemporalClass,
     VariableBoxFamily,
@@ -89,7 +96,38 @@ def _leaf_bounds(
         upper_temporal_class=upper_temporal_class,
         variable_temporal_class=variable_temporal_class,
     )
+    if context.numerical_preparation.exact_fixed_boxes and family in EXACT_BOX_FAMILIES:
+        return {"bounds": prepared_leaf_bounds(box, exact=True)}
     return {"bounds": [box.lower, box.upper]}
+
+
+def _selected_box(
+    variable: cp.Variable, lower: np.ndarray, upper: np.ndarray,
+    context: StepContext | VectorizedContext, family: VariableBoxFamily,
+    *, upper_temporal_class: TemporalClass = "static",
+) -> OperatingSetContribution:
+    """Use the temporal authority once, including single-step numeric faces."""
+    vectorized = isinstance(context, VectorizedContext)
+    box = prepare_box_bounds(
+        lower, upper, native_shape=(variable.shape[0],),
+        horizon_steps=context.horizon_steps if isinstance(context, VectorizedContext) else 1,
+        lower_temporal_class="static", upper_temporal_class=upper_temporal_class,
+        variable_temporal_class="interval",
+    )
+    if not vectorized:
+        box = PreparedBoxBounds(box.lower[:, 0], box.upper[:, 0])
+    representation = (
+        box_representation_decision(context.formulation, family).representation
+        if vectorized else "explicit"
+    )
+    return emit_exact_box(variable, box, family, representation)
+
+
+def _capability_options(context: StepContext | VectorizedContext) -> dict[str, bool]:
+    """Keep disabled component invocations unchanged, including keyword shape."""
+    if not context.numerical_preparation.normalize_device_limits:
+        return {}
+    return {"normalize_limits": True, "use_soc": context.formulation == "socp"}
 
 
 def _time_major_values(
@@ -258,10 +296,10 @@ def _load_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     fraction = variables.get("load_shed_fraction")
     if fraction is None:
-        return ()
+        return OperatingSetContribution()
     parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
     indices = _array(prepared, "sheddable_load_indices")
     maximum_fraction = _array(prepared, "load_max_shed_fraction")[indices]
@@ -270,13 +308,13 @@ def _load_operating_constraints(
         if supports_reactive_power(context.formulation)
         else load.dc_operating_constraints
     )
-    return tuple(
+    return OperatingSetContribution(tuple(
         constraint_method(
             fraction,
             maximum_fraction,
             parameters.eligibility_mask[context.step, indices],
         )
-    )
+    ))
 
 
 def _load_step_cost(
@@ -592,7 +630,7 @@ def _generator_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     if supports_reactive_power(context.formulation):
         constraints = generator.ac_operating_constraints(
             variables["Pg"],
@@ -601,6 +639,7 @@ def _generator_operating_constraints(
             _array(prepared, "Pgmax"),
             _array(prepared, "Qgmin"),
             _array(prepared, "Qgmax"),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         )
     else:
         constraints = generator.dc_operating_constraints(
@@ -608,7 +647,14 @@ def _generator_operating_constraints(
             _array(prepared, "Pgmin"),
             _array(prepared, "Pgmax"),
         )
-    return tuple(constraints)
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["Pg"], _array(prepared, "Pgmin"), _array(prepared, "Pgmax"),
+            context, VariableBoxFamily.DISPATCHABLE_P,
+        )
+        other = tuple(constraints) if supports_reactive_power(context.formulation) else ()
+        return OperatingSetContribution(box.constraints + other, box.exact_boxes)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _generator_network_constraints(
@@ -699,6 +745,7 @@ def _generator_vectorized_assembly(
 ) -> VectorizedModelContribution:
     constraints: tuple[cp.Constraint, ...] = ()
     network: tuple[cp.Constraint, ...] = ()
+    box = OperatingSetContribution()
     if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = generator.ac_injections(
             list(units), variables["Pg"], variables["Qg"],
@@ -708,6 +755,7 @@ def _generator_vectorized_assembly(
             variables["Pg"], variables["Qg"],
             *[_array(prepared, key)[:, np.newaxis]
               for key in ("Pgmin", "Pgmax", "Qgmin", "Qgmax")],
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         ))
         network = _generator_network_constraints(units, prepared, variables, context)
     else:
@@ -715,6 +763,12 @@ def _generator_vectorized_assembly(
             list(units), variables["Pg"], dict(context.ext_to_int),
             incidence=_array(prepared, "Cg"),
         )
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["Pg"], _array(prepared, "Pgmin"), _array(prepared, "Pgmax"),
+            context, VariableBoxFamily.DISPATCHABLE_P,
+        )
+        constraints = box.constraints + constraints
     cost_rate = generator.horizon_cost_rate(
         _array(prepared, "gencost"),
         context.base_mva * variables["Pg"],
@@ -725,6 +779,7 @@ def _generator_vectorized_assembly(
         operating_constraints=constraints,
         network_constraints=network,
         stage_cost_rate=cost_rate,
+        exact_boxes=box.exact_boxes,
     )
 
 
@@ -874,7 +929,7 @@ def _nd_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     available = _array(prepared, "nd_available_mw")[context.step]
     if supports_reactive_power(context.formulation):
         constraints = nondispatchable.ac_operating_constraints(
@@ -882,6 +937,8 @@ def _nd_operating_constraints(
             variables["p_nd"],
             variables["q_nd"],
             available,
+            **_capability_options(context),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         )
     else:
         constraints = nondispatchable.dc_operating_constraints(
@@ -889,7 +946,16 @@ def _nd_operating_constraints(
             variables["p_nd"],
             available,
         )
-    return tuple(constraints)
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["p_nd"], np.zeros(len(units)), available,
+            context, VariableBoxFamily.NONDISPATCHABLE_REAL_POWER,
+        )
+        other = tuple(constraints) if supports_reactive_power(context.formulation) else (
+            variables["p_nd"] <= _array(prepared, "nd_apparent_power_rating"),
+        )
+        return OperatingSetContribution(box.constraints + other, box.exact_boxes)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _nd_horizon(
@@ -947,6 +1013,7 @@ def _nd_vectorized_assembly(
     context: VectorizedContext,
 ) -> VectorizedModelContribution:
     constraints: tuple[cp.Constraint, ...] = ()
+    box = OperatingSetContribution()
     if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = nondispatchable.ac_injections(
             list(units), variables["p_nd"], variables["q_nd"],
@@ -955,15 +1022,28 @@ def _nd_vectorized_assembly(
         constraints = tuple(nondispatchable.vectorized_ac_operating_constraints(
             list(units), variables["p_nd"], variables["q_nd"],
             _array(prepared, "nd_available_mw").T,
+            **_capability_options(context),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         ))
     else:
         p_pu, q_pu, scale = nondispatchable.dc_injections(
             list(units), variables["p_nd"], dict(context.ext_to_int),
             incidence=_array(prepared, "Cnd"),
         )
+    if context.numerical_preparation.exact_fixed_boxes:
+        available = _array(prepared, "nd_available_mw")
+        upper = available if supports_reactive_power(context.formulation) else np.minimum(
+            available, _array(prepared, "nd_apparent_power_rating")[None, :]
+        )
+        box = _selected_box(
+            variables["p_nd"], np.zeros(len(units)), upper, context,
+            VariableBoxFamily.NONDISPATCHABLE_REAL_POWER, upper_temporal_class="interval",
+        )
+        constraints = box.constraints + constraints
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=constraints,
+        exact_boxes=box.exact_boxes,
     )
 
 
@@ -1062,13 +1142,14 @@ def _storage_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     if supports_reactive_power(context.formulation):
         constraints = storage.ac_operating_constraints(
             list(units),
             variables["b"],
             variables["b_q"],
             variables["soc"],
+            **_capability_options(context),
         )
     else:
         constraints = storage.dc_operating_constraints(
@@ -1076,7 +1157,7 @@ def _storage_operating_constraints(
             variables["b"],
             variables["soc"],
         )
-    return tuple(constraints)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _storage_step_cost(
@@ -1164,6 +1245,7 @@ def _storage_vectorized_assembly(
         )
         operating = tuple(storage.vectorized_ac_operating_constraints(
             list(units), power, variables["b_q"], soc,
+            **_capability_options(context),
         ))
     else:
         p_pu, q_pu, scale = storage.dc_injections(
@@ -1352,7 +1434,7 @@ def _hvdc_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     constraint_method = (
         hvdc.ac_operating_constraints
         if supports_reactive_power(context.formulation)
@@ -1366,7 +1448,7 @@ def _hvdc_operating_constraints(
         _array(prepared, "hvdc_p_max_mw")[context.step],
         context.step,
     )
-    return tuple(constraints)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _hvdc_step_cost(

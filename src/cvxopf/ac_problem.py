@@ -478,6 +478,7 @@ def _build_ac_single(
         network_state=ACNetworkState(
             v, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset
         ),
+        numerical_preparation=options.numerical_preparation,
     )
 
     components: PreparedComponents = d["_components"]
@@ -574,6 +575,8 @@ def _build_ac_single(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=step_aggregate.exact_boxes,
     )
 
 
@@ -615,6 +618,7 @@ def _build_ac_vectorized(
     context = VectorizedContext(
         "ac", T, delta, d["baseMVA"], d["_component_ext_to_int"],
         ACNetworkState(voltage, tuple(np.r_[[d["ref"]], d["pv"]]), options.enforce_vset),
+        numerical_preparation=options.numerical_preparation,
     )
     contributions = assemble_component_vectorized(components, context)
     aggregate = aggregate_vectorized_contributions(contributions)
@@ -705,6 +709,8 @@ def _build_ac_vectorized(
             network_projections,
             vectorized_component_result_projections(aggregate, integrated_component_costs=component_costs),
         ),
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=aggregate.model.exact_boxes,
     )
 
 
@@ -810,6 +816,7 @@ def _build_ac_multistep(
                 tuple(np.r_[[d["ref"]], d["pv"]]),
                 options.enforce_vset,
             ),
+            numerical_preparation=options.numerical_preparation,
         )
 
         step_components = assemble_component_step(
@@ -931,4 +938,6 @@ def _build_ac_multistep(
         prob=prob, variables=variables, data=data,
         formulation="ac", is_convex=False,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=tuple(box for step in step_aggregates for box in step.exact_boxes),
     )

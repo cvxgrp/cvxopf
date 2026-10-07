@@ -343,6 +343,7 @@ def _build_singlenode_dc_single(
         d["baseMVA"],
         d["collapsed_ext_to_int"],
         DCNetworkState(),
+        numerical_preparation=options.numerical_preparation,
     )
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
@@ -418,6 +419,8 @@ def _build_singlenode_dc_single(
         formulation="singlenode_dc",
         is_convex=True,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=step_aggregate.exact_boxes,
     )
 
 
@@ -469,6 +472,7 @@ def _build_singlenode_dc_vectorized(
     context = VectorizedContext(
         "singlenode_dc", T, delta, d["baseMVA"],
         d["collapsed_ext_to_int"], DCNetworkState(),
+        numerical_preparation=options.numerical_preparation,
     )
     contributions = assemble_component_vectorized(components, context)
     aggregate = aggregate_vectorized_contributions(contributions)
@@ -532,6 +536,8 @@ def _build_singlenode_dc_vectorized(
         result_projections=merge_result_projection_registries(
             network_projections, component_projections,
         ),
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=aggregate.model.exact_boxes,
     )
 
 
@@ -634,6 +640,7 @@ def _build_singlenode_dc_multistep(
             d["baseMVA"],
             d["collapsed_ext_to_int"],
             DCNetworkState(),
+            numerical_preparation=options.numerical_preparation,
         )
         step_components = assemble_component_step(
             components, step_context, variable_suffix=f"_{t}"
@@ -723,4 +730,6 @@ def _build_singlenode_dc_multistep(
         formulation="singlenode_dc",
         is_convex=True,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=tuple(box for step in step_aggregates for box in step.exact_boxes),
     )

@@ -1,6 +1,7 @@
 """Tests for the private M16+ typed component contracts."""
 
 import cvxpy as cp
+from cvxopf._numerical_preparation import OperatingSetContribution
 import pytest
 
 from cvxopf._component_adapter import (
@@ -38,7 +39,7 @@ def _injections(units, prepared, variables, context):
 
 
 def _constraints(units, prepared, variables, context):
-    return (variables["p"] >= 0,)
+    return OperatingSetContribution((variables["p"] >= 0,))
 
 
 def _cost(units, prepared, variables, context):

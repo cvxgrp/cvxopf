@@ -2,9 +2,34 @@
 
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
-required API/protocol review checkpoint, not an implementation or execution
-record. Production changes and numerical calls require owner approval after
-review of this design and the [qualification protocol](../experiments/numerical_preparation/QUALIFICATION_PROTOCOL.md).
+approved API/protocol design with assembly implementation progress recorded
+below. Qualification and execution remain separately authorized gates under the
+[qualification protocol](../experiments/numerical_preparation/QUALIFICATION_PROTOCOL.md).
+
+## Assembly implementation checkpoint
+
+The first production implementation checkpoint implements the immutable public
+policy, formulation validation, component-owned normalized device limits,
+explicit exact-box identities, and their propagation through all standalone
+assembly modes. Public variables and result projections remain intact. The
+disabled solver path remains unchanged; **every enabled preparation policy
+raises `NotImplementedError` from `OPFBuild.solve()` before a numerical call**.
+Direct `build.prob.solve()` bypasses that wrapper and is not a supported
+prepared execution path. This is an assembly foundation, not completed
+numerical preparation or qualification.
+
+The next implementation checkpoint must add the fixed-coordinate map, both
+build-local solver bridges, start and restoration evidence, failure cleanup,
+and their production tests before removing this guard. The bounded
+qualification matrix, prospective E3 changes, and execution remain subsequent
+gates. Prepared hierarchy remains rejected before any layer build, including
+when mutable hierarchical options have changed after input construction;
+its layer-specific policy work remains in Milestone 21. The existing streaming
+hierarchy fingerprint omits only the new disabled field to preserve frozen
+physical-input hashes and rejects enabled preparation rather than silently
+hashing it as baseline. Preserved investigation code, protocols, reports,
+inventories, raw evidence, and original E3 are unchanged. The isolated
+investigation checkout remains retained.
 
 ## Public selection and unchanged baseline
 
@@ -96,7 +121,9 @@ initially. Other existing Parameters may change between solves: recanonicalize
 and construct fresh maps/evidence for every solve, with no prepared solver cache.
 
 Normalize capability sets in their component modules, selected by adapter
-context. SOCP uses `norm([p/S, q/S]) <= 1`; AC uses
+context. SOCP uses direct `cp.SOC(ones, [p/S, q/S], axis=0)` constraints
+without norm epigraph variables, preserving the investigated canonical cone
+representation; AC uses
 `square(p/S) + square(q/S) <= 1`. Positive finite `S` remains validated. All
 device constraints remain DCP-valid; only the AC network is DNLP. `storage.py`
 continues to import no `cvxopf` modules: helpers receive a plain boolean rather

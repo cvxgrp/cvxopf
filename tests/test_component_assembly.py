@@ -8,6 +8,7 @@ from typing import Mapping, Sequence
 from unittest.mock import Mock
 
 import cvxpy as cp
+from cvxopf._numerical_preparation import OperatingSetContribution
 import numpy as np
 import pytest
 
@@ -127,10 +128,10 @@ def _toy_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     p_max = prepared["toy_p_max_mw"]
     assert isinstance(p_max, np.ndarray)
-    return (variables["p_toy"] >= 0, variables["p_toy"] <= p_max)
+    return OperatingSetContribution((variables["p_toy"] >= 0, variables["p_toy"] <= p_max))
 
 
 def _toy_network_constraints(

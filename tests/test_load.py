@@ -467,7 +467,9 @@ def test_empty_load_adapter_functions_retain_complete_empty_contract(formulation
     injection.inv_base_mva.value = 0.01
     np.testing.assert_array_equal(injection.p_pu.value, np.zeros(preparation.nb))
     assert (injection.q_pu is not None) is (formulation == "ac")
-    assert binding.operating_constraints((), prepared, {}, step) == ()
+    operating = binding.operating_constraints((), prepared, {}, step)
+    assert operating.constraints == ()
+    assert operating.exact_boxes == ()
     expressions = binding.step_expressions((), prepared, {}, step)
     assert all(expression.shape == (0,) for expression in expressions.values())
     horizon = binding.horizon(

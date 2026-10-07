@@ -22,6 +22,13 @@ from typing import (
 
 import cvxpy as cp
 
+from cvxopf._numerical_preparation import (
+    ExactBoxBinding,
+    NumericalPreparation,
+    OperatingSetContribution,
+    validate_preparation,
+)
+
 from cvxopf._temporal_assembly import Formulation as Formulation
 from cvxopf._temporal_assembly import HorizonVariableSpec
 
@@ -139,6 +146,7 @@ class StepContext:
     base_mva: float
     ext_to_int: Mapping[int, int]
     network_state: NetworkState
+    numerical_preparation: NumericalPreparation = NumericalPreparation()
 
     def __post_init__(self) -> None:
         if not isinstance(self.step, int) or isinstance(self.step, bool):
@@ -147,6 +155,7 @@ class StepContext:
             raise ValueError("step must be a nonnegative integer")
         _validate_positive_real("base_mva", self.base_mva)
         _validate_network_state(self.formulation, self.network_state)
+        validate_preparation(self.numerical_preparation, self.formulation)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -178,6 +187,7 @@ class VectorizedContext:
     base_mva: float
     ext_to_int: Mapping[int, int]
     network_state: NetworkState
+    numerical_preparation: NumericalPreparation = NumericalPreparation()
 
     def __post_init__(self) -> None:
         if (
@@ -189,6 +199,7 @@ class VectorizedContext:
         _validate_positive_real("delta", self.delta)
         _validate_positive_real("base_mva", self.base_mva)
         _validate_network_state(self.formulation, self.network_state)
+        validate_preparation(self.numerical_preparation, self.formulation)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -249,6 +260,7 @@ class StepContribution:
     cost: cp.Expression | None = None
     cost_expression_name: str | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
+    exact_boxes: tuple[ExactBoxBinding, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables", _readonly(self.variables))
@@ -263,6 +275,7 @@ class StepContribution:
             tuple(self.network_constraints),
         )
         object.__setattr__(self, "expressions", _readonly(self.expressions))
+        object.__setattr__(self, "exact_boxes", tuple(self.exact_boxes))
 
 
 @dataclass(frozen=True)
@@ -288,6 +301,7 @@ class VectorizedModelContribution:
     stage_cost_rate: cp.Expression | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
     horizon: HorizonContribution = field(default_factory=HorizonContribution)
+    exact_boxes: tuple[ExactBoxBinding, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -295,6 +309,7 @@ class VectorizedModelContribution:
         )
         object.__setattr__(self, "network_constraints", tuple(self.network_constraints))
         object.__setattr__(self, "expressions", _readonly(self.expressions))
+        object.__setattr__(self, "exact_boxes", tuple(self.exact_boxes))
 
 
 @dataclass(frozen=True)
@@ -366,7 +381,7 @@ class InjectionHook(Protocol[UnitT_contra]):
 
 
 class ConstraintHook(Protocol[UnitT_contra]):
-    """Return operating or device-to-network constraints for one step."""
+    """Return device-to-network constraints for one step."""
 
     def __call__(
         self,
@@ -375,6 +390,18 @@ class ConstraintHook(Protocol[UnitT_contra]):
         variables: Mapping[str, cp.Variable],
         context: StepContext,
     ) -> tuple[cp.Constraint, ...]: ...
+
+
+class OperatingSetHook(Protocol[UnitT_contra]):
+    """Return typed operating constraints and fixed-box provenance."""
+
+    def __call__(
+        self,
+        units: Sequence[UnitT_contra],
+        prepared: Mapping[str, object],
+        variables: Mapping[str, cp.Variable],
+        context: StepContext,
+    ) -> OperatingSetContribution: ...
 
 
 class StepCostHook(Protocol[UnitT_contra]):
@@ -443,7 +470,7 @@ class FormulationAdapter(Generic[UnitT]):
     capability: FormulationCapability
     variable_specs: VariableSpecHook[UnitT] | None = None
     injections: InjectionHook[UnitT] | None = None
-    operating_constraints: ConstraintHook[UnitT] | None = None
+    operating_constraints: OperatingSetHook[UnitT] | None = None
     network_constraints: ConstraintHook[UnitT] | None = None
     step_cost: StepCostHook[UnitT] | None = None
     step_expressions: StepExpressionHook[UnitT] | None = None

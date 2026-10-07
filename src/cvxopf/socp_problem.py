@@ -137,7 +137,7 @@ def _build_socp_vectorized(
                  load_participates_when_empty=load_participates_when_empty,
                  nd_inputs=nd_inputs, hvdc_inputs=hvdc_inputs)
     variables, network, constraints, state = _network_block(d, options, T)
-    context = VectorizedContext("socp", T, delta, d["baseMVA"], d["_component_ext_to_int"], state)
+    context = VectorizedContext("socp", T, delta, d["baseMVA"], d["_component_ext_to_int"], state, numerical_preparation=options.numerical_preparation)
     contributions = assemble_component_vectorized(d["_components"], context)
     aggregate = aggregate_vectorized_contributions(contributions)
     model = aggregate.model
@@ -166,6 +166,8 @@ def _build_socp_vectorized(
         temporal_assembly="vectorized",
         result_projections=merge_result_projection_registries(
             projections, vectorized_component_result_projections(aggregate, component_costs)),
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=aggregate.model.exact_boxes,
     )
 
 
@@ -176,7 +178,7 @@ def _build_steps(d, options, delta, T, multistep, coupling_constraints):
     steps, aggregates, blocks, constraints = [], [], [], []
     for t in range(T):
         variables, expressions, network_constraints, state = _network_block(d, options, suffix=f"_{t}")
-        context = StepContext("socp", t, d["baseMVA"], d["_component_ext_to_int"], state)
+        context = StepContext("socp", t, d["baseMVA"], d["_component_ext_to_int"], state, numerical_preparation=options.numerical_preparation)
         contribution = assemble_component_step(d["_components"], context, variable_suffix=f"_{t}")
         aggregate = aggregate_step_contributions(contribution)
         steps.append(contribution)
@@ -208,6 +210,8 @@ def _build_steps(d, options, delta, T, multistep, coupling_constraints):
         variables=publish_component_variables(steps, variables, multistep=multistep),
         expressions=publish_component_expressions(aggregates, horizon, {**expressions, **costs}, multistep=multistep),
         data=_metadata(d, options, delta, T, multistep, coupling_constraints),
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=tuple(box for step in aggregates for box in step.exact_boxes),
     )
 
 

@@ -49,6 +49,9 @@ from cvxopf._component_adapters import (
 from cvxopf._temporal_assembly import ResultProjectionRegistry
 from cvxopf.data import align_device_dataframe, load_timeseries_from_dataframe
 from cvxopf._cvxpy_dispatch import sparse_dispatch_policy, with_build_dispatch_policy
+from cvxopf._numerical_preparation import (
+    ExactBoxBinding, NumericalPreparation, validate_preparation,
+)
 
 
 TemporalAssembly = Literal["stepwise", "vectorized"]
@@ -115,12 +118,17 @@ class OPFOptions:
         and temporal_assembly: time-vectorized builds still batch across time.
         Does not change variable layouts, network physics, or branch-terminal
         constraints. AC only.
+    numerical_preparation : NumericalPreparation
+        Immutable opt-in representation policy, disabled by default. Snapshot
+        at build time; changing OPFOptions requires rebuilding. Enabled solves
+        are not available at this assembly-only implementation checkpoint.
 
     Notes
     -----
-    None of the above fields affect the 'singlenode_dc' formulation.
-    OPFOptions is accepted for API consistency but all fields are ignored
-    when formulation='singlenode_dc'.
+    Only numerical_preparation affects the 'singlenode_dc' formulation.
+    Preparation is an immutable build-time choice, disabled by default.
+    Enabled graphs can currently be inspected but not solved: the local solver
+    bridges and restoration evidence are a subsequent implementation checkpoint.
     """
 
     enforce_vset: bool = False
@@ -131,6 +139,7 @@ class OPFOptions:
     branch_limit_sentinel: float = 1e6
     sparse_pq: bool = True
     vectorize_pq: bool = True
+    numerical_preparation: NumericalPreparation = field(default_factory=NumericalPreparation)
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +279,13 @@ class OPFBuild:
         default_factory=ResultProjectionRegistry
     )
     automatic_sparse_dispatch: bool = False
+    _numerical_preparation: NumericalPreparation = field(default_factory=NumericalPreparation, repr=False)
+    _exact_boxes: tuple[ExactBoxBinding, ...] = field(default=(), repr=False)
+
+    @property
+    def numerical_preparation(self) -> NumericalPreparation:
+        """Build-time snapshot; changing options requires rebuilding the graph."""
+        return self._numerical_preparation
 
     @property
     def canonicalization_backend(self) -> CanonicalizationBackend:
@@ -303,6 +319,11 @@ class OPFBuild:
         build.solve()                  # uses formulation defaults
         build.solve(verbose=True)      # show solver output
         """
+        if self.numerical_preparation.enabled:
+            raise NotImplementedError(
+                "prepared solving awaits solver-coordinate bridges and restoration; "
+                "rebuild with disabled NumericalPreparation to use baseline solving"
+            )
         if self.is_convex:
             kwargs.setdefault("solver", cp.CLARABEL)
             kwargs.setdefault("nlp", False)
@@ -577,6 +598,7 @@ def build_opf(
         raise ValueError(
             f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
         )
+    validate_preparation(options.numerical_preparation, formulation)
     normalized_case = (
         _case_with_generators(case, generators) if generators is not None else case
     )
@@ -731,6 +753,7 @@ def build_opf_multistep(
             "registered vectorized formulations"
         )
 
+    validate_preparation(options.numerical_preparation, formulation)
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(
         case,
         df_P,

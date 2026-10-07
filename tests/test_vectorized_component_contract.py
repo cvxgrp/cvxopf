@@ -5,6 +5,7 @@ from typing import Mapping, Sequence
 from unittest.mock import Mock
 
 import cvxpy as cp
+from cvxopf._numerical_preparation import OperatingSetContribution
 import numpy as np
 import pytest
 
@@ -60,7 +61,7 @@ def _step_injection(units, prepared, variables, context):
 
 
 def _step_constraints(units, prepared, variables, context):
-    return (variables["p"] >= 0,)
+    return OperatingSetContribution((variables["p"] >= 0,))
 
 
 def _step_horizon(units, prepared, variables, context):

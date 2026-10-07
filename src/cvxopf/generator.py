@@ -567,13 +567,14 @@ def ac_operating_constraints(
     Pgmax,
     Qgmin,
     Qgmax,
+    *,
+    include_real_box: bool = True,
 ) -> list:
     """
     AC per-generator real/reactive power box (affine, DCP).
     """
-    return [
-        Pg >= Pgmin,
-        Pg <= Pgmax,
+    real_box = [Pg >= Pgmin, Pg <= Pgmax] if include_real_box else []
+    return real_box + [
         Qg >= Qgmin,
         Qg <= Qgmax,
     ]
