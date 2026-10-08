@@ -34,13 +34,27 @@ case9-PWL, case14 and case57 fixtures. Fixture tolerances and historical
 qualification evidence remain unchanged. Regression testing does not claim
 new Tracy qualification or authorization to resume E3/Stage D.
 
-The next production-path checkpoint is prepared in
+The production-path checkpoint is described in
 [the Tracy verification protocol](../experiments/ac_production_verification/PROTOCOL.md):
 four matched pairs (ordinary T=3, forced-shedding T=3/T=6/T=24) through public
 `build.solve()`, with the cost-coordinate flag off/on. It preserves cycling
 warnings, independently replays native/physical accounting and restoration,
-and uses fresh supervised evidence. Numerical execution requires review,
-commit and separate owner approval; it has not been launched.
+and uses fresh supervised evidence. The approved run at `31f8fb0013a9a19109a0294752c50037d075eed8`
+finalized all eight attempts: seven accepted and the cost-coordinate forced
+T=24 arm stopped at the 180-second wall limit. Earlier experimental qualification
+of that same physical case converged; this timeout does not establish infeasibility
+or invalidate the earlier solution.
+
+The owner approved preparation of the
+[two-arm objective-assembly diagnostic](../experiments/ac_objective_assembly/PROTOCOL.md)
+to investigate the discrepancy. Both arms retain the production coordinate map
+and public solve path; only experiment-local objective assembly changes.
+The comparison changes summation grouping and its induced canonical ordering
+together, so it cannot separate their effects. Inputs, starts, physics, solver
+settings and acceptance checks remain matched. Historical evidence stays
+unchanged. The diagnostic requires review, a clean committed checkpoint and
+separate numerical-execution approval; it has not been launched. E3 and Stage D
+remain held, and no production defaults or hierarchy policy change.
 
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
