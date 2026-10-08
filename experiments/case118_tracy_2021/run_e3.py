@@ -369,19 +369,23 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, 
     model.verified_inputs()  # pinned owner data; no silent fallback
     if prepared:
         model.monitoring()
+    expected_binding = dict(context=current, study=study)
+    # Exercise the archive's strict JSON contract even in non-writing preflight,
+    # before mkdir or any durable run artifacts can leave a partial launch.
+    json.dumps(expected_binding, sort_keys=True, separators=(",", ":"), allow_nan=False)
     if preflight:
         if resume:
             binding = read(root / "binding.json")
-            if binding != dict(context=current, study=study):
+            if binding != expected_binding:
                 raise ValueError("resume binding differs")
         return dict(classification="preflight_only", study=study, context=current)
     if not resume:
         root.mkdir(parents=True, exist_ok=False)
-        atomic_immutable_json(root / "binding.json", dict(context=current, study=study))
+        atomic_immutable_json(root / "binding.json", expected_binding)
         queue_protocol(root, model.DEFAULT_PROTOCOL, "initial reviewed protocol")
     with (root / "supervisor.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if read(root / "binding.json") != dict(context=current, study=study):
+        if read(root / "binding.json") != expected_binding:
             raise ValueError("resume binding differs; no implicit source transition")
         reconcile(root)
         if acknowledge_stop:

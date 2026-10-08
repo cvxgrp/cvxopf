@@ -103,9 +103,11 @@ def context():
         for key, setting in solver_options(formulation, DEFAULT_PROTOCOL).items():
             setattr(settings, key, setting)
         settings.verbose = True
-        value["resolved_clarabel_settings"][formulation] = {
+        # CLARABEL's unlimited time_limit is +inf. Preserve it explicitly in
+        # strict JSON provenance, without changing the native solver setting.
+        value["resolved_clarabel_settings"][formulation] = serializable({
             key: getattr(settings, key) for key in dir(settings)
-            if not key.startswith("_") and not callable(getattr(settings, key))}
+            if not key.startswith("_") and not callable(getattr(settings, key))})
     value["native_extension_sha256"] = {}
     for package in ("clarabel", "cyipopt", "sparsediffpy"):
         installed = distribution(package)

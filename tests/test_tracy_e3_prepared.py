@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import fields, replace
+import json
 import os
 
 import clarabel
@@ -223,6 +224,51 @@ def test_prepared_preflight_is_non_solving_and_creates_no_artifacts(tmp_path, mo
     monkeypatch.setattr(runner, "_child_rss_mib", lambda pid: 1.)
     output = tmp_path / "fresh"
     assert runner.run(output, "a"*40, prepared=True, preflight=True)["classification"] == "preflight_only"
+    assert not output.exists()
+
+
+def test_real_prepared_context_round_trips_strict_binding_json(tmp_path, monkeypatch):
+    # Use installed CLARABEL settings and native provenance, but no owner data
+    # or clean-checkout prerequisite for this non-solving serialization test.
+    monkeypatch.setattr(e3, "context", lambda: dict(clean=True, commit="a"*40,
+        code_sha256={}, thread_environment={k: "1" for k in runner.THREAD_KEYS}))
+    current = model.context()
+    for formulation in ("socp", "lossy_dc", "singlenode_dc"):
+        settings = current["resolved_clarabel_settings"][formulation]
+        assert settings["time_limit"] == {"nonfinite": "inf"}
+        assert settings["tol_gap_rel"] == model.solver_options(
+            formulation, model.DEFAULT_PROTOCOL)["tol_gap_rel"]
+    # The archive representation must not alter the native unlimited setting.
+    assert clarabel.DefaultSettings().time_limit == float("inf")
+    binding = dict(context=current, study=dict(cohort="prepared", arms=[]))
+    assert json.loads(json.dumps(binding, allow_nan=False)) == binding
+    atomic_immutable_json(tmp_path / "binding.json", binding)
+    retained = read(tmp_path / "binding.json")
+    assert retained == binding
+    model.verify_context(retained["context"])
+    monkeypatch.setattr(model, "specification", lambda: binding["study"])
+    monkeypatch.setattr(model, "verified_inputs", lambda: None)
+    monkeypatch.setattr(model, "monitoring", lambda: {})
+    monkeypatch.setattr(runner, "_child_rss_mib", lambda pid: 1.)
+    output = tmp_path / "fresh"
+    assert runner.run(output, "a"*40, prepared=True, preflight=True)["classification"] == "preflight_only"
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("preflight", [False, True])
+@pytest.mark.parametrize("location", ["context", "study"])
+def test_binding_serialization_failure_precedes_run_artifacts(tmp_path, monkeypatch, preflight, location):
+    current = dict(clean=True, commit="a"*40, thread_environment={k: "1" for k in runner.THREAD_KEYS})
+    study = dict(cohort="prepared", arms=[])
+    (current if location == "context" else study)["invalid"] = float("inf")
+    monkeypatch.setattr(model, "context", lambda: current)
+    monkeypatch.setattr(model, "specification", lambda: study)
+    monkeypatch.setattr(model, "verified_inputs", lambda: None)
+    monkeypatch.setattr(model, "monitoring", lambda: {})
+    monkeypatch.setattr(runner, "_child_rss_mib", lambda pid: 1.)
+    output = tmp_path / "fresh"
+    with pytest.raises(ValueError, match="JSON compliant"):
+        runner.run(output, "a"*40, prepared=True, preflight=preflight)
     assert not output.exists()
 
 
