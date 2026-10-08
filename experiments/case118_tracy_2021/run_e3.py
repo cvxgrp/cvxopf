@@ -43,6 +43,9 @@ def cohort_for(root):
     if cohort == "prepared":
         from . import e3_prepared
         return e3_prepared
+    if cohort == "prepared_plus":
+        from . import e3_plus
+        return e3_plus
     if cohort is not None:
         raise ValueError("unknown E3 cohort")
     return model
@@ -133,7 +136,7 @@ def replay(root, auditor=None, *, partial=False):
     """
     binding = read(root / "binding.json")
     model = cohort_for(root)
-    prepared_cohort = binding["study"].get("cohort") == "prepared"
+    prepared_cohort = binding["study"].get("cohort") in {"prepared", "prepared_plus"}
     study = binding["study"]
     # Snapshot directory identities before potentially slow independent audits:
     # status must not combine an earlier pending arm with newly launched arms.
@@ -353,10 +356,16 @@ def supervise(command, directory, root, request, *, rss_reader=_child_rss_mib):
     return record
 
 
-def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, prepared=False):
+def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, prepared=False, plus=False):
     model = globals()["model"]
+    if prepared and plus:
+        raise ValueError("select only one E3 cohort")
     if prepared:
         from . import e3_prepared as model
+    if plus:
+        from . import e3_plus as model
+    prepared_cohort = prepared or plus
+    if prepared_cohort:
         model.validate_output(root)
     current = model.context()
     if not current["clean"] or current["commit"] != commit or len(commit) != 40:
@@ -367,7 +376,7 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, 
         raise RuntimeError("preflight RSS/ps access unavailable")
     study = model.specification()
     model.verified_inputs()  # pinned owner data; no silent fallback
-    if prepared:
+    if prepared_cohort:
         model.monitoring()
     expected_binding = dict(context=current, study=study)
     # Exercise the archive's strict JSON contract even in non-writing preflight,
@@ -413,7 +422,7 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, 
                 ref = read(root / "control.json")["protocol"]
                 protocol = protocol_record(root, ref, current)["protocol"]
                 if progress["finished"]:
-                    outcome = "complete" if progress["accepted_arms"] == 20 else "complete_with_unresolved_arms"
+                    outcome = "complete" if progress["accepted_arms"] == len(study["arms"]) else "complete_with_unresolved_arms"
                     break
                 if (root / "STOP").exists():
                     outcome = "operator_stop"
@@ -425,7 +434,7 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, 
                 item = progress["next"]
                 request = request_for(item["arm"], item["slot"], item["causal_source"],
                                       item["target_free_source"], ref, min(protocol["wall_seconds"], remaining), cohort=model)
-                telemetry = model.monitoring() if prepared else None
+                telemetry = model.monitoring() if prepared_cohort else None
                 arm_dir = root / f"arm-{item['arm']['id']:03d}"
                 arm_dir.mkdir(exist_ok=True)
                 directory = arm_dir / f"attempt-{len(list(arm_dir.glob('attempt-*'))):03d}"
@@ -460,7 +469,9 @@ def interrupted(signum, frame):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--prepared", action="store_true", help="fresh prepared E3 cohort; never resumes historical E3")
+    cohorts = parser.add_mutually_exclusive_group()
+    cohorts.add_argument("--prepared", action="store_true", help="fresh prepared E3 cohort; never resumes historical E3")
+    cohorts.add_argument("--plus", action="store_true", help="separate four-arm forced-shedding E3+ cohort")
     parser.add_argument("--commit")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--acknowledge-stop", action="store_true")
@@ -473,10 +484,14 @@ def main():
     parser.add_argument("--show-protocol", action="store_true")
     parser.add_argument("--stop", action="store_true")
     args = parser.parse_args()
-    root = (args.output or HERE / ("results/e3_prepared" if args.prepared else "results/e3")).resolve()
+    default_output = "results/e3_plus" if args.plus else "results/e3_prepared" if args.prepared else "results/e3"
+    root = (args.output or HERE / default_output).resolve()
     selected = model
     if args.prepared:
         from . import e3_prepared as selected
+    if args.plus:
+        from . import e3_plus as selected
+    if args.prepared or args.plus:
         selected.validate_output(root)
     if args.show_protocol:
         print(json.dumps(selected.DEFAULT_PROTOCOL, indent=2))
@@ -502,7 +517,8 @@ def main():
     if args.acknowledge_stop and not args.resume:
         parser.error("--acknowledge-stop requires --resume")
     record = run(root, args.commit, resume=args.resume, preflight=args.preflight,
-                 acknowledge_stop=args.acknowledge_stop, **({"prepared": True} if args.prepared else {}))
+                 acknowledge_stop=args.acknowledge_stop,
+                 **({"prepared": True} if args.prepared else {"plus": True} if args.plus else {}))
     print(model.encode(record))
     return 0 if record["classification"] in ("complete", "complete_with_unresolved_arms", "preflight_only") else 1
 

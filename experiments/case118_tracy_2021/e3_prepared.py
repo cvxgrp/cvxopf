@@ -249,7 +249,7 @@ def economics(native_cost, costs, slack=None, *, formulation):
         passed=bool(np.isfinite([native_cost, physical, excess, l1, difference]).all() and abs(difference) <= limit))
 
 
-def assess(arm, role, record, kwargs, start=None, captured=None):
+def assess(arm, role, record, kwargs, start=None, captured=None, *, audit_fn=None):
     """Fresh inverse-chain replay; native rejection remains a numerical outcome."""
     native, evidence = record["native"], record["preparation_evidence"]
     if native != evidence["native"] or record["preparation_policy"] != asdict(kwargs["options"].numerical_preparation):
@@ -272,7 +272,7 @@ def assess(arm, role, record, kwargs, start=None, captured=None):
         named = {k: float(v.value) for k, v in build.expressions.items() if k.endswith("_cost")}
         if named != record["named_costs"]:
             raise ValueError("retained named costs differ from restored expressions")
-        common, _ = audit(build, restored, kwargs, named)
+        common, _ = (audit if audit_fn is None else audit_fn)(build, restored, kwargs, named)
         require_matching_audit(common, record["audit"])
         economic = economics(native_cost, common["costs"], slack, formulation=arm["formulation"])
         return dict(passed=common["passed"] and economic["passed"] and record.get("exception") is None,
@@ -281,21 +281,23 @@ def assess(arm, role, record, kwargs, start=None, captured=None):
         return dict(passed=False, reason=f"independent native replay failed: {exc}")
 
 
-def independent_auditor(root, study):
-    verify_context(read(root / "binding.json")["context"])
-    if study != specification():
+def independent_auditor(root, study, *, cohort=None):
+    import sys
+    implementation = sys.modules[__name__] if cohort is None else cohort
+    implementation.verify_context(read(root / "binding.json")["context"])
+    if study != implementation.specification():
         raise ValueError("prepared study differs from frozen selection and policies")
-    prepared = verified_inputs()
+    prepared = implementation.verified_inputs()
 
     def check(arm, role, record):
         request = record["request"]
-        kwargs = kwargs_for_arm(prepared, arm, study["storage_device_ids"], role,
+        kwargs = implementation.kwargs_for_arm(prepared, arm, study["storage_device_ids"], role,
                                assembly=request["objective_assembly"])
         # The replay caller has already verified safe artifact hashes.
         directory = (root / record["attempt"]).resolve()
         if root.resolve() not in directory.parents:
             raise ValueError("attempt identity escapes run")
-        checked = assess(arm, role, record, kwargs,
+        checked = implementation.assess(arm, role, record, kwargs,
             read(directory / "start.json") if arm["formulation"] == "ac" else None,
             read(directory / "x0.json.gz") if arm["formulation"] == "ac" else None)
         if checked != record["independent_audit"]:
