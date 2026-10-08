@@ -35,6 +35,17 @@ This is runner preparation, not execution authorization or gate closure;
 review, a clean owner commit and separate launch approval remain required.
 Original E2 evidence is preserved, and E3 and the earlier Tracy studies stay held.
 
+E1 and E2 v2 subsequently passed; their conclusions are saved in
+[the combined report](../experiments/m11_socp/E1_E2_V2_REPORT.md). The owner
+approved building the fresh prepared E3 runner. Its
+[plan](../experiments/case118_tracy_2021/E3_PREPARED_PLAN.md) and
+[execution protocol](../experiments/case118_tracy_2021/E3_PREPARED_PROTOCOL.md)
+preserve the original 20 problems and stopped evidence, apply the approved
+representations, and place the component-first AC recovery phase ahead of
+hourly fallback. Runner review and an owner commit precede separate launch
+approval, including the proposed 120-launch ceiling and actual monitoring
+preflight. E3 has not restarted; Stage D remains held.
+
 The two checkpoints below preserve the earlier increment history; their pending
 items are superseded where noted by the current builder/diagnostics report.
 

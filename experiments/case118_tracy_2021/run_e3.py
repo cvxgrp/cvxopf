@@ -37,6 +37,17 @@ referenced = model.referenced
 MODULE = "experiments.case118_tracy_2021.run_e3"
 
 
+def cohort_for(root):
+    """Select the declared cohort from immutable binding, never a global patch."""
+    cohort = read(root / "binding.json")["study"].get("cohort")
+    if cohort == "prepared":
+        from . import e3_prepared
+        return e3_prepared
+    if cohort is not None:
+        raise ValueError("unknown E3 cohort")
+    return model
+
+
 def utc():
     return datetime.now(timezone.utc).isoformat()
 
@@ -45,6 +56,7 @@ def queue_protocol(root, protocol, reason):
     """Separate control lock permits queuing while the run lock is held."""
     if not reason or not reason.strip():
         raise ValueError("protocol revision requires an operator reason")
+    model = cohort_for(root)
     model.validate_protocol(protocol)
     with (root / "control.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -64,6 +76,7 @@ def queue_protocol(root, protocol, reason):
 
 def protocol_record(root, ref, expected_context):
     """Verify the complete revision lineage, not just the mutable pointer."""
+    model = cohort_for(root)
     current = referenced(root, ref)
     model.validate_protocol(current["protocol"])
     tail = current
@@ -83,7 +96,9 @@ def protocol_record(root, ref, expected_context):
     return current
 
 
-def request_for(arm, slot, causal, target_free, protocol, wall):
+def request_for(arm, slot, causal, target_free, protocol, wall, *, cohort=None):
+    if cohort is not None and hasattr(cohort, "request_for"):
+        return cohort.request_for(arm, slot, causal, target_free, protocol, wall)
     return dict(arm_id=arm["id"], slot=slot,
         role=model.ROLES[slot] if arm["formulation"] == "ac" else "primary",
         causal_source=causal, target_free_source=target_free,
@@ -91,6 +106,9 @@ def request_for(arm, slot, causal, target_free, protocol, wall):
 
 
 def independent_auditor(root, study):
+    model = cohort_for(root)
+    if hasattr(model, "independent_auditor"):
+        return model.independent_auditor(root, study)
     prepared = model.verified_inputs()
 
     def check(arm, role, record):
@@ -114,12 +132,16 @@ def replay(root, auditor=None, *, partial=False):
     launch. Its worker_seconds contains only finalized supervision effort.
     """
     binding = read(root / "binding.json")
+    model = cohort_for(root)
+    prepared_cohort = binding["study"].get("cohort") == "prepared"
     study = binding["study"]
     # Snapshot directory identities before potentially slow independent audits:
     # status must not combine an earlier pending arm with newly launched arms.
     directories_by_arm = {}
     for directory in sorted(root.glob("arm-*/attempt-*")):
         directories_by_arm.setdefault(directory.parent.name, []).append(directory)
+    if prepared_cohort and set(directories_by_arm) - {f"arm-{a['id']:03d}" for a in study["arms"]}:
+        raise ValueError("attempt journal contains an undeclared arm")
     auditor = independent_auditor(root, study) if auditor is None else auditor
     active = read(root / "control.json")["protocol"]
     protocol_record(root, active, binding["context"])
@@ -130,7 +152,7 @@ def replay(root, auditor=None, *, partial=False):
         if not partial:
             raise ValueError("unreconciled attempt; inspect live worker before resume")
         return dict(path=str(directory.relative_to(root)), arm_id=arm["id"], slot=slot,
-            role=model.ROLES[slot] if arm["formulation"] == "ac" else "primary",
+            role=model.ROLES[slot % 10] if arm["formulation"] == "ac" else "primary",
             protocol=None if request is None else request["protocol"], request=request,
             classification="awaiting_request" if request is None else "awaiting_supervision",
             accepted=False, wall_seconds=None,
@@ -139,7 +161,7 @@ def replay(root, auditor=None, *, partial=False):
 
     for arm in study["arms"]:
         slot, causal, target_free, accepted = 0, None, None, None
-        count = 10 if arm["formulation"] == "ac" else 1
+        count = (20 if prepared_cohort else 10) if arm["formulation"] == "ac" else 1
         directories = directories_by_arm.get(f"arm-{arm['id']:03d}", [])
         if next_item is not None and directories:
             raise ValueError("attempt after an earlier pending arm")
@@ -164,7 +186,7 @@ def replay(root, auditor=None, *, partial=False):
             limits = revision["protocol"]
             if launches >= limits["max_launches"] or wall > limits["total_worker_seconds"]-used:
                 raise ValueError("attempt launched beyond its protocol budget")
-            if request != request_for(arm, slot, causal, target_free, request["protocol"], wall):
+            if request != request_for(arm, slot, causal, target_free, request["protocol"], wall, cohort=model):
                 raise ValueError("request/ladder/source mismatch")
             if not (directory / "supervision.json").exists():
                 if number != len(directories)-1:
@@ -183,6 +205,8 @@ def replay(root, auditor=None, *, partial=False):
             completion = read(directory / "completion.json") if (directory / "completion.json").exists() else None
             if completion:
                 required = {"request.json", "result.json.gz"}
+                if prepared_cohort and completion["classification"] != "exception":
+                    required |= {"native.json.gz", "preparation.json.gz"}
                 if arm["formulation"] == "ac" and completion["classification"] != "exception":
                     required |= {"start.json", "x0.json.gz"}
                 if not required <= set(completion["artifacts"]):
@@ -195,11 +219,21 @@ def replay(root, auditor=None, *, partial=False):
                     raise ValueError("archive/completion/request mismatch")
                 if record["execution_context"] != binding["context"]:
                     raise ValueError("worker archive execution context mismatch")
-                if arm["formulation"] == "ac" and record["classification"] != "exception":
+                if prepared_cohort and record.get("attempt") != str(directory.relative_to(root)):
+                    raise ValueError("prepared archive attempt identity mismatch")
+                if prepared_cohort and record["classification"] != "exception":
+                    if (read(directory / "native.json.gz") != dict(iteration=arm["id"], data=record["native"]) or
+                            read(directory / "preparation.json.gz") != dict(iteration=arm["id"], data=record["preparation_evidence"])):
+                        raise ValueError("native/preparation archive disagreement")
+                if arm["formulation"] == "ac" and record["classification"] != "exception" and not prepared_cohort:
                     verify_x0(read(directory / "start.json"), read(directory / "x0.json.gz"))
                 usable = (classification == "exited" and supervision["returncode"] == 0 and
                           record["classification"] == "accepted")
-                if usable and not auditor(arm, request["role"], record):
+                if prepared_cohort and record["classification"] != "exception":
+                    checked = auditor(arm, request["role"], record)
+                    if checked != (record["classification"] == "accepted"):
+                        raise ValueError("prepared archive classification differs from replay")
+                if usable and not prepared_cohort and not auditor(arm, request["role"], record):
                     raise ValueError("accepted archive failed independent replay audit")
             else:
                 record, usable = None, False
@@ -207,7 +241,11 @@ def replay(root, auditor=None, *, partial=False):
                     raise ValueError("successful worker exit lacks completion archive")
             attempts.append(dict(path=str(directory.relative_to(root)), arm_id=arm["id"],
                 role=request["role"], protocol=request["protocol"], classification=classification,
-                accepted=usable, wall_seconds=elapsed))
+                accepted=usable, wall_seconds=elapsed,
+                **({"objective_assembly": request["objective_assembly"], "slot": slot,
+                    "worker_classification": None if record is None else record["classification"],
+                    "cycling_warning": bool(record and record.get("independent_audit", {}).get("economics", {}).get("cycling_warning")),
+                    "target_free_diagnostic": request["role"] == "target_free"} if prepared_cohort else {})))
             # The original causal source is captured once, even after an interrupted solve.
             if arm["formulation"] == "ac" and causal is None and (directory / "start.json").exists():
                 causal = reference(directory / "start.json", root)
@@ -220,18 +258,29 @@ def replay(root, auditor=None, *, partial=False):
             # rejection/timeout/RSS exhaustion consumes a slot. Every launch costs budget.
             if classification not in ("interrupted", "orphaned_interruption"):
                 slot += 1
-                if slot == 6 and target_free is None:
-                    slot = count
+                if slot % 10 == 6 and target_free is None:
+                    slot = (slot // 10 + 1) * 10 if prepared_cohort else count
+                if prepared_cohort and slot == 10:
+                    target_free = None
         status = "accepted" if accepted else "unresolved" if slot >= count else "pending"
         arms.append(dict(arm=arm, classification=status, accepted=accepted,
                          next_slot=slot, attempts=len(directories)))
         if next_item is None and status == "pending":
             next_item = dict(arm=arm, slot=slot, causal_source=causal, target_free_source=target_free)
+    counts = {}
+    if prepared_cohort:
+        directories = [d for group in directories_by_arm.values() for d in group]
+        counts = {key: sum((d / name).exists() for d in directories) for key, name in (
+            ("result_archives", "result.json.gz"), ("native_archives", "native.json.gz"),
+            ("preparation_archives", "preparation.json.gz"), ("completion_manifests", "completion.json"),
+            ("finalized_supervision", "supervision.json"))}
+        counts.update(disposed_arms=sum(a["classification"] != "pending" for a in arms),
+                      unresolved_arms=sum(a["classification"] == "unresolved" for a in arms))
     return dict(arms=arms, attempts=attempts, launches=launches,
                 worker_seconds=used, next=None if active_attempt else next_item,
                 active_attempt=active_attempt,
                 finished=all(a["classification"] != "pending" for a in arms),
-                accepted_arms=sum(a["classification"] == "accepted" for a in arms))
+                accepted_arms=sum(a["classification"] == "accepted" for a in arms), **counts)
 
 
 def reconcile(root):
@@ -304,7 +353,11 @@ def supervise(command, directory, root, request, *, rss_reader=_child_rss_mib):
     return record
 
 
-def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False):
+def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False, prepared=False):
+    model = globals()["model"]
+    if prepared:
+        from . import e3_prepared as model
+        model.validate_output(root)
     current = model.context()
     if not current["clean"] or current["commit"] != commit or len(commit) != 40:
         raise ValueError("a reviewed clean full execution commit is required")
@@ -314,6 +367,8 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False):
         raise RuntimeError("preflight RSS/ps access unavailable")
     study = model.specification()
     model.verified_inputs()  # pinned owner data; no silent fallback
+    if prepared:
+        model.monitoring()
     if preflight:
         if resume:
             binding = read(root / "binding.json")
@@ -365,12 +420,15 @@ def run(root, commit, *, resume=False, preflight=False, acknowledge_stop=False):
                     break
                 item = progress["next"]
                 request = request_for(item["arm"], item["slot"], item["causal_source"],
-                                      item["target_free_source"], ref, min(protocol["wall_seconds"], remaining))
+                                      item["target_free_source"], ref, min(protocol["wall_seconds"], remaining), cohort=model)
+                telemetry = model.monitoring() if prepared else None
                 arm_dir = root / f"arm-{item['arm']['id']:03d}"
                 arm_dir.mkdir(exist_ok=True)
                 directory = arm_dir / f"attempt-{len(list(arm_dir.glob('attempt-*'))):03d}"
                 directory.mkdir()
                 atomic_immutable_json(directory / "request.json", request)
+                if telemetry is not None:
+                    atomic_immutable_json(directory / "monitoring.json", telemetry)
                 supervision = supervise([sys.executable, "-m", MODULE, "--output", str(root),
                     "--worker", str(directory.relative_to(root))], directory, root, request)
                 if supervision["classification"] in {"interrupted", "supervisor_failure", "rss_limit"}:
@@ -397,7 +455,8 @@ def interrupted(signum, frame):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=HERE / "results/e3")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--prepared", action="store_true", help="fresh prepared E3 cohort; never resumes historical E3")
     parser.add_argument("--commit")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--acknowledge-stop", action="store_true")
@@ -410,15 +469,19 @@ def main():
     parser.add_argument("--show-protocol", action="store_true")
     parser.add_argument("--stop", action="store_true")
     args = parser.parse_args()
-    root = args.output.resolve()
+    root = (args.output or HERE / ("results/e3_prepared" if args.prepared else "results/e3")).resolve()
+    selected = model
+    if args.prepared:
+        from . import e3_prepared as selected
+        selected.validate_output(root)
     if args.show_protocol:
-        print(json.dumps(model.DEFAULT_PROTOCOL, indent=2))
+        print(json.dumps(selected.DEFAULT_PROTOCOL, indent=2))
         return 0
     if args.worker:
         directory = (root / args.worker).resolve()
         if root not in directory.parents:
             parser.error("worker path outside run")
-        return model.worker(directory, root)
+        return cohort_for(root).worker(directory, root)
     if args.status:
         print(model.encode(replay(root, partial=True)))
         return 0
@@ -435,7 +498,7 @@ def main():
     if args.acknowledge_stop and not args.resume:
         parser.error("--acknowledge-stop requires --resume")
     record = run(root, args.commit, resume=args.resume, preflight=args.preflight,
-                 acknowledge_stop=args.acknowledge_stop)
+                 acknowledge_stop=args.acknowledge_stop, **({"prepared": True} if args.prepared else {}))
     print(model.encode(record))
     return 0 if record["classification"] in ("complete", "complete_with_unresolved_arms", "preflight_only") else 1
 

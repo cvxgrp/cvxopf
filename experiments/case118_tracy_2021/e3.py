@@ -42,6 +42,10 @@ DEFAULT_PROTOCOL = dict(
 RELAXATION_TOLERANCES = SOCPAuditTolerances(energy=1e-4, fraction=1e-8)
 
 
+class NativeRejection(Exception):
+    """A retained numerical outcome, not an implementation/worker failure."""
+
+
 def referenced(root, ref):
     if set(ref) != {"path", "sha256"}:
         raise ValueError("invalid artifact reference")
@@ -156,7 +160,7 @@ def kwargs_for_arm(prepared, arm, ids, role="primary"):
     return kwargs
 
 
-def audit(build, result, kwargs, named):
+def audit(build, result, kwargs, named, *, total_cost_relative_tolerance=None):
     """Same Tracy accounting gate; explicit numeric lifted-network extension."""
     if kwargs["formulation"] != "socp":
         return audit_result(result, kwargs, named), None
@@ -174,7 +178,8 @@ def audit(build, result, kwargs, named):
         audit_reactive_channels(a, kw, check, box,
                                 relaxation["branch_from_mva"], relaxation["branch_to_mva"])
 
-    common = audit_result(result, kwargs, named, network_audit=network)
+    common = audit_result(result, kwargs, named, network_audit=network,
+                          total_cost_relative_tolerance=total_cost_relative_tolerance)
     return common, relaxation
 
 
@@ -189,11 +194,21 @@ def encode(value):
     return jsonable(value)
 
 
-def worker(directory, root):
+def worker(directory, root, *, cohort=None):
+    implementation = cohort
+    if implementation is None:
+        import sys
+        implementation = sys.modules[__name__]
+    verify_context = implementation.verify_context
+    validate_protocol = implementation.validate_protocol
+    kwargs_for_arm = implementation.kwargs_for_arm
     began = time.monotonic()
     binding, request = read(root / "binding.json"), read(directory / "request.json")
     verify_context(binding["context"])
-    if read(directory / "launch.json")["pid"] != os.getpid():
+    deadline = time.monotonic()+5
+    while not (directory / "launch.json").exists() and time.monotonic() < deadline:
+        time.sleep(.01)
+    if read(directory / "launch.json")["pid"] != os.getpid() or (directory / "supervision.json").exists():
         raise ValueError("worker must be launched by the resource supervisor")
     revision = referenced(root, request["protocol"])
     protocol = validate_protocol(revision["protocol"])
@@ -216,13 +231,16 @@ def worker(directory, root):
     record = dict(iteration=request["arm_id"], request=request,
                   execution_context=binding["context"],
                   classification="exception", result=None, audit=None)
+    if cohort:
+        record["attempt"] = str(directory.relative_to(root))
     try:
         phase("preparation")
-        kwargs = kwargs_for_arm(verified_inputs(), arm, binding["study"]["storage_device_ids"], request["role"])
+        kwargs = kwargs_for_arm(verified_inputs(), arm, binding["study"]["storage_device_ids"], request["role"],
+                               **({"assembly": request["objective_assembly"]} if cohort else {}))
         neutral = dict(case=kwargs["case"], kwargs={k: v for k, v in kwargs.items()
                        if k not in {"case", "formulation"}})
-        record["mathematical_input_sha256"] = (validate_matching(neutral, neutral)
-            if arm["formulation"] in {"ac", "socp"} else input_digest(neutral))
+        record["mathematical_input_sha256"] = (implementation.physical_input_digest(kwargs) if cohort else
+            validate_matching(neutral, neutral) if arm["formulation"] in {"ac", "socp"} else input_digest(neutral))
         phase("construction")
         build = build_opf_multistep(**kwargs)
         record["input_identities"] = dict(storage=[u.device_id for u in kwargs["storage"]],
@@ -253,24 +271,54 @@ def worker(directory, root):
                 phase("native_solve")
 
             phase("canonicalization_and_solve")
-            config = HierarchicalSolveConfig(ac=LayerSolveConfig("IPOPT", options=protocol["ac_options"]))
-            solved = starts._solve_ac_with_verified_x0(build, config, start_observer=observe)
-            if solved.evidence is None:
-                raise RuntimeError(f"missing verified complete x0: {solved.exception}")
-            error = solved.exception
+            if cohort:
+                # Persist the prospective canonical/reduced start before a
+                # timeout can terminate the worker. Completed evidence must
+                # independently confirm the same actual verified handoff.
+                atomic_gzip_json(directory / "x0.json.gz", implementation.prepared_start(build, request["arm_id"]))
+                phase("canonical_start_prepared")
+                # Public solve applies cost coordinates and assembly before the
+                # existing verified-x0 boundary. Calling that boundary directly
+                # would bypass those transformations.
+                try:
+                    build.solve(solver="IPOPT", **protocol["ac_options"])
+                except Exception as exc:
+                    error = f"{type(exc).__name__}: {exc}"
+                if build.preparation_evidence is None:
+                    raise RuntimeError(f"missing verified prepared x0: {error}")
+                implementation.verify_prepared_start(build.preparation_evidence, read(directory / "x0.json.gz"))
+            else:
+                config = HierarchicalSolveConfig(ac=LayerSolveConfig("IPOPT", options=protocol["ac_options"]))
+                solved = starts._solve_ac_with_verified_x0(build, config, start_observer=observe)
+                if solved.evidence is None:
+                    raise RuntimeError(f"missing verified complete x0: {solved.exception}")
+                error = solved.exception
         else:
             phase("canonicalization_and_solve")
             try:
                 build.solve(solver="CLARABEL", canon_backend=build.canonicalization_backend,
-                    warm_start=False, verbose=True, **protocol["convex_options"])
+                    warm_start=False, verbose=True, **(implementation.solver_options(arm["formulation"], protocol)
+                                                      if cohort else protocol["convex_options"]))
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             record["convergence"] = convergence_diagnostics(build)
+        if cohort:
+            from experiments.numerical_preparation.audit import evidence_record
+            evidence = evidence_record(build.preparation_evidence)
+            if evidence is None:
+                raise ValueError("prepared solve lacks native/restoration evidence")
+            record.update(preparation_evidence=evidence, native=evidence["native"], exception=error,
+                          preparation_policy=implementation.policy_record(arm["formulation"], request["objective_assembly"]))
+            wanted = 0 if arm["formulation"] == "ac" else "Solved"
+            if record["native"].get("status") != wanted:
+                record.update(classification="rejected", independent_audit=dict(passed=False,
+                    reason="native solver did not fully converge", native_status=record["native"].get("status")))
+                raise NativeRejection
         phase("extraction_and_audit")
         result = jsonable(extract_results(build))
         named = {k: float(e.value) if e.value is not None else None
                  for k, e in build.expressions.items() if k.endswith("_cost")}
-        common, relaxation = audit(build, result, kwargs, named)
+        common, relaxation = implementation.audit(build, result, kwargs, named)
         record.update(result=result, named_costs=named, audit=common, exception=error,
             relaxation_audit=relaxation,
             recovery=None if arm["formulation"] != "socp" else
@@ -279,7 +327,13 @@ def worker(directory, root):
             boundary_soc_mwh=None if result.get("soc") is None else
                 np.vstack((arm["initial_soc_mwh"], result["soc"])),
             logical_solution=None)
-        accepted = error is None and common["passed"]
+        if cohort:
+            # Replay a separate graph even in the worker; no new optimization.
+            checked = implementation.assess(arm, request["role"], record, kwargs,
+                read(directory / "start.json") if arm["formulation"] == "ac" else None,
+                read(directory / "x0.json.gz") if arm["formulation"] == "ac" else None)
+            record["independent_audit"] = checked
+        accepted = error is None and common["passed"] and (not cohort or checked["passed"])
         record["classification"] = "accepted" if accepted else "rejected"
         if accepted and arm["formulation"] == "ac":
             record["logical_solution"] = stepwise_values(build, starts._solution_values(build))
@@ -288,13 +342,24 @@ def worker(directory, root):
             iterations=stats.num_iters, native_seconds=stats.solve_time,
             compilation_seconds=build.prob.compilation_time)
         verify_context(binding["context"])
+    except NativeRejection:
+        pass
     except Exception as exc:
         record.update(classification="exception", exception=f"{type(exc).__name__}: {exc}")
+    if cohort:
+        try:
+            verify_context(binding["context"])
+        except Exception as exc:
+            record.update(classification="exception", exception=f"{type(exc).__name__}: {exc}")
     phase("archive")
     atomic_gzip_json(directory / "result.json.gz", encode(record))
+    if cohort and record.get("preparation_evidence") is not None:
+        atomic_gzip_json(directory / "native.json.gz", dict(iteration=request["arm_id"], data=encode(record["native"])))
+        atomic_gzip_json(directory / "preparation.json.gz", dict(iteration=request["arm_id"], data=encode(record["preparation_evidence"])))
     phase("finished")
     artifacts = {name: digest(directory / name) for name in
-                 ("request.json", "result.json.gz", "start.json", "x0.json.gz") if (directory / name).exists()}
+                 ("request.json", "result.json.gz", "start.json", "x0.json.gz", "native.json.gz",
+                  "preparation.json.gz", "monitoring.json") if (directory / name).exists()}
     atomic_immutable_json(directory / "completion.json", dict(
         classification=record["classification"], artifacts=artifacts,
         worker_seconds=time.monotonic()-began, phase_seconds=timings))
