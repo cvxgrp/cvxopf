@@ -62,10 +62,15 @@ The next [four-formulation comparison](../experiments/objective_assembly_qualifi
 is prepared for review: hourly/component-first pairs across AC, SOCP, lossy DC
 and copper plate, ordinary T=3 and forced T=3/T=6/T=24. AC keeps its approved
 production cost coordinates; the convex formulations keep original economic
-coordinates and their approved preparation. No new matrix solves have been
-launched. Review, a clean committed checkpoint and separate numerical
-execution approval remain required. E3 and Stage D stay held; no production
-defaults or hierarchy policy change.
+coordinates and their approved preparation. The approved launch at
+`9032c19c83aff75255d3c2d1d574b061297b11de` stopped before any worker or optimizer
+started because its protocol envelope did not match the shared supervisor.
+`results/qualification_001` remains unchanged, with failure-record hashes in
+the comparison protocol. The correction restores that handoff contract and
+adds a non-solving real-supervisor regression. A fresh `qualification_002`
+invocation requires review, a clean correction commit and separate launch
+approval. No matrix numerical results exist yet. E3 and Stage D stay held;
+no production defaults or hierarchy policy change.
 
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the

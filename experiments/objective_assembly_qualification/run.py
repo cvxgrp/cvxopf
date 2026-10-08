@@ -32,7 +32,7 @@ from . import model as f
 
 HERE = Path(__file__).resolve().parent
 MODULE = "experiments.objective_assembly_qualification.run"
-OUTPUT = HERE / "results/qualification_001"
+OUTPUT = HERE / "results/qualification_002"
 ARTIFACTS = ("request.json", "canonical.json.gz", "native.json.gz", "result.json.gz")
 
 
@@ -48,7 +48,7 @@ def context():
 
 
 def protocol():
-    return dict(limits=f.LIMITS, protocol_sha256=q.digest(HERE / "PROTOCOL.md"))
+    return dict(protocol=f.LIMITS, protocol_sha256=q.digest(HERE / "PROTOCOL.md"))
 
 
 def frozen_binding():

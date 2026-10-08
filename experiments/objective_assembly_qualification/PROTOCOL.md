@@ -21,6 +21,39 @@ Historical records remain unchanged. No production defaults or API changes,
 hierarchical execution, E3/Stage D resumption, solver tuning, retries, or economic
 rescaling of convex formulations are included.
 
+## Preserved pre-worker launch failure
+
+The approved invocation at `9032c19c83aff75255d3c2d1d574b061297b11de`,
+launch session 63562, created `results/qualification_001` on 2026-10-08
+at 06:38:00.857054 UTC and stopped at 06:38:03.136543 UTC with
+`KeyError: 'protocol'`. The experiment wrote the limits under `limits`, while
+the shared supervisor expects `protocol`. The error occurred before process
+creation: no solver worker or optimizer ran, and no launch, supervision,
+completion, native or result archive was written. The first attempt directory
+and request exist, but are unfinished, not a numerical rejection or accepted
+case. The status reader's directory-based launch count is one; actual worker
+launches are zero. No numerical comparison is available from this invocation.
+
+These records remain unchanged. The corrected runner uses the existing
+supervisor's `protocol` envelope, covered by a non-solving test that exercises
+the real supervisor with a simulated process. The fresh default output is
+`results/qualification_002`; it must remain absent until execution. A reviewed
+clean correction commit and separate launch approval are required, with the
+same matrix, limits, solver settings and acceptance checks below. This is a
+fresh invocation, not resumption or retry of an unfinished numerical attempt.
+
+SHA-256 hashes of the retained pre-worker records (paths below are relative
+to `results/qualification_001`):
+
+| Record | SHA-256 |
+| --- | --- |
+| `binding.json` | `bc15cd109d7932e5e26f9e90d68a3e77b53c6d96100f8bb7d073bfab9f199293` |
+| `protocol.json` | `cce0fe7a995a47c61961bbbf2a2111125ed9261369f5ec36d58ba1532301bc46` |
+| `invocation-start.json` | `d2eb55fb81491ea78ddddb4919232d3eda6355ed99889c8fd1930e2e69ef5bde` |
+| `invocation-finish.json` | `df9d93edb65e38664035268c03ea8449d463375994314fdb21ee38f0ea5eb3ff` |
+| `call-001/request.json` | `8bbf1ecef9c0e9d7fd20b98ee61145c730202d1a434b9def4187bd9eced5c77c` |
+| `call-001/telemetry-start.json` | `f2e2946a00dfc4700b36e9faf7ab9b18c2238611f62cde0407aafcfd53fd91f0` |
+
 ## Prespecified matrix: 16 pairs, 32 attempts
 
 Use the existing frozen Tracy inputs starting at global hour 1165. Each row

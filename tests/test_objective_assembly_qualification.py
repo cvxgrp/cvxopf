@@ -186,6 +186,52 @@ def setup_attempt(monkeypatch, root):
     return directory, req
 
 
+def test_protocol_request_reaches_real_supervisor_without_optimizer(monkeypatch, tmp_path):
+    from experiments.case118_tracy_2021 import run_e3 as supervisor
+
+    directory, req = setup_attempt(monkeypatch, tmp_path)
+    command = ["synthetic-worker"]
+    launches, sleeps, rss_pids = [], [], []
+
+    class Process:
+        pid = 12345
+
+        def __init__(self):
+            self.polls = 0
+
+        def poll(self):
+            self.polls += 1
+            return None if self.polls == 1 else 0
+
+        def wait(self):
+            return 0
+
+    def launch(actual_command, **kwargs):
+        assert actual_command == command
+        assert kwargs["cwd"] == original.ROOT
+        assert kwargs["start_new_session"]
+        assert kwargs["stdout"].name == str(directory / "worker.log")
+        launches.append(actual_command)
+        return Process()
+
+    def rss(pid):
+        rss_pids.append(pid)
+        return 4.
+
+    monkeypatch.setattr(supervisor.subprocess, "Popen", launch)
+    monkeypatch.setattr(supervisor.time, "sleep", sleeps.append)
+    result = q.supervise(command, directory, tmp_path, req, rss_reader=rss)
+    assert launches == [command] and rss_pids == [Process.pid]
+    assert sleeps == [m.LIMITS["poll_seconds"]]
+    assert result["classification"] == "exited" and result["returncode"] == 0
+    assert result["samples"] == 1 and result["peak_sampled_rss_mib"] == 4.
+    assert q.read(directory / "launch.json")["pid"] == Process.pid
+    assert q.read(directory / "supervision.json") == result
+    assert q.resource_evidence(directory, result)
+    assert not any((directory / name).exists() for name in
+                   ("native.json.gz", "result.json.gz", "completion.json"))
+
+
 def test_unsupervised_archive_is_unfinished(monkeypatch, tmp_path):
     directory, _ = setup_attempt(monkeypatch, tmp_path)
     q.atomic_gzip_json(directory / "result.json.gz", dict(iteration=1))
