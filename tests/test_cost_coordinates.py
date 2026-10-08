@@ -215,8 +215,11 @@ def test_failed_resolve_clears_original_physical_variables(monkeypatch):
 
 @pytest.mark.parametrize("warning_as_error", [False, True])
 @pytest.mark.parametrize("cancelling_slack", [False, True])
-def test_large_cycling_slack_warns_without_discarding_solution(monkeypatch, warning_as_error, cancelling_slack):
-    build = make_build("vectorized" if cancelling_slack else "single", "cycling")
+@pytest.mark.parametrize("objective_assembly", ["hourly", "component_first"])
+def test_large_cycling_slack_warns_without_discarding_solution(monkeypatch, warning_as_error, cancelling_slack, objective_assembly):
+    build = make_build("vectorized" if cancelling_slack or objective_assembly == "component_first" else "single", "cycling")
+    build = replace(build, _numerical_preparation=replace(build.numerical_preparation,
+                                                       objective_assembly=objective_assembly))
     from cvxopf import _cost_coordinates as coordinates
     original_factory = coordinates.cost_canonicalization
     captured = []

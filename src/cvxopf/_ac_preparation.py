@@ -66,7 +66,13 @@ stage rates and weights. ``_cost_coordinates`` maps power/fraction leaves to
 cost-valued leaves before ordinary DNLP canonicalization, snapshots current
 Parameter weights on every solve, and inverts the map after native success.
 Zero-cost entries retain identity scaling. Generator, HVDC and terminal costs
-are not rebuilt or rescaled. A local reduction records tagged cycling-abs
+retain their original meaning and weights. The default ``objective_assembly``
+is ``'hourly'``; opt-in ``'component_first'`` reassembles complete typed costs
+in a private vectorized solve graph, with priced cycling/shedding leaves summed
+directly. This changes summation grouping and induced canonical order together,
+not the physical problem, and implies no fallback or retry. Selection is
+retained in preparation evidence on success and native failure.
+A local reduction records tagged cycling-abs
 auxiliaries through tree copies; it delegates their mathematics to CVXPY's
 installed abs canonicalizer rather than guessing auxiliary identity by shape.
 
@@ -225,7 +231,9 @@ def solve_at_verified_boundary(
     checks: dict[str, Any] = {"restoration_available": False, "start_round_trip": True}
 
     def evidence() -> PreparationEvidence:
-        return PreparationEvidence(mapping, native, checks, np.ones(mapping.free.size),
+        return PreparationEvidence(mapping, native,
+                                   {**checks, "objective_assembly": build.numerical_preparation.objective_assembly},
+                                   np.ones(mapping.free.size),
                                    np.ones(mapping.kept.size), assigned_x0=assigned,
                                    adjusted_x0=adjusted, reduced_x0=y0, start_layout=tuple(layout))
 
@@ -290,7 +298,7 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
             _complete_start(build)
             solver_build, bindings = transform_cost_coordinates(build)
             reduction = cost_canonicalization(bindings)
-            if bindings:
+            if solver_build is not build:
                 clear_prepared_result(build, clear_variables=False)
             for binding in bindings:
                 binding.term.variable.save_value(None)
@@ -301,7 +309,7 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
         if run.exception:
             raise cp.error.SolverError(run.exception)
         evidence = build._preparation_evidence
-        if bindings and evidence is not None and evidence.checks["restoration_available"]:
+        if solver_build is not build and evidence is not None and evidence.checks["restoration_available"]:
             restore_cost_coordinates(build, solver_build, bindings, reduction)
         if evidence is not None and not evidence.checks["restoration_available"]:
             clear_prepared_result(build)

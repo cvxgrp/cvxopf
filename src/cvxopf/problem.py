@@ -19,7 +19,7 @@ build_acopf_multistep(case, df_P, df_Q, *, T, options, coupling_constraints)
 
 from __future__ import annotations
 
-from cvxopf._cost_coordinates import CostCoordinateTerm
+from cvxopf._cost_coordinates import CostCoordinateTerm, ObjectiveCostContribution
 
 import warnings
 from dataclasses import dataclass, field
@@ -285,6 +285,8 @@ class OPFBuild:
     _exact_boxes: tuple[ExactBoxBinding, ...] = field(default=(), repr=False)
     _cost_coordinate_terms: tuple[CostCoordinateTerm, ...] = field(default=(), repr=False)
     _cost_coordinate_delta: float = field(default=1., repr=False)
+    _objective_cost_contributions: tuple[ObjectiveCostContribution, ...] = field(default=(), repr=False)
+    _objective_cost_expression: cp.Expression | None = field(default=None, repr=False)
     _preparation_evidence: PreparationEvidence | None = field(default=None, init=False, repr=False)
 
     @property
@@ -613,6 +615,7 @@ def build_opf(
             f"Unknown formulation '{formulation}'. Supported: {sorted(builders.keys())}"
         )
     validate_preparation(options.numerical_preparation, formulation)
+    options.numerical_preparation.validate_assembly("stepwise")
     normalized_case = (
         _case_with_generators(case, generators) if generators is not None else case
     )
@@ -768,6 +771,7 @@ def build_opf_multistep(
         )
 
     validate_preparation(options.numerical_preparation, formulation)
+    options.numerical_preparation.validate_assembly(temporal_assembly)
     load_inputs, explicit_load_mode = _normalize_multistep_load_inputs(
         case,
         df_P,

@@ -48,6 +48,7 @@ from cvxopf._component_assembly import (
     aggregate_vectorized_contributions,
     integrate_vectorized_stage_cost_rate,
     integrate_vectorized_component_stage_costs,
+    collect_vectorized_objective_costs,
     publish_vectorized_component_expressions,
     publish_vectorized_component_variables,
     vectorized_component_result_projections,
@@ -717,6 +718,8 @@ def _build_ac_vectorized(
         _exact_boxes=aggregate.model.exact_boxes,
         _cost_coordinate_terms=collect_cost_terms(contributions),
         _cost_coordinate_delta=delta,
+        _objective_cost_contributions=collect_vectorized_objective_costs(contributions, component_costs),
+        _objective_cost_expression=total_cost,
     )
 
 

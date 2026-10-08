@@ -406,6 +406,7 @@ def test_normalized_soc_has_no_norm_epigraph(module, shape):
         NumericalPreparation(exact_fixed_boxes=True),
         NumericalPreparation(canonical_scaling="joint5"),
         NumericalPreparation(cost_coordinates=True),
+        NumericalPreparation(cost_coordinates=True, objective_assembly="component_first"),
     ],
 )
 def test_hierarchy_rejects_preparation_before_build(monkeypatch, policy):

@@ -15,6 +15,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence, cast
 
 import cvxpy as cp
+from cvxopf._cost_coordinates import ObjectiveCostContribution
 
 from cvxopf._numerical_preparation import ExactBoxBinding, OperatingSetContribution
 
@@ -915,6 +916,19 @@ def integrate_vectorized_component_stage_costs(
             )
         costs[expression_name] = integrate_vectorized_stage_cost_rate(rate, delta)
     return MappingProxyType(costs)
+
+
+def collect_vectorized_objective_costs(
+    contributions: Mapping[str, VectorizedComponentContribution],
+    integrated_costs: Mapping[str, cp.Expression],
+) -> tuple[ObjectiveCostContribution, ...]:
+    """Retain complete ordered stage and boundary costs for solve-local assembly."""
+    return tuple(ObjectiveCostContribution(
+        name, contribution.model.stage_cost_rate,
+        (integrated_costs[contribution.cost_expression_name or f"{name}_cost"]
+         if contribution.model.stage_cost_rate is not None else None),
+        contribution.model.horizon.terminal_cost, contribution.model.cost_coordinates,
+    ) for name, contribution in contributions.items())
 
 
 def _validate_publication_step_count(

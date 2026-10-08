@@ -30,12 +30,18 @@ class NumericalPreparation:
     ``cost_coordinates`` is AC-only: represent battery cycling and shedding in
     cost units internally, restore engineering units publicly, and retain
     advisory economic-accuracy warnings without rejecting native solutions.
+    ``objective_assembly='hourly'`` preserves the original aggregate-interval
+    objective (including non-unit durations). ``'component_first'`` integrates
+    contributions separately in the solve graph; initially it requires
+    standalone, vectorized AC with cost coordinates. Neither option changes
+    economic weights or the public physical graph, and no retry is implied.
     """
 
     normalize_device_limits: bool = False
     exact_fixed_boxes: bool = False
     canonical_scaling: Literal["none", "joint5"] = "none"
     cost_coordinates: bool = False
+    objective_assembly: Literal["hourly", "component_first"] = "hourly"
 
     def __post_init__(self) -> None:
         for name in ("normalize_device_limits", "exact_fixed_boxes", "cost_coordinates"):
@@ -45,6 +51,10 @@ class NumericalPreparation:
             self.canonical_scaling, str
         ) or self.canonical_scaling not in ("none", "joint5"):
             raise ValueError("canonical_scaling must be 'none' or 'joint5'")
+        if not isinstance(self.objective_assembly, str) or self.objective_assembly not in ("hourly", "component_first"):
+            raise ValueError("objective_assembly must be 'hourly' or 'component_first'")
+        if self.objective_assembly == "component_first" and not self.cost_coordinates:
+            raise ValueError("component_first objective assembly requires cost_coordinates=True")
 
     @property
     def enabled(self) -> bool:
@@ -53,6 +63,7 @@ class NumericalPreparation:
             or self.exact_fixed_boxes
             or self.canonical_scaling != "none"
             or self.cost_coordinates
+            or self.objective_assembly != "hourly"
         )
 
     def validate_formulation(self, formulation: Formulation) -> None:
@@ -67,6 +78,10 @@ class NumericalPreparation:
             raise ValueError("AC does not support canonical scaling")
         if formulation != "ac" and self.cost_coordinates:
             raise ValueError("cost coordinates are qualified for AC only")
+
+    def validate_assembly(self, temporal_assembly: str) -> None:
+        if self.objective_assembly == "component_first" and temporal_assembly != "vectorized":
+            raise ValueError("component_first objective assembly requires standalone vectorized AC")
 
 
 def validate_preparation(

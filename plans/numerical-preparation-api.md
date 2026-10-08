@@ -58,8 +58,8 @@ component-first converged in 132.94 worker seconds, with a cycling warning and
 the same reconstructed physical cost as the historical successful solution.
 This is localized evidence, not a universal objective-assembly rule.
 
-The next [four-formulation comparison](../experiments/objective_assembly_qualification/PROTOCOL.md)
-is prepared for review: hourly/component-first pairs across AC, SOCP, lossy DC
+The [four-formulation comparison](../experiments/objective_assembly_qualification/PROTOCOL.md)
+tests hourly/component-first pairs across AC, SOCP, lossy DC
 and copper plate, ordinary T=3 and forced T=3/T=6/T=24. AC keeps its approved
 production cost coordinates; the convex formulations keep original economic
 coordinates and their approved preparation. The approved launch at
@@ -67,10 +67,75 @@ coordinates and their approved preparation. The approved launch at
 started because its protocol envelope did not match the shared supervisor.
 `results/qualification_001` remains unchanged, with failure-record hashes in
 the comparison protocol. The correction restores that handoff contract and
-adds a non-solving real-supervisor regression. A fresh `qualification_002`
-invocation requires review, a clean correction commit and separate launch
-approval. No matrix numerical results exist yet. E3 and Stage D stay held;
-no production defaults or hierarchy policy change.
+adds a non-solving real-supervisor regression. After review, clean commit
+`3fb7489d021a458ec60aa5bd66737c84210adc98` and owner launch approval,
+`qualification_002` finalized 32 attempts: 25 accepted, six SOCP audit
+rejections and one AC timeout, with 21 advisory cycling warnings. It retains
+31 result archives, 31 native archives and 31 completion manifests, plus 32
+finalized supervision records; the timeout has no completed result archive.
+
+| Formulation | Hourly accepted | Component-first accepted | Other outcomes |
+| --- | --- | --- | --- |
+| AC | 3/4 | 4/4 | Forced T=24 hourly timeout |
+| SOCP | 1/4 | 1/4 | Forced T=3/T=6/T=24 audit rejection in both arms |
+| Lossy DC | 4/4 | 4/4 | None |
+| Copper plate | 4/4 | 4/4 | None |
+
+The initial invocation stopped after 31 arms because thermal telemetry was
+unavailable. The owner separately authorized the final copper-plate arm; its
+start/finish and `report-final-arm.json` are supplemental records in the same
+ignored execution directory. Original invocation records remain unchanged.
+The final arm retained the original numerical settings and passed acceptance.
+Total sampled worker time was 587.77 seconds of the 5760-second budget.
+
+The AC forced T=24 component-first arm converged in 137.84 worker seconds,
+while hourly hit the 180-second limit. Its retained physical trajectories
+matched the earlier component-first diagnostic exactly, with physical cost
+11852950486.055317 and cycling slack 0.004628212372312357 (an advisory warning).
+There is no two-accepted-arm cost/trajectory comparison for this timed-out pair.
+Shorter AC cases showed no timing advantage; the convex comparison does not
+support changing their defaults. Timeout and numerical/audit rejection are
+not proofs of infeasibility. E3 and Stage D remain held.
+
+## Named AC objective assembly checkpoint
+
+The owner approved the reviewed API concept: retain `"hourly"` as the
+compatibility default and add opt-in `"component_first"` to immutable
+`NumericalPreparation`. Initially, the new mode requires standalone vectorized
+AC with `cost_coordinates=True`; unsupported formulation/assembly combinations
+fail before optimization. Prepared hierarchy remains M21 work. This field
+means objective summation grouping, not temporal assembly or interval duration.
+
+Production vectorized assembly now retains complete ordered stage/boundary
+contributions and typed cost-coordinate ownership. The private solve graph
+sums ordinary component costs, priced cycling leaves, priced shedding leaves,
+then terminal costs. Generator constants/PWL costs and HVDC remain intact;
+duration is applied exactly once and terminal costs are outside integration.
+Zero-priced entries retain identity coordinates and no priced cycling epigraph.
+Unsupported partial coordinate ownership or a caller-replaced objective raises
+explicitly rather than silently omitting a cost. There are no experiment imports,
+objective-name scans, global patches, retries or automatic representation changes.
+
+The build snapshots the option; success and native-failure preparation evidence
+record it. The original physical graph remains the public accounting authority,
+with unchanged advisory warning semantics. Regression coverage compares the
+production canonical layout, complete start, objective and constraint evaluations
+against the successful experimental construction without solving Tracy. It also
+checks integration, zero/parameter weights, absent devices, HVDC/PWL/terminal
+costs, restoration, warnings, failure cleanup, unchanged PYPOWER fixtures and
+unsupported combinations. These tests are not a new scientific qualification.
+
+After implementation review and a clean owner commit, a separately authorized
+production-path Tracy forced T=24 qualification remains required. Another full
+32-arm matrix is not automatically necessary. The evidence supports offering
+the complete qualified AC configuration as an opt-in option, not a universal
+speedup, a convex policy change or a production default change.
+
+Documentation-site follow-up requested by the owner: organize getting-started
+examples, formulation/assembly support, numerical options, economic warnings,
+result interpretation and an experiment-evidence index into navigable docs.
+Site tooling, hosting and publication are a separate task; no site is built or
+published in this checkpoint. The README now carries a concise selection guide.
 
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
@@ -118,9 +183,10 @@ class NumericalPreparation:
     exact_fixed_boxes: bool = False
     canonical_scaling: Literal["none", "joint5"] = "none"
     cost_coordinates: bool = False
+    objective_assembly: Literal["hourly", "component_first"] = "hourly"
 ```
 
-Validate actual booleans and the closed scaling literal. No configurable number
+Validate actual booleans and the closed scaling and objective-assembly literals. No configurable number
 of passes, scale limits, objective divisor, tolerance, or plugin registry.
 Preparation is a build-time representation choice; changing it requires a new
 build. The disabled path continues through the existing `OPFBuild.solve()`

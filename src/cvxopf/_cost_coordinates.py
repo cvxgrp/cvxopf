@@ -3,8 +3,11 @@
 Component adapters declare the exact stage-rate expression and its linear or
 absolute-value weights. The solve-local transformation uses ``y = delta*w*x``
 where the weight is positive, and identity coordinates where it is zero. It
-replaces only the declared cost subtree, not the whole objective: generator,
-HVDC, terminal, and future unrelated costs retain their original meaning.
+In the default hourly mode it replaces only the declared cost subtree.
+Opt-in component-first assembly rebuilds the solve-local objective from typed,
+complete contributions, in qualified order. Generator, HVDC, terminal and
+unrelated costs retain their original meaning and integration factors in both
+modes; the original objective remains the public reporting authority.
 
 Each solve snapshots the current weights (including load Parameters), maps the
 complete physical start, and restores public variables by inverse scaling.
@@ -73,6 +76,73 @@ class CoordinateBinding:
     physical_start: np.ndarray
 
 
+@dataclass(frozen=True)
+class ObjectiveCostContribution:
+    """Complete component-owned objective contribution, retained at assembly.
+
+    ``integrated_stage`` is already multiplied by the interval duration;
+    ``terminal`` is a once-per-horizon cost. A declared coordinate term owns
+    the entire ``stage_rate``, so unsupported partial substitutions fail rather
+    than silently discarding an unrelated cost. Public expression names play
+    no role in deciding which terms enter the objective.
+    """
+
+    component: str
+    stage_rate: cp.Expression | None
+    integrated_stage: cp.Expression | None
+    terminal: cp.Expression | None
+    coordinates: tuple[CostCoordinateTerm, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (self.stage_rate is None) != (self.integrated_stage is None):
+            raise ValueError("stage rate and integrated cost must be retained together")
+        if self.coordinates and (len(self.coordinates) != 1 or self.coordinates[0].rate is not self.stage_rate):
+            raise ValueError("component-first requires a complete declared stage-rate substitution")
+
+
+def component_first_objective(build: OPFBuild, substitutions: Mapping[int, cp.Expression],
+                              bindings: Sequence[CoordinateBinding]) -> cp.Minimize:
+    """Integrate complete typed costs, flattening the qualified priced leaves.
+
+    Ordinary contributions retain registry order, followed by cycling and then
+    shedding cost coordinates, and finally terminal costs. The positive-weight
+    leaves already contain duration times price; summing them must not apply
+    either factor again. Mixed zero weights retain identity physical coordinates
+    but never acquire a priced cycling epigraph.
+    """
+    contributions = build._objective_cost_contributions
+    if build.formulation != "ac":
+        raise ValueError("component-first objective assembly supports AC only")
+    build.numerical_preparation.validate_formulation("ac")
+    build.numerical_preparation.validate_assembly(build.temporal_assembly)
+    if build.prob.objective.expr is not build._objective_cost_expression:
+        raise ValueError("objective no longer matches its typed component assembly")
+    if not contributions:
+        raise ValueError("component-first objective requires typed component cost contributions")
+    declared = [term for contribution in contributions for term in contribution.coordinates]
+    if [id(term) for term in declared] != [id(binding.term) for binding in bindings]:
+        raise ValueError("component-first coordinate contribution coverage differs")
+    parts = [contribution.integrated_stage.tree_copy(substitutions)
+             for contribution in contributions
+             if contribution.integrated_stage is not None and not contribution.coordinates]
+    for kind in ("cycling", "shedding"):
+        for binding in bindings:
+            if binding.term.kind != kind:
+                continue
+            if kind == "cycling":
+                if binding.absolute is not None:
+                    parts.append(cp.sum(binding.absolute))
+            else:
+                active = np.broadcast_to(np.asarray(binding.term.weights.value) > 0, binding.leaf.shape)
+                parts.append(cp.sum(binding.leaf) if active.all()
+                             else cp.sum(cp.multiply(active.astype(float), binding.leaf)))
+    parts.extend(contribution.terminal.tree_copy(substitutions)
+                 for contribution in contributions if contribution.terminal is not None)
+    if not parts:
+        raise ValueError("component-first objective has no supported cost contributions")
+    return cp.Minimize(sum(parts[1:], start=parts[0]))
+
+
 def collect_cost_terms(
     contributions: Sequence[Mapping[str, StepContribution]] | Mapping[str, VectorizedComponentContribution],
 ) -> tuple[CostCoordinateTerm, ...]:
@@ -125,9 +195,12 @@ def transform_cost_coordinates(build: OPFBuild) -> tuple[OPFBuild, tuple[Coordin
         substitutions[id(term.rate)] = rate
         bindings.append(CoordinateBinding(term, leaf, scale.copy(), rate, absolute,
                                           np.asarray(term.variable.value).copy()))
-    if not bindings:
+    component_first = build.numerical_preparation.objective_assembly == "component_first"
+    if not bindings and not component_first:
         return build, ()
-    problem = cp.Problem(build.prob.objective.tree_copy(substitutions),
+    objective = (component_first_objective(build, substitutions, bindings) if component_first
+                 else build.prob.objective.tree_copy(substitutions))
+    problem = cp.Problem(objective,
                          [constraint.tree_copy(substitutions) for constraint in build.prob.constraints])
     if {c.id for c in problem.constraints} != {c.id for c in build.prob.constraints}:
         raise RuntimeError("cost-coordinate transformation changed constraint identity")

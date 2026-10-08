@@ -661,6 +661,48 @@ Terminal storage penalties occur once and are not multiplied by `delta`.
 objective composition can be audited. This corrects the former unscaled
 per-step sum for `delta != 1`; `delta=1` results are unchanged.
 
+### AC numerical preparation and objective assembly
+
+Numerical preparation changes the internal solve representation, not the
+physical model or economic weights. Select it when building, then use
+`build.solve()`; calling `build.prob.solve()` bypasses this supported boundary.
+
+```python
+from cvxopf import NumericalPreparation, OPFOptions
+
+options = OPFOptions(numerical_preparation=NumericalPreparation(
+    normalize_device_limits=True,
+    exact_fixed_boxes=True,
+    cost_coordinates=True,
+    objective_assembly="component_first",
+))
+# Pass options to build_opf_multistep(..., formulation="ac",
+#                                     temporal_assembly="vectorized").
+```
+
+The compatibility default, `objective_assembly="hourly"`, aggregates interval
+costs before integration (including when `delta != 1`). `"component_first"`
+integrates component contributions separately and sums priced cycling/shedding
+coordinates directly. It changes summation grouping and the induced canonical
+ordering together; it is independent of `temporal_assembly`.
+
+Initially, `"component_first"` requires standalone, time-vectorized AC with
+`cost_coordinates=True`. Single-step, stepwise, convex and hierarchical uses
+are rejected explicitly. Normalization and exact-fixed removal remain separate
+choices; the complete configuration above was used in the supporting experiment.
+Neither mode switches representations or retries automatically. The public
+physical objective, dispatch units and result schema remain unchanged, and
+`build.preparation_evidence.checks["objective_assembly"]` records the selection.
+`CostAccuracyWarning` remains advisory: it does not reject a returned solution.
+
+The difficult Tracy forced-shedding T=24 case converged with component-first
+assembly in two experimental executions where hourly assembly timed out.
+Shorter cases showed no timing advantage. This supports an opt-in choice, not
+a universal speedup or a default change. Production-path T=24 qualification
+is still a separate checkpoint. See the
+[numerical preparation design and evidence](plans/numerical-preparation-api.md)
+for supported combinations, warnings and limitations.
+
 ## First-class loads and explicit load shedding
 
 With `loads=None`, MATPOWER `PD` and `QD` columns are converted automatically
