@@ -27,6 +27,14 @@ an owner commit and separate launch approval come first. Historical E1/E2
 evidence remains unchanged. A prepared E2 refresh is a subsequent checkpoint;
 E3 and the earlier Tracy studies remain held.
 
+The refreshed E1 run subsequently passed all 18 calls; the owner agreed to
+move on to E2 v2. The [E2 v2 execution contract](../experiments/m11_socp/E2_V2_PLAN.md)
+prepares the same four physical fixtures (eight solves) with current approved
+AC and SOCP numerical representations and the original independent checks.
+This is runner preparation, not execution authorization or gate closure;
+review, a clean owner commit and separate launch approval remain required.
+Original E2 evidence is preserved, and E3 and the earlier Tracy studies stay held.
+
 The two checkpoints below preserve the earlier increment history; their pending
 items are superseded where noted by the current builder/diagnostics report.
 
