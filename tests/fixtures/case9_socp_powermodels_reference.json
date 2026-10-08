@@ -1,0 +1,805 @@
+{
+  "case": {
+    "baseMVA": 100.0,
+    "branch": [
+      [
+        1.0,
+        4.0,
+        0.0,
+        0.0576,
+        0.0,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        4.0,
+        5.0,
+        0.017,
+        0.092,
+        0.158,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        5.0,
+        6.0,
+        0.039,
+        0.17,
+        0.358,
+        150.0,
+        150.0,
+        150.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        3.0,
+        6.0,
+        0.0,
+        0.0586,
+        0.0,
+        300.0,
+        300.0,
+        300.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        6.0,
+        7.0,
+        0.0119,
+        0.1008,
+        0.209,
+        150.0,
+        150.0,
+        150.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        7.0,
+        8.0,
+        0.0085,
+        0.072,
+        0.149,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        8.0,
+        2.0,
+        0.0,
+        0.0625,
+        0.0,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        8.0,
+        9.0,
+        0.032,
+        0.161,
+        0.306,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ],
+      [
+        9.0,
+        4.0,
+        0.01,
+        0.085,
+        0.176,
+        250.0,
+        250.0,
+        250.0,
+        0.0,
+        0.0,
+        1.0,
+        -360.0,
+        360.0
+      ]
+    ],
+    "bus": [
+      [
+        1.0,
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        2.0,
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        3.0,
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        4.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        5.0,
+        1.0,
+        90.0,
+        30.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        6.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        7.0,
+        1.0,
+        100.0,
+        35.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        8.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ],
+      [
+        9.0,
+        1.0,
+        125.0,
+        50.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        345.0,
+        1.0,
+        1.1,
+        0.9
+      ]
+    ],
+    "gen": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        300.0,
+        -300.0,
+        1.0,
+        100.0,
+        1.0,
+        250.0,
+        10.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        2.0,
+        163.0,
+        0.0,
+        300.0,
+        -300.0,
+        1.0,
+        100.0,
+        1.0,
+        300.0,
+        10.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        3.0,
+        85.0,
+        0.0,
+        300.0,
+        -300.0,
+        1.0,
+        100.0,
+        1.0,
+        270.0,
+        10.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ],
+    "gencost": [
+      [
+        2.0,
+        1500.0,
+        0.0,
+        3.0,
+        0.11,
+        5.0,
+        150.0
+      ],
+      [
+        2.0,
+        2000.0,
+        0.0,
+        3.0,
+        0.085,
+        1.2,
+        600.0
+      ],
+      [
+        2.0,
+        3000.0,
+        0.0,
+        3.0,
+        0.1225,
+        1.0,
+        335.0
+      ]
+    ],
+    "version": "2"
+  },
+  "case_name": "case9",
+  "independent_audit": {
+    "branch_loss_mw": 3.3057303641181477,
+    "max_balance_mva": 5.401119551606826e-10,
+    "max_cone_violation": 7.040945604330773e-11,
+    "max_determinant_violation": 8.35476132721169e-11,
+    "objective": 5296.666083379821,
+    "shunt_consumption_mw": 0.0
+  },
+  "input_sha256": "a0c409a64d9c3fdc095c5d9d83ba473cc5af300038e885f4b341e25321b3d8e2",
+  "objective": 5296.6660833079695,
+  "objective_components": {
+    "generator_cost": 5296.666083379821
+  },
+  "policy": {
+    "angle_constraints": false,
+    "angle_cuts": false,
+    "delta": 1.0,
+    "enforce_branch_limits": true,
+    "enforce_vset": false,
+    "loss_proxy": false,
+    "optional_devices": false,
+    "product_bounds": false,
+    "sparsity_tol": 0
+  },
+  "primal": {
+    "Pg": [
+      89.80335648873434,
+      134.32598807563872,
+      94.1763858026811
+    ],
+    "Qg": [
+      12.99571068758012,
+      2.645417661346272,
+      -7.87171684612149
+    ],
+    "W_im": [
+      0.05172673333736959,
+      0.08395374254713808,
+      0.055187362080235614,
+      0.03062209205878091,
+      0.04480486128843181,
+      -0.09691390545301726,
+      0.03670226760295376,
+      -0.044615088646615994,
+      0.11195228461709308
+    ],
+    "W_re": [
+      1.2025144677720072,
+      1.204156301116079,
+      1.1940012745052746,
+      1.1861471343942138,
+      1.1719275615027305,
+      1.1888818814625142,
+      1.1978739207006095,
+      1.1976053106843083,
+      1.1736666381625156
+    ],
+    "branch_p_from": [
+      89.80335648872094,
+      34.34939162371009,
+      -55.82284918752869,
+      94.17638580266848,
+      37.311159352918935,
+      -62.83146991681403,
+      -134.32598807521646,
+      71.20796211915868,
+      -55.1517395930871
+    ],
+    "branch_p_to": [
+      -89.80335648825695,
+      -34.177150812485024,
+      56.86522644929961,
+      -94.17638580223122,
+      -37.16853008319892,
+      63.118025956044164,
+      134.3259880756254,
+      -69.84826040692636,
+      55.453964864534555
+    ],
+    "branch_q_from": [
+      12.995710687580164,
+      -3.697691642126122,
+      -15.881687643697507,
+      -7.87171684612149,
+      -5.019449369416185,
+      -16.179134663109274,
+      9.349917756037529,
+      -10.09883001240044,
+      -30.850458689673353
+    ],
+    "branch_q_to": [
+      -9.076275328769734,
+      -14.118312356303209,
+      -22.28212945437935,
+      27.301578823795538,
+      -18.82086533689078,
+      0.7489122563629547,
+      2.645417661346272,
+      -19.1495413103266,
+      12.773966970896078
+    ],
+    "bus_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "voltage_product_pairs": [
+      [
+        1,
+        4
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        4,
+        9
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        8,
+        9
+      ]
+    ],
+    "w": [
+      1.2099999971280535,
+      1.2058096871544204,
+      1.1893884484334474,
+      1.1972865331826374,
+      1.175894573145885,
+      1.2099999996960185,
+      1.18698263363072,
+      1.2099999997136022,
+      1.1487823899338894
+    ]
+  },
+  "primal_objective": 5296.666083379821,
+  "primal_status": "FEASIBLE_POINT",
+  "reference": {
+    "generator_sha256": "7b4ae48716b60075598c9a39c3f76305cddc33be503590aac8ba5735ea719877",
+    "implementation": "PowerModels.SOCWRConicPowerModel",
+    "julia": "1.12.7",
+    "machine": "arm64-apple-darwin25.5.0",
+    "manifest_sha256": "4cc93729d1f0ea78b448d389d236e58092d6349e8f787289131912e9b1287780",
+    "packages": {
+      "ADTypes": {
+        "git_tree_sha1": "629de23e1c16911b439dabd2303c08af9575b226",
+        "version": "1.24.0"
+      },
+      "AMD": {
+        "git_tree_sha1": "45a1272e3f809d36431e57ab22703c6896b8908f",
+        "version": "0.5.3"
+      },
+      "Adapt": {
+        "git_tree_sha1": "daa72978cd7a624246e894a4f4f067706d4e17e2",
+        "version": "4.7.0"
+      },
+      "ArrayInterface": {
+        "git_tree_sha1": "daf5b2aab5b1c1fdcb65b05883cdb4b18abac1b9",
+        "version": "7.30.1"
+      },
+      "Bzip2_jll": {
+        "git_tree_sha1": "1b96ea4a01afe0ea4090c5c8039690672dd13f2e",
+        "version": "1.0.9+0"
+      },
+      "Clarabel": {
+        "git_tree_sha1": "9f5dcd866a1cee6fb2e853db82286e4cdf06c622",
+        "version": "0.11.1"
+      },
+      "CodecBzip2": {
+        "git_tree_sha1": "84990fa864b7f2b4901901ca12736e45ee79068c",
+        "version": "0.8.5"
+      },
+      "CodecZlib": {
+        "git_tree_sha1": "970758a3d591a2a5c2a907c53f2e2f8c1b1d3537",
+        "version": "0.7.9"
+      },
+      "CommonSubexpressions": {
+        "git_tree_sha1": "cda2cfaebb4be89c9084adaca7dd7333369715c5",
+        "version": "0.3.1"
+      },
+      "ConstructionBase": {
+        "git_tree_sha1": "b4b092499347b18a015186eae3042f72267106cb",
+        "version": "1.6.0"
+      },
+      "DataStructures": {
+        "git_tree_sha1": "b0bc6d2cad1fed8b7fd59a1551a991cb3d2809e6",
+        "version": "0.19.6"
+      },
+      "DiffResults": {
+        "git_tree_sha1": "782dd5f4561f5d267313f23853baaaa4c52ea621",
+        "version": "1.1.0"
+      },
+      "DiffRules": {
+        "git_tree_sha1": "79a2aca180a85c690c58a020d47b426954b590f8",
+        "version": "1.16.0"
+      },
+      "DifferentiationInterface": {
+        "git_tree_sha1": "0693d8b0a4608ff289d228ab4c598df5894845cd",
+        "version": "0.7.21"
+      },
+      "Distances": {
+        "git_tree_sha1": "c7e3a542b999843086e2f29dac96a618c105be1d",
+        "version": "0.10.12"
+      },
+      "DocStringExtensions": {
+        "git_tree_sha1": "7442a5dfe1ebb773c29cc2962a8980f47221d76c",
+        "version": "0.9.5"
+      },
+      "ExprTools": {
+        "git_tree_sha1": "d2e49e7efd29719d6f28b891b0e0e159daa9d2b4",
+        "version": "0.1.11"
+      },
+      "FiniteDiff": {
+        "git_tree_sha1": "5031f23e040bf17082e5b52422d77b5e844eefb1",
+        "version": "2.33.0"
+      },
+      "ForwardDiff": {
+        "git_tree_sha1": "1b86cca764a61dcac4fef4c5e16e378e5ed6953c",
+        "version": "1.4.5"
+      },
+      "GenericLinearAlgebra": {
+        "git_tree_sha1": "fc6236b7fbc40bc283e0dc5a84ead1169a6d7dda",
+        "version": "0.3.19"
+      },
+      "InfrastructureModels": {
+        "git_tree_sha1": "32a8f6b30c92a88ecc2f66fb422d25fddd0da7ae",
+        "version": "0.7.9"
+      },
+      "IrrationalConstants": {
+        "git_tree_sha1": "b2d91fe939cae05960e760110b328288867b5758",
+        "version": "0.2.6"
+      },
+      "JLLWrappers": {
+        "git_tree_sha1": "7204148362dafe5fe6a273f855b8ccbe4df8173e",
+        "version": "1.8.0"
+      },
+      "JSON": {
+        "git_tree_sha1": "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a",
+        "version": "0.21.4"
+      },
+      "JuMP": {
+        "git_tree_sha1": "4f27b21df3b47e8c08a83ead049afb621b2f5b3c",
+        "version": "1.31.2"
+      },
+      "LineSearches": {
+        "git_tree_sha1": "9ea3422d03222c6de679934d1c08f0a99405aa03",
+        "version": "7.5.1"
+      },
+      "LogExpFunctions": {
+        "git_tree_sha1": "bba2d9aa057d8f126415de240573e86a8f39d2a1",
+        "version": "1.0.1"
+      },
+      "MacroTools": {
+        "git_tree_sha1": "1e0228a030642014fe5cfe68c2c0a818f9e3f522",
+        "version": "0.5.16"
+      },
+      "MathOptInterface": {
+        "git_tree_sha1": "d10ba577e0b5a0481fab01dfd31fb20af3326954",
+        "version": "1.53.0"
+      },
+      "Memento": {
+        "git_tree_sha1": "e03a25cb3b6569623f8246d3d8b3faa7ce86f4ad",
+        "version": "1.5.0"
+      },
+      "MutableArithmetics": {
+        "git_tree_sha1": "dc5b2c4c111c46bc79ac4405eeb563523b39c004",
+        "version": "1.8.0"
+      },
+      "NLSolversBase": {
+        "git_tree_sha1": "25a6638571a902ecfb1ae2a18fc1575f86b1d4df",
+        "version": "7.10.0"
+      },
+      "NLsolve": {
+        "git_tree_sha1": "019f12e9a1a7880459d0173c182e6a99365d7ac1",
+        "version": "4.5.1"
+      },
+      "NaNMath": {
+        "git_tree_sha1": "dbd2e8cd2c1c27f0b584f6661b4309609c5a685e",
+        "version": "1.1.4"
+      },
+      "OpenSpecFun_jll": {
+        "git_tree_sha1": "1346c9208249809840c91b26703912dff463d335",
+        "version": "0.5.6+0"
+      },
+      "OrderedCollections": {
+        "git_tree_sha1": "05f45c2e0de6259db764adbfd2f1dc6d3f8de13c",
+        "version": "2.0.1"
+      },
+      "Parsers": {
+        "git_tree_sha1": "3de8f5e6e90ebfa8d6d1f86997d6cdcd6a912ff3",
+        "version": "2.8.7"
+      },
+      "PowerModels": {
+        "git_tree_sha1": "b8e410e1d827b621e82e7e670967f0efc5845c30",
+        "version": "0.21.5"
+      },
+      "PrecompileTools": {
+        "git_tree_sha1": "edbeefc7a4889f528644251bdb5fc9ab5348bc2c",
+        "version": "1.3.4"
+      },
+      "Preferences": {
+        "git_tree_sha1": "8b770b60760d4451834fe79dd483e318eee709c4",
+        "version": "1.5.2"
+      },
+      "QDLDL": {
+        "git_tree_sha1": "5a3c14e534faf5b66c4633b5770a665ec1a87503",
+        "version": "0.4.1"
+      },
+      "Reexport": {
+        "git_tree_sha1": "45e428421666073eab6f2da5c9d310d99bb12f9b",
+        "version": "1.2.2"
+      },
+      "Requires": {
+        "git_tree_sha1": "62389eeff14780bfe55195b7204c0d8738436d64",
+        "version": "1.3.1"
+      },
+      "Setfield": {
+        "git_tree_sha1": "c5391c6ace3bc430ca630251d02ea9687169ca68",
+        "version": "1.1.2"
+      },
+      "SnoopPrecompile": {
+        "git_tree_sha1": "e760a70afdcd461cf01a575947738d359234665c",
+        "version": "1.0.3"
+      },
+      "SpecialFunctions": {
+        "git_tree_sha1": "429071b23f4c9a13fb6582f807cc2ef454082408",
+        "version": "2.9.0"
+      },
+      "StaticArrays": {
+        "git_tree_sha1": "e206cf4850fd7ac4255ffd2b98922f563e18ac53",
+        "version": "1.9.20"
+      },
+      "StaticArraysCore": {
+        "git_tree_sha1": "6ab403037779dae8c514bad259f32a447262455a",
+        "version": "1.4.4"
+      },
+      "Statistics": {
+        "git_tree_sha1": "e2b53ce13a53367e96601081e33d34746b571bad",
+        "version": "1.11.5"
+      },
+      "StatsAPI": {
+        "git_tree_sha1": "178ed29fd5b2a2cfc3bd31c13375ae925623ff36",
+        "version": "1.8.0"
+      },
+      "TimerOutputs": {
+        "git_tree_sha1": "3748bd928e68c7c346b52125cf41fff0de6937d0",
+        "version": "0.5.29"
+      },
+      "TranscodingStreams": {
+        "git_tree_sha1": "0c45878dcfdcfa8480052b6ab162cdd138781742",
+        "version": "0.11.3"
+      }
+    },
+    "parser_normalization": [
+      "validate=false (no corrections)",
+      "zero taps to unity",
+      "charging split equally",
+      "zero ratings omitted",
+      "loads/shunts separated",
+      "make_per_unit! powers/costs/angles"
+    ],
+    "parser_verified": true,
+    "powermodels_source_sha256": {
+      "core/data.jl": "c2610b7306b9fa8d00986cbc9d0e96aa0cdcb89ee0f3dda6c149ea3ab9aba0da",
+      "core/objective.jl": "fdb439e9bf12f76bd9c3b5d96f8f21a768769ef08fe51c661496ec0ce009c636",
+      "core/variable.jl": "f3a188eab679f7529f154064db358dc923b44373a009af8bc8e15aa356b7e894",
+      "form/shared.jl": "65cd15f2636efa1f9da44b0bfc36558135421ac56de1acaa35a18b11c1429026",
+      "form/wr.jl": "a0801836af401ec61b367be74437fdb9ac3b55394d4136d1c59d4451155900a7",
+      "io/matpower.jl": "56ec769e187a5dcde2be43d0751d71d713f589c58627925d778e75adc7e1d257"
+    },
+    "settings": {
+      "max_iter": 200,
+      "time_limit": 20.0,
+      "tol_feas": 1e-09,
+      "tol_gap_abs": 1e-09,
+      "tol_gap_rel": 1e-09
+    }
+  },
+  "schema_version": 1,
+  "termination": "OPTIMAL",
+  "timing": {
+    "build_s": 0.0026400089263916016,
+    "solve_wall_s": 0.004892826080322266,
+    "solver_s": 0.0012281260000000002
+  },
+  "units": {
+    "Pg": "MW",
+    "Qg": "MVAr",
+    "W_im": "pu^2",
+    "W_re": "pu^2",
+    "branch_p": "MW",
+    "branch_q": "MVAr",
+    "max_cone_violation": "pu^2",
+    "max_determinant_violation": "pu^4",
+    "objective": "cost for delta=1 hour",
+    "w": "pu^2"
+  }
+}

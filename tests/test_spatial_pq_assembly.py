@@ -96,7 +96,7 @@ def test_spatial_pq_option_does_not_change_dc_graph(formulation):
 def test_default_and_frozen_input_fingerprint_compatibility():
     assert OPFOptions().vectorize_pq is True
     inputs = load_p0_fixture(6).inputs
-    # Independently reconstruct the legacy payload, which had no new field.
+    # Independently reconstruct the legacy payload, which had neither field.
     payload = {key: getattr(inputs, key) for key in (
         'case', 'horizon_steps', 'delta', 'generators', 'loads', 'storage',
         'nondispatchable', 'hvdc', 'df_load_p', 'df_load_q', 'df_nd',
@@ -104,6 +104,8 @@ def test_default_and_frozen_input_fingerprint_compatibility():
     )}
     payload['options'] = asdict(inputs.options)
     del payload['options']['vectorize_pq']
+    assert not inputs.options.numerical_preparation.enabled
+    del payload['options']['numerical_preparation']
     legacy = sha256(json.dumps(streaming._fingerprint_value(payload), sort_keys=True,
                                separators=(',', ':'), allow_nan=False).encode()).hexdigest()
     assert streaming.execution_input_sha256(inputs) == legacy

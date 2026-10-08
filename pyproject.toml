@@ -32,6 +32,7 @@ classifiers = [
 dependencies = [
     "cvxpy>=1.9.3",
     "numpy",
+    "scipy",
     "pandas",
     "cyipopt",
     "ipython>=9.15.0",

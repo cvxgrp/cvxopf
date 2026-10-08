@@ -29,6 +29,7 @@ from cvxopf import (
     HierarchicalSolveAudit,
     IPOPTStartEvidence,
     OPFBuild,
+    NumericalPreparation,
     TemporalAssembly,
     StorageUnitIdeal,
     build_opf_multistep,
@@ -289,7 +290,15 @@ def _fingerprint_value(value: object) -> object:
 
 def execution_input_sha256(inputs: HierarchicalInputs) -> str:
     """Fingerprint the complete owned physical/model input snapshot."""
+    preparation = inputs.options.numerical_preparation
+    if not isinstance(preparation, NumericalPreparation):
+        raise TypeError("numerical_preparation must be NumericalPreparation")
+    if preparation.enabled:
+        raise ValueError("legacy hierarchy fingerprints do not support numerical preparation")
     options = asdict(inputs.options)
+    # Preserve frozen physical-input hashes, without silently fingerprinting a
+    # prepared hierarchy as its baseline. M21 needs its own prepared schema.
+    del options["numerical_preparation"]
     # Preserve frozen snapshots made before the spatial assembly switch existed.
     # A nondefault representation remains explicit in new fingerprints.
     if options["vectorize_pq"] is True:

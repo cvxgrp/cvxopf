@@ -14,7 +14,14 @@ from typing import Literal, Mapping
 
 import numpy as np
 
-Formulation = Literal["ac", "lossy_dc", "singlenode_dc"]
+Formulation = Literal["ac", "socp", "lossy_dc", "singlenode_dc"]
+
+
+def supports_reactive_power(formulation: Formulation) -> bool:
+    """Select device P/Q channels independently of network convexity."""
+    return formulation in ("ac", "socp")
+
+
 TemporalClass = Literal["static", "interval", "boundary"]
 BoxRepresentation = Literal["explicit", "leaf"]
 ResultTemporalView = Literal[
@@ -29,6 +36,7 @@ BoxDecisionAuthority = Literal[
     "existing_production",
     "pending_component_gate",
     "ac_explicit_policy",
+    "socp_explicit_policy",
 ]
 
 
@@ -436,6 +444,7 @@ def prepare_box_bounds(
 class VariableBoxFamily(Enum):
     """Closed set of independently represented elementwise operating boxes."""
 
+    SOCP_VOLTAGE_SQUARED = "socp_voltage_squared"
     DISPATCHABLE_P = "dispatchable_p"
     DISPATCHABLE_Q = "dispatchable_q"
     AC_VOLTAGE = "ac_voltage"
@@ -479,6 +488,18 @@ _BOX_REPRESENTATIONS: Mapping[
     tuple[Formulation, VariableBoxFamily], BoxRepresentationDecision
 ] = MappingProxyType(
     {
+        **{
+            ("socp", family): _decision("explicit", "socp_explicit_policy")
+            for family in (
+                VariableBoxFamily.SOCP_VOLTAGE_SQUARED,
+                VariableBoxFamily.DISPATCHABLE_P,
+                VariableBoxFamily.DISPATCHABLE_Q,
+                VariableBoxFamily.STORAGE_SOC,
+                VariableBoxFamily.NONDISPATCHABLE_REAL_POWER,
+                VariableBoxFamily.HVDC_INPUT_POWER,
+                VariableBoxFamily.LOAD_SHED_FRACTION,
+            )
+        },
         ("lossy_dc", VariableBoxFamily.DISPATCHABLE_P): _decision(
             "leaf", "m14a1_qualified"
         ),

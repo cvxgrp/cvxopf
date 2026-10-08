@@ -16,6 +16,19 @@ authorization to run while the study is on hold.
 Start with [the input report](STAGE_A_REPORT.md), then the
 [study plan](../../plans/case118-tracy-2021-study-plan.md).
 
+## M11 E3 selection checkpoint
+
+The separate matched 24-hour comparison has a
+[no-solve selection plan](E3_SELECTION_PLAN.md) and
+[four-window proposal report](e3_selection/REPORT.md), derived from the retained
+annual lossy-DC states. The owner accepted the four selected dates.
+The owner subsequently selected a separate deficit-depletion leg with
+[60%-to-25% per-device boundaries](E3_BOUNDARY_DECISIONS.md). The
+[bounded 20-problem protocol](E3_PROTOCOL.md) and restartable `run_e3.py` runner
+are implemented for review, with queued per-attempt protocol revisions.
+No E3 numerical runner has been launched; this does not resume Stage D or
+change the historical study's hold status.
+
 ## Reproduce the input package
 
 The source CSV is **owner-provided and Git-ignored**, not included in a fresh

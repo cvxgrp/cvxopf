@@ -243,9 +243,6 @@ def require_matching_audit(actual, retained):
 
 
 def verify_attempt(root, directory, request, prepared):
-    import numpy as np
-    from cvxopf.hierarchical import IPOPTStartEvidence
-
     completion = model.read(directory / "completion.json")
     for name, key in (
         ("result.json.gz", "result_sha256"),
@@ -265,20 +262,9 @@ def verify_attempt(root, directory, request, prepared):
     elif expected_context != model.read(root / "binding.json")["context"]:
         raise ValueError("new continued attempt lacks execution provenance")
     start = model.read(directory / "start.json")
-    raw_x0 = model.read(directory / "x0.json.gz")
-    raw_x0.pop("iteration")
-    evidence = IPOPTStartEvidence(**raw_x0)
-    seen = set()
-    for item in evidence.layout:
-        if item["is_original_variable"]:
-            name = item["name"]
-            seen.add(name)
-            expected = np.asarray(start["assigned_start"][name]).flatten(order="F")
-            np.testing.assert_array_equal(
-                evidence.complete_x0[item["start"] : item["stop"]], expected
-            )
-    if seen != set(start["assigned_start"]):
-        raise ValueError("retained IPOPT x0 omits model variables")
+    from .ac_archive import verify_x0, verify_logical
+
+    verify_x0(start, model.read(directory / "x0.json.gz"))
     if payload["request"] != request:
         raise ValueError("worker used a different request")
     audit = audit_result(
@@ -293,38 +279,8 @@ def verify_attempt(root, directory, request, prepared):
     if accepted and payload["next_soc_mwh"] != payload["result"]["soc"][0]:
         raise ValueError("next state differs from accepted first action")
     if accepted:
-        logical = payload["logical_solution"]
-        if not logical or any(
-            not np.isfinite(np.asarray(v)).all() for v in logical.values()
-        ):
-            raise ValueError("accepted source lacks finite logical solution")
-        # Explicitly check the physical coordinates used for the next action's
-        # state and warm start against the independently audited public result.
-        aliases = {
-            "Pg": "Pg",
-            "Qg": "Qg",
-            "b": "b",
-            "b_q": "b_q",
-            "soc": "soc",
-            "p_nd": "p_nd",
-            "q_nd": "q_nd",
-            "load_shed_fraction": "load_shed_fraction",
-            "v": "Vm",
-            "theta": "Va_deg",
-            "p": "p_net",
-            "q": "q_net",
-        }
         base = float(model.request_kwargs(prepared, request)["case"]["baseMVA"])
-        for family, public in aliases.items():
-            for t in range(request["W"]):
-                values = np.asarray(logical[f"{family}_{t}"]).reshape(-1)
-                if family in {"Pg", "Qg", "p", "q"}:
-                    values = values * base
-                elif family == "theta":
-                    values = np.rad2deg(values)
-                np.testing.assert_allclose(
-                    values, payload["result"][public][t], rtol=1e-12, atol=1e-10
-                )
+        verify_logical(payload["logical_solution"], payload["result"], base, request["W"])
     # The live cache keeps summaries, not all full-window/x0 arrays.
     return dict(
         accepted=accepted,

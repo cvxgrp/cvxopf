@@ -522,6 +522,8 @@ class HierarchicalInputs:
             )
         if not isinstance(self.options, OPFOptions):
             raise TypeError("options must be OPFOptions")
+        from cvxopf._numerical_preparation import reject_hierarchical_preparation
+        reject_hierarchical_preparation(self.options.numerical_preparation)
         if not self.options.init_flat:
             raise ValueError(
                 "hierarchical initialization requires OPFOptions.init_flat=True"

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "edits": [
+    {
+      "path": "tests/test_socp_conditioning_native_lu.py",
+      "node_id": "tests/test_socp_conditioning_native_lu.py::test_execution_context_enumerates_only_declared_solver",
+      "original_sha256": "4225a3616f66589abed23b617520fc6fa546c156908ad28acad4a0ec2c870d17",
+      "edited_sha256": "0d33090621373db9db36c1bbfbbaa0932ae508ccb941cb8451f2ffeccd3a83c7",
+      "purpose": "Isolate real CLARABEL-only execution configuration from unrelated historical environment and provenance collection.",
+      "mocked_dependencies": [
+        "native_step_probe.context (commercial metadata, ignored baseline and temporary Rust engine provenance)",
+        "diagnostic.sha (unrelated source/protocol file hashes)"
+      ],
+      "preserved_behavior": "Real execution_configuration, live SOLVERS/options enumeration and restoration of SOLVERS/options/context.",
+      "baseline_outcome": "Reproduced PackageNotFoundError: mosek after verifying original test bytes.",
+      "command": "UV_CACHE_DIR=/private/tmp/cvxopf-integration-uv uv run --offline --no-sync --extra dev pytest tests/test_socp_conditioning_native_lu.py::test_execution_context_enumerates_only_declared_solver -q",
+      "outcome": "1 passed; known OpenMP import warning; no optimization call or dependency installation."
+    }
+  ]
+}

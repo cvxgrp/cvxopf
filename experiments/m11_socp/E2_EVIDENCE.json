@@ -1,0 +1,2826 @@
+{
+  "accepted": true,
+  "context": {
+    "head": "5dd963bb813538df9b762ce16bae094fb8dfa68b",
+    "machine": "arm64",
+    "platform": "macOS-26.7-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.11.15 (main, May 10 2026, 19:23:07) [Clang 22.1.3 ]",
+    "source_sha256": {
+      "experiments/m11_socp/E2_PLAN.md": "83b08d0d98d30e0df7d8d603f06f6f70480efc49dfc1d6d1e4bc0f19b09e52c4",
+      "experiments/m11_socp/e2_compare.py": "e6fabbdaf070e6d1729996dbe19083699d332199b0ff2e210261ffbf33562b87",
+      "src/cvxopf/__init__.py": "0ab6e35c81559fd4bbd04d4fb427967fde7afc84286d080cb06c73871fdb0597",
+      "src/cvxopf/_ac_start_mapping.py": "a19d592f99f36700fa90623b53bb25b33e09ac3f5edb8c38196e1a153a7919fa",
+      "src/cvxopf/_admittance_preparation.py": "ddcdd566b5f5366a571b878e6e34428bfc5f68e1f223552d6fa80c0e71a60d83",
+      "src/cvxopf/_component_adapter.py": "b531b32fb7fcbd2f3c8792c600f8b2fa5ec948d4dfc5e37f3806178b23f7edb4",
+      "src/cvxopf/_component_adapters.py": "06b2075b00dec5ef77f04b71c497013fea3aa6cd4947f5a646b5fda30a417813",
+      "src/cvxopf/_component_assembly.py": "7cc011b8e2593e792685ea359bf29409c5ef93851cafb76cc54b9889944bc4c9",
+      "src/cvxopf/_cvxpy_dispatch.py": "c52ee16536bb3bd196990df9b7ee5120c2c48df1a33620fbc0f1ab171e2de938",
+      "src/cvxopf/_hierarchical_solver.py": "33a247ac4afdacf0d5ed62fdea9e4535d944c72add512c0a66ad52e5529e3368",
+      "src/cvxopf/_temporal_assembly.py": "d9dad4eb4ea4f74416e2b55648e0a467e8f1e5f6c4fb53183e5ddbc9dde1f6ec",
+      "src/cvxopf/_voltage_product.py": "d4264f54330a23f2b8bd7e6a9957cc042ec023c18a83a36adf4d0caf256451e2",
+      "src/cvxopf/ac_problem.py": "4fc9ad5f40eeba940c1e41995f2122dd750fb9316b5ce046e9773afc416dd514",
+      "src/cvxopf/characterization.py": "86e1069e4fa41e43d5374dc809c1380b5a105df7141035c5ffca86175dde2037",
+      "src/cvxopf/cost.py": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+      "src/cvxopf/data.py": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+      "src/cvxopf/dc_problem.py": "39f8b1ae5621886148a3cfc65148eda8dd0fa49babc7dc68399388c51ead38ce",
+      "src/cvxopf/generator.py": "fa4db67afaecfb3a51b06a88690785df3574efb9e4f20520730e09168b073eab",
+      "src/cvxopf/hierarchical.py": "dde134d7f1ab327fc74c7d92ead4d284b269cebcf7b8149bf0f2eed43f09e5d6",
+      "src/cvxopf/hvdc.py": "127434b1bf6fa4dc48a21419cfd26b108bd3deb41f39d875a9ae47d643ef1457",
+      "src/cvxopf/load.py": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+      "src/cvxopf/network.py": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+      "src/cvxopf/nondispatchable.py": "8d7e0d503df5d1cc7864354e73b01370d0903d23dbbbf6faffbe73dfc74aaa1b",
+      "src/cvxopf/problem.py": "5162f77e5c8a38da8adb1233d205e41d67b0991756ce6f585e9cb9a0930048c8",
+      "src/cvxopf/results.py": "4723b84bd3fec2f760d3b9161899849c9aa52b5b33de0a8bbc1894f17e023010",
+      "src/cvxopf/singlenode_dc_problem.py": "02c672ead63e3308ccfc227c8039b0233a9014ddb77bcdf37d7c31c78a35dbd0",
+      "src/cvxopf/socp_diagnostics.py": "01d918bb3b873c1747887b86aebf88f5b1ae023eb144b9b221e2092623e88ac4",
+      "src/cvxopf/socp_problem.py": "8d44d56f63372b5fcf475f473f63241ef3eedbc5d37582908e46038e49a38c96",
+      "src/cvxopf/storage.py": "6964dbe9168926128b605575566ec3fd99217271350a96de19fef66acabca871",
+      "src/cvxopf/testcases/__init__.py": "987d7eaa7935e05ac739a64acc5244fc6ed356612e533192b13df5bf85eddd2f",
+      "src/cvxopf/testcases/case118.py": "989cfb26ded5a60fc32dfd311b6c6f9161e0653819d874f76291f23d7ed0f264",
+      "src/cvxopf/testcases/case14.py": "b28c001ad9c1568fa6c9fbe112a5225638f80899c8a9673f80e45c3f164a8bd3",
+      "src/cvxopf/testcases/case30.py": "8e92a4843a3750f500388ee951369209f036906f0e1b615cb2a5cb99b27039e1",
+      "src/cvxopf/testcases/case30pwl.py": "092e2489b725c199c5be542a3019640a16748dcb657d2026ccd474195ae401fb",
+      "src/cvxopf/testcases/case39.py": "571c17b2791fb503631173340a52c303acb7b50ad4715732baee30859ad2b4d2",
+      "src/cvxopf/testcases/case57.py": "b53b12eeace410699f39fa9c157eb2c8d5461fb9ead8ef9f04f3d43e14e9af99",
+      "src/cvxopf/testcases/case9.py": "e9caaead9f13c262cbc6075e77e00117463220ceace5ca4f2b421c28a7194a68",
+      "src/cvxopf/testcases/case9_dcline.py": "2ade63e529e0274fe800d58faf649529074f242dfdf3d8762b499e9ce368ad20",
+      "src/cvxopf/testcases/case9_pwl.py": "57213a8e36658180f820346856911c805913b5747263bddd6fc6e01a2165a8bb",
+      "src/cvxopf/testcases/singlenode.py": "9de5c60fd2e016738bb4b01ae79673496711e92809458ca4e4a9be3a9e193224",
+      "tests/socp_matched.py": "c1535f86b64281b4c27011d6e5086e9a0ae865a23fd196162b51fd85995a5c36",
+      "tests/socp_reference_cases.py": "37d0babd2582e3bcd195c3ea5f5f60d8c20ef457bd9d4d02b12e1a80267c4153",
+      "tests/test_socp_matched.py": "e3a48e5e9bbaa178e80a5f372421deee726afdd73463017842dab682f72415e8",
+      "uv.lock": "0159930e5a2c4781826b3390d8ebb648580b8649f92ec81d961561cf8419a185"
+    },
+    "versions": {
+      "clarabel": "0.11.1",
+      "cvxpy": "1.9.3",
+      "cyipopt": "1.7.0",
+      "numpy": "2.4.6",
+      "scipy": "1.17.1"
+    },
+    "worktree_status": "?? experiments/m11_socp/E2_PLAN.md\n?? experiments/m11_socp/e2_compare.py\n?? tests/socp_matched.py\n?? tests/test_socp_matched.py\n"
+  },
+  "mixed_assembly_objective_difference": 0.0010011116119130747,
+  "raw_directory": "e2",
+  "raw_root_sha256": "e63725bf2d33f301b48843334f49a7b9cd3240886d569558cd060cde00ed377e",
+  "records": [
+    {
+      "accepted": true,
+      "artifact": "case9.json",
+      "attempts": {
+        "ac": {
+          "canonical_soc_sizes": null,
+          "canonicalization_backend": "DNLP_IPOPT",
+          "constraint_objects": 33,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": "Not available",
+          "reduction_chain_apply_s": 0.017716917034704238,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 127,
+          "scalar_inequalities": 30,
+          "scalar_variables": 132,
+          "settings": {
+            "acceptable_tol": 1e-08,
+            "max_cpu_time": 60.0,
+            "max_iter": 500,
+            "tol": 1e-08
+          },
+          "solve_wall_including_canonicalization_s": 0.050196958996821195,
+          "solver_name": "IPOPT",
+          "solver_s": null,
+          "status": "optimal"
+        },
+        "socp": {
+          "canonical_soc_sizes": [
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "canonicalization_backend": "CPP",
+          "constraint_objects": 11,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": 16,
+          "reduction_chain_apply_s": 0.009236250014510006,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 18,
+          "scalar_inequalities": 30,
+          "scalar_variables": 33,
+          "settings": {
+            "max_iter": 200,
+            "time_limit": 20.0,
+            "tol_feas": 1e-09,
+            "tol_gap_abs": 1e-09,
+            "tol_gap_rel": 1e-09
+          },
+          "solve_wall_including_canonicalization_s": 0.011051957961171865,
+          "solver_name": "CLARABEL",
+          "solver_s": 0.000622208,
+          "status": "optimal"
+        }
+      },
+      "error": null,
+      "name": "case9",
+      "pair_build_s": 0.013282250030897558,
+      "returncode": 0,
+      "sha256": "615b1dacc4f45bd4c63b7d092b054f320b1bb36d091e3c421a8ef52dec3bfd5b",
+      "summary": {
+        "arms": {
+          "ac": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 6.661338147750939e-16,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      7,
+                      8
+                    ],
+                    "index": 8,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "p_balance": {
+                  "maximum": 2.4424906541753444e-13,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 3,
+                    "index": 3,
+                    "interval": 0
+                  }
+                },
+                "q_balance": {
+                  "maximum": 3.375077994860476e-12,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 3,
+                    "index": 3,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 3.3066888942258146,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 5296.686203991437
+            },
+            "energy_not_served_mwh": 0.0,
+            "hvdc_loss_mwh": null,
+            "objective": 5296.686203991437,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": null,
+            "storage_power_mw": null
+          },
+          "socp": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 1.006759120514289e-10,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      7,
+                      8
+                    ],
+                    "index": 8,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "p_balance": {
+                  "maximum": 1.7112977701572163e-10,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 3,
+                    "index": 3,
+                    "interval": 0
+                  }
+                },
+                "q_balance": {
+                  "maximum": 7.034373084024992e-11,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 8,
+                    "index": 8,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 3.3057302477461263,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 5296.666083405543
+            },
+            "energy_not_served_mwh": 0.0,
+            "hvdc_loss_mwh": null,
+            "objective": 5296.666083405543,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": null,
+            "storage_power_mw": null
+          }
+        },
+        "cycle_summary": {
+          "maximum": 0.005248702440844716,
+          "passed": false,
+          "tolerance": 1e-05,
+          "units": "radians",
+          "worst": {
+            "identity": [
+              6,
+              7
+            ],
+            "index": 0,
+            "interval": 0
+          }
+        },
+        "dual_certificate": null,
+        "exact_product_recovery": false,
+        "gap_allowance": 0.010613372407982873,
+        "lifted_ac_exact_recovery": true,
+        "lifted_ac_feasible": true,
+        "objective_gap": 0.020120585893891985,
+        "objective_label": "numerical relaxation optimum estimate",
+        "product_summary": {
+          "maximum": 0.006290227035305909,
+          "passed": false,
+          "tolerance": 1e-05,
+          "units": "p.u.^2",
+          "worst": {
+            "identity": [
+              6,
+              7
+            ],
+            "index": 7,
+            "interval": 0
+          }
+        },
+        "recovered_ac_audit": {
+          "available": true,
+          "complete": true,
+          "feasible": false,
+          "reason": null,
+          "residuals": {
+            "branch_from": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "branch_to": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_p": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_q": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "p_balance": {
+              "maximum": 8.7644624792236,
+              "passed": false,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 7,
+                "index": 7,
+                "interval": 0
+              }
+            },
+            "q_balance": {
+              "maximum": 9.133308103187876,
+              "passed": false,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 2,
+                "index": 2,
+                "interval": 0
+              }
+            },
+            "voltage_bounds": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            }
+          },
+          "tolerances": {
+            "cone": 1e-06,
+            "cycle_angle": 1e-05,
+            "energy": 1e-05,
+            "fraction": 1e-07,
+            "normalization_floor": 1e-12,
+            "phase_floor": 1e-12,
+            "power": 0.0001,
+            "product": 1e-05,
+            "rank_relative": 1e-05,
+            "voltage_squared": 1e-06
+          }
+        },
+        "recovered_ac_feasible": false,
+        "recovery_available": true,
+        "recovery_reason": "Forest candidate only; no dispatch repair or control-action acceptance.",
+        "socp_rank_relative": {
+          "maximum": 0.00890509281047157,
+          "passed": false,
+          "tolerance": 1e-05,
+          "units": "dimensionless",
+          "worst": {
+            "identity": [
+              2,
+              5
+            ],
+            "index": 2,
+            "interval": 0
+          }
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "artifact": "case14.json",
+      "attempts": {
+        "ac": {
+          "canonical_soc_sizes": null,
+          "canonicalization_backend": "DNLP_IPOPT",
+          "constraint_objects": 55,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": "Not available",
+          "reduction_chain_apply_s": 0.03645195800345391,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 245,
+          "scalar_inequalities": 60,
+          "scalar_variables": 254,
+          "settings": {
+            "acceptable_tol": 1e-08,
+            "max_cpu_time": 60.0,
+            "max_iter": 500,
+            "tol": 1e-08
+          },
+          "solve_wall_including_canonicalization_s": 0.0771104579907842,
+          "solver_name": "IPOPT",
+          "solver_s": null,
+          "status": "optimal"
+        },
+        "socp": {
+          "canonical_soc_sizes": [
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "canonicalization_backend": "CPP",
+          "constraint_objects": 11,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": 14,
+          "reduction_chain_apply_s": 0.02446745795896277,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 28,
+          "scalar_inequalities": 48,
+          "scalar_variables": 64,
+          "settings": {
+            "max_iter": 200,
+            "time_limit": 20.0,
+            "tol_feas": 1e-09,
+            "tol_gap_abs": 1e-09,
+            "tol_gap_rel": 1e-09
+          },
+          "solve_wall_including_canonicalization_s": 0.026687833946198225,
+          "solver_name": "CLARABEL",
+          "solver_s": 0.000969377,
+          "status": "optimal"
+        }
+      },
+      "error": null,
+      "name": "case14",
+      "pair_build_s": 0.01980770897353068,
+      "returncode": 0,
+      "sha256": "cff00cc1d76928245e641c1572ab80fc9247a74d32949c105c529f5181156d54",
+      "summary": {
+        "arms": {
+          "ac": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 8.881784197001252e-16,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      3,
+                      6
+                    ],
+                    "index": 7,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "p_balance": {
+                  "maximum": 4.2671821631756757e-10,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 5,
+                    "index": 5,
+                    "interval": 0
+                  }
+                },
+                "q_balance": {
+                  "maximum": 3.9045389144121145e-10,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 5,
+                    "index": 5,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 9.287191730208079,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 8081.526258208551
+            },
+            "energy_not_served_mwh": 0.0,
+            "hvdc_loss_mwh": null,
+            "objective": 8081.526258208551,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": null,
+            "storage_power_mw": null
+          },
+          "socp": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 5.013101045392432e-11,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      0,
+                      1
+                    ],
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "p_balance": {
+                  "maximum": 3.0375701953744283e-13,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 4,
+                    "index": 4,
+                    "interval": 0
+                  }
+                },
+                "q_balance": {
+                  "maximum": 1.2363443602225743e-12,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 8,
+                    "index": 8,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 9.177895679140544,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 8075.124700366227
+            },
+            "energy_not_served_mwh": 0.0,
+            "hvdc_loss_mwh": null,
+            "objective": 8075.1247003662265,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": null,
+            "storage_power_mw": null
+          }
+        },
+        "cycle_summary": {
+          "maximum": 0.05872434158604906,
+          "passed": false,
+          "tolerance": 1e-05,
+          "units": "radians",
+          "worst": {
+            "identity": [
+              9,
+              10
+            ],
+            "index": 4,
+            "interval": 0
+          }
+        },
+        "dual_certificate": null,
+        "exact_product_recovery": false,
+        "gap_allowance": 0.0161830525164171,
+        "lifted_ac_exact_recovery": true,
+        "lifted_ac_feasible": true,
+        "objective_gap": 6.4015578423241095,
+        "objective_label": "numerical relaxation optimum estimate",
+        "product_summary": {
+          "maximum": 0.06379283244224968,
+          "passed": false,
+          "tolerance": 1e-05,
+          "units": "p.u.^2",
+          "worst": {
+            "identity": [
+              9,
+              10
+            ],
+            "index": 17,
+            "interval": 0
+          }
+        },
+        "recovered_ac_audit": {
+          "available": true,
+          "complete": true,
+          "feasible": false,
+          "reason": null,
+          "residuals": {
+            "branch_from": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "branch_to": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_p": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_q": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "p_balance": {
+              "maximum": 108.33255001435337,
+              "passed": false,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 4,
+                "index": 4,
+                "interval": 0
+              }
+            },
+            "q_balance": {
+              "maximum": 35.894372338290914,
+              "passed": false,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 4,
+                "index": 4,
+                "interval": 0
+              }
+            },
+            "voltage_bounds": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            }
+          },
+          "tolerances": {
+            "cone": 1e-06,
+            "cycle_angle": 1e-05,
+            "energy": 1e-05,
+            "fraction": 1e-07,
+            "normalization_floor": 1e-12,
+            "phase_floor": 1e-12,
+            "power": 0.0001,
+            "product": 1e-05,
+            "rank_relative": 1e-05,
+            "voltage_squared": 1e-06
+          }
+        },
+        "recovered_ac_feasible": false,
+        "recovery_available": true,
+        "recovery_reason": "Forest candidate only; no dispatch repair or control-action acceptance.",
+        "socp_rank_relative": {
+          "maximum": 1.4467122426742965e-10,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "dimensionless",
+          "worst": {
+            "identity": [
+              3,
+              8
+            ],
+            "index": 8,
+            "interval": 0
+          }
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "artifact": "mixed_vectorized.json",
+      "attempts": {
+        "ac": {
+          "canonical_soc_sizes": null,
+          "canonicalization_backend": "DNLP_IPOPT",
+          "constraint_objects": 32,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": "Not available",
+          "reduction_chain_apply_s": 0.006078583013731986,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 78,
+          "scalar_inequalities": 57,
+          "scalar_variables": 101,
+          "settings": {
+            "acceptable_tol": 1e-08,
+            "max_cpu_time": 60.0,
+            "max_iter": 500,
+            "tol": 1e-08
+          },
+          "solve_wall_including_canonicalization_s": 0.025991124974098057,
+          "solver_name": "IPOPT",
+          "solver_s": null,
+          "status": "optimal"
+        },
+        "socp": {
+          "canonical_soc_sizes": [
+            4,
+            4,
+            4,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "canonicalization_backend": "SCIPY",
+          "constraint_objects": 26,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": 25,
+          "reduction_chain_apply_s": 0.026331499975640327,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 27,
+          "scalar_inequalities": 63,
+          "scalar_variables": 53,
+          "settings": {
+            "max_iter": 200,
+            "time_limit": 20.0,
+            "tol_feas": 1e-09,
+            "tol_gap_abs": 1e-09,
+            "tol_gap_rel": 1e-09
+          },
+          "solve_wall_including_canonicalization_s": 0.029055624967440963,
+          "solver_name": "CLARABEL",
+          "solver_s": 0.001052787,
+          "status": "optimal"
+        }
+      },
+      "error": null,
+      "name": "mixed_vectorized",
+      "pair_build_s": 0.014456374978180975,
+      "returncode": 0,
+      "sha256": "cd351bb8061e8524ac629a75fc60d69801bd38221e939ff3c6c5fc288ccb2961",
+      "summary": {
+        "arms": {
+          "ac": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 1.1102230246251565e-16,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      0,
+                      1
+                    ],
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_box": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_coupling": {
+                  "maximum": 1.1102230246251565e-16,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_p": {
+                  "maximum": 3.60233099215663e-21,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "p_balance": {
+                  "maximum": 7.815970093361102e-14,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "q_balance": {
+                  "maximum": 5.001172099978232e-16,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 2
+                  }
+                },
+                "shedding_fraction": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-07,
+                  "units": "fraction",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_energy": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_terminal": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 2
+                  }
+                },
+                "storage_transition": {
+                  "maximum": 8.881784197001252e-16,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_setpoints": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 1.8887854067458854,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 73.56158080464321,
+              "hvdc_cost": 0.530000013568419,
+              "load_shedding_cost": 13682.000000027107,
+              "storage_cost": 1.5874123090103534,
+              "storage_terminal_cost": 0.11091497508367743
+            },
+            "energy_not_served_mwh": 13.682000000027108,
+            "hvdc_loss_mwh": 0.06000000339244749,
+            "objective": 13757.789908129413,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": [
+              [
+                11.99999931262222,
+                3.4999997683400337
+              ],
+              [
+                5.999999312626747,
+                1.999999768344559
+              ],
+              [
+                6.0,
+                2.8741230901216377
+              ]
+            ],
+            "storage_power_mw": [
+              [
+                -11.99999862524444,
+                -2.999999536680068
+              ],
+              [
+                11.99999999999095,
+                2.99999999999095
+              ],
+              [
+                -1.3747465079604754e-06,
+                -1.748246643554157
+              ]
+            ]
+          },
+          "socp": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      0,
+                      1
+                    ],
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_box": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_coupling": {
+                  "maximum": 4.884981308350689e-15,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "nondispatchable_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_p": {
+                  "maximum": 1.2460029479682832e-15,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "p_balance": {
+                  "maximum": 5.157261284693959e-10,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 1
+                  }
+                },
+                "q_balance": {
+                  "maximum": 1.1521963589660306e-12,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 1
+                  }
+                },
+                "shedding_fraction": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-07,
+                  "units": "fraction",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_capability": {
+                  "maximum": 3.742263583461636e-07,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "storage_energy": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_terminal": {
+                  "maximum": 8.881784197001252e-16,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 2
+                  }
+                },
+                "storage_transition": {
+                  "maximum": 3.552713678800501e-15,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_setpoints": {
+                  "maximum": 1.3322676295501878e-15,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 1.8887870165560372,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 73.56158394661942,
+              "hvdc_cost": 0.5300003064799006,
+              "load_shedding_cost": 13682.000995320532,
+              "storage_cost": 1.5874122796811343,
+              "storage_terminal_cost": 0.11091615098948492
+            },
+            "energy_not_served_mwh": 13.682000995320532,
+            "hvdc_loss_mwh": 0.06000007662770418,
+            "objective": 13757.790908004305,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": [
+              [
+                11.999833807038518,
+                3.499990340914
+              ],
+              [
+                5.999833619925339,
+                1.9999903410506519
+              ],
+              [
+                6.000000000000001,
+                2.8741224228582816
+              ]
+            ],
+            "storage_power_mw": [
+              [
+                -11.999667614077044,
+                -2.999980681828
+              ],
+              [
+                12.000000374226358,
+                2.9999999997266955
+              ],
+              [
+                -0.00033276014932576104,
+                -1.7482641636152596
+              ]
+            ]
+          }
+        },
+        "cycle_summary": {
+          "maximum": 0.0,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "radians",
+          "worst": null
+        },
+        "dual_certificate": null,
+        "exact_product_recovery": true,
+        "gap_allowance": 0.027535579816258822,
+        "lifted_ac_exact_recovery": true,
+        "lifted_ac_feasible": true,
+        "objective_gap": -0.0009998748919315403,
+        "objective_label": "numerical relaxation optimum estimate",
+        "product_summary": {
+          "maximum": 1.2409889782460937e-09,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "p.u.^2",
+          "worst": {
+            "identity": [
+              0,
+              1
+            ],
+            "index": 0,
+            "interval": 1
+          }
+        },
+        "recovered_ac_audit": {
+          "available": true,
+          "complete": true,
+          "feasible": true,
+          "reason": null,
+          "residuals": {
+            "branch_from": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "branch_to": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_p": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_q": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "hvdc_box": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "hvdc_coupling": {
+              "maximum": 4.884981308350689e-15,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 1
+              }
+            },
+            "nondispatchable_capability": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "nondispatchable_p": {
+              "maximum": 1.2460029479682832e-15,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 1
+              }
+            },
+            "p_balance": {
+              "maximum": 1.2415047692115877e-06,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 1,
+                "index": 1,
+                "interval": 1
+              }
+            },
+            "q_balance": {
+              "maximum": 1.1522249772844076e-12,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 1,
+                "index": 1,
+                "interval": 1
+              }
+            },
+            "shedding_fraction": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-07,
+              "units": "fraction",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "storage_capability": {
+              "maximum": 3.742263583461636e-07,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 1
+              }
+            },
+            "storage_energy": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "storage_terminal": {
+              "maximum": 8.881784197001252e-16,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 2
+              }
+            },
+            "storage_transition": {
+              "maximum": 3.552713678800501e-15,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "voltage_bounds": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "voltage_setpoints": {
+              "maximum": 1.3322676295501878e-15,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 1
+              }
+            }
+          },
+          "tolerances": {
+            "cone": 1e-06,
+            "cycle_angle": 1e-05,
+            "energy": 1e-05,
+            "fraction": 1e-07,
+            "normalization_floor": 1e-12,
+            "phase_floor": 1e-12,
+            "power": 0.0001,
+            "product": 1e-05,
+            "rank_relative": 1e-05,
+            "voltage_squared": 1e-06
+          }
+        },
+        "recovered_ac_feasible": true,
+        "recovery_available": true,
+        "recovery_reason": "Forest candidate only; no dispatch repair or control-action acceptance.",
+        "socp_rank_relative": {
+          "maximum": 2.6071197150138446e-09,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "dimensionless",
+          "worst": {
+            "identity": [
+              0,
+              1
+            ],
+            "index": 0,
+            "interval": 1
+          }
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "artifact": "mixed_stepwise.json",
+      "attempts": {
+        "ac": {
+          "canonical_soc_sizes": null,
+          "canonicalization_backend": "DNLP_IPOPT",
+          "constraint_objects": 97,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": "Not available",
+          "reduction_chain_apply_s": 0.016694707970600575,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 76,
+          "scalar_inequalities": 57,
+          "scalar_variables": 99,
+          "settings": {
+            "acceptable_tol": 1e-08,
+            "max_cpu_time": 60.0,
+            "max_iter": 500,
+            "tol": 1e-08
+          },
+          "solve_wall_including_canonicalization_s": 0.04291841702070087,
+          "solver_name": "IPOPT",
+          "solver_s": null,
+          "status": "optimal"
+        },
+        "socp": {
+          "canonical_soc_sizes": [
+            4,
+            3,
+            3,
+            4,
+            4,
+            4,
+            4,
+            3,
+            3,
+            4,
+            4,
+            4,
+            4,
+            3,
+            3,
+            4,
+            4,
+            4
+          ],
+          "canonicalization_backend": "CPP",
+          "constraint_objects": 79,
+          "exception": null,
+          "extra_stats": null,
+          "iterations": 19,
+          "reduction_chain_apply_s": 0.0467724580084905,
+          "reduction_chain_calls": 1,
+          "scalar_equalities": 25,
+          "scalar_inequalities": 63,
+          "scalar_variables": 51,
+          "settings": {
+            "max_iter": 200,
+            "time_limit": 20.0,
+            "tol_feas": 1e-09,
+            "tol_gap_abs": 1e-09,
+            "tol_gap_rel": 1e-09
+          },
+          "solve_wall_including_canonicalization_s": 0.050764957966748625,
+          "solver_name": "CLARABEL",
+          "solver_s": 0.000816667,
+          "status": "optimal"
+        }
+      },
+      "error": null,
+      "name": "mixed_stepwise",
+      "pair_build_s": 0.023422875034157187,
+      "returncode": 0,
+      "sha256": "8562357abc1174a4b3796ab1b1806fa938aa1112d63832ee4a8a2241658a068e",
+      "summary": {
+        "arms": {
+          "ac": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 1.1102230246251565e-16,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      0,
+                      1
+                    ],
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_box": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_coupling": {
+                  "maximum": 1.1102230246251565e-16,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_p": {
+                  "maximum": 3.6023309921535765e-21,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "p_balance": {
+                  "maximum": 7.815970093361102e-14,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "q_balance": {
+                  "maximum": 2.780731741730533e-16,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 2
+                  }
+                },
+                "shedding_fraction": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-07,
+                  "units": "fraction",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_energy": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_terminal": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 2
+                  }
+                },
+                "storage_transition": {
+                  "maximum": 8.881784197001252e-16,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_setpoints": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 1.8887854067458854,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 73.56158080464321,
+              "hvdc_cost": 0.530000013568419,
+              "load_shedding_cost": 13682.000000027107,
+              "storage_cost": 1.5874123090103534,
+              "storage_terminal_cost": 0.11091497508367743
+            },
+            "energy_not_served_mwh": 13.682000000027108,
+            "hvdc_loss_mwh": 0.06000000339244749,
+            "objective": 13757.789908129414,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": [
+              [
+                11.99999931262222,
+                3.4999997683400337
+              ],
+              [
+                5.999999312626747,
+                1.999999768344559
+              ],
+              [
+                6.0,
+                2.8741230901216377
+              ]
+            ],
+            "storage_power_mw": [
+              [
+                -11.99999862524444,
+                -2.999999536680068
+              ],
+              [
+                11.99999999999095,
+                2.99999999999095
+              ],
+              [
+                -1.3747465079417143e-06,
+                -1.748246643554157
+              ]
+            ]
+          },
+          "socp": {
+            "audit": {
+              "available": true,
+              "complete": true,
+              "feasible": true,
+              "reason": null,
+              "residuals": {
+                "branch_from": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "branch_to": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "edge_cones": {
+                  "maximum": 6.587996814744201e-11,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": [
+                      0,
+                      1
+                    ],
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_p": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "generator_q": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_box": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "hvdc_coupling": {
+                  "maximum": 1.1102230246251565e-16,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "nondispatchable_p": {
+                  "maximum": 1.360624213317604e-17,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 1
+                  }
+                },
+                "p_balance": {
+                  "maximum": 5.6630256040079985e-12,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MW",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 1
+                  }
+                },
+                "q_balance": {
+                  "maximum": 4.120174253857689e-14,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVAr",
+                  "worst": {
+                    "identity": 1,
+                    "index": 1,
+                    "interval": 0
+                  }
+                },
+                "shedding_fraction": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-07,
+                  "units": "fraction",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_capability": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 0.0001,
+                  "units": "MVA",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_energy": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "storage_terminal": {
+                  "maximum": 8.881784197001252e-16,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 2
+                  }
+                },
+                "storage_transition": {
+                  "maximum": 1.7763568394002505e-15,
+                  "passed": true,
+                  "tolerance": 1e-05,
+                  "units": "MWh",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_bounds": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                },
+                "voltage_setpoints": {
+                  "maximum": 0.0,
+                  "passed": true,
+                  "tolerance": 1e-06,
+                  "units": "p.u.^2",
+                  "worst": {
+                    "identity": 0,
+                    "index": 0,
+                    "interval": 0
+                  }
+                }
+              },
+              "tolerances": {
+                "cone": 1e-06,
+                "cycle_angle": 1e-05,
+                "energy": 1e-05,
+                "fraction": 1e-07,
+                "normalization_floor": 1e-12,
+                "phase_floor": 1e-12,
+                "power": 0.0001,
+                "product": 1e-05,
+                "rank_relative": 1e-05,
+                "voltage_squared": 1e-06
+              }
+            },
+            "branch_loss_mwh": 1.8887853862934456,
+            "bus_shunt_mwh": 0.0,
+            "components": {
+              "generator_cost": 73.56158079563838,
+              "hvdc_cost": 0.5300000113278266,
+              "load_shedding_cost": 13681.999998800346,
+              "storage_cost": 1.5874123073455724,
+              "storage_terminal_cost": 0.11091497803399487
+            },
+            "energy_not_served_mwh": 13.681999998800345,
+            "hvdc_loss_mwh": 0.06000000283231133,
+            "objective": 13757.789906892693,
+            "status": "optimal",
+            "storage_end_boundaries_mwh": [
+              [
+                11.999998548848405,
+                3.4999991276474383
+              ],
+              [
+                5.999998556338729,
+                1.9999991276529963
+              ],
+              [
+                6.000000000000001,
+                2.8741230884474867
+              ]
+            ],
+            "storage_power_mw": [
+              [
+                -11.999997097696806,
+                -2.999998255294877
+              ],
+              [
+                11.999999985019352,
+                2.9999999999888844
+              ],
+              [
+                -2.887322543844245e-06,
+                -1.7482479215889806
+              ]
+            ]
+          }
+        },
+        "cycle_summary": {
+          "maximum": 0.0,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "radians",
+          "worst": null
+        },
+        "dual_certificate": null,
+        "exact_product_recovery": true,
+        "gap_allowance": 0.027535579816258825,
+        "lifted_ac_exact_recovery": true,
+        "lifted_ac_feasible": true,
+        "objective_gap": 1.23672180052381e-06,
+        "objective_label": "numerical relaxation optimum estimate",
+        "product_summary": {
+          "maximum": 3.295219652700362e-11,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "p.u.^2",
+          "worst": {
+            "identity": [
+              0,
+              1
+            ],
+            "index": 0,
+            "interval": 0
+          }
+        },
+        "recovered_ac_audit": {
+          "available": true,
+          "complete": true,
+          "feasible": true,
+          "reason": null,
+          "residuals": {
+            "branch_from": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "branch_to": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_p": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "generator_q": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "hvdc_box": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "hvdc_coupling": {
+              "maximum": 1.1102230246251565e-16,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "nondispatchable_capability": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "nondispatchable_p": {
+              "maximum": 1.360624213317604e-17,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 1
+              }
+            },
+            "p_balance": {
+              "maximum": 3.2952073070191545e-08,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MW",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "q_balance": {
+              "maximum": 2.7814773054246622e-14,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVAr",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "shedding_fraction": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-07,
+              "units": "fraction",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "storage_capability": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 0.0001,
+              "units": "MVA",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "storage_energy": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "storage_terminal": {
+              "maximum": 8.881784197001252e-16,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 2
+              }
+            },
+            "storage_transition": {
+              "maximum": 1.7763568394002505e-15,
+              "passed": true,
+              "tolerance": 1e-05,
+              "units": "MWh",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "voltage_bounds": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            },
+            "voltage_setpoints": {
+              "maximum": 0.0,
+              "passed": true,
+              "tolerance": 1e-06,
+              "units": "p.u.^2",
+              "worst": {
+                "identity": 0,
+                "index": 0,
+                "interval": 0
+              }
+            }
+          },
+          "tolerances": {
+            "cone": 1e-06,
+            "cycle_angle": 1e-05,
+            "energy": 1e-05,
+            "fraction": 1e-07,
+            "normalization_floor": 1e-12,
+            "phase_floor": 1e-12,
+            "power": 0.0001,
+            "product": 1e-05,
+            "rank_relative": 1e-05,
+            "voltage_squared": 1e-06
+          }
+        },
+        "recovered_ac_feasible": true,
+        "recovery_available": true,
+        "recovery_reason": "Forest candidate only; no dispatch repair or control-action acceptance.",
+        "socp_rank_relative": {
+          "maximum": 6.771515780444757e-11,
+          "passed": true,
+          "tolerance": 1e-05,
+          "units": "dimensionless",
+          "worst": {
+            "identity": [
+              0,
+              1
+            ],
+            "index": 0,
+            "interval": 0
+          }
+        }
+      }
+    }
+  ],
+  "schema_version": 1,
+  "scope": "E2 matched AC/SOCP; not a certified bound or M11 closure",
+  "settings": {
+    "ac": {
+      "acceptable_tol": 1e-08,
+      "max_cpu_time": 60.0,
+      "max_iter": 500,
+      "tol": 1e-08
+    },
+    "socp": {
+      "max_iter": 200,
+      "time_limit": 20.0,
+      "tol_feas": 1e-09,
+      "tol_gap_abs": 1e-09,
+      "tol_gap_rel": 1e-09
+    }
+  },
+  "solves_attempted": 8,
+  "timeout_s_per_pair": 180
+}

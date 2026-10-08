@@ -1,6 +1,7 @@
 """Tests for the private M16+ typed component contracts."""
 
 import cvxpy as cp
+from cvxopf._numerical_preparation import OperatingSetContribution
 import pytest
 
 from cvxopf._component_adapter import (
@@ -38,7 +39,7 @@ def _injections(units, prepared, variables, context):
 
 
 def _constraints(units, prepared, variables, context):
-    return (variables["p"] >= 0,)
+    return OperatingSetContribution((variables["p"] >= 0,))
 
 
 def _cost(units, prepared, variables, context):
@@ -67,6 +68,7 @@ def _adapter():
         metadata=_metadata,
         formulations={
             "ac": _active(),
+            "socp": _active(),
             "lossy_dc": _active(),
             "singlenode_dc": FormulationAdapter(
                 capability=FormulationCapability.NULL
@@ -156,7 +158,7 @@ def test_component_adapter_name_must_be_nonempty():
             metadata=_metadata,
             formulations={
                 formulation: _active()
-                for formulation in ("ac", "lossy_dc", "singlenode_dc")
+                for formulation in ("ac", "socp", "lossy_dc", "singlenode_dc")
             },
         )
 
@@ -311,6 +313,7 @@ def test_step_context_rejects_inconsistent_network_state(
 def test_prepared_data_and_formulation_registry_are_read_only_copies():
     formulations = {
         "ac": _active(),
+        "socp": _active(),
         "lossy_dc": _active(),
         "singlenode_dc": FormulationAdapter(
             capability=FormulationCapability.NULL

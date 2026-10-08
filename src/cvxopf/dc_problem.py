@@ -330,6 +330,7 @@ def _build_lossy_dc_single(
         d["baseMVA"],
         d["_component_ext_to_int"],
         DCNetworkState(),
+        numerical_preparation=options.numerical_preparation,
     )
     components: PreparedComponents = d["_components"]
     step_components = assemble_component_step(components, step_context)
@@ -412,6 +413,8 @@ def _build_lossy_dc_single(
         formulation="lossy_dc",
         is_convex=True,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=step_aggregate.exact_boxes,
     )
 
 
@@ -490,6 +493,7 @@ def _build_lossy_dc_multistep(
             d["baseMVA"],
             d["_component_ext_to_int"],
             DCNetworkState(),
+            numerical_preparation=options.numerical_preparation,
         )
         step_components = assemble_component_step(
             components, step_context, variable_suffix=f"_{t}"
@@ -584,6 +588,8 @@ def _build_lossy_dc_multistep(
         formulation="lossy_dc",
         is_convex=True,
         expressions=expressions,
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=tuple(box for step in step_aggregates for box in step.exact_boxes),
     )
 
 
@@ -658,6 +664,7 @@ def _build_lossy_dc_vectorized(
         d["baseMVA"],
         d["_component_ext_to_int"],
         DCNetworkState(),
+        numerical_preparation=options.numerical_preparation,
     )
     component_contributions = assemble_component_vectorized(components, context)
     component_aggregate = aggregate_vectorized_contributions(component_contributions)
@@ -791,4 +798,6 @@ def _build_lossy_dc_vectorized(
             network_projections,
             component_projections,
         ),
+        _numerical_preparation=options.numerical_preparation,
+        _exact_boxes=component_aggregate.model.exact_boxes,
     )

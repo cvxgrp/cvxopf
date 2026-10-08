@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "repository_root": "../..",
+  "inventory": {
+    "path": "plans/socp-conditioning-evidence-inventory.json",
+    "sha256": "97efdf91c7494765624638571eb8a3d0097c4e3d51b197d60b06ca134f7d0371"
+  },
+  "roots": {
+    "conditioning": {
+      "original": "/Users/bmeyers/.codex/worktrees/socp-ac-scaling/cvxopf/experiments/socp_conditioning/results",
+      "current": "experiments/socp_conditioning/results"
+    },
+    "original_e3": {
+      "original": "/Users/bmeyers/github/cvxopf/experiments/case118_tracy_2021/results/e3",
+      "current": "experiments/case118_tracy_2021/results/e3"
+    }
+  },
+  "verification": {
+    "date_local": "2026-10-06",
+    "initial_reviewable_copies_matching_inventory": 108,
+    "conditioning_mirror_files_matching_inventory": 714,
+    "original_e3_files_matching_inventory": 219,
+    "conditioning_files_git_ignored": 714,
+    "originals_retained": true
+  },
+  "reader": "experiments.socp_conditioning.artifact_locations.resolve_artifact",
+  "replay_scope": "Artifact inspection only; legacy source-bound numerical loaders remain tied to the isolated base checkout and external prerequisites."
+}
