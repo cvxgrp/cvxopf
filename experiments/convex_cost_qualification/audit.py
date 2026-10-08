@@ -7,6 +7,7 @@ from scipy import sparse
 
 from experiments.numerical_preparation.audit import physical_audit, serializable
 from experiments.numerical_preparation.tracy_variables import check_coordinates
+from experiments.case118_tracy_2021.stage_b import TOLERANCES
 from . import fixture as f, model
 
 
@@ -84,7 +85,22 @@ def economic_checks(problem, full, view, kwargs, physical):
                 warnings=[] if cycling_ok else ["cycling cost/absolute auxiliary slack exceeds advisory threshold"])
 
 
-def assess(view, kwargs, stress, native, preparation_evidence, signature):
+def coordinate_policy(view):
+    """Declared leaf boxes only; no inferred clipping of explicit constraints."""
+    boxes = {}
+    units = dict(Pg="MW", Qg="MVAr", p_flows="MW", b="MW", b_q="MVAr",
+                 p_nd="MW", q_nd="MVAr", soc="MWh", load_shed_fraction="fraction")
+    for name, variable in view.physical.variables.items():
+        if any(value for key, value in variable.attributes.items() if key != "bounds"):
+            raise ValueError("coordinate audit supports only ordinary or box-bounded leaves")
+        if variable.attributes["bounds"] is not None:
+            lower, upper = variable.get_bounds()
+            tolerance = TOLERANCES["fraction" if name == "load_shed_fraction" else "box"]
+            boxes[name] = (lower, upper, tolerance, units[name])
+    return dict(leaf_boxes=boxes, initial_soc_tolerance=TOLERANCES["soc_mwh"])
+
+
+def assess(view, kwargs, stress, native, preparation_evidence, signature, *, historical_coordinates=False):
     problem = model.canonical(view.solver)
     if problem.signature != signature:
         raise ValueError("fresh canonical data/map/layout differs from bound signature")
@@ -116,7 +132,8 @@ def assess(view, kwargs, stress, native, preparation_evidence, signature):
             projected_x[item["start"]:item["stop"]] /= view.scales[name].ravel(order="F")
             item["name"] = name
         layout.append(item)
-    projection = check_coordinates(dict(full_x=projected_x, layout=layout, raw=physical_raw), result, kwargs)
+    policy = {} if historical_coordinates else coordinate_policy(view)
+    projection = check_coordinates(dict(full_x=projected_x, layout=layout, raw=physical_raw), result, kwargs, **policy)
     economics = economic_checks(problem, full, view, kwargs, common["costs"])
     diagnostics_ok = all(isinstance(native.get(key), Real) and not isinstance(native[key], bool)
                          and np.isfinite(native[key]) for key in

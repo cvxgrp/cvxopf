@@ -56,6 +56,8 @@ def plot_group(root, number, arm, candidates, kwargs):
               ("p_load_shed", "Real load shed MW", False))
     for label, candidate in candidates.items():
         label += " [rejected]" if not candidate["accepted"] else " [cycling warning]" if candidate["economics"]["cycling_gap_warning"] else ""
+        if candidate.get("coordinate_checks", {}).get("bound_projection_warning"):
+            label += " [bound projection]"
         for axis, (key, title, absolute) in zip(axes.flat, panels, strict=True):
             axis.set_title(title)
             axis.grid(alpha=.25)
@@ -78,7 +80,13 @@ def analyze(root, *, make_plots=True):
     finish = q.read(root / "invocation-finish.json")
     if (root / "analysis.json").exists():
         raise FileExistsError(root / "analysis.json")
-    progress = r.status(root)
+    return analyze_progress(root, root, r.status(root), finish, make_plots=make_plots)
+
+
+def analyze_progress(source, output, progress, finish, *, make_plots=True):
+    """Render verified progress in a fresh directory without rewriting evidence."""
+    if (output / "analysis.json").exists():
+        raise FileExistsError(output / "analysis.json")
     if any(a["classification"] == "unfinished" for a in progress["attempts"]):
         raise ValueError("unfinished evidence cannot support terminal analysis")
     summaries, groups = [], defaultdict(dict)
@@ -87,15 +95,16 @@ def analyze(root, *, make_plots=True):
         summary = {k: v for k, v in attempt.items() if k != "checks"}
         if "checks" in attempt:
             checks = attempt["checks"]
-            native = q.read(root / f"call-{arm.id:03d}" / "result.json.gz")["native"]
+            native = q.read(source / f"call-{arm.id:03d}" / "result.json.gz")["native"]
             summary.update(costs=checks["common"]["costs"], economics=checks["economics"],
                 physical_passed=checks["common"]["passed"], residuals=checks["common"]["residuals"],
                 native={k: v for k, v in native.items() if k not in {"x", "s", "z"}},
                 restoration_diagnostics=checks["original_space_diagnostics"], forced_shedding=checks["forced_shedding"])
+            summary["coordinate_checks"] = checks["coordinate_checks"]
             groups[arm.group][arm.treatment] = dict(result=checks["result"], common=checks["common"],
-                accepted=attempt["accepted"], economics=checks["economics"])
-        elif (root / f"call-{arm.id:03d}" / "result.json.gz").exists() and attempt.get("archive_state") != "incomplete_publication":
-            native = q.read(root / f"call-{arm.id:03d}" / "result.json.gz").get("native", {})
+                accepted=attempt["accepted"], economics=checks["economics"], coordinate_checks=checks["coordinate_checks"])
+        elif (source / f"call-{arm.id:03d}" / "result.json.gz").exists() and attempt.get("archive_state") != "incomplete_publication":
+            native = q.read(source / f"call-{arm.id:03d}" / "result.json.gz").get("native", {})
             summary["native"] = {k: v for k, v in native.items() if k not in {"x", "s", "z"}}
         summaries.append(summary)
     comparisons, plots = {}, []
@@ -114,7 +123,7 @@ def analyze(root, *, make_plots=True):
             raise ValueError("device/time axis mismatch")
         comparisons[group] = comparison
         if make_plots:
-            plots.append(plot_group(root, number, arm, candidates, kwargs))
+            plots.append(plot_group(output, number, arm, candidates, kwargs))
     dispositions = {}
     for form in f.FORMS:
         dispositions[form] = {treatment: disposition([a for a in f.arms() if a.formulation == form and a.treatment == treatment],
@@ -123,5 +132,5 @@ def analyze(root, *, make_plots=True):
     value = serializable(dict(invocation=finish, progress={k: v for k, v in progress.items() if k != "attempts"},
         summaries=summaries, treatment_dispositions=dispositions, comparisons=comparisons, plots=plots,
         limitations="Bounded stated-model qualification, not default promotion, AC realizability, or a certified lower bound. Pair discrepancies require interpretation, not trajectory identity."))
-    q.atomic_immutable_json(root / "analysis.json", value)
+    q.atomic_immutable_json(output / "analysis.json", value)
     return value

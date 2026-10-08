@@ -96,14 +96,25 @@ def discrepancy(actual, expected):
     return dict(passed=error <= limit, maximum=error, tolerance=limit)
 
 
-def check_coordinates(coordinates, result, kwargs, *, require_raw=True):
-    """Independent time-last→time-first/unit/boundary projection arithmetic."""
+def check_coordinates(coordinates, result, kwargs, *, require_raw=True,
+                      leaf_boxes=None, initial_soc_tolerance=None):
+    """Independent time-last→time-first/unit/boundary projection arithmetic.
+
+    Historical callers retain the original strict comparison by default. The
+    opt-in ``leaf_boxes`` maps names to (lower, upper, engineering tolerance,
+    unit). Independently clip canonical leaves to these declared CVXPY boxes,
+    then test restoration/publication with the unchanged tight mapping check.
+    Raw bound excursions are a separate feasibility check, not a mapping error.
+    An explicit initial-SoC tolerance similarly separates boundary feasibility
+    from the time-axis mapping. Neither option modifies result arrays.
+    """
     full = np.asarray(coordinates["full_x"], float)
     if full.ndim != 1 or not np.isfinite(full).all():
         raise ValueError("nonfinite/malformed full canonical primal")
     T, base = kwargs["T"], kwargs["case"]["baseMVA"]
     leaves, projections, raw = {}, {}, coordinates.get("raw", {})
-    values = {}
+    values, excursions, boundaries = {}, {}, {}
+    original_values = {}
     for item in coordinates["layout"]:
         if not item["is_original_variable"]:
             continue
@@ -113,6 +124,19 @@ def check_coordinates(coordinates, result, kwargs, *, require_raw=True):
             stop-start != int(np.prod(shape))):
             raise ValueError("invalid original leaf layout")
         value = full[start:stop].reshape(shape, order="F")
+        original_values[name] = value
+        if leaf_boxes is not None and name in leaf_boxes:
+            lower, upper, tolerance, unit = leaf_boxes[name]
+            lower, upper = (np.broadcast_to(np.asarray(v, float), shape) for v in (lower, upper))
+            if (np.isnan(lower).any() or np.isnan(upper).any() or np.any(lower > upper)
+                    or not np.isfinite(tolerance) or tolerance < 0):
+                raise ValueError("invalid declared leaf box/tolerance")
+            projected = np.clip(value, lower, upper)
+            factor = base if name in {"Pg", "Qg", "p_flows"} else 1.
+            maximum = float(np.max(abs(projected-value), initial=0))*factor
+            excursions[name] = dict(passed=maximum <= tolerance, maximum=maximum,
+                tolerance=tolerance, unit=unit, warning=maximum > 0)
+            value = projected
         values[name] = value
         if require_raw:
             leaves[name] = discrepancy(raw.get(name), value)
@@ -127,7 +151,15 @@ def check_coordinates(coordinates, result, kwargs, *, require_raw=True):
         if name in {"Pg", "Qg", "p_flows"}:
             expected = expected * base
         elif name == "soc":
-            projections["initial_soc"] = discrepancy(expected[0], [s.initial_soc for s in kwargs["storage"]])
+            initial = [s.initial_soc for s in kwargs["storage"]]
+            if initial_soc_tolerance is None:
+                projections["initial_soc"] = discrepancy(expected[0], initial)
+            else:
+                if not np.isfinite(initial_soc_tolerance) or initial_soc_tolerance < 0:
+                    raise ValueError("invalid initial SoC tolerance")
+                maximum = float(np.max(abs(original_values[name].T[0]-initial), initial=0))
+                boundaries["initial_soc"] = dict(passed=maximum <= initial_soc_tolerance,
+                    maximum=maximum, tolerance=initial_soc_tolerance, unit="MWh")
             expected = expected[1:]
         elif name == "v":
             public = "Vm"
@@ -150,9 +182,18 @@ def check_coordinates(coordinates, result, kwargs, *, require_raw=True):
             projections["absent_" + name] = dict(passed=result.get(name) is None)
     expected_net_shape = (T,) if kwargs["formulation"] == "singlenode_dc" else (T, len(kwargs["case"]["bus"]))
     projections["p_net_shape"] = dict(passed=np.shape(result.get("p_net")) == expected_net_shape)
-    passed = all(c["passed"] for c in [*leaves.values(), *projections.values()])
-    return serializable(dict(passed=passed, canonical_to_restored=leaves,
-                             canonical_to_public=projections))
+    if leaf_boxes is not None and leaf_boxes.keys()-values.keys():
+        raise ValueError("declared box lacks canonical leaf")
+    mapping_passed = all(c["passed"] for c in [*leaves.values(), *projections.values()])
+    value = dict(passed=mapping_passed, canonical_to_restored=leaves,
+                 canonical_to_public=projections)
+    if leaf_boxes is not None or initial_soc_tolerance is not None:
+        feasibility_passed = all(c["passed"] for c in [*excursions.values(), *boundaries.values()])
+        value.update(passed=mapping_passed and feasibility_passed,
+            mapping_passed=mapping_passed, feasibility_passed=feasibility_passed,
+            bound_excursions=excursions, boundary_feasibility=boundaries,
+            bound_projection_warning=any(c["warning"] for c in excursions.values()))
+    return serializable(value)
 
 
 def historical_candidates():

@@ -55,7 +55,8 @@ def frozen_binding():
 
 
 def protocol():
-    return dict(protocol=f.LIMITS, gates=f.GATES, protocol_sha256=q.digest(HERE / "PROTOCOL.md"))
+    return dict(protocol=f.LIMITS, gates=f.GATES, protocol_sha256=q.digest(HERE / "PROTOCOL.md"),
+                coordinate_policy_sha256=q.digest(HERE / "COORDINATE_REAUDIT_PROTOCOL.md"))
 
 
 def request(root, number, wall):
@@ -148,7 +149,16 @@ def worker(root, number):
 
 def status(root):
     """Independent replay: unfinished attempts can never be accepted/advanced."""
-    binding = verify_binding(root)
+    return replay(root, verify_binding(root))
+
+
+def replay(root, binding, *, auditor=assess):
+    """Shared archive verification; callers must verify the source binding first.
+
+    ``status`` requires the exact execution context. The separate historical
+    re-audit reader pins its original context and supplies the old coordinate
+    policy to reproduce original records before applying the correction.
+    """
     attempts, used, archives = [], 0., 0
     directories = sorted(root.glob("call-*"))
     if len(directories) > f.LIMITS["max_launches"]:
@@ -221,7 +231,7 @@ def status(root):
                         captured["native"] != record["native"] or captured["canonical"] != row["canonical"]):
                     raise ValueError("audited record lacks bound native evidence")
                 call, kwargs, view, stress, problem = checked_construction(row)
-                replay = assess(view, kwargs, stress, record["native"],
+                replay = auditor(view, kwargs, stress, record["native"],
                                 record["preparation_evidence"], problem.signature)
                 if replay != record["checks"] or replay["passed"] != (record["classification"] == "accepted"):
                     raise ValueError("independent physical/economic audit mismatch")
