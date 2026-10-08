@@ -7,6 +7,8 @@ bindings over the authoritative device modules live in ``_component_adapters``.
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import CostCoordinateTerm
+
 from dataclasses import dataclass, field
 from enum import Enum
 import math
@@ -14,6 +16,7 @@ from numbers import Real
 from types import MappingProxyType
 from typing import (
     Generic,
+    Callable,
     Mapping,
     Protocol,
     Sequence,
@@ -261,6 +264,7 @@ class StepContribution:
     cost_expression_name: str | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
     exact_boxes: tuple[ExactBoxBinding, ...] = ()
+    cost_coordinates: tuple[CostCoordinateTerm, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables", _readonly(self.variables))
@@ -302,6 +306,7 @@ class VectorizedModelContribution:
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
     horizon: HorizonContribution = field(default_factory=HorizonContribution)
     exact_boxes: tuple[ExactBoxBinding, ...] = ()
+    cost_coordinates: tuple[CostCoordinateTerm, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -473,6 +478,8 @@ class FormulationAdapter(Generic[UnitT]):
     operating_constraints: OperatingSetHook[UnitT] | None = None
     network_constraints: ConstraintHook[UnitT] | None = None
     step_cost: StepCostHook[UnitT] | None = None
+    cost_coordinates: Callable[[Mapping[str, object], Mapping[str, cp.Variable], StepContext,
+                                cp.Expression], tuple[CostCoordinateTerm, ...]] | None = None
     step_expressions: StepExpressionHook[UnitT] | None = None
     horizon: HorizonHook[UnitT] | None = None
     vectorized_variable_specs: VectorizedVariableSpecHook[UnitT] | None = None
@@ -503,6 +510,7 @@ class FormulationAdapter(Generic[UnitT]):
                 *required,
                 self.network_constraints,
                 self.step_cost,
+                self.cost_coordinates,
                 self.step_expressions,
                 self.vectorized_variable_specs,
                 self.vectorized_assembly,

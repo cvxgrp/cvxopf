@@ -1,5 +1,39 @@
 # Typed numerical preparation design
 
+## Approved AC cost-coordinate extraction
+
+The standalone production policy now includes opt-in ``cost_coordinates=False``.
+The owner approved the AC method after the
+[AC qualification](../experiments/ac_cost_qualification/REPORT.md); the
+[convex comparison](../experiments/convex_cost_qualification/REPORT.md) explicitly
+refrains from adopting cost rescaling for SOCP, lossy DC and copper plate.
+Those formulations reject this field when enabled. No default or hierarchy
+change is included; per-layer prepared execution remains M21 work.
+
+Component adapters declare typed coordinate terms alongside their original
+stage rates. A solve-local graph substitutes cost-valued cycling/shedding
+variables, leaving the public physical graph, Parameters, constraints and result
+schema intact. Rates are time-integrated once; terminal and unrelated objective
+terms remain untouched. Zero weights use identity scaling; current Parameter
+weights are snapshotted anew for each solve. No experiment imports or global
+monkey-patching are promoted.
+
+Native objective and reconstructed physical objective are both retained in
+immutable preparation evidence, together with scale/start maps, signed cycling
+epigraph excess, non-cancelling absolute slack, limits and warning flags.
+Cycling discrepancies use ``1e-4 + 1e-6*abs(physical cycling cost)`` as an
+advisory diagnostic, not a rejection gate. Explained cycling slack is excluded
+from the separate unexplained total-accounting discrepancy. A public
+``CostAccuracyWarning`` retains native status and returned physical values.
+These diagnostics are not a scientific acceptance policy or feasibility proof.
+
+General regressions cover algebra, physical restoration, forced shedding,
+zero weights, PWL/terminal costs, repeated solves and failure cleanup, plus
+both baseline and prepared AC paths against unchanged PYPOWER case9,
+case9-PWL, case14 and case57 fixtures. Fixture tolerances and historical
+qualification evidence remain unchanged. Regression testing does not claim
+new Tracy qualification or authorization to resume E3/Stage D.
+
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
 approved API/protocol design with implementation progress recorded
@@ -45,6 +79,7 @@ class NumericalPreparation:
     normalize_device_limits: bool = False
     exact_fixed_boxes: bool = False
     canonical_scaling: Literal["none", "joint5"] = "none"
+    cost_coordinates: bool = False
 ```
 
 Validate actual booleans and the closed scaling literal. No configurable number

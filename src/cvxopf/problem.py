@@ -19,6 +19,8 @@ build_acopf_multistep(case, df_P, df_Q, *, T, options, coupling_constraints)
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import CostCoordinateTerm
+
 import warnings
 from dataclasses import dataclass, field
 from numbers import Real
@@ -281,6 +283,8 @@ class OPFBuild:
     automatic_sparse_dispatch: bool = False
     _numerical_preparation: NumericalPreparation = field(default_factory=NumericalPreparation, repr=False)
     _exact_boxes: tuple[ExactBoxBinding, ...] = field(default=(), repr=False)
+    _cost_coordinate_terms: tuple[CostCoordinateTerm, ...] = field(default=(), repr=False)
+    _cost_coordinate_delta: float = field(default=1., repr=False)
     _preparation_evidence: PreparationEvidence | None = field(default=None, init=False, repr=False)
 
     @property

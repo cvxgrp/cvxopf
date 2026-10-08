@@ -27,14 +27,18 @@ class NumericalPreparation:
 
     Prepared solves retain native and original-space diagnostic evidence;
     numerical qualification and any default adoption remain separate gates.
+    ``cost_coordinates`` is AC-only: represent battery cycling and shedding in
+    cost units internally, restore engineering units publicly, and retain
+    advisory economic-accuracy warnings without rejecting native solutions.
     """
 
     normalize_device_limits: bool = False
     exact_fixed_boxes: bool = False
     canonical_scaling: Literal["none", "joint5"] = "none"
+    cost_coordinates: bool = False
 
     def __post_init__(self) -> None:
-        for name in ("normalize_device_limits", "exact_fixed_boxes"):
+        for name in ("normalize_device_limits", "exact_fixed_boxes", "cost_coordinates"):
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"{name} must be a bool")
         if not isinstance(
@@ -48,6 +52,7 @@ class NumericalPreparation:
             self.normalize_device_limits
             or self.exact_fixed_boxes
             or self.canonical_scaling != "none"
+            or self.cost_coordinates
         )
 
     def validate_formulation(self, formulation: Formulation) -> None:
@@ -60,6 +65,8 @@ class NumericalPreparation:
             raise ValueError("DC formulations do not support normalized device limits")
         if formulation == "ac" and self.canonical_scaling != "none":
             raise ValueError("AC does not support canonical scaling")
+        if formulation != "ac" and self.cost_coordinates:
+            raise ValueError("cost coordinates are qualified for AC only")
 
 
 def validate_preparation(
@@ -333,10 +340,11 @@ class PreparationEvidence:
             raise ValueError("nonfinite preparation offset")
 
 
-def clear_prepared_result(build: Any) -> None:
+def clear_prepared_result(build: Any, *, clear_variables: bool = True) -> None:
     """Keep Parameters/assigned starts intact until captured; clear publications."""
-    for variable in build.prob.variables():
-        variable.save_value(None)
+    if clear_variables:
+        for variable in build.prob.variables():
+            variable.save_value(None)
     for constraint in build.prob.constraints:
         for dual in constraint.dual_variables:
             dual.save_value(None)

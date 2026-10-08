@@ -347,6 +347,8 @@ def assemble_component_step(
             exact_boxes=operating_constraints.exact_boxes,
             network_constraints=network_constraints,
             cost=cost,
+            cost_coordinates=(() if binding.cost_coordinates is None or cost is None else
+                              binding.cost_coordinates(component.data, variables, context, cost)),
             cost_expression_name=(
                 None if cost is None else component.adapter.cost_expression_name
             ),

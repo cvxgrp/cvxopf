@@ -10,6 +10,8 @@ Solver: IPOPT (via cyipopt).
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import collect_cost_terms
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -577,6 +579,8 @@ def _build_ac_single(
         expressions=expressions,
         _numerical_preparation=options.numerical_preparation,
         _exact_boxes=step_aggregate.exact_boxes,
+        _cost_coordinate_terms=collect_cost_terms([step_components]),
+        _cost_coordinate_delta=delta,
     )
 
 
@@ -711,6 +715,8 @@ def _build_ac_vectorized(
         ),
         _numerical_preparation=options.numerical_preparation,
         _exact_boxes=aggregate.model.exact_boxes,
+        _cost_coordinate_terms=collect_cost_terms(contributions),
+        _cost_coordinate_delta=delta,
     )
 
 
@@ -940,4 +946,6 @@ def _build_ac_multistep(
         expressions=expressions,
         _numerical_preparation=options.numerical_preparation,
         _exact_boxes=tuple(box for step in step_aggregates for box in step.exact_boxes),
+        _cost_coordinate_terms=collect_cost_terms(component_steps),
+        _cost_coordinate_delta=delta,
     )

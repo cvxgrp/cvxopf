@@ -371,6 +371,7 @@ def _solve_ac_with_verified_x0(
     *, start_observer: Callable[[IPOPTStartEvidence], None] | None = None,
     solver_options: Mapping[str, Any] | None = None,
     native_observer: Callable[[Mapping[str, Any]], None] | None = None,
+    smooth_reduction: Any = None,
 ) -> _X0Run:
     """Solve through a build-local IPOPT instance and retain its exact x0."""
     assigned = _complete_start(build)
@@ -472,7 +473,7 @@ def _solve_ac_with_verified_x0(
         solver = solver_type()
         chain = SolvingChain(reductions=[
             CvxAttr2Constr(reduce_bounds=not solver.BOUNDED_VARIABLES),
-            Dnlp2Smooth(),
+            Dnlp2Smooth() if smooth_reduction is None else smooth_reduction,
             solver,
         ])
         with sparse_dispatch_policy(build.automatic_sparse_dispatch):

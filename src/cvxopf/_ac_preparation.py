@@ -4,6 +4,8 @@ This module implements opt-in standalone AC preparation through the existing
 ``_solve_ac_with_verified_x0`` boundary. It preserves the original CVXPY graph,
 variable and Parameter identities, physical units, objective, and result schema.
 Device-limit normalization, when selected, is already part of model assembly.
+AC cost coordinates, when selected, use a private solve-local CVXPY graph;
+the public physical graph and its reporting expressions are never replaced.
 Unlike ``_convex_preparation``, this bridge performs no canonical scaling or
 general Jacobian/Hessian equilibration. Sharing the verified boundary does not
 enable prepared hierarchical execution; that integration remains deferred.
@@ -55,6 +57,30 @@ data are checked before execution; infinite bound faces are allowed, NaNs are
 not. No solver method or registry is patched globally, and no experiment code
 is imported. Compatibility with the private adapter/oracle interfaces must be
 verified against the installed CVXPY version.
+
+Cost-valued coordinates
+----------------------
+``NumericalPreparation(cost_coordinates=True)`` selects the approved AC-only
+cycling/shedding representation. Typed component bindings declare their exact
+stage rates and weights. ``_cost_coordinates`` maps power/fraction leaves to
+cost-valued leaves before ordinary DNLP canonicalization, snapshots current
+Parameter weights on every solve, and inverts the map after native success.
+Zero-cost entries retain identity scaling. Generator, HVDC and terminal costs
+are not rebuilt or rescaled. A local reduction records tagged cycling-abs
+auxiliaries through tree copies; it delegates their mathematics to CVXPY's
+installed abs canonicalizer rather than guessing auxiliary identity by shape.
+
+The full/reduced starts and derivative residuals below refer to that private
+solve graph when cost coordinates are selected. Immutable ``cost_coordinate_maps``
+retain physical/solver variable IDs, physical starts and scales. Separate
+``cost_accounting`` evidence retains native objective, public physical objective,
+signed cycling excess, absolute (non-cancelling) cycling slack, and unexplained
+objective difference. Cycling uses ``1e-4 + 1e-6*abs(physical cycling cost)``;
+unexplained accounting uses the same rule against total physical cost. These
+are advisory economic diagnostics, not feasibility or native-status gates.
+``CostAccuracyWarning`` does not discard a restored solution, including when
+the caller elects to convert the warning into an exception. Explained cycling
+slack is not counted again as an unrelated accounting discrepancy.
 
 Restoration and evidence
 ------------------------
@@ -246,6 +272,12 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
     from cvxpy.reductions.solvers.nlp_solvers.ipopt_nlpif import IPOPT
     from cvxpy.reductions.solution import failure_solution
     from cvxpy.problems.problem import SolverStats
+    from cvxopf._cost_coordinates import (
+        transform_cost_coordinates, cost_canonicalization, restore_cost_coordinates,
+        retain_coordinate_maps,
+        emit_cost_warning,
+    )
+    from cvxopf._hierarchical_solver import _complete_start
 
     build._preparation_evidence = None
     try:
@@ -253,10 +285,24 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
         for name in ("canon_backend", "gp", "qcp", "requires_grad", "enforce_dpp", "ignore_dpp", "solver_path"):
             if name in options:
                 raise ValueError(f"prepared AC does not support {name}")
-        run = _solve_ac_with_verified_x0(build, None, solver_options=dict(options, verbose=verbose))
+        solver_build, bindings, reduction = build, (), None
+        if build.numerical_preparation.cost_coordinates:
+            _complete_start(build)
+            solver_build, bindings = transform_cost_coordinates(build)
+            reduction = cost_canonicalization(bindings)
+            if bindings:
+                clear_prepared_result(build, clear_variables=False)
+            for binding in bindings:
+                binding.term.variable.save_value(None)
+        run = _solve_ac_with_verified_x0(solver_build, None,
+                solver_options=dict(options, verbose=verbose), smooth_reduction=reduction)
+        build._preparation_evidence = solver_build.preparation_evidence
+        retain_coordinate_maps(build, bindings)
         if run.exception:
             raise cp.error.SolverError(run.exception)
         evidence = build._preparation_evidence
+        if bindings and evidence is not None and evidence.checks["restoration_available"]:
+            restore_cost_coordinates(build, solver_build, bindings, reduction)
         if evidence is not None and not evidence.checks["restoration_available"]:
             clear_prepared_result(build)
             status = IPOPT.STATUS_MAP[evidence.native["status"]]
@@ -269,3 +315,5 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
     except Exception:
         clear_prepared_result(build)
         raise
+    if build.preparation_evidence is not None:
+        emit_cost_warning(build)

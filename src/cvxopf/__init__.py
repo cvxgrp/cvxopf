@@ -51,6 +51,7 @@ __version__ = "0.1.0"
 
 # Re-export public API
 from cvxopf._numerical_preparation import NumericalPreparation
+from cvxopf._cost_coordinates import CostAccuracyWarning
 from cvxopf.problem import (
     build_opf,
     build_opf_multistep,
@@ -103,6 +104,7 @@ __all__ = [
     "build_opf_multistep",
     "OPFOptions",
     "NumericalPreparation",
+    "CostAccuracyWarning",
     "OPFBuild",
     "TemporalAssembly",
     "extract_results",

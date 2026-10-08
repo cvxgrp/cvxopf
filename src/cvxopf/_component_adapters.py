@@ -7,6 +7,8 @@ without duplicating their physics, feasible sets, or cost models.
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import CostCoordinateTerm
+
 from dataclasses import dataclass
 from typing import Literal, Mapping, Sequence, cast
 
@@ -332,6 +334,20 @@ def _load_step_cost(
     return load.shedding_cost_rate(p_shed, costs)
 
 
+def _load_cost_coordinates(
+    prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
+    context: StepContext, rate: cp.Expression,
+) -> tuple[CostCoordinateTerm, ...]:
+    fraction = variables.get("load_shed_fraction")
+    if fraction is None:
+        return ()
+    indices = _array(prepared, "sheddable_load_indices")
+    parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
+    weights = cp.multiply(_array(prepared, "load_shedding_cost_per_mwh")[indices],
+                          parameters.p_eligible_mw[context.step, indices])
+    return (CostCoordinateTerm(fraction, weights, rate, "shedding"),)
+
+
 def _load_step_expressions(
     units: Sequence[Load],
     prepared: Mapping[str, object],
@@ -497,6 +513,10 @@ def _load_vectorized_assembly(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=constraints,
         stage_cost_rate=stage_cost_rate,
+        cost_coordinates=(() if fraction is None or context.formulation != "ac" else
+                          (CostCoordinateTerm(fraction,
+                           cp.Constant(costs[:, np.newaxis] * eligible_values[indices]),
+                           stage_cost_rate, "shedding", 0),)),
         expressions=expressions,
         horizon=horizon,
     )
@@ -508,6 +528,7 @@ LOAD_AC = FormulationAdapter[Load](
     injections=_load_injections,
     operating_constraints=_load_operating_constraints,
     step_cost=_load_step_cost,
+    cost_coordinates=_load_cost_coordinates,
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
     vectorized_variable_specs=_load_vectorized_variable_specs,
@@ -1169,6 +1190,14 @@ def _storage_step_cost(
     return storage.storage_cost_expr(list(units), variables["b"])
 
 
+def _storage_cost_coordinates(
+    prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
+    context: StepContext, rate: cp.Expression,
+) -> tuple[CostCoordinateTerm, ...]:
+    return (CostCoordinateTerm(variables["b"], cp.Constant(_array(prepared, "storage_aging_weight")),
+                               rate, "cycling"),)
+
+
 def _storage_horizon(
     units: Sequence[StorageUnitIdeal],
     prepared: Mapping[str, object],
@@ -1263,6 +1292,10 @@ def _storage_vectorized_assembly(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=operating,
         stage_cost_rate=stage_cost_rate,
+        cost_coordinates=(() if context.formulation != "ac" else
+                          (CostCoordinateTerm(power,
+                           cp.Constant(_array(prepared, "storage_aging_weight")[:, np.newaxis]),
+                           stage_cost_rate, "cycling", 0),)),
         horizon=HorizonContribution(
             constraints=tuple(constraints),
             terminal_cost=terminal_cost,
@@ -1277,6 +1310,7 @@ STORAGE_AC = FormulationAdapter[StorageUnitIdeal](
     injections=_storage_injections,
     operating_constraints=_storage_operating_constraints,
     step_cost=_storage_step_cost,
+    cost_coordinates=_storage_cost_coordinates,
     horizon=_storage_horizon,
     vectorized_variable_specs=_storage_vectorized_variable_specs,
     vectorized_assembly=_storage_vectorized_assembly,
