@@ -696,10 +696,18 @@ physical objective, dispatch units and result schema remain unchanged, and
 `CostAccuracyWarning` remains advisory: it does not reject a returned solution.
 
 The difficult Tracy forced-shedding T=24 case converged with component-first
-assembly in two experimental executions where hourly assembly timed out.
+assembly in two experimental executions and the production-path qualification
+where hourly assembly timed out. The production solve passed acceptance in
+135.40 seconds and reproduced the earlier physical trajectories exactly;
+see the [qualification report](experiments/ac_objective_assembly/PRODUCTION_REPORT.md).
 Shorter cases showed no timing advantage. This supports an opt-in choice, not
-a universal speedup or a default change. Production-path T=24 qualification
-is still a separate checkpoint. See the
+a universal speedup or a library default change.
+
+For future supported AC experimental runners, the approved policy is to try the
+complete component-first recovery ladder before the existing hourly ladder,
+stopping at the first independently accepted solution. The runner/protocol must
+explicitly implement that order and budget both phases; `build.solve()` does not
+retry automatically. Existing studies are not changed or resumed. See the
 [numerical preparation design and evidence](plans/numerical-preparation-api.md)
 for supported combinations, warnings and limitations.
 

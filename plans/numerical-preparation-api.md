@@ -1,5 +1,63 @@
 # Typed numerical preparation design
 
+## Closeout and approved experimental policy — 2026-10-08
+
+The owner closed the standalone numerical-preparation, cost-coordinate and AC
+objective-assembly investigation after the production-path qualification below.
+The implemented representation options, regression coverage and formulation-
+specific adoption decisions are sufficient to return to the engineering studies;
+another general qualification matrix is not required for this checkpoint.
+
+AC experiments retain the approved normalized-device/exact-fixed preparation
+and cycling/shedding cost coordinates. SOCP, lossy DC and copper plate retain
+their original economic coordinates with their formulation-specific preparation;
+the [convex disposition](../experiments/convex_cost_qualification/REPORT.md#owner-decision-retain-original-cost-coordinates-for-convex-formulations)
+does not adopt cost rescaling. Cycling-cost gaps remain advisory warnings,
+while unexplained mapping, physical feasibility and accounting failures retain
+their applicable checks. No physical weights, solver tolerances or public defaults
+change at closeout.
+
+For future experimental AC runners supporting standalone vectorized prepared
+solves, the owner approved this recovery order:
+
+1. Run the prescribed recovery ladder with `objective_assembly="component_first"`.
+2. Only if no independently accepted solution is obtained, run the previous
+   ladder with `objective_assembly="hourly"` (time-first summation).
+
+This means the complete component-first ladder precedes the hourly ladder,
+not alternating representations at each start. Within each phase retain the
+existing physical starts, perturbation sequence/seeds, target-free source
+dependencies, acceptance checks and per-attempt resource ceilings. Stop at the
+first independently accepted solution of the requested problem; target-free
+diagnostic acceptance never completes a hard-target arm. Retain timeouts and
+numerical/audit failures rather than selecting an unaccepted or best-of result.
+Infrastructure, monitoring or RSS failures still stop for operator review;
+an unfinished attempt cannot advance either ladder. Budget exhaustion and
+operator stop do not authorize entry into the second phase.
+
+Every attempt must record its assembly method, ladder slot, source dependencies
+and preparation settings, with complete start mapping for its own canonical
+layout. Future protocols must explicitly budget the combined ladder's launches
+and cumulative worker time; this decision does not automatically double budgets
+or authorize new starts, retries or execution. It changes the experimental first
+choice, not the library's `"hourly"` default or automatic `build.solve()` behavior.
+The motivation is improved likelihood of returning an audited solution in the
+difficult T=24 case, not evidence of universally faster or lower-cost AC solves.
+
+This is an approved **prospective runner policy**, not an implemented ladder
+change. Wire it into the relevant next experimental runner/protocol checkpoint
+before execution. Current component-first support excludes single-step,
+stepwise and hierarchical preparation; extending those paths remains separate
+work, with per-layer preparation in M21. Original E3, Stage D and historical
+protocols remain unchanged and held. Any fresh E3 protocol must explicitly
+record this superseding order rather than cross-source resume the old run.
+
+Closeout does not resolve the retained SOCP forced-shedding feasibility misses,
+SOCP relaxation slack/AC realizability, or the causal mechanism behind AC
+summation sensitivity. It does not close M11, enable prepared hierarchy, build
+the requested docs site, or authorize further solves. Those are separate tasks,
+not blockers to closing this representation/qualification detour.
+
 ## Approved AC cost-coordinate extraction
 
 The standalone production policy now includes opt-in ``cost_coordinates=False``.
@@ -125,20 +183,24 @@ checks integration, zero/parameter weights, absent devices, HVDC/PWL/terminal
 costs, restoration, warnings, failure cleanup, unchanged PYPOWER fixtures and
 unsupported combinations. These tests are not a new scientific qualification.
 
-After implementation review and a clean owner commit, a separately authorized
-production-path Tracy forced T=24 qualification remains required. Another full
-32-arm matrix is not automatically necessary. The evidence supports offering
-the complete qualified AC configuration as an opt-in option, not a universal
-speedup, a convex policy change or a production default change.
+The separately authorized production-path Tracy forced T=24 qualification is
+complete. The evidence supports offering the complete qualified AC configuration
+as an opt-in option, not a universal speedup, a convex policy change or a
+production default change.
 
 The owner accepted the production implementation in `1f7c7f056`. The
 [production objective assembly protocol](../experiments/ac_objective_assembly/PRODUCTION_PROTOCOL.md)
-prepares the two public-selector T=24 arms with unchanged numerical settings and
-acceptance checks. The existing supervisor/replay runner gains an explicit
-`--production-option` mode and fresh `results/production_001` directory; it does
-not reuse the experimental objective adapter. Review and a clean runner commit
-precede launch. Historical evidence and the original diagnostic protocol remain
-unchanged, and E3/Stage D remain held.
+defined the two public-selector T=24 arms with unchanged numerical settings and
+acceptance checks. The reviewed runner committed at
+`5410e627e1cecfc80aa36d2c65cbc0fd6c4d1790` executed both attempts in fresh
+`results/production_001`, without the experimental objective adapter. Hourly
+timed out at 180.20 worker seconds; component-first returned IPOPT status 0 and
+passed all acceptance checks in 135.40 seconds, with an advisory cycling warning.
+Its retained generator, battery, shedding and voltage trajectories and economic
+audit matched the earlier successful diagnostic exactly. The
+[production report](../experiments/ac_objective_assembly/PRODUCTION_REPORT.md)
+pins the evidence hashes and limitations. Historical evidence and the original
+diagnostic protocol remain unchanged, and E3/Stage D remain held.
 
 Documentation-site follow-up requested by the owner: organize getting-started
 examples, formulation/assembly support, numerical options, economic warnings,
@@ -170,7 +232,10 @@ diagnostics through `OPFBuild.preparation_evidence`. Enabled standalone solving
 is available through these boundaries; defaults remain disabled. Unit and
 regression tests are not the bounded scientific qualification matrix.
 
-Qualification, prospective E3 changes, and execution remain subsequent gates.
+At this initial solver-boundary checkpoint, qualification, prospective E3 changes
+and execution remained subsequent gates. Completed standalone qualification and
+the current prospective policy are recorded above; E3 integration/execution
+remain separate.
 Prepared hierarchy remains rejected before any layer build, including
 when mutable hierarchical options have changed after input construction;
 its layer-specific policy work remains in Milestone 21. The existing streaming
@@ -399,10 +464,11 @@ qualification before any default proposal. Record per-formulation qualified,
 not-qualified, or incomplete disposition; do not treat unit tests as numerical
 qualification or one timing sample as a speedup result.
 
-Only afterward prepare prospective E3 code/configuration under the original
-plan: SOCP-specific preparation and acceptance settings, unchanged component
+The next E3 integration, if authorized, prepares prospective code/configuration:
+SOCP-specific preparation and acceptance settings, unchanged component
 and physical gates, replay validation of maps/native evidence, separate DC/AC
-dispositions, and a new `results/e3_prepared` root. Do not cross-source resume or
+dispositions, the approved component-first-then-hourly AC recovery order above,
+explicit combined-ladder budgets, and a new `results/e3_prepared` root. Do not cross-source resume or
 rewrite original E3. No fresh execution binding/start/launch is created until a
 clean reviewed execution commit and separate authorization. Stage D stays held;
 the isolated investigation checkout stays retained.
