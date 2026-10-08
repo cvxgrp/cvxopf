@@ -6,42 +6,20 @@ Meshed primal nonuniqueness and inexact voltage recovery are not test failures.
 
 import hashlib
 import json
-from pathlib import Path
 from time import perf_counter
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from cvxopf import (
-    OPFOptions, audit_socp_relaxation, build_opf, build_opf_multistep,
+    OPFOptions, audit_socp_relaxation, build_opf,
     extract_results, recover_socp_voltage,
 )
 from tests.socp_reference_audit import audit, edge_violations
 from tests.socp_reference_cases import (
     analytic_two_bus, cases, input_hash, payload, policy, SETTINGS, verify_reference_sources,
 )
-
-
-FIXTURES = Path(__file__).parent / "fixtures"
-OBJ_RTOL, OBJ_ATOL = 2e-6, 2e-5
-
-
-def reference(name):
-    # Missing/invalid/stale oracles must fail; never skip or generate in CI.
-    record = json.loads((FIXTURES / f"{name}_socp_powermodels_reference.json").read_text())
-    case = cases()[name]
-    assert record["schema_version"] == 1 and record["case_name"] == name
-    assert record["input_sha256"] == input_hash(case)
-    assert record["case"] == payload(case) and record["policy"] == policy(name)
-    ref = record["reference"]
-    assert ref["implementation"] == "PowerModels.SOCWRConicPowerModel"
-    assert ref["settings"] == SETTINGS and ref["parser_verified"] is True
-    assert ref["packages"]["PowerModels"]["version"] == "0.21.5"
-    assert ref["packages"]["PowerModels"]["git_tree_sha1"] == "b8e410e1d827b621e82e7e670967f0efc5845c30"
-    verify_reference_sources(ref)
-    assert record["termination"] == "OPTIMAL" and record["primal_status"] == "FEASIBLE_POINT"
-    return case, record
+from tests.socp_reference_comparison import FIXTURES, OBJ_RTOL, OBJ_ATOL, reference, construct, compare
 
 
 def test_two_bus_analytic_oracle_is_feasible_and_exactly_recoverable():
@@ -156,51 +134,20 @@ def test_fixture_tooling_uses_explicit_raw_directory(tmp_path, monkeypatch, caps
 @pytest.mark.parametrize("name", ["two_bus", "case9", "case14"])
 @pytest.mark.parametrize("assembly", ["single", "vectorized", "stepwise"])
 def test_socp_matches_independent_optimum(name, assembly, record_property):
-    case, record = reference(name)
-    options = OPFOptions(enforce_vset=policy(name)["enforce_vset"])
     start = perf_counter()
-    if assembly == "single":
-        build = build_opf(case, formulation="socp", options=options)
-    else:
-        build = build_opf_multistep(case, pd.DataFrame([case["bus"][:, 2]]),
-            pd.DataFrame([case["bus"][:, 3]]), T=1, formulation="socp",
-            temporal_assembly=assembly, options=options)
+    _, _, build = construct(name, assembly)
     built = perf_counter()
     canonical, _, _ = build.prob.get_problem_data("CLARABEL", canon_backend=build.canonicalization_backend)
     canonicalized = perf_counter()
     build.solve(**SETTINGS)
     solved = perf_counter()
     result = extract_results(build)
-    assert result["status"] == "optimal"
-    assert result["objective"] == pytest.approx(record["objective"], rel=OBJ_RTOL, abs=OBJ_ATOL)
-    primal = {key: np.asarray(result[key] if assembly == "single" else result[key][0])
-              for key in ("w", "W_re", "W_im", "Pg", "Qg", "branch_p_from",
-                          "branch_q_from", "branch_p_to", "branch_q_to")}
-    primal.update(bus_ids=case["bus"][:, 0].astype(int).tolist(),
-                  voltage_product_pairs=record["primal"]["voltage_product_pairs"])
-    # Check actual builder pair order too, rather than relabeling its products.
-    actual_pairs = case["bus"][build.data["voltage_product_pairs"], 0].astype(int).tolist()
-    assert actual_pairs == primal["voltage_product_pairs"]
-    checked = audit(case, primal, enforce_vset=options.enforce_vset)
-    assert result["objective"] == pytest.approx(checked["objective"], rel=1e-10, abs=1e-7)
-    assert audit_socp_relaxation(build, result)["feasible"]
-    recovery = recover_socp_voltage(build, result)
-    assert recovery["available"]
-    if name == "two_bus":
-        analytic = analytic_two_bus()
-        for key in ("w", "W_re", "W_im", "Pg", "Qg"):
-            np.testing.assert_allclose(primal[key], analytic[key], rtol=0,
-                                       atol=1e-5 if key in ("Pg", "Qg") else 1e-6)
-        assert recovery["exact_product_recovery"] and recovery["ac_feasible"]
-    record_property("socp_reference", json.dumps(dict(**checked, case=name, assembly=assembly,
-        objective_estimate=result["objective"], reference_objective=record["objective"],
+    checked = compare(name, assembly, build, result)
+    record_property("socp_reference", json.dumps(dict(**checked,
         build_s=built-start, canonicalize_s=canonicalized-built, solve_wall_s=solved-canonicalized,
         solver_s=build.prob.solver_stats.solve_time,
         scalar_variables=build.prob.size_metrics.num_scalar_variables,
-        soc_sizes=canonical["dims"].soc,
-        max_cycle_rad=recovery["cycle_summary"]["maximum"],
-        exact_product_recovery=recovery["exact_product_recovery"],
-        recovered_ac_feasible=recovery["ac_feasible"])))
+        soc_sizes=canonical["dims"].soc)))
 
 
 @pytest.mark.parametrize("key", ["W_im", "Pg", "branch_p_to"])

@@ -18,6 +18,15 @@ specified below. Window/boundary selection and a bounded execution protocol
 precede that study's numerical launch. The existing Tracy rolling-horizon and
 annual AC execution remain on hold; this plan update does not restart them.
 
+On 2026-10-08 the owner approved preparing a fresh E1 regression after the
+numerical implementation changes. The [execution contract](../experiments/m11_socp/E1_REGRESSION_PLAN.md)
+adds baseline/prepared SOCP pairs across the same three fixtures and three
+assembly paths (18 calls), reusing the frozen external references and original
+independent checks. Runner preparation does not authorize execution; review,
+an owner commit and separate launch approval come first. Historical E1/E2
+evidence remains unchanged. A prepared E2 refresh is a subsequent checkpoint;
+E3 and the earlier Tracy studies remain held.
+
 The two checkpoints below preserve the earlier increment history; their pending
 items are superseded where noted by the current builder/diagnostics report.
 
