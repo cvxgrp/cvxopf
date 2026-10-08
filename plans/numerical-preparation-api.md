@@ -34,6 +34,14 @@ case9-PWL, case14 and case57 fixtures. Fixture tolerances and historical
 qualification evidence remain unchanged. Regression testing does not claim
 new Tracy qualification or authorization to resume E3/Stage D.
 
+The next production-path checkpoint is prepared in
+[the Tracy verification protocol](../experiments/ac_production_verification/PROTOCOL.md):
+four matched pairs (ordinary T=3, forced-shedding T=3/T=6/T=24) through public
+`build.solve()`, with the cost-coordinate flag off/on. It preserves cycling
+warnings, independently replays native/physical accounting and restoration,
+and uses fresh supervised evidence. Numerical execution requires review,
+commit and separate owner approval; it has not been launched.
+
 Prepared 2026-10-06 on `socp`, following preservation commit `eb511da3f` and the
 [approved transfer plan](socp-conditioning-integration-transfer.md). This is the
 approved API/protocol design with implementation progress recorded
