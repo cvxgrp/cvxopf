@@ -33,21 +33,26 @@ def portable(monkeypatch):
     monkeypatch.setattr(IPOPT, "solve_via_data", lambda *_a, **_k: pytest.fail("optimizer not authorized"))
 
 
-def test_matched_two_arm_binding(portable):
-    rows = [m.row_binding(arm) for arm in m.arms()]
+@pytest.mark.parametrize("production_option", [False, True])
+def test_matched_two_arm_binding(portable, production_option):
+    rows = [m.row_binding(arm, production_option=production_option) for arm in m.arms()]
     assert m.LIMITS["max_launches"] == len(rows) == 2
     assert m.LIMITS["total_worker_seconds"] == 2 * m.LIMITS["wall_seconds"]
     x, y = [row["fixture"] for row in rows]
     assert x["physical_start"] == y["physical_start"] and x["stress"] == y["stress"]
     assert x["frozen"]["mathematical_inputs"] == y["frozen"]["mathematical_inputs"]
-    assert x["frozen"]["policy"] == y["frozen"]["policy"]
+    policies = [dict(row["frozen"]["policy"]) for row in (x, y)]
+    for arm, policy in zip(m.arms(), policies, strict=True):
+        assert policy.pop("objective_assembly") == (arm.assembly if production_option else "hourly")
+    assert policies[0] == policies[1]
     assert x["frozen"]["policy"]["cost_coordinates"]
     assert x["stress"]["forced_shedding"]
     assert rows[0]["layout"] != rows[1]["layout"]
 
 
-def test_control_is_normal_production_canonicalization(portable):
-    _, _, control, _, _ = m.construct(m.arms()[0])
+@pytest.mark.parametrize("production_option", [False, True])
+def test_control_is_normal_production_canonicalization(portable, production_option):
+    _, _, control, _, _ = m.construct(m.arms()[0], production_option=production_option)
     _, _, ordinary, _, _ = production.construct(production.arms()[-1])
     x, y = m.canonical(control), m.canonical(ordinary)
     assert m.layout(*x) == m.layout(*y)
@@ -55,8 +60,12 @@ def test_control_is_normal_production_canonicalization(portable):
     assert type(control.prob.objective) is cp.Minimize
 
 
-def test_component_first_reproduces_historical_cost_graph_and_layout(portable):
-    _, _, candidate, _, _ = m.construct(m.arms()[1])
+@pytest.mark.parametrize("production_option", [False, True])
+def test_component_first_reproduces_historical_cost_graph_and_layout(portable, production_option):
+    _, _, candidate, _, _ = m.construct(m.arms()[1], production_option=production_option)
+    if production_option:
+        assert type(candidate.prob.objective) is cp.Minimize
+        assert candidate.numerical_preparation.objective_assembly == "component_first"
     solver, bindings, auxiliary, data, inverse = m.canonical(candidate)
     _, _, view, _, _, _ = qualified.construct(qualified.arms()[-1])
     hdata, hinverse = historical.canonical_data(view.solver)
@@ -96,12 +105,51 @@ def test_adapter_rejects_unsupported_costs_and_nonunit_weights(portable):
     assert type(objective.tree_copy()) is cp.Minimize
 
 
-def setup_status(monkeypatch, root, number=1):
-    q.atomic_immutable_json(root / "protocol.json", r.protocol())
+def test_public_selector_never_constructs_experimental_adapter(monkeypatch, portable):
+    monkeypatch.setattr(m, "ComponentFirstObjective", lambda *_a: pytest.fail("experimental adapter used"))
+    for arm in m.arms():
+        _, kwargs, build, _, _ = m.construct(arm, production_option=True)
+        assert type(build.prob.objective) is cp.Minimize
+        assert kwargs["options"].numerical_preparation.objective_assembly == arm.assembly
+        assert build.numerical_preparation.objective_assembly == arm.assembly
+        m.canonical(build)
+
+
+def test_execution_modes_cannot_replay_each_others_binding(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "context", lambda *, production_option=False: dict(public=production_option))
+    q.atomic_immutable_json(tmp_path / "binding.json", dict(context=r.context(production_option=True),
+        rows=[{}, {}], raw_inputs={}, historical={}))
+    q.atomic_immutable_json(tmp_path / "protocol.json", r.protocol(production_option=True))
+    assert r.verify_binding(tmp_path, production_option=True)["context"] == dict(public=True)
+    with pytest.raises(ValueError, match="source/environment/protocol"):
+        r.verify_binding(tmp_path)
+    assert r.protocol()["protocol"] == r.protocol(production_option=True)["protocol"]
+    assert r.protocol()["protocol_sha256"] != r.protocol(production_option=True)["protocol_sha256"]
+
+
+def test_public_preflight_uses_public_option_without_creating_output(monkeypatch, portable, tmp_path, capsys):
+    import json
+    import sys
+    rows = [m.row_binding(arm, production_option=True) for arm in m.arms()]
+    def frozen(*, production_option=False):
+        assert production_option
+        return dict(context=dict(commit="a" * 40, clean=False), rows=rows)
+    monkeypatch.setattr(r, "frozen_binding", frozen)
+    monkeypatch.setattr(r, "HERE", tmp_path)
+    output = tmp_path / "results/fresh"
+    monkeypatch.setattr(sys, "argv", ["run", "--preflight", "--production-option", "--output", str(output)])
+    r.main()
+    result = json.loads(capsys.readouterr().out)
+    assert [row["policy"]["objective_assembly"] for row in result["rows"]] == ["hourly", "component_first"]
+    assert not output.exists()
+
+
+def setup_status(monkeypatch, root, number=1, *, production_option=False):
+    q.atomic_immutable_json(root / "protocol.json", r.protocol(production_option=production_option))
     row = dict(layout=[], canonical_x0=[])
     binding = dict(rows=[row, row])
-    monkeypatch.setattr(r, "verify_binding", lambda _: binding)
-    monkeypatch.setattr(r, "checked_arm", lambda _, n: m.arms()[n-1])
+    monkeypatch.setattr(r, "verify_binding", lambda _, **_kw: binding)
+    monkeypatch.setattr(r, "checked_arm", lambda _, n, **_kw: m.arms()[n-1])
     directory = root / f"call-{number:03d}"
     directory.mkdir()
     req = r.request(root, number, 180.)
@@ -110,16 +158,20 @@ def setup_status(monkeypatch, root, number=1):
 
 
 @pytest.mark.parametrize("number", [1, 2])
-def test_worker_calls_public_solve_and_keeps_failure(monkeypatch, tmp_path, portable, number):
-    directory, req = setup_status(monkeypatch, tmp_path, number)
+@pytest.mark.parametrize("production_option", [False, True])
+def test_worker_calls_public_solve_and_keeps_failure(monkeypatch, tmp_path, portable, number, production_option):
+    directory, req = setup_status(monkeypatch, tmp_path, number, production_option=production_option)
     q.atomic_immutable_json(directory / "launch.json", dict(pid=os.getpid()))
     _, _, build, _, _ = m.construct(m.arms()[number-1])
     calls = []
     def solve(self, **options):
+        if production_option:
+            assert type(self.prob.objective) is cp.Minimize
+            assert self.numerical_preparation.objective_assembly == m.arms()[number-1].assembly
         calls.append(options)
         raise RuntimeError("synthetic public failure")
     monkeypatch.setattr(type(build), "solve", solve)
-    r.worker(tmp_path, number)
+    r.worker(tmp_path, number, production_option=production_option)
     record = q.read(directory / "result.json.gz")
     assert len(calls) == record["optimizer_calls"] == 1
     assert "synthetic public failure" in record["exception"]
@@ -128,9 +180,10 @@ def test_worker_calls_public_solve_and_keeps_failure(monkeypatch, tmp_path, port
 
 
 @pytest.mark.parametrize("number", [1, 2])
-def test_audit_restores_this_assembly_and_rejects_changed_start(monkeypatch, portable, number):
+@pytest.mark.parametrize("production_option", [False, True])
+def test_audit_restores_this_assembly_and_rejects_changed_start(monkeypatch, portable, number, production_option):
     arm = m.arms()[number-1]
-    _, _, build, _, _ = m.construct(arm)
+    _, _, build, _, _ = m.construct(arm, production_option=production_option)
     sb, bindings, _, data, inverse = m.canonical(build)
     mapping = resolve_fixed_map(sb._exact_boxes, inverse[:-1], inverse[-1],
         data["_bounds"].problem.constraints, len(data["x0"]), len(data["cl"]))
@@ -142,7 +195,8 @@ def test_audit_restores_this_assembly_and_rejects_changed_start(monkeypatch, por
     build.prob._status, build.prob._value = cp.OPTIMAL, float(sb.prob.objective.value)
     published = serializable(extract_results(build))
     native = dict(status=0, obj_val=value, x=adjusted[mapping.free])
-    evidence = evidence_record(PreparationEvidence(mapping, native, dict(restoration_available=True),
+    evidence = evidence_record(PreparationEvidence(mapping, native,
+        dict(restoration_available=True, objective_assembly=build.numerical_preparation.objective_assembly),
         np.ones(mapping.free.size), np.ones(mapping.kept.size), assigned_x0=data["x0"],
         adjusted_x0=adjusted, reduced_x0=adjusted[mapping.free], start_layout=tuple(
             (v.id, v.shape, inverse[-1].var_offsets[v.id], inverse[-1].var_offsets[v.id]+v.size)
@@ -151,12 +205,17 @@ def test_audit_restores_this_assembly_and_rejects_changed_start(monkeypatch, por
     # the independent physical oracle only to exercise restoration/accounting.
     monkeypatch.setattr(m, "physical_audit", lambda *args: (dict(passed=True,
         costs={k: float(v.value) for k, v in args[0].expressions.items() if k.endswith("_cost")}), None))
-    check = m.assess(arm, serializable(native), evidence, published)
+    check = m.assess(arm, serializable(native), evidence, published, production_option=production_option)
     assert check["publication"]["objective_difference"] <= check["publication"]["objective_limit"]
     assert check["economics"]["passed"] and check["transformation"]["passed"]
+    if production_option:
+        evidence["checks"]["objective_assembly"] = "wrong"
+        with pytest.raises(ValueError, match="production objective assembly"):
+            m.assess(arm, serializable(native), evidence, published, production_option=True)
+        evidence["checks"]["objective_assembly"] = arm.assembly
     evidence["assigned_x0"][0] += 1
     with pytest.raises(ValueError, match="layout/start"):
-        m.assess(arm, serializable(native), evidence, published)
+        m.assess(arm, serializable(native), evidence, published, production_option=production_option)
 
 
 def test_unsupervised_archive_is_not_finalized(monkeypatch, tmp_path):
@@ -179,35 +238,37 @@ def test_manifest_mismatch_is_not_accepted(monkeypatch, tmp_path):
 
 
 def test_dirty_source_gate_precedes_output_creation(monkeypatch, tmp_path):
-    monkeypatch.setattr(r, "frozen_binding", lambda: dict(context=dict(clean=False, commit="a"*40)))
+    monkeypatch.setattr(r, "frozen_binding", lambda **_kw: dict(context=dict(clean=False, commit="a"*40)))
     with pytest.raises(ValueError, match="clean full commit"):
         r.run(tmp_path / "absent", "a"*40)
     assert not (tmp_path / "absent").exists()
 
 
-def test_finalized_timeout_does_not_censor_second_arm(monkeypatch, tmp_path):
-    monkeypatch.setattr(r, "frozen_binding", lambda: dict(context=dict(clean=True, commit="a"*40,
+@pytest.mark.parametrize("production_option", [False, True])
+def test_finalized_timeout_does_not_censor_second_arm(monkeypatch, tmp_path, production_option):
+    monkeypatch.setattr(r, "frozen_binding", lambda **_kw: dict(context=dict(clean=True, commit="a"*40,
         thread_environment={key:"1" for key in r.THREAD_KEYS})))
     monkeypatch.setattr(r, "monitoring", lambda: {})
     state = dict(launches=0, finalized=0, remaining_worker_seconds=360., attempts=[])
-    monkeypatch.setattr(r, "status", lambda _: state)
+    monkeypatch.setattr(r, "status", lambda _, **_kw: state)
     launches = []
     def supervise(command, directory, root, req):
+        assert ("--production-option" in command) == production_option
         launches.append(req["call_id"])
         state.update(launches=len(launches), finalized=len(launches),
                      remaining_worker_seconds=360.-180.*len(launches))
         return dict(classification="wall_limit", returncode=-15)
     monkeypatch.setattr(q, "supervise", supervise)
-    assert r.run(tmp_path / "fresh", "a"*40)["outcome"] == "matrix_complete"
+    assert r.run(tmp_path / "fresh", "a"*40, production_option=production_option)["outcome"] == "matrix_complete"
     assert launches == [1, 2]
 
 
 @pytest.mark.parametrize("classification", ["rss_limit", "interrupted", "supervisor_failure"])
 def test_safety_stop_does_not_launch_second_arm(monkeypatch, tmp_path, classification):
-    monkeypatch.setattr(r, "frozen_binding", lambda: dict(context=dict(clean=True, commit="a"*40,
+    monkeypatch.setattr(r, "frozen_binding", lambda **_kw: dict(context=dict(clean=True, commit="a"*40,
         thread_environment={key:"1" for key in r.THREAD_KEYS})))
     monkeypatch.setattr(r, "monitoring", lambda: {})
-    monkeypatch.setattr(r, "status", lambda _: dict(launches=0, finalized=0,
+    monkeypatch.setattr(r, "status", lambda _, **_kw: dict(launches=0, finalized=0,
         remaining_worker_seconds=360., attempts=[]))
     launches = []
     def supervise(command, directory, root, req):
@@ -218,10 +279,11 @@ def test_safety_stop_does_not_launch_second_arm(monkeypatch, tmp_path, classific
     assert launches == [1]
 
 
-def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, portable):
-    directory, _ = setup_status(monkeypatch, tmp_path)
-    rows = [m.row_binding(arm) for arm in m.arms()]
-    monkeypatch.setattr(r, "verify_binding", lambda _: dict(rows=rows))
+@pytest.mark.parametrize("production_option", [False, True])
+def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, portable, production_option):
+    directory, _ = setup_status(monkeypatch, tmp_path, production_option=production_option)
+    rows = [m.row_binding(arm, production_option=production_option) for arm in m.arms()]
+    monkeypatch.setattr(r, "verify_binding", lambda _, **_kw: dict(rows=rows))
 
     def solve(build, **options):
         sb, bindings, auxiliary, data, inverse = m.canonical(build)
@@ -245,7 +307,8 @@ def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, por
             binding.term.variable.save_value(binding.leaf.value / binding.scale)
         build.prob._status, build.prob._value = cp.OPTIMAL, float(sb.prob.objective.value)
         build._preparation_evidence = PreparationEvidence(mapping,
-            dict(status=0, obj_val=value, x=full[mapping.free]), dict(restoration_available=True),
+            dict(status=0, obj_val=value, x=full[mapping.free]), dict(restoration_available=True,
+                objective_assembly=build.numerical_preparation.objective_assembly),
             np.ones(mapping.free.size), np.ones(mapping.kept.size), assigned_x0=data["x0"],
             adjusted_x0=adjusted, reduced_x0=adjusted[mapping.free], start_layout=tuple(
                 (v.id, v.shape, inverse[-1].var_offsets[v.id], inverse[-1].var_offsets[v.id]+v.size)
@@ -263,12 +326,12 @@ def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, por
             directory.mkdir()
             q.atomic_immutable_json(directory / "request.json", r.request(tmp_path, number, 180.))
         q.atomic_immutable_json(directory / "launch.json", dict(pid=os.getpid()))
-        r.worker(tmp_path, number)
+        r.worker(tmp_path, number, production_option=production_option)
         record = q.read(directory / "result.json.gz")
         assert record["classification"] == "accepted", record.get("exception")
         q.atomic_immutable_json(directory / "supervision.json", dict(classification="exited",
             returncode=0, wall_seconds=1., peak_sampled_rss_mib=1.))
-    report = r.status(tmp_path)
+    report = r.status(tmp_path, production_option=production_option)
     assert report["accepted"] == report["finalized"] == report["result_archives"] == 2
     assert report["native_archives"] == report["completion_manifests"] == 2
     assert abs(report["pairs"][0]["component_first_minus_hourly_cost"]) < 1e-6
@@ -282,4 +345,4 @@ def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, por
     completion["artifacts"]["canonical-start.json.gz"] = q.digest(directory / "canonical-start.json.gz")
     q.atomic_json(directory / "completion.json", completion)
     with pytest.raises(ValueError, match="expected canonical start"):
-        r.status(tmp_path)
+        r.status(tmp_path, production_option=production_option)

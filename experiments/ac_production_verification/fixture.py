@@ -19,18 +19,19 @@ def arms():
     return tuple(rows)
 
 
-def construct(arm, prepared=None):
+def construct(arm, prepared=None, *, objective_assembly="hourly"):
     call, kwargs, stress = qualified.kwargs_for_arm(arm, prepared)
     policy = NumericalPreparation(normalize_device_limits=True, exact_fixed_boxes=True,
-                                  cost_coordinates=arm.mode == "both")
+                                  cost_coordinates=arm.mode == "both",
+                                  objective_assembly=objective_assembly)
     kwargs["options"] = replace(kwargs["options"], numerical_preparation=policy)
     build = build_opf_multistep(**kwargs)
     start = q.physical_start(build, kwargs)
     return call, kwargs, build, start, stress
 
 
-def row_binding(arm, prepared=None):
-    call, kwargs, _, start, stress = construct(arm, prepared)
+def row_binding(arm, prepared=None, *, objective_assembly="hourly"):
+    call, kwargs, _, start, stress = construct(arm, prepared, objective_assembly=objective_assembly)
     frozen = original.call_binding(call, kwargs)
     frozen["policy"] = asdict(kwargs["options"].numerical_preparation)
     return serializable(dict(arm=asdict(arm), group=arm.group, frozen=frozen,

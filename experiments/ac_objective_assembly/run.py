@@ -31,6 +31,7 @@ from experiments.ac_production_verification import run as predecessor
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "results/diagnostic_001"
+PRODUCTION_OUTPUT = HERE / "results/production_001"
 MODULE = "experiments.ac_objective_assembly.run"
 HISTORY = tuple(
     original.ROOT / "experiments" / study / "results" / run / filename
@@ -43,39 +44,64 @@ HISTORY = tuple(
             "binding.json", "protocol.json", "invocation-finish.json",
             "call-008/request.json", "call-008/supervision.json", "call-008/worker.log")),
     ) for filename in files)
+PRODUCTION_HISTORY = tuple(
+    original.ROOT / "experiments" / study / "results" / run / filename
+    for study, run, files in (
+        ("ac_objective_assembly", "diagnostic_001", (
+            "binding.json", "protocol.json", "invocation-finish.json",
+            "call-002/request.json", "call-002/completion.json", "call-002/supervision.json",
+            "call-002/result.json.gz", "call-002/native.json.gz", "call-002/worker.log")),
+        ("objective_assembly_qualification", "qualification_002", (
+            "binding.json", "protocol.json", "report-final-arm.json",
+            "call-026/request.json", "call-026/completion.json", "call-026/supervision.json",
+            "call-026/result.json.gz", "call-026/native.json.gz", "call-026/worker.log")),
+    ) for filename in files)
 
 
-def context():
+def context(*, production_option=False):
     value = predecessor.context()
     value["objective_assembly_sources"] = {
         str(p.relative_to(original.ROOT)): q.digest(p) for p in sorted(HERE.iterdir())
         if p.suffix in {".py", ".md"}}
+    if production_option:
+        value["objective_assembly_execution"] = "public_option"
     return value
 
 
-def protocol():
-    return dict(protocol=f.LIMITS, protocol_sha256=q.digest(HERE / "PROTOCOL.md"))
+def protocol(*, production_option=False):
+    name = "PRODUCTION_PROTOCOL.md" if production_option else "PROTOCOL.md"
+    value = dict(protocol=f.LIMITS, protocol_sha256=q.digest(HERE / name))
+    if production_option:
+        value["objective_assembly_execution"] = "public_option"
+    return value
 
 
-def frozen_binding():
+def frozen_binding(*, production_option=False):
     prepared = original.e3.verified_inputs()
-    rows = [f.row_binding(arm, prepared) for arm in f.arms()]
+    rows = [f.row_binding(arm, prepared, production_option=production_option) for arm in f.arms()]
     a, b = (row["fixture"] for row in rows)
+    policies = [dict(row["frozen"]["policy"]) for row in (a, b)]
+    if production_option:
+        for arm, policy in zip(f.arms(), policies, strict=True):
+            if policy.pop("objective_assembly") != arm.assembly:
+                raise ValueError("public policy differs from requested objective assembly")
     if (a["physical_start"] != b["physical_start"] or a["stress"] != b["stress"]
             or a["frozen"]["mathematical_input_sha256"] != b["frozen"]["mathematical_input_sha256"]
-            or a["frozen"]["policy"] != b["frozen"]["policy"]):
+            or policies[0] != policies[1]):
         raise ValueError("unmatched diagnostic physical input/start/policy pair")
     from experiments.case118_tracy_2021.prepare import SOURCE
     from experiments.case118_annual_hierarchy.pglib_case import SOURCE_CASE_PATH
     paths = (SOURCE, SOURCE_CASE_PATH, original.ROOT / "experiments/case118_tracy_2021/stage_a/manifest.json")
-    return dict(context=context(), rows=rows, raw_inputs={
+    history = HISTORY + PRODUCTION_HISTORY if production_option else HISTORY
+    return dict(context=context(production_option=production_option), rows=rows, raw_inputs={
         str(p.relative_to(original.ROOT)): q.digest(p) for p in paths},
-        historical={str(p.relative_to(original.ROOT)): q.digest(p) for p in HISTORY})
+        historical={str(p.relative_to(original.ROOT)): q.digest(p) for p in history})
 
 
-def verify_binding(root):
+def verify_binding(root, *, production_option=False):
     binding = q.read(root / "binding.json")
-    if binding["context"] != context() or q.read(root / "protocol.json") != protocol():
+    if (binding["context"] != context(production_option=production_option)
+            or q.read(root / "protocol.json") != protocol(production_option=production_option)):
         raise ValueError("source/environment/protocol binding changed")
     for name, digest in binding["raw_inputs"].items():
         if q.digest(original.ROOT / name) != digest:
@@ -88,9 +114,9 @@ def verify_binding(root):
     return binding
 
 
-def checked_arm(binding, number):
+def checked_arm(binding, number, *, production_option=False):
     arm = f.arms()[number-1]
-    if f.row_binding(arm) != binding["rows"][number-1]:
+    if f.row_binding(arm, production_option=production_option) != binding["rows"][number-1]:
         raise ValueError("input/start/policy differs from frozen arm")
     return arm
 
@@ -100,7 +126,7 @@ def request(root, number, wall):
                 protocol=q.reference(root / "protocol.json", root))
 
 
-def worker(root, number):
+def worker(root, number, *, production_option=False):
     directory = root / f"call-{number:03d}"
     req = q.read(directory / "request.json")
     record = dict(iteration=number, arm=number, request=req, optimizer_calls=0, exception=None)
@@ -119,10 +145,10 @@ def worker(root, number):
                 req != request(root, number, req["wall_seconds"]) or
                 not 0 < req["wall_seconds"] <= f.LIMITS["wall_seconds"]):
             raise ValueError("invalid worker launch/request")
-        binding = verify_binding(root)
+        binding = verify_binding(root, production_option=production_option)
         phase("construct")
-        arm = checked_arm(binding, number)
-        _, _, build, _, _ = f.construct(arm)
+        arm = checked_arm(binding, number, production_option=production_option)
+        _, _, build, _, _ = f.construct(arm, production_option=production_option)
         # Preserve the independently assembled expected start even if the
         # worker times out before production can publish native evidence.
         q.atomic_gzip_json(directory / "canonical-start.json.gz", dict(
@@ -147,8 +173,9 @@ def worker(root, number):
         phase("audit")
         if native["status"] == 0:
             record["result"] = serializable(extract_results(build))
-            record["audit"] = assess(arm, native, record["preparation_evidence"], record["result"])
-        verify_binding(root)
+            record["audit"] = assess(arm, native, record["preparation_evidence"], record["result"],
+                                     production_option=production_option)
+        verify_binding(root, production_option=production_option)
     except Exception as exc:
         record["exception"] = f"{type(exc).__name__}: {exc}"
     record["classification"] = ("exception" if record["exception"] else
@@ -162,8 +189,8 @@ def worker(root, number):
     phase("complete")
 
 
-def status(root):
-    binding = verify_binding(root)
+def status(root, *, production_option=False):
+    binding = verify_binding(root, production_option=production_option)
     directories = sorted(root.glob("call-*"))
     if len(directories) > f.LIMITS["max_launches"] or [p.name for p in directories] != [
             f"call-{n:03d}" for n in range(1, len(directories)+1)]:
@@ -210,7 +237,7 @@ def status(root):
         record = q.read(directory / "result.json.gz")
         if record["arm"] != number or record["request"] != req or record["optimizer_calls"] not in (0, 1):
             raise ValueError("worker attempt record mismatch")
-        checked_arm(binding, number)
+        checked_arm(binding, number, production_option=production_option)
         if "canonical-start.json.gz" in expected:
             start = q.read(directory / "canonical-start.json.gz")
             if start != dict(iteration=number, layout=binding["rows"][number-1]["layout"],
@@ -228,7 +255,8 @@ def status(root):
         elif record.get("audit") is not None:
             raise ValueError("audited result lacks native archive")
         if record.get("audit") is not None:
-            audit = assess(f.arms()[number-1], native, record["preparation_evidence"], record["result"])
+            audit = assess(f.arms()[number-1], native, record["preparation_evidence"], record["result"],
+                           production_option=production_option)
             if audit != record["audit"]:
                 raise ValueError("retained audit differs from independent replay")
         expected_class = ("exception" if record["exception"] else
@@ -253,8 +281,8 @@ def status(root):
                 attempts=rows, pairs=pairs)
 
 
-def run(root, commit):
-    binding = frozen_binding()
+def run(root, commit, *, production_option=False):
+    binding = frozen_binding(production_option=production_option)
     if not binding["context"]["clean"] or binding["context"]["commit"] != commit or len(commit) != 40:
         raise ValueError("reviewed clean full commit required before execution")
     if any(binding["context"]["thread_environment"][k] != "1" for k in THREAD_KEYS):
@@ -262,12 +290,12 @@ def run(root, commit):
     telemetry = monitoring()
     root.mkdir(parents=True, exist_ok=False)
     q.atomic_immutable_json(root / "binding.json", binding)
-    q.atomic_immutable_json(root / "protocol.json", protocol())
+    q.atomic_immutable_json(root / "protocol.json", protocol(production_option=production_option))
     q.atomic_immutable_json(root / "invocation-start.json", dict(utc=q.utc(), telemetry=telemetry))
     outcome, exception = "failure", None
     try:
         for number in range(1, len(f.arms())+1):
-            progress = status(root)
+            progress = status(root, production_option=production_option)
             remaining = progress["remaining_worker_seconds"]
             if progress["launches"] != progress["finalized"]:
                 raise ValueError("unfinished attempt cannot advance")
@@ -280,9 +308,11 @@ def run(root, commit):
             q.atomic_immutable_json(directory / "telemetry-start.json", telemetry)
             req = request(root, number, min(f.LIMITS["wall_seconds"], remaining))
             q.atomic_immutable_json(directory / "request.json", req)
-            sup = q.supervise([sys.executable, "-m", MODULE, "--worker", str(number), "--output", str(root)],
-                              directory, root, req)
-            progress = status(root)
+            command = [sys.executable, "-m", MODULE, "--worker", str(number), "--output", str(root)]
+            if production_option:
+                command.append("--production-option")
+            sup = q.supervise(command, directory, root, req)
+            progress = status(root, production_option=production_option)
             q.atomic_json(root / "report.json", progress)
             if sup["classification"] == "wall_limit":
                 # A finalized numerical timeout is a comparison outcome. The
@@ -314,29 +344,31 @@ def main():
     group.add_argument("--status", action="store_true")
     group.add_argument("--worker", type=int, choices=range(1, len(f.arms())+1), help=argparse.SUPPRESS)
     parser.add_argument("--commit")
-    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--production-option", action="store_true",
+                        help="qualify the public objective_assembly option, without the experimental adapter")
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    root = args.output.resolve()
+    root = (args.output or (PRODUCTION_OUTPUT if args.production_option else OUTPUT)).resolve()
     if root.parent != HERE / "results":
         parser.error("output must be a fresh direct child of this experiment's results directory")
     if args.authorize_execution and args.commit is None:
         parser.error("execution requires --commit and separate owner approval")
     if args.worker:
-        worker(root, args.worker)
+        worker(root, args.worker, production_option=args.production_option)
     elif args.authorize_execution:
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, q.interrupted)
-        value = run(root, args.commit)
+        value = run(root, args.commit, production_option=args.production_option)
         print(json.dumps(value, indent=2))
         if value["outcome"] != "matrix_complete":
             raise SystemExit(1)
     elif args.status:
-        print(json.dumps(status(root), indent=2))
+        print(json.dumps(status(root, production_option=args.production_option), indent=2))
     else:
-        value = frozen_binding()
+        value = frozen_binding(production_option=args.production_option)
         # Canonicalize every arm without solving, checking production maps/starts.
         for arm in f.arms():
-            canonical(f.construct(arm)[2])
+            canonical(f.construct(arm, production_option=args.production_option)[2])
         print(json.dumps(dict(commit=value["context"]["commit"], clean=value["context"]["clean"],
                               limits=f.LIMITS, rows=[dict(arm=r["arm"], layout_prefix=r["layout"][:6],
                                   canonical_size=len(r["canonical_x0"]),

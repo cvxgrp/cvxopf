@@ -131,6 +131,15 @@ production-path Tracy forced T=24 qualification remains required. Another full
 the complete qualified AC configuration as an opt-in option, not a universal
 speedup, a convex policy change or a production default change.
 
+The owner accepted the production implementation in `1f7c7f056`. The
+[production objective assembly protocol](../experiments/ac_objective_assembly/PRODUCTION_PROTOCOL.md)
+prepares the two public-selector T=24 arms with unchanged numerical settings and
+acceptance checks. The existing supervisor/replay runner gains an explicit
+`--production-option` mode and fresh `results/production_001` directory; it does
+not reuse the experimental objective adapter. Review and a clean runner commit
+precede launch. Historical evidence and the original diagnostic protocol remain
+unchanged, and E3/Stage D remain held.
+
 Documentation-site follow-up requested by the owner: organize getting-started
 examples, formulation/assembly support, numerical options, economic warnings,
 result interpretation and an experiment-evidence index into navigable docs.

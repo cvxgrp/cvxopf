@@ -75,12 +75,13 @@ class ComponentFirstObjective(cp.Minimize):
                            + cp.sum(parts["cycling"]) + cp.sum(parts["shedding"]))
 
 
-def construct(arm, prepared=None):
+def construct(arm, prepared=None, *, production_option=False):
     if arm not in arms():
         raise ValueError("undeclared diagnostic arm")
     source = replace(production.arms()[-1], id=arm.id)
-    call, kwargs, build, start, stress = production.construct(source, prepared)
-    if arm.assembly == "component_first":
+    call, kwargs, build, start, stress = production.construct(source, prepared,
+        objective_assembly=arm.assembly if production_option else "hourly")
+    if arm.assembly == "component_first" and not production_option:
         build = replace(build, prob=cp.Problem(ComponentFirstObjective(build), build.prob.constraints))
     return call, kwargs, build, start, stress
 
@@ -108,18 +109,21 @@ def layout(solver_build, bindings, auxiliary, data, inverse):
     return rows
 
 
-def row_binding(arm, prepared=None):
+def row_binding(arm, prepared=None, *, production_option=False):
     source = replace(production.arms()[-1], id=arm.id)
-    frozen = production.row_binding(source, prepared)
-    _, _, build, _, _ = construct(arm, prepared)
+    frozen = production.row_binding(source, prepared,
+        objective_assembly=arm.assembly if production_option else "hourly")
+    _, _, build, _, _ = construct(arm, prepared, production_option=production_option)
     values = canonical(build)
     return serializable(dict(arm=asdict(arm), fixture=frozen, layout=layout(*values),
                              canonical_x0=values[-2]["x0"]))
 
 
-def assess(arm, native, evidence, published):
+def assess(arm, native, evidence, published, *, production_option=False):
     """Independently replay this arm's native layout and production restoration."""
-    call, kwargs, build, _, stress = construct(arm)
+    call, kwargs, build, _, stress = construct(arm, production_option=production_option)
+    if production_option and evidence["checks"].get("objective_assembly") != arm.assembly:
+        raise ValueError("retained production objective assembly differs from selected arm")
     solver_build, bindings, auxiliary, data, inverse = canonical(build)
     retained = [(v[1], v[2], v[3]) for v in evidence["start_layout"]]
     fresh = [(list(v.shape), inverse[-1].var_offsets[v.id], inverse[-1].var_offsets[v.id]+v.size)
