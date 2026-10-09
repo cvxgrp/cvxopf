@@ -1,7 +1,8 @@
-"""Read-only prepared-E3 viewer support; no model construction or solver imports.
+"""Read-only six-scenario E3 viewer; no construction or solver imports.
 
-Only finalized, supervised hard-target acceptances are exposed. Hash checks here
-protect retained evidence; they do not repeat the runner's numerical replay.
+Finalized, supervised hard-target results from prepared E3 and E3+ are exposed,
+including the owner-approved E3+ trajectories with saved numerical flags.
+Hash checks protect retained evidence; they do not repeat numerical replay.
 Display calculations are descriptive, leave small values unclipped, and never
 change the scientific acceptance decision.
 """
@@ -118,15 +119,22 @@ def case_label(arm: dict) -> str:
 
 
 def load_results(directory: Path = HERE / "results/e3_prepared") -> dict:
-    """Load the completed fresh cohort, checking manifests and matched inputs."""
+    """Load one completed run, retaining its original audit classifications."""
     directory = Path(directory).resolve()
     binding = read_json(directory / "binding.json")
     progress = read_json(directory / "progress.json")
-    require(binding["context"]["cohort"] == "prepared", "Not the prepared E3 cohort")
+    cohort = binding["context"]["cohort"]
+    require(cohort in ("prepared", "prepared_plus"), "Not a prepared E3 run")
+    expected_cases, expected_arms = (5, 20) if cohort == "prepared" else (1, 4)
     require(
-        progress["accepted_arms"] == 20,
-        "This viewer requires the completed 20-arm cohort",
+        progress["disposed_arms"] == expected_arms
+        and progress["finished"]
+        and progress["active_attempt"] is None,
+        "This viewer requires a completed run without active attempts",
     )
+    require(len(progress["arms"]) == expected_arms, "Unexpected progress inventory")
+    if cohort == "prepared":
+        require(progress["accepted_arms"] == 20, "Prepared E3 is not fully accepted")
     manifest_path = HERE / "stage_a/manifest.json"
     require(
         sha(manifest_path) == binding["context"]["stage_a_manifest_sha256"],
@@ -160,14 +168,18 @@ def load_results(directory: Path = HERE / "results/e3_prepared") -> dict:
     for item in progress["arms"]:
         arm = item["arm"]
         require(arm == bound_arms[arm["id"]], "Progress arm differs from binding")
-        require(
-            item["classification"] == "accepted", "Unaccepted arm in completed cohort"
-        )
-        path = retained_path(directory, item["accepted"]["path"])
+        result_ref = result_reference(item, cohort)
+        path = retained_path(directory, result_ref["path"])
         completion = read_json(path.parent / "completion.json")
         supervision = read_json(path.parent / "supervision.json")
         require(
-            completion["classification"] == "accepted", "Completion is not accepted"
+            completion["classification"] in ("accepted", "rejected"),
+            "Completion has no retained solution classification",
+        )
+        require(
+            (completion["classification"] == "accepted")
+            == (item["classification"] == "accepted"),
+            "Progress/completion labels disagree",
         )
         require(
             supervision["classification"] == "exited"
@@ -190,17 +202,24 @@ def load_results(directory: Path = HERE / "results/e3_prepared") -> dict:
             artifact = retained_path(path.parent, name)
             require(sha(artifact) == expected, f"Artifact hash mismatch: {artifact}")
             hashes[str(artifact.relative_to(directory))] = expected
-        require(
-            sha(path) == item["accepted"]["sha256"], "Accepted result hash mismatch"
-        )
+        if "sha256" in result_ref:
+            require(sha(path) == result_ref["sha256"], "Result reference hash mismatch")
         with gzip.open(path, "rt") as stream:
             record = json.load(stream)
         require(
-            record["classification"] == "accepted"
-            and record["audit"]["passed"]
-            and record["independent_audit"]["passed"],
-            "Saved acceptance/audits disagree",
+            record["classification"] == completion["classification"],
+            "Saved result/completion labels disagree",
         )
+        if record["classification"] == "accepted":
+            require(
+                record["audit"]["passed"] and record["independent_audit"]["passed"],
+                "Saved acceptance/audits disagree",
+            )
+        else:
+            require(
+                cohort == "prepared_plus" and record["native"]["status"] == "Solved",
+                "Flagged result lacks a converged native solution",
+            )
         require(
             record["request"]["arm_id"] == arm["id"]
             and record["request"]["role"] != "target_free",
@@ -269,13 +288,14 @@ def load_results(directory: Path = HERE / "results/e3_prepared") -> dict:
             supervision=supervision,
             iterations=iterations,
             archive=str(path.relative_to(directory)),
+            cohort=cohort,
         )
         label = case_label(arm)
         case = cases.setdefault(label, {})
         require(arm["formulation"] not in case, "Duplicate formulation in matched case")
         case[arm["formulation"]] = record
     require(
-        len(cases) == 5 and sum(map(len, cases.values())) == 20,
+        len(cases) == expected_cases and sum(map(len, cases.values())) == expected_arms,
         "Unexpected case inventory",
     )
     for case in cases.values():
@@ -307,6 +327,47 @@ def load_results(directory: Path = HERE / "results/e3_prepared") -> dict:
         hashes=hashes,
         directory=directory,
     )
+
+
+def result_reference(item: dict, cohort: str) -> dict:
+    """Resolve a finalized result without guessing among multiple candidates."""
+    if item["classification"] == "accepted":
+        require(item["accepted"] is not None, "Missing accepted result reference")
+        return item["accepted"]
+    require(
+        cohort == "prepared_plus" and item["classification"] == "unresolved",
+        "Unexpected arm disposition",
+    )
+    # E3+ retained one converged primary per formulation. Do not silently pick
+    # a future retry or a target-free diagnostic if that inventory changes.
+    require(
+        item["attempts"] == 1 and item["accepted"] is None,
+        "Flagged arm has ambiguous or unfinished attempt inventory",
+    )
+    return {"path": f"arm-{item['arm']['id']:03d}/attempt-000/result.json.gz"}
+
+
+def load_scenarios(directory: Path = HERE / "results") -> dict:
+    """One integrated six-scenario inventory, with per-result provenance."""
+    runs = [load_results(Path(directory) / name) for name in ("e3_prepared", "e3_plus")]
+    first, plus = runs
+    for name, table in first["tables"].items():
+        pd.testing.assert_frame_equal(table, plus["tables"][name])
+    np.testing.assert_array_equal(first["branches"], plus["branches"])
+    np.testing.assert_array_equal(first["branch_rows"], plus["branch_rows"])
+    require(not (first["cases"].keys() & plus["cases"].keys()), "Duplicate scenario")
+    return {
+        **first,
+        "cases": {**first["cases"], **plus["cases"]},
+        "hashes": {
+            f"{run['directory'].name}/{path}": digest
+            for run in runs
+            for path, digest in run["hashes"].items()
+        },
+        "runs": [
+            {"directory": run["directory"], "binding": run["binding"]} for run in runs
+        ],
+    }
 
 
 def channel(
@@ -400,12 +461,17 @@ def summary_table(data: dict) -> pd.DataFrame:
                 {
                     "Case": case_name,
                     "Formulation / solver": LABELS[formulation],
+                    "Run": record["cohort"],
+                    "Saved decision": record["classification"],
+                    "Physical checks passed": record["audit"]["passed"],
+                    "Independent audit passed": record["independent_audit"]["passed"],
                     "Physical objective": r["objective"],
                     **record["named_costs"],
                     "Generation (MWh)": float(r["Pg"].sum()),
                     "Battery throughput (MWh)": float(np.abs(r["b"]).sum()),
                     "Curtailment (MWh)": float(r["curtailment"].sum()),
                     "Unserved energy (MWh)": r["energy_not_served"],
+                    "Served energy (MWh)": float(r["p_load_served"].sum()),
                     "Worker (s)": record["supervision"]["wall_seconds"],
                     "Peak sampled RSS (MiB)": record["supervision"][
                         "peak_sampled_rss_mib"

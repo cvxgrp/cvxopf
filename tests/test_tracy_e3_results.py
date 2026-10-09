@@ -9,6 +9,8 @@ from experiments.case118_tracy_2021.e3_results import (
     asset_labels,
     channel,
     load_results,
+    load_scenarios,
+    result_reference,
     retained_path,
     summary_table,
     time_coordinates,
@@ -79,3 +81,41 @@ def test_retained_prepared_e3_inventory_and_asset_identity():
     assert len(asset_labels(data, "Buses")) == 118
     assert len(asset_labels(data, "Branches")) == 186
     assert not summary_table(data)["Cycling warning"].any()
+
+
+def test_flagged_reference_requires_plus_and_unambiguous_attempt():
+    item = {
+        "classification": "unresolved",
+        "accepted": None,
+        "attempts": 1,
+        "arm": {"id": 2},
+    }
+    assert result_reference(item, "prepared_plus")["path"] == (
+        "arm-002/attempt-000/result.json.gz"
+    )
+    with pytest.raises(ValueError, match="disposition"):
+        result_reference(item, "prepared")
+    with pytest.raises(ValueError, match="attempt inventory"):
+        result_reference({**item, "attempts": 2}, "prepared_plus")
+    with pytest.raises(ValueError, match="disposition"):
+        result_reference({**item, "classification": "pending"}, "prepared_plus")
+
+
+def test_integrated_six_scenarios_include_all_four_shedding_trajectories():
+    if not all(
+        (HERE / f"results/{name}/progress.json").exists()
+        for name in ("e3_prepared", "e3_plus")
+    ):
+        pytest.skip("owner retained E3/E3+ results unavailable")
+    data = load_scenarios()
+    assert len(data["cases"]) == 6
+    assert all(set(case) == set(LABELS) for case in data["cases"].values())
+    table = summary_table(data)
+    assert len(table) == 24
+    shedding = table[table["Case"].str.startswith("Forced shedding")]
+    assert len(shedding) == 4
+    assert set(shedding["Saved decision"]) == {"accepted", "rejected"}
+    assert (shedding["Served energy (MWh)"] > 0).all()
+    assert (shedding["Unserved energy (MWh)"] > 439252).all()
+    assert len(data["runs"]) == 2
+    assert any(key.startswith("e3_plus/") for key in data["hashes"])
