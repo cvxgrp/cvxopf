@@ -80,12 +80,15 @@ must match the origin binding. Bind all 21 prospective trials before launching.
 
 ## Supervision, stopping and acceptance
 
-Run one fresh process at a time with one numerical thread. Proposed launch
+Run one fresh process at a time with one numerical thread. Approved launch
 ceilings are 3600 supervised wall seconds and 16384 MiB sampled RSS per attempt,
 21 launches and 75600 cumulative supervised worker-seconds. Preparation and
-auditing consume the wall budget too. Require read-only process/RSS permission,
-AC power and valid thermal telemetry before launch; reuse the existing supervisor.
-Do not launch if monitoring is unavailable. Resource samples corroborate process
+auditing consume the wall budget too. Require read-only process/RSS permission
+and valid thermal telemetry before launch; reuse the existing supervisor.
+Power source is recorded as timing context only: battery operation, or unavailable
+power-source telemetry, does not prevent a launch or reject a result. This
+owner-approved correction replaces the original mandatory AC-power gate.
+Do not launch if process/RSS or thermal monitoring is unavailable. Resource samples corroborate process
 liveness, and finalized supervision is required for acceptance.
 
 Native rejection or timeout consumes a slot and advances to the next start.
@@ -93,6 +96,7 @@ Stop that donor on its first independently audited compatible result; subsequent
 slots are skipped, not run for a better objective. Stop the experiment on audit
 failure, infrastructure/monitoring failure, interruption, RSS ceiling, operator
 STOP or cumulative-budget exhaustion. No automatic restart or resume is offered.
+The explicit power-stop continuation below is the only authorized exception.
 An unfinished or unsupervised candidate never advances or accepts the ladder.
 
 Native status zero and the original physics, accounting, pin, implied-SoC and
@@ -108,6 +112,32 @@ exhaustion does not certify physical infeasibility. Comparisons to matched AC
 remain local model-conditioned estimates, not global optimality or truth claims.
 Successful-first stopping is a feasibility diagnostic, not a multistart optimum
 comparison. Source E3/E3+ classifications and historical Stage D remain untouched.
+
+## Explicit continuation after the power-source stop
+
+The owner authorized continuing the invocation that stopped between workers
+because AC power was not detected. Use `--continue-from` and a **fresh** output
+directory. Never alter the old binding, invocation records, logs or archives.
+Hash every predecessor file, independently replay its finalized supervision,
+completion manifests and audits without optimization, and retain those file
+hashes and its path in the new binding. Reject an unfinished predecessor, an
+audit/infrastructure failure, exhausted budget, or a different stop reason.
+This is a single transition from the original power-stopped invocation, not a
+general resume facility or automatic retry policy.
+
+The new execution binds the clean current commit supplied by the owner at launch;
+it is **not** hardcoded to the first runner commit. The historical source identity
+remains historical. Only this experiment's runner, tests, protocol and checkpoint
+may differ across this correction; model construction, production code, numerical
+binaries, solver options, retained inputs and all 21 prospective canonical starts
+must remain identical. Current workers enforce the new binding normally.
+
+Carry forward completed outcomes, consumed slots, launches and supervised seconds
+without rerunning any consumed slot. Global call numbering continues from the
+predecessor. Keep inherited and new launches separately visible, and enforce the
+same 21-launch/75600-worker-second ceiling over both invocations together.
+The first completed SOCP flat-start rejection therefore remains call 1; the first
+new worker is call 2, trial 2, matched-AC perturbation scale 1e-4, seed 17001311.
 
 ## Commands
 
@@ -136,3 +166,20 @@ direct children of this experiment's results directory are permitted.
 ```sh
 uv run --extra dev python -m experiments.tracy_battery_transfer_starts.run --status
 ```
+
+Preflight the explicit continuation (no solves or run-directory creation):
+
+```sh
+uv run --extra dev python -m experiments.tracy_battery_transfer_starts.run --preflight --continue-from experiments/tracy_battery_transfer_starts/results/starts_001 --output experiments/tracy_battery_transfer_starts/results/starts_002
+```
+
+After owner commit, launch the already owner-authorized remaining ladder:
+
+```sh
+uv run --extra dev python -m experiments.tracy_battery_transfer_starts.run --authorize-execution --commit FULL_NEW_COMMIT_SHA --continue-from experiments/tracy_battery_transfer_starts/results/starts_001 --output experiments/tracy_battery_transfer_starts/results/starts_002
+```
+
+Read the combined outcome using `--status --output
+experiments/tracy_battery_transfer_starts/results/starts_002`. Its inherited
+evidence is reconstructed under the recorded historical identity; no historical
+optimization is repeated and no source result is reclassified.

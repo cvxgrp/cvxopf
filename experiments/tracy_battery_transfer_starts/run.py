@@ -1,7 +1,7 @@
 """Bounded alternative-start ladder; preflight/status never optimize.
 
 Execution requires separate owner approval and a reviewed clean full commit.
-No resume, continuation, unpinning, or changes to historical results.
+Explicit power-stop continuation uses a fresh root; never rerun consumed slots.
 """
 # ruff: noqa: E402 -- set worker thread limits before numerical imports.
 
@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import subprocess
 import sys
 import time
 import warnings
@@ -27,7 +28,6 @@ if __name__ == "__main__":
 
 import cvxpy as cp
 from cvxopf import extract_results
-from experiments.ac_cost_coordinates.run import monitoring
 from experiments.case118_tracy_2021 import e3_prepared
 from experiments.numerical_preparation import run_qualification as q
 from experiments.numerical_preparation.audit import evidence_record, serializable
@@ -38,6 +38,34 @@ MODULE = "experiments.tracy_battery_transfer_starts.run"
 OUTPUT = m.HERE / "results/starts_001"
 ARTIFACTS = (*original.ARTIFACTS, "raw-start.json")
 COUNTED_ARTIFACTS = (*ARTIFACTS, "completion.json", "supervision.json")
+RECOVERY_EDIT_PATHS = {
+    str((m.HERE / name).relative_to(transfer.ROOT))
+    for name in ("run.py", "test_starts.py", "PROTOCOL.md", "CHECKPOINT.md")
+}
+
+
+def monitoring():
+    """Power source is timing context, not numerical launch authority."""
+    if q._child_rss_mib(os.getpid()) is None:
+        raise RuntimeError("process/RSS permission unavailable")
+    try:
+        battery = subprocess.check_output(["pmset", "-g", "batt"], text=True)
+        power_warning = None if "AC Power" in battery else "running on battery"
+    except (OSError, subprocess.SubprocessError) as exc:
+        battery, power_warning = None, f"power telemetry unavailable: {exc}"
+    thermal = json.loads(
+        subprocess.check_output(
+            ["macmon", "pipe", "--samples", "1"], text=True, timeout=10
+        )
+    )
+    if not all(
+        math.isfinite(thermal["temp"][key]) and thermal["temp"][key] > 0
+        for key in ("cpu_temp_avg", "gpu_temp_avg")
+    ):
+        raise RuntimeError("thermal sample unavailable")
+    return dict(
+        utc=q.utc(), battery=battery, power_warning=power_warning, thermal=thermal
+    )
 
 
 def validate_output(root):
@@ -59,7 +87,9 @@ def context():
 def protocol():
     return dict(
         protocol=dict(
-            m.LIMITS, ac_options=dict(e3_prepared.DEFAULT_PROTOCOL["ac_options"])
+            m.LIMITS,
+            ac_options=dict(e3_prepared.DEFAULT_PROTOCOL["ac_options"]),
+            power_policy="informational",
         ),
         protocol_sha256=q.digest(m.HERE / "PROTOCOL.md"),
     )
@@ -77,7 +107,7 @@ def checked_construction(binding, data, prepared, trial_id):
     return build, kwargs, schedule, raw, assigned, row, captured
 
 
-def frozen_binding():
+def frozen_binding(predecessor=None):
     data = transfer.source_inventory()
     sources = m.origin_hashes(data)
     current = context()
@@ -95,7 +125,7 @@ def frozen_binding():
         checked_construction(None, data, prepared, trial["id"])[5]
         for trial in m.registry(data)
     ]
-    return serializable(
+    binding = serializable(
         dict(
             context=current,
             sources=sources,
@@ -104,16 +134,101 @@ def frozen_binding():
             origin=str(m.ORIGIN),
         )
     )
+    if predecessor is not None:
+        prior = predecessor.resolve()
+        validate_output(prior)
+        snapshot = dict(root=str(prior), files=retained_files(prior))
+        # Replay the completed call, not the optimizer. Bind all untouched bytes.
+        predecessor_progress(binding, snapshot)
+        binding["predecessor"] = snapshot
+    return binding
 
 
-def verify_binding(root):
+def retained_files(root):
+    paths = sorted(root.rglob("*"))
+    if any(path.is_symlink() for path in paths):
+        raise ValueError("predecessor must contain ordinary retained files")
+    return {
+        str(path.relative_to(root)): q.digest(path) for path in paths if path.is_file()
+    }
+
+
+def historical_context_matches(previous, current):
+    """Only this runner's power/continuation code and documentation may change."""
+
+    def numerical(value):
+        value = dict(value)
+        value.pop("commit", None)
+        value.pop("clean", None)
+        for key in ("sources", "alternative_start_sources"):
+            value[key] = {
+                path: digest
+                for path, digest in value[key].items()
+                if path not in RECOVERY_EDIT_PATHS
+            }
+        return value
+
+    return previous["clean"] is True and numerical(previous) == numerical(current)
+
+
+def predecessor_progress(binding, snapshot):
+    prior = Path(snapshot["root"])
+    validate_output(prior)
+    if retained_files(prior) != snapshot["files"]:
+        raise ValueError("predecessor evidence changed")
+    previous = q.read(prior / "binding.json")
+    finish = q.read(prior / "invocation-finish.json")
+    if (
+        "predecessor" in previous
+        or finish.get("outcome") != "failure"
+        or finish.get("exception")
+        != "RuntimeError: AC power required before launching a new attempt"
+        or any(
+            previous[key] != binding[key]
+            for key in ("rows", "limits", "origin", "sources")
+        )
+    ):
+        raise ValueError(
+            "continuation requires the finalized power-stop invocation and unchanged ladder"
+        )
+    progress = status(prior, historical=True)
+    if (
+        progress["launches"] != progress["finalized"]
+        or progress["next_trial"] is None
+        or progress["audit_failures"]
+        or progress["infrastructure_failures"]
+        or progress["remaining_worker_seconds"] <= 0
+    ):
+        raise ValueError("predecessor cannot advance an unfinished or failed attempt")
+    return progress
+
+
+def verify_binding(root, *, historical=False):
     validate_output(root)
     binding = q.read(root / "binding.json")
+    current = context()
+    saved_protocol = q.read(root / "protocol.json")
+    historical_options = dict(saved_protocol["protocol"])
+    historical_options.pop("power_policy", None)
+    current_options = dict(protocol()["protocol"])
+    current_options.pop("power_policy", None)
     if (
-        binding["context"] != context()
+        (
+            not historical_context_matches(binding["context"], current)
+            if historical
+            else binding["context"] != current
+        )
         or binding["limits"] != m.LIMITS
         or binding["origin"] != str(m.ORIGIN)
-        or q.read(root / "protocol.json") != protocol()
+        or (
+            historical_options != current_options
+            if historical
+            else saved_protocol != protocol()
+        )
+        or saved_protocol["protocol_sha256"]
+        != binding["context"]["alternative_start_sources"][
+            str((m.HERE / "PROTOCOL.md").relative_to(transfer.ROOT))
+        ]
     ):
         raise ValueError("source/environment/protocol binding changed")
     data = transfer.source_inventory()
@@ -298,15 +413,27 @@ def worker(root, number):
     phase("complete")
 
 
-def status(root):
+def status(root, *, historical=False):
     """Read-only independent replay; unfinished/unsupervised candidates never count."""
-    binding, data = verify_binding(root)
+    binding, data = (
+        verify_binding(root, historical=True) if historical else verify_binding(root)
+    )
+    prior = (
+        predecessor_progress(binding, binding["predecessor"])
+        if "predecessor" in binding
+        else None
+    )
+    inherited = prior["launches"] if prior else 0
     directories = sorted(root.glob("call-*"))
-    if len(directories) > m.LIMITS["max_launches"] or [
+    if inherited + len(directories) > m.LIMITS["max_launches"] or [
         path.name for path in directories
-    ] != [f"call-{n:03d}" for n in range(1, len(directories) + 1)]:
+    ] != [
+        f"call-{n:03d}" for n in range(inherited + 1, inherited + len(directories) + 1)
+    ]:
         raise ValueError("excess or noncontiguous launches")
-    rows, used = [], 0.0
+    rows, used = (
+        (list(prior["attempts"]), prior["worker_seconds"]) if prior else ([], 0.0)
+    )
     prepared = e3_prepared.verified_inputs() if directories else None
     counts = dict(
         finalized=0,
@@ -318,7 +445,10 @@ def status(root):
         cycling_warnings=0,
     )
     artifacts = {name: 0 for name in COUNTED_ARTIFACTS}
-    for number, directory in enumerate(directories, 1):
+    if prior:
+        counts.update({key: prior[key] for key in counts})
+        artifacts.update(prior["artifacts"])
+    for number, directory in enumerate(directories, inherited + 1):
         trial = next_trial(binding, rows)
         if trial is None:
             raise ValueError(
@@ -329,7 +459,10 @@ def status(root):
         for name in COUNTED_ARTIFACTS:
             artifacts[name] += int((directory / name).exists())
         if not (directory / "request.json").exists():
-            if number != len(directories) or (directory / "supervision.json").exists():
+            if (
+                number != inherited + len(directories)
+                or (directory / "supervision.json").exists()
+            ):
                 raise ValueError("missing request before finalized/later launch")
             continue
         req = q.read(directory / "request.json")
@@ -505,7 +638,10 @@ def status(root):
     ]
     return dict(
         expected_cases=3,
-        launches=len(directories),
+        launches=inherited + len(directories),
+        local_launches=len(directories),
+        inherited_launches=inherited,
+        predecessor=None if prior is None else binding["predecessor"]["root"],
         **counts,
         compatible_cases=sum(case["accepted_trial"] is not None for case in cases),
         artifacts=artifacts,
@@ -521,9 +657,11 @@ def status(root):
     )
 
 
-def run(root, commit):
+def run(root, commit, predecessor=None):
     validate_output(root)
-    binding = frozen_binding()
+    binding = (
+        frozen_binding(predecessor) if predecessor is not None else frozen_binding()
+    )
     if (
         not isinstance(commit, str)
         or len(commit) != 40
@@ -620,17 +758,32 @@ def main():
         "--worker", type=int, choices=range(1, 22), help=argparse.SUPPRESS
     )
     parser.add_argument("--commit")
+    parser.add_argument(
+        "--continue-from",
+        type=Path,
+        help="finalized power-stop root; remaining slots only",
+    )
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
     root = args.output.resolve()
     validate_output(root)
+    if args.continue_from and not (args.preflight or args.authorize_execution):
+        parser.error(
+            "--continue-from is only for preflight or an authorized fresh launch"
+        )
+    if args.continue_from and root == args.continue_from.resolve():
+        parser.error("continuation requires a fresh output root")
     if args.authorize_execution and args.commit is None:
         parser.error("execution requires --commit and separate owner approval")
     if args.worker:
         worker(root, args.worker)
         return
     if args.preflight:
-        binding = frozen_binding()
+        binding = (
+            frozen_binding(args.continue_from)
+            if args.continue_from
+            else frozen_binding()
+        )
         result = dict(
             classification="preflight_only",
             cases=3,
@@ -638,13 +791,14 @@ def main():
             limits=m.LIMITS,
             clean=binding["context"]["clean"],
             rows=binding["rows"],
+            predecessor=binding.get("predecessor"),
         )
     elif args.status:
         result = status(root)
     else:
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, q.interrupted)
-        result = run(root, args.commit)
+        result = run(root, args.commit, args.continue_from)
     print(json.dumps(serializable(result), indent=2, allow_nan=False))
 
 

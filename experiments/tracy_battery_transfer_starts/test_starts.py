@@ -169,10 +169,18 @@ def test_requests_reject_invalid_or_excess_budget(tmp_path, wall):
         r.validate_request(tmp_path, 1, trial, req, 75600)
 
 
-def journal(tmp_path, monkeypatch, native_status=2, supervised=True):
+def journal(
+    tmp_path, monkeypatch, native_status=2, supervised=True, complete_binding=False
+):
     frozen = binding()
+    if complete_binding:
+        frozen.update(limits=m.LIMITS, origin=str(m.ORIGIN), sources={})
     trial = frozen["rows"][0]["trial"]
-    monkeypatch.setattr(r, "verify_binding", lambda root: (frozen, data()))
+    monkeypatch.setattr(
+        r,
+        "verify_binding",
+        lambda root, **_k: (r.q.read(root / "binding.json"), data()),
+    )
     monkeypatch.setattr(e3_prepared, "verified_inputs", lambda: {})
     monkeypatch.setattr(r.q, "resource_evidence", lambda *_: True)
     raw = dict(b=[[3.0]])
@@ -351,3 +359,171 @@ def test_dirty_execution_is_refused_without_creating_output(tmp_path, monkeypatc
     with pytest.raises(ValueError, match="clean full commit"):
         r.run(target, "a" * 40)
     assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    "power", ["Now drawing from 'Battery Power'", "Now drawing from 'AC Power'"]
+)
+def test_battery_power_is_informational_not_a_launch_gate(monkeypatch, power):
+    monkeypatch.setattr(r.q, "_child_rss_mib", lambda *_: 100.0)
+    monkeypatch.setattr(
+        r.subprocess,
+        "check_output",
+        lambda command, **_k: (
+            power
+            if command[0] == "pmset"
+            else '{"temp": {"cpu_temp_avg": 55, "gpu_temp_avg": 45}}'
+        ),
+    )
+    sample = r.monitoring()
+    assert sample["battery"] == power
+    assert bool(sample["power_warning"]) == ("AC Power" not in power)
+
+
+def test_restart_context_accepts_new_commit_only_for_scoped_runner_changes():
+    previous = dict(
+        clean=True,
+        commit="a" * 40,
+        packages={"numpy": "same"},
+        sources={
+            "src/cvxopf/storage.py": "physical",
+            **{p: "old" for p in r.RECOVERY_EDIT_PATHS},
+        },
+        alternative_start_sources={p: "old" for p in r.RECOVERY_EDIT_PATHS},
+    )
+    current = deepcopy(previous)
+    current["commit"] = "b" * 40
+    current["sources"].update({p: "new" for p in r.RECOVERY_EDIT_PATHS})
+    current["alternative_start_sources"].update(
+        {p: "new" for p in r.RECOVERY_EDIT_PATHS}
+    )
+    assert r.historical_context_matches(previous, current)
+    current["sources"]["src/cvxopf/storage.py"] = "changed"
+    assert not r.historical_context_matches(previous, current)
+
+
+def continued_journal(tmp_path, monkeypatch):
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    journal(prior, monkeypatch, complete_binding=True)
+    frozen = r.q.read(prior / "binding.json")
+    r.q.atomic_immutable_json(
+        prior / "invocation-finish.json",
+        dict(
+            outcome="failure",
+            exception="RuntimeError: AC power required before launching a new attempt",
+        ),
+    )
+    snapshot = dict(root=str(prior), files=r.retained_files(prior))
+    frozen["predecessor"] = snapshot
+    monkeypatch.setattr(r, "validate_output", lambda *_: None)
+    return prior, frozen
+
+
+def test_continuation_replays_completed_call_and_never_relaunches_it(
+    tmp_path, monkeypatch
+):
+    prior, frozen = continued_journal(tmp_path, monkeypatch)
+    before = r.retained_files(prior)
+    frozen["context"] = dict(
+        clean=True,
+        commit="b" * 40,
+        thread_environment={key: "1" for key in r.THREAD_KEYS},
+    )
+    monkeypatch.setattr(r, "frozen_binding", lambda predecessor: deepcopy(frozen))
+    monkeypatch.setattr(
+        r, "monitoring", lambda: dict(power_warning="running on battery")
+    )
+    launches = []
+
+    def supervised(command, directory, root, req):
+        launches.append(req["trial"]["id"])
+        assert req["call_id"] == 2 and req["wall_seconds"] == 3600
+        sup = dict(
+            classification="wall_limit",
+            returncode=-15,
+            wall_seconds=3600.1,
+            peak_sampled_rss_mib=100.0,
+        )
+        r.q.atomic_immutable_json(directory / "supervision.json", sup)
+        (root / "STOP").write_text("synthetic lifecycle stopping rule")
+        return sup
+
+    monkeypatch.setattr(r.q, "supervise", supervised)
+    root = tmp_path / "continued"
+    result = r.run(root, "b" * 40, prior)
+    assert result["outcome"] == "operator_stop"
+    report = r.status(root)
+    assert launches == [2]  # cp.Problem.solve is forbidden throughout this test.
+    assert report["launches"] == report["finalized"] == 2
+    assert report["inherited_launches"] == report["local_launches"] == 1
+    assert report["native_rejections"] == report["timeouts"] == 1
+    assert report["worker_seconds"] == 3610.1
+    assert report["remaining_worker_seconds"] == 75600 - 3610.1
+    assert report["next_trial"]["id"] == 3
+    assert r.retained_files(prior) == before
+
+
+def test_continuation_refuses_changed_predecessor_bytes(tmp_path, monkeypatch):
+    prior, frozen = continued_journal(tmp_path, monkeypatch)
+    (prior / "call-001" / "worker.log").write_text("changed")
+    with pytest.raises(ValueError, match="evidence changed"):
+        r.predecessor_progress(frozen, frozen["predecessor"])
+
+
+def test_continuation_refuses_unfinished_predecessor(tmp_path, monkeypatch):
+    prior, frozen = continued_journal(tmp_path, monkeypatch)
+    directory = prior / "call-002"
+    directory.mkdir()
+    r.q.atomic_immutable_json(
+        directory / "request.json", r.request(prior, 2, m.registry(data())[1], 3600)
+    )
+    frozen["predecessor"]["files"] = r.retained_files(prior)
+    with pytest.raises(ValueError, match="unfinished"):
+        r.predecessor_progress(frozen, frozen["predecessor"])
+
+
+def test_binding_accepts_new_execution_commit_but_preserves_historical_identity(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(r, "validate_output", lambda *_: None)
+    protocol_path = str((m.HERE / "PROTOCOL.md").relative_to(transfer.ROOT))
+    run_path = str((m.HERE / "run.py").relative_to(transfer.ROOT))
+    old = dict(
+        clean=True,
+        commit="a" * 40,
+        sources={"src/cvxopf/storage.py": "same", run_path: "old"},
+        alternative_start_sources={protocol_path: "old-protocol", run_path: "old"},
+    )
+    current = deepcopy(old)
+    current["commit"] = "b" * 40
+    current["sources"][run_path] = "new"
+    current["alternative_start_sources"] = {
+        protocol_path: r.protocol()["protocol_sha256"],
+        run_path: "new",
+    }
+    monkeypatch.setattr(r, "context", lambda: current)
+    monkeypatch.setattr(transfer, "source_inventory", data)
+    monkeypatch.setattr(m, "origin_hashes", lambda *_: {})
+    frozen = dict(
+        binding(), context=old, limits=m.LIMITS, origin=str(m.ORIGIN), sources={}
+    )
+    historical_protocol = deepcopy(r.protocol())
+    historical_protocol["protocol"].pop("power_policy")
+    historical_protocol["protocol_sha256"] = "old-protocol"
+    r.q.atomic_immutable_json(tmp_path / "binding.json", frozen)
+    r.q.atomic_immutable_json(tmp_path / "protocol.json", historical_protocol)
+    restored, _ = r.verify_binding(tmp_path, historical=True)
+    assert restored["context"]["commit"] == "a" * 40
+    with pytest.raises(ValueError, match="binding changed"):
+        r.verify_binding(
+            tmp_path
+        )  # Old execution authority cannot launch a new worker.
+    frozen["context"] = deepcopy(current)
+    r.q.atomic_json(tmp_path / "binding.json", frozen)
+    r.q.atomic_json(tmp_path / "protocol.json", r.protocol())
+    restored, _ = r.verify_binding(tmp_path)
+    assert restored["context"]["commit"] == "b" * 40
+    current["sources"]["src/cvxopf/storage.py"] = "changed"
+    with pytest.raises(ValueError, match="binding changed"):
+        r.verify_binding(tmp_path, historical=True)
