@@ -107,8 +107,9 @@ diagnostic, canceled and accepted contenders all consume the global ceilings.
 
 RSS/admission remain S5's reviewed 16,384 MiB per worker, 24,576 MiB aggregate,
 8,192 MiB helper reserve and 22,528 MiB pressure threshold. Process-tree and
-thermal telemetry must work before any launch and remain available during the
-run. Battery power is timing context only. Native IPOPT controls and the 3,000
+RSS monitoring must work before any launch and remain available during the run.
+Thermal-sampling failures are recorded as advisory alerts, not reasons to stop
+a solve or cancel a peer. Battery power is timing context only. Native IPOPT controls and the 3,000
 iteration default remain those of prepared E3; no tolerances/gates are retuned.
 
 `--run` requires an independently reviewed authority JSON with exactly:
@@ -129,3 +130,31 @@ that could duplicate a completed solve or silently elect a different winner.
 Numerical seam qualification, engineering comparison thresholds and launch
 budgets remain owner decisions. Source E3/E3+ qualifications and historical
 Stage D/annual execution holds remain unchanged.
+
+## Explicit telemetry-stop continuation
+
+After the owner-authorized operational fix and clean commit, use
+`--prepare-continuation --output <original-root>` to independently replay the
+stopped predecessor and freeze all inherited immutable hashes, exact checkpoints,
+consumed attempt count and supervised effort. The only admitted predecessor is
+the original finalized thermal-telemetry stop, with no live workers or pending
+durable winners. This does not create execution authority or launch a solver.
+
+Create the matching reviewed `continuations/continuation_001/authority.json`,
+then invoke `--resume --output <original-root> --authority <that-file>` once.
+New attempts and outcome/monitoring records live under that generation, while
+the original binding, authority, stopped outcome and attempt bytes are untouched.
+Original arm checkpoints advance only through the existing audited exact-once
+transaction. The new clean context and authority are bound separately from the
+old scientific input binding. Read-only historical comparison allows only the
+declared operational runner/documentation edits; all physical, preparation,
+solver, input, audit and environment dependencies remain checked.
+
+Completed controllers are restored as source lookups, never rerun. Interrupted
+unpublished attempts remain censored, and any fresh attempt has a distinct
+generation/path identity even when its window/slot is repeated. All inherited
+attempt reservations and worker-seconds count against the original 2,304-launch
+and 172,800-worker-second ceilings; two primaries and one shared helper remain
+unchanged. A continuation already attempted cannot be launched again. Status
+combines original and continuation evidence and uses the latest generation's
+outcome, not the historical stopped marker.

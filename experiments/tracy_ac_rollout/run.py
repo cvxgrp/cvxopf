@@ -21,7 +21,7 @@ from experiments.case118_tracy_2021 import e3_prepared, e3_plus
 from experiments.case118_tracy_2021.stage_d import read
 from experiments.numerical_preparation import run_qualification as qualification
 from experiments.numerical_preparation.audit import serializable
-from . import model, audit, runtime, worker
+from . import model, audit, runtime, worker, continuation
 
 
 @contextmanager
@@ -59,7 +59,8 @@ def validate_context(expected, current, *, execution):
         # newly added unrelated experiment sources; bound bytes remain required.
         before = {k: v for k, v in expected.items() if k not in {"commit", "clean", "sources"}}
         after = {k: v for k, v in current.items() if k not in {"commit", "clean", "sources"}}
-        if before != after or any(current["sources"].get(k) != v for k, v in expected["sources"].items()):
+        if before != after or any(current["sources"].get(k) != v for k, v in expected["sources"].items()
+                                 if k not in continuation.OPERATIONAL_EDIT_PATHS):
             raise ValueError("historical rollout sources/environment changed")
 
 
@@ -82,7 +83,10 @@ def validate_output(root):
 
 def verify_binding(root, *, execution=False):
     binding = read(root / "binding.json")
-    validate_context(binding["context"], context(), execution=execution)
+    resumed = continuation.active(root)
+    validate_context(binding["context"], context(), execution=execution and resumed is None)
+    if resumed is not None:
+        continuation.verify_authority(root, resumed, execution=execution)
     runtime.ResourceBudgets(**binding["budgets"])
     manifest, data, prepared = model.inventory()
     if binding["manifest"] != manifest:
@@ -116,7 +120,7 @@ def status(root):
         fixed, _ = model.retained_transfers()
         arms = []
         effort, attempts = 0., []
-        directories = sorted((root / "attempts").glob("*/ac-*-spec-*"))
+        directories = continuation.attempts(root)
         for directory in directories:
             req = read(directory / "request.json")
             spec = worker.invocation(req["invocation"])
@@ -142,7 +146,8 @@ def status(root):
                     record, _, _ = runtime.checked_record(directory, spec, row, data, prepared, supervised=True)
                     label = ("accepted" if record["classification"] == "accepted" else
                              "native_rejection" if record["native"].get("status") != 0 else "audit_failure")
-            attempts.append(dict(invocation=asdict(spec), finalized=finalized, classification=label))
+            attempts.append(dict(path=str(directory.relative_to(root)), invocation=asdict(spec),
+                                 finalized=finalized, classification=label))
         for row in binding["manifest"]["arms"]:
             directory = root / "arms" / row["arm_id"]
             cursor, executed = model.cursor_for(row), []
@@ -227,7 +232,7 @@ def status(root):
         return dict(arms=arms, completed_arms=sum(a["completed_intervals"] == 24 for a in arms),
             independently_audited_complete_arms=sum(a["completed_intervals"] == 24 and a["trajectory"]["audit"]["passed"] for a in arms),
             attempts=attempts, finalized_worker_seconds=effort, active_partial_attempts=sum(not a["finalized"] for a in attempts),
-            outcome=read(root / "outcome.json") if (root / "outcome.json").exists() else None, optimizer_calls=0)
+            outcome=continuation.outcome(root), optimizer_calls=0)
 
 
 def main(argv=None):
@@ -237,6 +242,8 @@ def main(argv=None):
     mode.add_argument("--prepare", action="store_true")
     mode.add_argument("--status", action="store_true")
     mode.add_argument("--run", action="store_true")
+    mode.add_argument("--prepare-continuation", action="store_true")
+    mode.add_argument("--resume", action="store_true")
     mode.add_argument("--worker", type=Path)
     parser.add_argument("--output", type=Path, default=model.HERE / "results/rollout_001")
     parser.add_argument("--budgets", type=Path, help="reviewed explicit run-wide resource ceilings")
@@ -250,7 +257,13 @@ def main(argv=None):
         print(json.dumps(serializable(status(root)), indent=2, allow_nan=False))
         return
     validate_output(root)
-    if args.prepare:
+    if args.prepare_continuation:
+        print(f"Prepared explicit continuation: {continuation.prepare(root)}; no execution authorized.")
+    elif args.resume:
+        if args.authority is None:
+            parser.error("--resume requires its separately reviewed --authority")
+        continuation.resume(root, args.authority)
+    elif args.prepare:
         if args.budgets is None:
             parser.error("--prepare requires --budgets; no compute budget is inferred")
         budgets = runtime.ResourceBudgets(**read(args.budgets))
@@ -264,8 +277,15 @@ def main(argv=None):
         print(f"Prepared {len(binding['manifest']['arms'])} arms; no execution authorized.")
     elif args.worker is not None:
         directory = args.worker.resolve()
-        if not directory.is_relative_to(root / "attempts"):
+        resumed = continuation.active(root)
+        allowed = [root / "attempts"] + ([] if resumed is None else [resumed / "attempts"])
+        if not any(directory.is_relative_to(path) for path in allowed):
             raise ValueError("worker directory escapes this run")
+        if resumed is not None and directory.is_relative_to(resumed / "attempts"):
+            req = read(directory / "request.json")
+            if (req.get("continuation_generation") != resumed.name
+                    or req.get("continuation_authority_sha256") != e3_prepared.digest(resumed / "authority.json")):
+                raise ValueError("worker request differs from its continuation authority")
         worker.run(root, directory)
     else:
         if args.authority is None:

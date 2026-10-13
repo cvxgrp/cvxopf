@@ -100,9 +100,14 @@ def checked_record(directory, spec, row, data, prepared, *, supervised):
         hard_target=spec.hard_target, phase=req["phase"])
     if record["window_request"] != serializable(asdict(request)):
         raise ValueError("candidate window/realized state/target changed")
-    root = directory.parents[2]
+    root = next(p for p in directory.parents if (p / "binding.json").is_file())
     if req["binding_sha256"] != e3_prepared.digest(root / "binding.json"):
         raise ValueError("candidate belongs to a different run binding")
+    if directory.is_relative_to(root / "continuations"):
+        generation = directory.parents[2]
+        if (req.get("continuation_generation") != generation.name
+                or req.get("continuation_authority_sha256") != e3_prepared.digest(generation / "authority.json")):
+            raise ValueError("candidate continuation authority changed")
     sources = {key: None if ref is None else source_values(root, ref, req, key, row)
                for key, ref in req["sources"].items()}
     raw, assigned = starting_values(build, snapshot, request, source_slot=spec.source_slot,
@@ -202,9 +207,14 @@ class RolloutBackend(SubprocessBackend):
         self.finalized_effort = 0.
         self.resource_samples = {}
         self.thermal_at = None
+        self.inherited_launches = 0
+        self.inherited_children = 0
+
+    def total_launches(self):
+        return self.inherited_launches + len(self.children) - self.inherited_children
 
     def launch(self, spec):
-        if len(self.children) >= self.budgets.max_launches:
+        if self.total_launches() >= self.budgets.max_launches:
             raise ResourceStop("global launch ceiling reached; no new contender")
         if self.effort() >= self.budgets.total_worker_seconds:
             raise ResourceStop("cumulative worker budget exhausted")
@@ -273,14 +283,23 @@ class RolloutBackend(SubprocessBackend):
 
 
 def telemetry():
-    """Read-only launch/runtime thermal evidence. Battery power is context only."""
+    """Process evidence is required; thermal/battery telemetry is advisory."""
     process_observations()  # fail before any launch if ps permission is missing
-    thermal = json.loads(subprocess.check_output(["macmon", "pipe", "--samples", "1"], text=True, timeout=10))
-    if any(not math.isfinite(thermal["temp"][key]) or thermal["temp"][key] <= 0
-           for key in ("cpu_temp_avg", "gpu_temp_avg")):
-        raise ResourceStop("required thermal telemetry unavailable")
+    alerts, thermal, battery = [], None, None
+    try:
+        thermal = json.loads(subprocess.check_output(["macmon", "pipe", "--samples", "1"], text=True, timeout=10))
+        if any(not math.isfinite(thermal["temp"][key]) or thermal["temp"][key] <= 0
+               for key in ("cpu_temp_avg", "gpu_temp_avg")):
+            raise ValueError("missing/nonpositive temperature sample")
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as exc:
+        thermal = None
+        alerts.append(f"thermal telemetry unavailable (advisory): {type(exc).__name__}: {exc}")
+    try:
+        battery = subprocess.check_output(["pmset", "-g", "batt"], text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        alerts.append(f"battery context unavailable (advisory): {type(exc).__name__}: {exc}")
     return dict(utc=datetime.now(timezone.utc).isoformat(), thermal=thermal,
-                battery=subprocess.check_output(["pmset", "-g", "batt"], text=True))
+                thermal_status="available" if thermal is not None else "unavailable", battery=battery, alerts=alerts)
 
 
 class StudyAdapter:
@@ -322,9 +341,13 @@ class StudyAdapter:
             atomic_immutable_json(directory / "replay-source.json", replay)
             sources["replay"] = reference(directory / "replay-source.json", self.root)
         phase = "component_first" if spec.window.shard_id.endswith("-component_first") else "hourly"
+        from .continuation import active
+        resumed = active(self.root)
         atomic_immutable_json(directory / "request.json", dict(invocation=asdict(spec), arm_id=row["arm_id"],
             phase=phase, checkpoint=cp, sources=sources,
-            binding_sha256=e3_prepared.digest(self.root / "binding.json")))
+            binding_sha256=e3_prepared.digest(self.root / "binding.json"),
+            **({} if resumed is None else dict(continuation_generation=resumed.name,
+                continuation_authority_sha256=e3_prepared.digest(resumed / "authority.json")))))
         atomic_immutable_json(directory / "monitoring.json", telemetry())
         return [sys.executable, "-m", "experiments.tracy_ac_rollout.run", "--worker", str(directory), "--output", str(self.root)]
 
@@ -375,24 +398,37 @@ class StudyAdapter:
         advance_from_winner(self.arm_directory(self.row(spec)), self.entries[spec.window])
 
 
-def execute(root, binding, data, prepared):
+def execute(root, binding, data, prepared, *, continuation=None):
     """Two independent arm lanes, one fair shared helper; no automatic resume."""
     budgets = ResourceBudgets(**binding["budgets"])
     adapter = StudyAdapter(root, binding, data, prepared)
     backend = RolloutBackend(root, budgets, command=adapter.command, audit=adapter.candidate,
         publish=adapter.publish, advance=adapter.advance)
     adapter.backend = backend
+    output = root
+    if continuation is not None:
+        from .continuation import restore_backend
+        output = root / "continuations" / continuation["generation"]
+        backend.root = output / "attempts"
+        restore_backend(root, backend, continuation)
     supervisor = RolloutSupervisor(backend)
     queue = list(binding["manifest"]["arms"])
     active = {}
     for row in queue:
         directory = adapter.arm_directory(row)
+        if continuation is not None:
+            if not (directory / "checkpoint.json").is_file():
+                raise ValueError("continuation lacks its preserved checkpoint")
+            continue
         directory.mkdir(parents=True, exist_ok=False)
         atomic_json(directory / "checkpoint.json", dict(shard_id=row["arm_id"], plan_id=row["plan"]["plan_id"],
             binding_sha256=e3_prepared.digest(root / "binding.json"), interval=dict(start=0, stop=24),
             completed_intervals=0, next_global_iteration=0, complete=False, windows=[],
             storage_device_ids=row["plan"]["storage_device_ids"], realized_soc_mwh=row["initial_soc_mwh"],
             preceding_controlling_attempt_id=None))
+    if continuation is not None:
+        queue = [row for row in queue if not read(adapter.arm_directory(row) / "checkpoint.json")["complete"]
+                 and not (adapter.arm_directory(row) / "outcome.json").exists()]
 
     def admit(row, phase="component_first"):
         cp = read(adapter.arm_directory(row) / "checkpoint.json")
@@ -414,7 +450,7 @@ def execute(root, binding, data, prepared):
             if (root / "STOP").exists():
                 raise ResourceStop("owner STOP marker")
             if time.monotonic() - last_thermal >= 60:
-                atomic_json(root / "monitoring.json", telemetry())
+                atomic_json(output / "monitoring.json", telemetry())
                 last_thermal = time.monotonic()
             for key in supervisor.tick(time.monotonic()):
                 row = active.pop(key)
@@ -443,11 +479,11 @@ def execute(root, binding, data, prepared):
             supervisor.stop("study_stopped", now=time.monotonic())
         except BaseException as cleanup:
             cleanup_error = f"{type(cleanup).__name__}: {cleanup}"
-        atomic_immutable_json(root / "outcome.json", dict(classification="stopped", reason=f"{type(exc).__name__}: {exc}",
+        atomic_immutable_json(output / "outcome.json", dict(classification="stopped", reason=f"{type(exc).__name__}: {exc}",
             cleanup_error=cleanup_error))
         raise
     finally:
         for signum, handler in handlers.items():
             signal.signal(signum, handler)
-    atomic_immutable_json(root / "outcome.json", dict(classification="finished", finalized_worker_seconds=backend.finalized_effort,
-        launches=len(backend.children)))
+    atomic_immutable_json(output / "outcome.json", dict(classification="finished", finalized_worker_seconds=backend.finalized_effort,
+        launches=backend.total_launches() if hasattr(backend, "total_launches") else len(backend.children)))

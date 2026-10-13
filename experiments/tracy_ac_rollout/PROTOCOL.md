@@ -316,3 +316,10 @@ cycle-strengthened SOCP, new physical models, annual
 execution, automatic repair of donor schedules, or completion of all M21/M25.
 Each is a possible separately reviewed follow-on, not an implicit response to
 an unsuccessful E4 arm.
+
+Owner operational amendment after the original telemetry stop: thermal-sampling
+failure is advisory, while process/RSS and cumulative compute limits remain
+mandatory. Explicit checked continuation may advance preserved checkpoints under
+a separately frozen clean execution context without rerunning completed solves
+or resetting inherited consumption. See the README continuation contract. This
+amendment changes no physical constraint, numerical setting or acceptance gate.

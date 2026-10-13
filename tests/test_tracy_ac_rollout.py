@@ -300,6 +300,87 @@ def test_explicit_budget_and_authority_gates(tmp_path):
     assert not (model.HERE / "results/not_launched").exists()
 
 
+@pytest.mark.parametrize("sample", ["not-json", '{"temp":{}}',
+    '{"temp":{"cpu_temp_avg":0,"gpu_temp_avg":45}}',
+    '{"temp":{"cpu_temp_avg":NaN,"gpu_temp_avg":45}}'])
+def test_thermal_failure_is_advisory_not_a_process_stop(monkeypatch, sample):
+    monkeypatch.setattr(runtime, "process_observations", lambda: ())
+    monkeypatch.setattr(runtime.subprocess, "check_output",
+        lambda argv, **kwargs: sample if argv[0] == "macmon" else "AC Power")
+    value = runtime.telemetry()
+    assert value["thermal"] is None and value["thermal_status"] == "unavailable"
+    assert "advisory" in value["alerts"][0]
+    assert value["battery"] == "AC Power"
+
+
+def test_process_monitoring_is_still_required(monkeypatch):
+    def denied():
+        raise PermissionError("ps unavailable")
+    monkeypatch.setattr(runtime, "process_observations", denied)
+    with pytest.raises(PermissionError):
+        runtime.telemetry()
+
+
+def test_thermal_command_failure_and_battery_failure_are_advisory(monkeypatch):
+    monkeypatch.setattr(runtime, "process_observations", lambda: ())
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("telemetry command unavailable")
+    monkeypatch.setattr(runtime.subprocess, "check_output", missing)
+    value = runtime.telemetry()
+    assert value["thermal"] is None and value["battery"] is None
+    assert len(value["alerts"]) == 2
+
+
+def test_continuation_restores_controllers_and_consumed_budget_without_launch(tmp_path):
+    from experiments.tracy_ac_rollout import continuation
+    spec = AttemptSpec(WindowKey("arm-000-component_first", 0), 0, 0)
+    directory = tmp_path / "attempts/arm-000-component_first/ac-000000-spec-00"
+    atomic_json(directory / "record.json", dict(invocation=asdict(spec)))
+    selected = dict(path=str((directory / "record.json").relative_to(tmp_path)), sha256="a" * 64)
+    atomic_json(tmp_path / "arms/arm-000/window.json", dict(selected_record=selected))
+    binding = dict(initial_checkpoints={"arm-000":dict(windows=[dict(relative_path="window.json")])},
+                   inherited_launches=43, inherited_worker_seconds=1398.5)
+    backend = runtime.RolloutBackend(tmp_path, runtime.ResourceBudgets(43, 172800., 300., 300.),
+        command=lambda *args: pytest.fail("must not launch"), audit=lambda *args: None,
+        publish=lambda *args: None, advance=lambda *args: None)
+    continuation.restore_backend(tmp_path, backend, binding)
+    assert backend.total_launches() == 43
+    assert backend.effort() == 1398.5
+    assert backend.children[spec.attempt_id].reaped
+    assert backend.children[spec.attempt_id].completion.outcome == "accepted"
+    from experiments.case118_annual_hierarchy.s5_speculative_supervisor import ResourceStop
+    with pytest.raises(ResourceStop, match="launch ceiling"):
+        backend.launch(AttemptSpec(WindowKey("arm-000-component_first", 1), 0, 0))
+
+
+def test_operational_historical_context_does_not_exempt_numerical_sources():
+    old = dict(clean=True, commit="a", sources={
+        "experiments/tracy_ac_rollout/runtime.py":"old", "src/cvxopf/storage.py":"fixed"}, env="same")
+    new = dict(old, commit="b", sources={
+        "experiments/tracy_ac_rollout/runtime.py":"reviewed-new", "src/cvxopf/storage.py":"fixed"})
+    run.validate_context(old, new, execution=False)
+    with pytest.raises(ValueError):
+        run.validate_context(old, new, execution=True)
+    new["sources"]["src/cvxopf/storage.py"] = "changed"
+    with pytest.raises(ValueError):
+        run.validate_context(old, new, execution=False)
+
+
+def test_continuation_preserves_and_checks_immutable_predecessor(tmp_path):
+    from experiments.tracy_ac_rollout import continuation
+    atomic_json(tmp_path / "binding.json", dict(original=True))
+    atomic_json(tmp_path / "outcome.json", dict(classification="stopped"))
+    atomic_json(tmp_path / "arms/arm-000/checkpoint.json", dict(completed_intervals=1))
+    before = continuation.retained_files(tmp_path)
+    assert "arms/arm-000/checkpoint.json" not in before
+    receipt = dict(retained_files=before, run_binding_sha256=e3_prepared.digest(tmp_path / "binding.json"))
+    atomic_json(tmp_path / "arms/arm-000/checkpoint.json", dict(completed_intervals=2))
+    continuation.verify_retained(tmp_path, receipt)
+    atomic_json(tmp_path / "outcome.json", dict(classification="changed"))
+    with pytest.raises(ValueError, match="predecessor evidence changed"):
+        continuation.verify_retained(tmp_path, receipt)
+
+
 def test_experiment_exhaustion_hook_preserves_peer_primary(tmp_path, monkeypatch):
     backend = FakeBackend(tmp_path)
     def launch(attempt):
@@ -352,11 +433,13 @@ def test_production_prepared_boundary_intercept_no_optimizer_and_unusable_cleanu
 
 
 @pytest.mark.parametrize("native_status", [-1, 0])
-def test_supervised_worker_archives_acceptance_or_rejection_and_replays_without_solving(tmp_path, monkeypatch, native_status):
+@pytest.mark.parametrize("continued", [False, True])
+def test_supervised_worker_archives_acceptance_or_rejection_and_replays_without_solving(tmp_path, monkeypatch, native_status, continued):
     import os
     root = tmp_path
     spec = AttemptSpec(WindowKey("arm-000-component_first", 0), 0, 0)
-    directory = root / "attempts/arm-000-component_first/ac-000000-spec-00"
+    base = root / "continuations/continuation_001" if continued else root
+    directory = base / "attempts/arm-000-component_first/ac-000000-spec-00"
     directory.mkdir(parents=True)
     from tests.test_tracy_stage_d import fixture
     from cvxopf import _hierarchical_solver as shared
@@ -390,6 +473,10 @@ def test_supervised_worker_archives_acceptance_or_rejection_and_replays_without_
                     preceding_controlling_attempt_id=None)
     req = dict(invocation=asdict(spec), arm_id="arm-000", phase="component_first", checkpoint=cp_state,
                sources=dict(preceding=None, target_free=None, replay=None), binding_sha256=e3_prepared.digest(root / "binding.json"))
+    if continued:
+        atomic_json(base / "authority.json", dict(test_only=True))
+        req.update(continuation_generation=base.name,
+                   continuation_authority_sha256=e3_prepared.digest(base / "authority.json"))
     atomic_json(directory / "request.json", req)
     atomic_json(directory / "launch.json", dict(pid=os.getpid(), invocation=asdict(spec)))
     atomic_json(directory / "monitoring.json", dict(test_only=True))
@@ -428,7 +515,8 @@ def test_supervised_worker_archives_acceptance_or_rejection_and_replays_without_
 
 
 @pytest.mark.parametrize("failed_arm", [None, "arm-000"])
-def test_synthetic_24_arm_two_lane_schedule_uses_no_subprocesses(tmp_path, monkeypatch, failed_arm):
+@pytest.mark.parametrize("resume_prefix", [0, 2])
+def test_synthetic_24_arm_two_lane_schedule_uses_no_subprocesses(tmp_path, monkeypatch, failed_arm, resume_prefix):
     from cvxopf._ac_rollout import RolloutCursor
     launches, advanced, stopped = [], [], []
     rows = [dict(arm_id=f"arm-{i:03d}", plan=dict(plan_id=f"p-{i}", storage_device_ids=["b"]),
@@ -485,8 +573,34 @@ def test_synthetic_24_arm_two_lane_schedule_uses_no_subprocesses(tmp_path, monke
         return next_cursor, dict(controlling_attempt_id=attempt_id, test_only_synthetic=True)
     monkeypatch.setattr(audit, "first_action", action)
     monkeypatch.setattr(runtime, "reference", lambda *args: dict(path="synthetic", sha256="a" * 64))
-    runtime.execute(tmp_path, binding, None, None)
-    assert len(advanced) == (576 if failed_arm is None else 555)
+    receipt = None
+    if resume_prefix:
+        checkpoints = {}
+        for i, row in enumerate(rows):
+            count = resume_prefix if i < 2 else 0
+            entries = []
+            previous = None
+            for k in range(count):
+                spec = AttemptSpec(WindowKey(f'{row["arm_id"]}-component_first', k), 0, 0)
+                record_path = tmp_path / "retained" / f"{i}-{k}.json"
+                atomic_json(record_path, dict(invocation=asdict(spec)))
+                window_path = tmp_path / "arms" / row["arm_id"] / f"retained-{k}.json"
+                atomic_json(window_path, dict(selected_record=dict(path=str(record_path.relative_to(tmp_path)))))
+                entries.append(dict(iteration=k, relative_path=window_path.name,
+                    bytes=window_path.stat().st_size, sha256=e3_prepared.digest(window_path)))
+                previous = spec.attempt_id
+            cp = dict(shard_id=row["arm_id"], plan_id=row["plan"]["plan_id"],
+                binding_sha256=e3_prepared.digest(tmp_path / "binding.json"), interval=dict(start=0, stop=24),
+                completed_intervals=count, next_global_iteration=count, complete=False, windows=entries,
+                storage_device_ids=["b"], realized_soc_mwh=[1.], preceding_controlling_attempt_id=previous)
+            atomic_json(tmp_path / "arms" / row["arm_id"] / "checkpoint.json", cp)
+            checkpoints[row["arm_id"]] = cp
+        receipt = dict(generation="continuation_001", initial_checkpoints=checkpoints,
+            inherited_launches=2 * resume_prefix, inherited_worker_seconds=10.)
+    runtime.execute(tmp_path, binding, None, None, continuation=receipt)
+    assert len(advanced) == (576 if failed_arm is None else 555) - 2 * resume_prefix
+    assert all(spec.window.iteration >= resume_prefix for spec in launches
+               if spec.window.shard_id.startswith(("arm-000-", "arm-001-")))
     assert len(launches) >= len(advanced)
     assert not stopped
     for row in rows:
