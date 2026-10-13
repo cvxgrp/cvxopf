@@ -13,7 +13,7 @@ its identity is recorded in the rendering manifest. It does not alter evidence.
 Common device cost, energy not served (ENS), and renewable curtailment for six
 matched 24-hour Case118 treatments and four network models. Cost is the sum of
 generation, storage cycling and load-shedding costs; the network-flow penalty
-is excluded. Grouped bars share a zero baseline. Cost and ENS use symmetric-log
+is excluded. Styled markers have stems from zero. Cost and ENS use symmetric-log
 axes, linear below 1 cost unit and 1 MWh respectively and logarithmic above;
 curtailment is shown on a linear GWh scale.
 
@@ -21,11 +21,11 @@ curtailment is shown on a linear GWh scale.
 
 - The forced-shedding convex results retain their original numerical
   qualifications and owner-approved source-use disposition. Their inclusion
-  does not upgrade their historical classifications. Uniform filled bars are
+  does not upgrade their historical classifications. Uniform filled markers are
   a presentation choice, not an acceptance label.
-- Raw numerical-scale values, including signed values, are preserved. A bar
+- Raw numerical-scale values, including signed values, are preserved. A marker
   indistinguishable from zero is not a statement of exact arithmetic zero.
-- Because the cost and ENS axes are nonlinear, bar-length ratios are not
+- Because the cost and ENS axes are nonlinear, stem-length ratios are not
   ratios of those quantities. The axes show their wide dynamic ranges; use
   retained values for quantitative percentage comparisons.
 - SOCP relaxes the matched AC problem. Copper plate relaxes the network-flow
@@ -101,8 +101,9 @@ executed first actions only, not overlapping prediction objectives.
 
 ## Shared presentation and evidence conventions
 
-Scenario order and donor colors are identical across figures. Figure 1 uses
-grouped bars; Figures 3 and 4 use signed point-and-stem differences, with common
+Scenario order, donor colors, styled markers and stems are identical across
+figures. Figure 1 shows absolute outcomes; Figures 3 and 4 show signed
+differences from joint AC, with common
 axis limits so their magnitudes can be compared directly. All figures are
 7.2 inches wide, approximately a two-column IEEE figure, with vector PDF and
 190-dpi PNG exports. Final placement and caption length remain author choices.

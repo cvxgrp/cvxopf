@@ -266,7 +266,6 @@ def render(bundle, output):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
-    from matplotlib.patches import Patch
     from matplotlib.ticker import FuncFormatter
 
     plt.rcParams.update(
@@ -285,20 +284,22 @@ def render(bundle, output):
     titles = ("(a) Device cost", "(b) Energy not served", "(c) Curtailment")
     keys = ("device_cost", "ens_mwh", "curtailed_mwh")
 
-    def legend(fig, rollout=False, three=False, bars=False):
+    def legend(fig, rollout=False, three=False, combined=False):
         handles = [
-            (
-                Patch(facecolor=COLORS[m], label=LABELS[m])
-                if bars
-                else Line2D(
-                    [],
-                    [],
-                    color=COLORS[m],
-                    marker=MARKERS[m],
-                    linestyle="none",
-                    markersize=5,
-                    label="AC signposts" if rollout and m == "ac" else LABELS[m],
-                )
+            Line2D(
+                [],
+                [],
+                color=COLORS[m],
+                marker=MARKERS[m],
+                linestyle="none",
+                markersize=4.25,
+                label=(
+                    "AC signposts (rollout only)"
+                    if combined and m == "ac"
+                    else "AC signposts"
+                    if rollout and m == "ac"
+                    else LABELS[m]
+                ),
             )
             for m in METHODS
             if not (three and m == "ac")
@@ -312,16 +313,23 @@ def render(bundle, output):
             columnspacing=1.3,
         )
 
-    def base():
-        fig, axes = plt.subplots(1, 3, figsize=(7.2, 3.8), sharey=True)
-        fig.subplots_adjust(
-            left=0.205, right=0.985, top=0.845, bottom=0.155, wspace=0.26
+    def base(rows=1):
+        fig, axes = plt.subplots(
+            rows, 3, figsize=(7.2, {1: 3.0, 2: 5.4, 3: 8.2}[rows]), sharey=True
         )
-        for j, ax in enumerate(axes):
+        fig.subplots_adjust(
+            left=0.205,
+            right=0.985,
+            top=0.82 if rows == 1 else 0.88 if rows == 2 else 0.875,
+            bottom=0.18 if rows == 1 else 0.10 if rows == 2 else 0.06,
+            wspace=0.26,
+            hspace=0.36 if rows < 3 else 0.60,
+        )
+        for j, ax in enumerate(axes.flat):
             ax.set_ylim(5.55, -0.55)
             ax.set_yticks(range(6), SCENARIOS)
             ax.tick_params(axis="y", length=0, pad=6)
-            ax.set_title(titles[j], pad=8)
+            ax.set_title(titles[j % 3], pad=8)
             for i in range(0, 6, 2):
                 ax.axhspan(i - 0.47, i + 0.47, color="#f3f5f7", zorder=0)
             ax.grid(axis="x", which="major", color="#dde0e3", lw=0.65)
@@ -345,36 +353,48 @@ def render(bundle, output):
             fig.savefig(output / f"{stem}.{ext}", facecolor="white")
         plt.close(fig)
 
+    def joint(axes):
+        for j, ax in enumerate(axes):
+            key = keys[j]
+            for row in bundle["joint"]:
+                method = row["method"]
+                value = row[key] / (1000 if j == 2 else 1)
+                # Preserve raw signed values; qualifications belong in captions.
+                y = row["case"] + offsets[method]
+                ax.plot([0, value], [y, y], color=COLORS[method], alpha=0.26, lw=1.1)
+                ax.plot(
+                    value,
+                    y,
+                    marker=MARKERS[method],
+                    ms=3.825,
+                    color=COLORS[method],
+                    zorder=3,
+                )
+            ax.axvline(0, color="#666666", lw=0.8, zorder=1)
+            if j == 0:
+                ax.set_xscale("symlog", linthresh=1)
+                ax.set_xticks([0, 1, 1e3, 1e6, 1e9])
+                ax.set_xlabel("Cost units (symlog)")
+            elif j == 1:
+                ax.set_xscale("symlog", linthresh=1)
+                ax.set_xticks([0, 1, 1e3, 1e6])
+                ax.set_xlabel("MWh (symlog)")
+            else:
+                ax.set_xlabel("GWh")
+            values = [r[key] / (1000 if j == 2 else 1) for r in bundle["joint"]]
+            if j < 2:
+                # Pad symlog in display space, avoiding an empty negative range.
+                ax.set_xlim(min(-0.5, min(values) * 3), max(2, max(values) * 3))
+            else:
+                pad = max(1, max(abs(v) for v in values) * 0.05)
+                ax.set_xlim(min(0, min(values)) - pad, max(values) + pad)
+            ax.xaxis.set_major_formatter(FuncFormatter(tick))
+            ax.set_yticks(range(6), SCENARIOS)
+            ax.tick_params(axis="y", labelleft=(j == 0))
+
     fig, axes = base()
-    legend(fig, bars=True)
-    for j, ax in enumerate(axes):
-        key = keys[j]
-        for row in bundle["joint"]:
-            method = row["method"]
-            value = row[key] / (1000 if j == 2 else 1)
-            # Baseline zero and raw signed widths are preserved, including
-            # numerical-scale values. Qualification belongs in caption notes.
-            ax.barh(
-                row["case"] + offsets[method],
-                value,
-                height=0.135,
-                color=COLORS[method],
-                linewidth=0,
-                zorder=3,
-            )
-        if j == 0:
-            ax.set_xscale("symlog", linthresh=1)
-            ax.set_xticks([0, 1, 1e3, 1e6, 1e9])
-            ax.set_xlabel("Cost units (symlog)")
-        elif j == 1:
-            ax.set_xscale("symlog", linthresh=1)
-            ax.set_xticks([0, 1, 1e3, 1e6])
-            ax.set_xlabel("MWh (symlog)")
-        else:
-            ax.set_xlabel("GWh")
-        ax.xaxis.set_major_formatter(FuncFormatter(tick))
-        ax.set_yticks(range(6), SCENARIOS)
-        ax.tick_params(axis="y", labelleft=(j == 0))
+    legend(fig)
+    joint(axes)
     save(fig, "01_joint_dispatch")
 
     # Identical axes between the two AC-implementation figures; preserve signs.
@@ -389,25 +409,12 @@ def render(bundle, output):
         limits.append(
             (min(-threshold, min(values) * 1.5), max(threshold * 2, max(values) * 1.7))
         )
-    for group, stem in (
-        (
-            "fixed",
-            "03_fixed_schedule_transfer",
-        ),
-        (
-            "rollouts",
-            "04_ac_rollouts",
-        ),
-    ):
-        fig, axes = base()
-        legend(fig, rollout=group == "rollouts", three=group == "fixed")
+
+    def differences(axes, group, panel_offset=0):
         for j, ax in enumerate(axes):
             ax.set_title(
-                (
-                    "(a) Cost difference",
-                    "(b) ENS difference",
-                    "(c) Curtailment difference",
-                )[j],
+                f"({chr(ord('a') + panel_offset + j)}) "
+                + ("Cost difference", "ENS difference", "Curtailment difference")[j],
                 pad=8,
             )
             for row in bundle[group]:
@@ -421,7 +428,7 @@ def render(bundle, output):
                     value,
                     y,
                     marker=MARKERS[method],
-                    ms=4.5,
+                    ms=3.825,
                     color=COLORS[method],
                     zorder=3,
                 )
@@ -458,7 +465,49 @@ def render(bundle, output):
                     color="#555555",
                     bbox=dict(facecolor="white", edgecolor="none", pad=2),
                 )
+
+    for group, stem in (
+        ("fixed", "03_fixed_schedule_transfer"),
+        ("rollouts", "04_ac_rollouts"),
+    ):
+        fig, axes = base()
+        legend(fig, rollout=group == "rollouts", three=group == "fixed")
+        differences(axes, group)
         save(fig, stem)
+
+    fig, axes = base(rows=2)
+    legend(fig, rollout=True, combined=True)
+    differences(axes[0], "fixed")
+    differences(axes[1], "rollouts", panel_offset=3)
+    save(fig, "03_04_ac_implementation")
+
+    fig, axes = base(rows=3)
+    legend(fig)
+    joint(axes[0])
+    differences(axes[1], "fixed")
+    differences(axes[2], "rollouts")
+    for row, heading in enumerate(
+        (
+            "(a) Joint dispatch",
+            "(b) Fixed-power AC transfer",
+            "(c) Energy-signpost AC rollout",
+        )
+    ):
+        fig.text(
+            0.205,
+            axes[row, 0].get_position().y1 + 0.055,
+            heading,
+            fontsize=9,
+            fontweight="bold",
+        )
+        for j, ax in enumerate(axes[row]):
+            ax.set_title(
+                ("Device cost", "Energy not served", "Curtailment")[j]
+                if row == 0
+                else ("Cost difference", "ENS difference", "Curtailment difference")[j],
+                pad=8,
+            )
+    save(fig, "01_03_04_results")
 
 
 def main():
