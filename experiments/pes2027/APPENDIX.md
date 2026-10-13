@@ -72,29 +72,35 @@ MATPOWER/PGLib network and the implementation equations below.
 
 ### Notation and common devices
 
+We follow Boyd and Vandenberghe's [Sec. 1.6](https://stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf#page=28)
+and [notation list](https://stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf#page=711).
+Scalars and vectors use ordinary type; their dimensions and context distinguish
+them. Device paragraphs describe a generic scalar device, omitting its device
+index. In fleet expressions, $g_{i,t}$, $r_{i,t}$, $b_{i,t}$, $e_{i,t}$ and
+$u_{i,t}$ refer to device $i$ of the stated family at time $t$. A subscript $t$
+on a declared vector denotes the vector at that time; $x_{i,t}$ is its $i$th
+component. The symbol $1$ denotes the all-ones vector when used in vector
+expressions, and $\preceq$ denotes componentwise vector inequality.
+
 Intervals $t=1,\ldots,T$ have duration $\delta>0$ hours; energy boundaries
 are $t=0,\ldots,T$. Let $n_g,n_r,n_b,n_d$ count generators, renewable channels,
-batteries and loads. Generator power is $g_t\in\mathbb R^{n_g}$ in per-unit;
-renewable and battery power are $r_t\in\mathbb R^{n_r}$ and
-$b_t\in\mathbb R^{n_b}$ in MW. Reactive vectors $q_t^g,q_t^r,q_t^b$ have
-corresponding dimensions, with generator values per-unit and the others MVAr.
-Stored energy is $e_t\in\mathbb R^{n_b}$ in MWh. Positive battery power is
-discharge. Network powers are per-unit on base $S_0$ MVA; load powers are in
-MW/MVAr. Vector inequalities are componentwise and $\odot$ denotes elementwise
-multiplication. Unless stated otherwise, equations hold for every interval.
+batteries and loads. Generator and network power is per-unit on base $S_0$ MVA;
+renewable, battery and load powers are MW/MVAr, and energy is MWh. Positive
+battery power denotes discharge. Unless stated otherwise, operating constraints
+hold at every interval.
 
-**Generators.** Impose $\underline g\leq g_t\leq\overline g$ and, in AC/SOCP,
-$\underline q^g\leq q_t^g\leq\overline q^g$. At physical MW output $P$, generator
-$i$ has rate $c_i(P)=c_{0,i}+c_{1,i}P+c_{2,i}P^2$, with $c_{2,i}\geq0$.
-Its argument is $P=S_0g_{i,t}$. The study has no commitment or ramping constraints.
+**Generic generator.** Impose $\underline g\leq g_t\leq\overline g$ and, in
+AC/SOCP, $\underline q^g\leq q_t^g\leq\overline q^g$. At physical MW output $P$,
+the cost rate is $c(P)=c_0+c_1P+c_2P^2$, with $c_2\geq0$ and argument
+$P=S_0g_t$. The study has no commitment or ramping constraints.
 
-**Renewables.** For availability $\overline r_t$ and MVA ratings $s_r$,
-impose $0\leq r_t\leq\overline r_t$. For each unit $i$, AC/SOCP add
-$r_{i,t}^2+(q_{i,t}^r)^2\leq(s_r)_i^2$, while DC uses $r_t\leq s_r$.
+**Generic renewable unit.** For availability $\overline r_t$ and MVA rating
+$s_r$, impose $0\leq r_t\leq\overline r_t$. AC/SOCP add
+$r_t^2+(q_t^r)^2\leq s_r^2$, while DC uses $r_t\leq s_r$.
 Curtailment is $\overline r_t-r_t$ and has no separate penalty.
 
-**Ideal storage.** For capacities $\overline e$, ratings $s_b$ and prescribed
-individual initial/final energies,
+**Generic ideal battery.** For capacity $\overline e$, MVA rating $s_b$ and
+prescribed initial/final energies,
 
 $$
 e_t=e_{t-1}-\delta b_t\quad(t=1,\ldots,T),\qquad
@@ -105,41 +111,60 @@ $$
 e_0=e^{\mathrm{init}},\qquad e_T=e^{\mathrm{final}}.
 $$
 
-For each battery $i$, AC/SOCP impose $b_{i,t}^2+(q_{i,t}^b)^2\leq(s_b)_i^2$;
-DC replaces this by $-s_b\leq b_t\leq s_b$. Unit efficiency and zero
-self-discharge give $\delta\sum_{t=1}^T b_t=e^{\mathrm{init}}-e^{\mathrm{final}}$.
+AC/SOCP impose $b_t^2+(q_t^b)^2\leq s_b^2$; DC replaces this by
+$-s_b\leq b_t\leq s_b$. The cycling cost rate is $\alpha|b_t|$, with
+$\alpha\geq0$ in cost units/MWh. Unit efficiency and zero self-discharge give
+$\delta\sum_{t=1}^T b_t=e^{\mathrm{init}}-e^{\mathrm{final}}$.
 Thus equal endpoints allow shifting but no net energy supply. The ideal
 inverter permits reactive support at zero real output, including empty/full SoC.
 
-**Load service.** Requested active/reactive load is
-$d_t,h_t\in\mathbb R^{n_d}$, with $d_t\geq0$. Interruption fractions satisfy
-$0\leq z_{i,t}\leq\mathbf1_{\{d_{i,t}>0\}}$. Unserved active power, served
-active power and served reactive power are
+**Generic load.** Requested active/reactive power is $d_t,h_t\in\mathbb R$,
+with $d_t\geq0$. Its interruption fraction satisfies $0\leq z_t\leq1$
+when $d_t>0$, and $z_t=0$ when $d_t=0$.
+Unserved active power, served active power and served reactive power are
 
 $$
-u_t=d_t\odot z_t,\qquad \widetilde d_t=d_t-u_t,\qquad
-\widetilde h_t=h_t\odot(\mathbf1-z_t).
+u_t=d_tz_t,\qquad \widetilde d_t=d_t-u_t,\qquad
+\widetilde h_t=h_t(1-z_t).
 $$
 
-The same fraction relieves active and reactive demand. Energy not served is
-$\mathrm{ENS}=\delta\sum_{t=1}^T\mathbf1^Tu_t$.
+The same fraction relieves active and reactive demand. Shedding has cost rate
+$\nu u_t$, with $\nu>0$ in cost units/MWh. Fleet energy not served is
+$\mathrm{ENS}=\delta\sum_{t=1}^T\sum_{i=1}^{n_d}u_{i,t}$.
 
 ### Objective and nodal injections
 
-The common device cost is
+Each generic model applies to every device of its family, with that device's
+parameters. The common device cost sums over those devices explicitly:
 
 $$
 C_{\mathrm{dev}}=\delta\sum_{t=1}^T
-\left[c_{\mathrm{gen}}(S_0g_t)+\sum_{i=1}^{n_b}\alpha_i|b_{i,t}|+\nu^Tu_t\right],
-\qquad c_{\mathrm{gen}}(P)=\sum_{i=1}^{n_g}c_i(P_i).
+\left[
+\sum_{i=1}^{n_g}c_i(S_0g_{i,t})
++\sum_{i=1}^{n_b}\alpha_i|b_{i,t}|
++\sum_{i=1}^{n_d}\nu_i u_{i,t}
+\right].
 $$
 
-Cycling prices $\alpha\in\mathbb R_+^{n_b}$ and interruption prices
-$\nu\in\mathbb R_{++}^{n_d}$ are cost units/MWh. Reactive output and
-curtailment are unpriced. Hard energy endpoints introduce no terminal cost.
+Here $c_i(P)=c_{0,i}+c_{1,i}P+c_{2,i}P^2$ is generator $i$'s cost rate;
+$\alpha_i$ and $\nu_i$ are the battery and load prices. The index $i$ is local
+to each device family. Reactive output and curtailment are unpriced, and hard
+energy endpoints introduce no terminal cost.
 
-Let $n$ be the bus count, and let $C_g,C_r,C_b,C_d$ map device families to
-buses. Per-unit device injections are
+For network equations, collect the scalar device quantities into column vectors:
+$g_t=(g_{1,t},\ldots,g_{n_g,t})\in\mathbb R^{n_g}$,
+$r_t=(r_{1,t},\ldots,r_{n_r,t})\in\mathbb R^{n_r}$,
+$b_t=(b_{1,t},\ldots,b_{n_b,t})\in\mathbb R^{n_b}$ and
+$e_t=(e_{1,t},\ldots,e_{n_b,t})\in\mathbb R^{n_b}$.
+The vectors $d_t,h_t,z_t,u_t,\widetilde d_t,\widetilde h_t\in\mathbb R^{n_d}$
+are assembled in the same way. Reactive vectors $q_t^g,q_t^r,q_t^b$ have the
+corresponding family dimensions and units. This vector use is distinct from
+the generic scalar-device paragraphs above.
+
+Let $n$ be the bus count, with incidence matrices
+$C_g\in\mathbb R^{n\times n_g}$, $C_r\in\mathbb R^{n\times n_r}$,
+$C_b\in\mathbb R^{n\times n_b}$ and $C_d\in\mathbb R^{n\times n_d}$.
+Per-unit device injections $\pi_t,\kappa_t\in\mathbb R^n$ are
 
 $$
 \pi_t=C_gg_t+\frac{C_rr_t+C_bb_t-C_d\widetilde d_t}{S_0},\qquad
@@ -159,13 +184,15 @@ prepend the supplied initial state to obtain all $T+1$ boundaries.
 ### Full AC
 
 For complex bus voltages $V_{i,t}=v_{i,t}\exp(\mathrm j\theta_{i,t})$,
-with magnitude per-unit and angle radians, and per-unit bus admittance $Y$,
+with magnitude per-unit and angle radians, collect $V_t\in\mathbb C^n$
+and $v_t,\theta_t\in\mathbb R^n$. For per-unit bus admittance
+$Y\in\mathbb C^{n\times n}$,
 
 $$
 \pi_t+\mathrm j\kappa_t=V_t\odot\overline{YV_t}.
 $$
 
-Impose $\underline v\leq v_t\leq\overline v$ and reference angle
+Impose $\underline v\preceq v_t\preceq\overline v$ and reference angle
 $\theta_{i_{\mathrm{ref}},t}=0$. With rating $F_a$ MVA and
 $f_a^{\max}=F_a/S_0$, both terminal powers satisfy
 
@@ -174,23 +201,25 @@ $$
 \qquad \sigma\in\{\mathrm f,\mathrm t\}.
 $$
 
-For $V_t=v_t\odot\exp(\mathrm j\theta_t)$ and $Y=G+\mathrm jB$, collect the
-nonzero admittance entries with bus indices $i,j$. Let
-$a_t=v_{i,t}\odot v_{j,t}$ and $\phi_t=\theta_{i,t}-\theta_{j,t}$. The real
-lifted variables satisfy
+For $Y=G+\mathrm jB$, each nonzero admittance entry $(i,j)$ has lifted
+variables $P_{ij,t},Q_{ij,t}$. With $\phi_{ij,t}=\theta_{i,t}-\theta_{j,t}$,
 
 $$
-P_t=a_t\odot(G_I\odot\cos\phi_t+B_I\odot\sin\phi_t),\qquad
-Q_t=a_t\odot(G_I\odot\sin\phi_t-B_I\odot\cos\phi_t).
+P_{ij,t}=v_{i,t}v_{j,t}(G_{ij}\cos\phi_{ij,t}+B_{ij}\sin\phi_{ij,t}),
 $$
 
-Diagonal admittance entries are included. These variables are not
-branch-terminal powers. A sparse row-sum map gives $p_t=R_pP_t$ and
+$$
+Q_{ij,t}=v_{i,t}v_{j,t}(G_{ij}\sin\phi_{ij,t}-B_{ij}\cos\phi_{ij,t}).
+$$
+
+Diagonal admittance entries are included. Collect the entries into vectors
+$P_t,Q_t$ in the retained sparsity order; these are not branch-terminal powers.
+A sparse row-sum map gives $p_t=R_pP_t$ and
 $q_t=R_pQ_t$, with separate device-injection balances $p_t=\pi_t$, $q_t=\kappa_t$.
 Only the network physics uses DNLP; device operating sets, cost functions and
 intertemporal equations remain DCP-valid.
 
-For branch $a$ from $i$ to $j$,
+For branch $a$ from $i$ to $j$, let $\phi_t=\theta_{i,t}-\theta_{j,t}$.
 
 $$
 p_{a,t}^{\mathrm f}=g_a^{\mathrm{ff}}v_{i,t}^2+
@@ -209,11 +238,12 @@ absorption is supplied through power balance, not an added AC objective penalty.
 
 ### Sparse voltage-product SOCP
 
-SOCP stores $w_i=|V_i|^2$ and $c_{ij}+\mathrm js_{ij}=V_i\overline V_j$ on
+SOCP stores $w_{i,t}=|V_{i,t}|^2$ and
+$c_{ij,t}+\mathrm js_{ij,t}=V_{i,t}\overline V_{j,t}$ on
 unordered branch pairs. Parallel circuits share a voltage product but retain
-separate terminal constraints. Sparse real maps of $x=(w,c,s)$ give nodal and
-terminal powers, expanding $\sum_j\overline{Y_{ij}}W_{ij}$ without a dense
-voltage-product matrix. Edge cones enforce $c_{ij}^2+s_{ij}^2\leq w_iw_j$;
+separate terminal constraints. Sparse real maps of $x_t=(w_t,c_t,s_t)$ give nodal
+and terminal powers, expanding $\sum_j\overline{Y_{ij}}W_{ij,t}$ without a dense
+voltage-product matrix. Edge cones enforce $c_{ij,t}^2+s_{ij,t}^2\leq w_{i,t}w_{j,t}$;
 no global positive-semidefinite or rank-one matrix constraint is imposed.
 
 With explicit time indices, $w_{i,t}=|V_{i,t}|^2$ and
@@ -241,16 +271,16 @@ flow and $A\in\mathbb R^{n\times n_\ell}$ its incidence matrix, with $-1$
 at the from bus and $+1$ at the to bus. Network flow uses
 
 $$
-Af_t+\pi_t=0,\qquad -f^{\max}\leq f_t\leq f^{\max},\qquad
+Af_t+\pi_t=0,\qquad -f^{\max}\preceq f_t\preceq f^{\max},\qquad
 C_{\mathrm{net}}^{(\mathrm{DC})}=\delta\lambda\sum_{t=1}^T\sum_a\rho_a f_{a,t}^2.
 $$
 
 Per-unit resistances are $\rho_a$ and the study uses $\lambda=1.0$.
 This convex network-flow QP is not phase-angle DC power flow. The proxy
 penalizes flow but does not withdraw lost power from nodal balance;
-$\mathbf1^T\pi_t=0$ still holds. Its cost is reported separately from device cost.
+$1^T\pi_t=0$ still holds. Its cost is reported separately from device cost.
 
-Copper plate removes branches and uses $\mathbf1^T\pi_t=0$, with
+Copper plate removes branches and uses $1^T\pi_t=0$, with
 $C_{\mathrm{net}}^{(\mathrm{CP})}=0$. It retains active-power device constraints;
 location no longer restricts delivery.
 
@@ -324,8 +354,9 @@ physical or accounting gate.
 
 ### Fixed battery-power transfer
 
-For each of six treatments and three convex donors, fix every hourly battery
-power to the retained donor value without rounding, clipping or repair.
+For each of six treatments and three convex donors, impose
+$b_{i,t}=b_{i,t}^{(m)}$ for every battery $i$ and interval $t$, using the
+retained donor powers without rounding, clipping or repair.
 The unchanged ideal recurrence and initial state determine energy. Remove the
 redundant terminal equality through the storage API while independently checking
 the original endpoint. Initialize from matched unrestricted AC, replacing only
@@ -344,8 +375,8 @@ solver outcomes remain separate from the subsequent certificates in A6.
 ### Three-hour energy-signpost rollout
 
 Each of six treatments has four donor-energy arms. At boundary $k$, start from
-realized $e_k$, solve intervals $k+1,\ldots,\ell$ with
-$\ell=\min(k+3,T)$ and impose individual $e_\ell=e_\ell^{(m)}$.
+realized energies $e_{i,k}$, solve intervals $k+1,\ldots,\ell$ with
+$\ell=\min(k+3,T)$ and impose $e_{i,\ell}=e_{i,\ell}^{(m)}$ for each battery $i$.
 Use the original final obligation whenever $\ell=T$. Audit the full window,
 execute its first hour and advance exactly once; final horizons are two and
 one hours. Donor battery powers are free, and joint-AC donors supply only
@@ -444,9 +475,9 @@ $\sum_i e_{i,t}/\sum_i\overline e_i$, a capacity-weighted fraction, not the
 unweighted mean of device percentages. All 25 boundaries are included.
 The SoC plotter exports all six treatments for comparison.
 
-For generator changes $\Delta P_t^g=S_0(g_t^{(a)}-g_t^{(b)})$, net adjustment
-is $N_t=\mathbf1^T\Delta P_t^g$ and opposing redispatch is
-$R_t=\tfrac12(\|\Delta P_t^g\|_1-|N_t|)$. These summaries distinguish net
+For generator $i$, define $\Delta P_{i,t}^g=S_0(g_{i,t}^{(a)}-g_{i,t}^{(b)})$.
+Net adjustment is $N_t=\sum_{i=1}^{n_g}\Delta P_{i,t}^g$ and opposing redispatch is
+$R_t=\tfrac12(\sum_{i=1}^{n_g}|\Delta P_{i,t}^g|-|N_t|)$. These summaries distinguish net
 change from spatial cancellation without attributing its cause. Per-device
 trajectories remain important because aggregate sums can hide opposing changes.
 
