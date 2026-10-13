@@ -14,7 +14,8 @@ solution. Fixture offsets, policies, stock solver settings, physical gates and
 device identities come from the reviewed plan and existing E3 helpers.
 
 Execution is **serial**, in fresh single-numerical-thread processes. Adjacent
-pairs alternate baseline-first and prepared-first. No races, recovery ladder,
+pairs alternate baseline-first and prepared-first separately within AC and SOCP,
+with two pairs of each order per formulation. No races, recovery ladder,
 solution-derived start, hourly fallback, solver retuning or numerical retry.
 Both AC treatments use the same deterministic physical cold-start recipe;
 preflight verifies physical inputs, settings and identity-matched starts.
@@ -60,6 +61,9 @@ speedup ratio. Matched runtime ratios use `public_solve` and whole-worker clocks
 only, and only for pairs independently accepted on both sides. Timers in
 different formulations are not interchangeable. Fake-worker rehearsal timings
 are not numerical-performance estimates.
+After interruptions, these matched timers describe the completed attempts;
+the all-arm table separately retains attempt counts and all-attempt supervised
+effort so that restart costs are not hidden or mixed into solve-time ratios.
 
 ## Persistence, scope and resume
 
@@ -95,23 +99,28 @@ arm and leave its partner eligible to run. Infrastructure/RSS faults or operator
 stop halt the study for review. Missing required process/RSS monitoring is fatal;
 optional temperature, power and host-load telemetry are bounded and advisory.
 
-Ordinary explicitly authorized resume **disposes an unfinished/failed attempt**
-as unaccepted and proceeds to the next arm. It does not silently retry it. To
-permit an interruption replacement, include `--replacement-allowance N` in the
-reviewed initial launch and use `--retry-interrupted` explicitly on resume. The
-default allowance is zero. All earlier effort and attempt reservations remain
-charged; replacement candidates retain separate identities. Numerical timeouts
-and completed rejected arms are never retried. A journal gap after parent loss
+Ordinary explicitly authorized resume **restarts the same unfinished arm** from
+its frozen cold start, in a fresh process and a separately identified attempt.
+The interrupted attempt remains unaccepted; its artifacts and all earlier effort
+are retained. Accepted arms are never rerun. No replacement allowance or separate
+retry flag is needed, and no restart occurs automatically after a stop. Numerical
+timeouts and completed rejected arms are never retried. A journal gap after parent loss
 is charged the full reserved ceiling with uncertainty labeled; potentially live
 orphan PIDs require operator inspection, never automatic termination/adoption.
 
 Owner-approved budgets (2026-10-13) are **3,600 s per whole worker** at both T=3
 and T=24, **16,384 MiB sampled RSS**, and **57,600 cumulative supervised
-worker-seconds (16 hours)**, with one-second polling. These replace the original
+worker-seconds (16 hours) advisory warning**, with one-second polling. These replace the original
 unexecuted 300-/600-second and 7,200-second proposal, not any E4 budget. Solver
 iteration limits and all numerical/physical/acceptance settings are unchanged.
-Final admission is clipped to remaining time. Cleanup overrun remains charged.
-Reserving replacements does not enlarge the cumulative time budget.
+The cumulative threshold never stops a worker or blocks admission, and never
+clips its one-hour ceiling. Status (including live sampled effort), progress and
+reports expose an advisory warning; the parent also prints it after finalized
+effort crosses the threshold. Cleanup overrun remains charged. Use the documented
+stop command if the observed effort warrants stopping. The matrix is 16 terminal
+arm outcomes, not a 16-attempt cap: interruptions may add attempts, only on
+explicitly authorized resume. Schema-1 hard-budget records remain readable under
+their original rules; they are not silently converted to this execution policy.
 Matrix completion means every arm is disposed, **not** that all were accepted.
 
 ## Commands

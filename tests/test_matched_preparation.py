@@ -71,23 +71,27 @@ def analytic_record(treatment, *, excess=.01, delta=1.):
     return kwargs, record, slack, error
 
 
-def test_matrix_matches_design_and_alternates_pair_order():
+def test_matrix_matches_design_and_counterbalances_within_each_formulation():
     rows = m.arms()
     assert len(rows) == 16 and [a["id"] for a in rows] == list(range(1, 17))
     assert {(a["start"], a["stop"]) for a in rows} == {(1165,1168), (1165,1189), (2439,2442), (2439,2463)}
-    for pair in range(1, 9):
-        members = [a for a in rows if a["pair"] == pair]
-        assert [a["treatment"] for a in members] == (["baseline", "prepared"] if pair % 2 else ["prepared", "baseline"])
-        assert all(m.policy(a).objective_assembly == ("component_first" if a["formulation"] == "ac"
-            and a["treatment"] == "prepared" else "hourly") for a in members)
+    for formulation in ("ac", "socp"):
+        pairs = sorted({a["pair"] for a in rows if a["formulation"] == formulation})
+        first_treatments = []
+        for number, pair in enumerate(pairs):
+            members = [a for a in rows if a["pair"] == pair]
+            assert [a["treatment"] for a in members] == (["baseline", "prepared"] if number % 2 == 0 else ["prepared", "baseline"])
+            first_treatments.append(members[0]["treatment"])
+            assert all(m.policy(a).objective_assembly == ("component_first" if a["formulation"] == "ac"
+                and a["treatment"] == "prepared" else "hourly") for a in members)
+        assert first_treatments.count("baseline") == first_treatments.count("prepared") == 2
 
 
-def test_owner_approved_hourly_worker_and_total_budgets():
-    assert m.LIMITS == dict(rss_mib=16384., total_worker_seconds=57600.,
-                           max_launches=16, poll_seconds=1.,
+def test_owner_approved_hourly_worker_and_advisory_total():
+    assert m.LIMITS == dict(rss_mib=16384., worker_seconds_warning=57600., poll_seconds=1.,
                            wall_seconds_by_T={"3": 3600., "24": 3600.})
     assert sum(m.LIMITS["wall_seconds_by_T"][str(arm["T"])]
-               for arm in m.arms()) == m.LIMITS["total_worker_seconds"]
+               for arm in m.arms()) == m.LIMITS["worker_seconds_warning"]
 
 
 @pytest.mark.parametrize("treatment", ["baseline", "prepared"])
@@ -141,18 +145,17 @@ def test_baseline_capture_goes_through_public_solve_and_stock_adapter(tmp_path, 
     assert capture.elapsed >= 0
 
 
-def synthetic_binding(count=3, allowance=0):
+def synthetic_binding(count=3):
     rows = []
     for arm in m.arms()[:count]:
         rows.append(dict(arm=arm, marker="synthetic lifecycle only"))
-    return dict(schema=1, context={"synthetic": True}, rows=rows,
-                limits=dict(m.LIMITS, max_launches=count+allowance, poll_seconds=.01),
-                replacement_allowance=allowance)
+    return dict(schema=2, context={"synthetic": True}, rows=rows,
+                limits=dict(m.LIMITS, poll_seconds=.01), interruption_policy="retry_on_explicit_resume")
 
 
-def setup(root, count=3, allowance=0):
+def setup(root, count=3):
     root.mkdir(parents=True, exist_ok=True)
-    binding = synthetic_binding(count, allowance)
+    binding = synthetic_binding(count)
     r.atomic_immutable_json(root / "binding.json", binding)
     r.atomic_immutable_json(root / "protocol.json", dict(protocol=binding["limits"]))
     r.atomic_immutable_json(root / "authority.json", dict(execution_commit="a"*40,
@@ -212,10 +215,10 @@ def fake_run(monkeypatch, tmp_path, outcomes):
 
 
 def test_stop_resume_twice_reuses_publications_and_charges_effort(tmp_path, monkeypatch):
-    outcomes = ["exited", "operator_stop", "operator_stop", "exited"]
+    outcomes = ["exited", "operator_stop", "operator_stop", "exited", "exited", "exited"]
     supervisor = fake_run(monkeypatch, tmp_path, outcomes)
     root = tmp_path / "results/matched_comparison_rehearsal"
-    def factory(allowance):
+    def factory():
         return synthetic_binding(4)
     first = r.run(root, "a"*40, binding_factory=factory, supervisor=supervisor)
     assert first["outcome"] == "operator_stop" and first["progress"]["accepted_arms"] == 1
@@ -223,8 +226,9 @@ def test_stop_resume_twice_reuses_publications_and_charges_effort(tmp_path, monk
     second = r.run(root, "a"*40, resume=True, acknowledge_stop=True, supervisor=supervisor)
     assert second["outcome"] == "operator_stop" and second["progress"]["worker_seconds"] == 6.
     final = r.run(root, "a"*40, resume=True, acknowledge_stop=True, supervisor=supervisor)
-    assert final["progress"]["matrix_complete"] and final["progress"]["accepted_arms"] == 2
-    assert final["progress"]["disposed_arms"] == 4 and final["progress"]["worker_seconds"] == 8.
+    assert final["progress"]["matrix_complete"] and final["progress"]["accepted_arms"] == 4
+    assert final["progress"]["disposed_arms"] == 4 and final["progress"]["worker_seconds"] == 12.
+    assert [a["arm_id"] for a in final["progress"]["attempts"]] == [1, 2, 2, 2, 3, 4]
     assert m.digest(root / "attempts/attempt-001/result.json.gz") == original
     assert r.run(root, "a"*40, resume=True, supervisor=supervisor)["outcome"] == "matrix_complete"
 
@@ -251,8 +255,8 @@ def test_interrupted_request_publication_has_a_same_policy_resume_path(tmp_path)
     assert r.status(tmp_path)["attempts"][0]["classification"] == "awaiting_request"
     r.reconcile(tmp_path, binding)
     assert r.status(tmp_path)["pending_disposition"] and r.status(tmp_path)["worker_seconds"] == 0.
-    r.atomic_immutable_json(directory / "disposition.json", dict(action="dispose", reason="explicit resume"))
-    assert r.status(tmp_path)["next_arm"] == 2
+    r.atomic_immutable_json(directory / "disposition.json", dict(action="retry", reason="explicit resume"))
+    assert r.status(tmp_path)["next_arm"] == 1
 
 
 def test_manifest_corruption_missing_completion_and_order_fail(tmp_path):
@@ -360,36 +364,39 @@ def test_real_worker_publication_and_full_replay_with_analytic_native(tmp_path, 
                ("build", "prospective_preparation", "public_solve", "extraction", "independent_audit", "archive"))
 
 
-def test_failed_launch_can_resume_without_implicit_retry(tmp_path, monkeypatch):
-    outcomes = ["supervisor_failure", "exited"]
+def test_failed_launch_resumes_same_arm_then_partner(tmp_path, monkeypatch):
+    outcomes = ["supervisor_failure", "exited", "exited"]
     supervisor = fake_run(monkeypatch, tmp_path, outcomes)
     root = tmp_path / "results/matched_comparison_launch_failure"
-    first = r.run(root, "a"*40, binding_factory=lambda allowance: synthetic_binding(2), supervisor=supervisor)
+    first = r.run(root, "a"*40, binding_factory=lambda: synthetic_binding(2), supervisor=supervisor)
     assert first["outcome"] == "infrastructure_failure"
     assert first["progress"]["pending_disposition"]
     final = r.run(root, "a"*40, resume=True, supervisor=supervisor)
-    assert final["progress"]["accepted_arms"] == 1 and final["progress"]["disposed_arms"] == 2
-    assert final["progress"]["worker_seconds"] == 4.
+    assert final["progress"]["accepted_arms"] == final["progress"]["disposed_arms"] == 2
+    assert final["progress"]["worker_seconds"] == 6.
+    assert [a["arm_id"] for a in final["progress"]["attempts"]] == [1, 1, 2]
 
 
-def test_explicit_replacement_uses_frozen_allowance_and_retains_old_attempt(tmp_path, monkeypatch):
+def test_explicit_resume_restarts_unfinished_arm_and_retains_old_attempt(tmp_path, monkeypatch):
     outcomes = ["operator_stop", "exited", "exited"]
     supervisor = fake_run(monkeypatch, tmp_path, outcomes)
     root = tmp_path / "results/matched_comparison_replacement"
-    r.run(root, "a"*40, replacement_allowance=1,
-          binding_factory=lambda allowance: synthetic_binding(2, allowance), supervisor=supervisor)
-    final = r.run(root, "a"*40, resume=True, acknowledge_stop=True, retry_interrupted=True, supervisor=supervisor)
+    r.run(root, "a"*40, binding_factory=lambda: synthetic_binding(2), supervisor=supervisor)
+    old = m.digest(root / "attempts/attempt-001/supervision.json")
+    final = r.run(root, "a"*40, resume=True, acknowledge_stop=True, supervisor=supervisor)
     assert final["progress"]["accepted_arms"] == 2 and final["progress"]["reservations"] == 3
     assert read(root / "attempts/attempt-001/disposition.json")["action"] == "retry"
     assert final["progress"]["worker_seconds"] == 6.
+    assert m.digest(root / "attempts/attempt-001/supervision.json") == old
 
 
-def test_undeclared_replacement_is_refused(tmp_path, monkeypatch):
+def test_stopped_study_does_not_restart_without_stop_acknowledgement(tmp_path, monkeypatch):
     supervisor = fake_run(monkeypatch, tmp_path, ["operator_stop"])
     root = tmp_path / "results/matched_comparison_no_replacement"
-    r.run(root, "a"*40, binding_factory=lambda allowance: synthetic_binding(2), supervisor=supervisor)
-    with pytest.raises(ValueError, match="replacement allowance"):
-        r.run(root, "a"*40, resume=True, acknowledge_stop=True, retry_interrupted=True, supervisor=supervisor)
+    r.run(root, "a"*40, binding_factory=lambda: synthetic_binding(2), supervisor=supervisor)
+    final = r.run(root, "a"*40, resume=True, supervisor=supervisor)
+    assert final["outcome"] == "operator_stop" and final["progress"]["accepted_arms"] == 0
+    assert final["progress"]["reservations"] == 1
     assert r.status(root)["worker_seconds"] == 2.
 
 
@@ -404,7 +411,7 @@ from experiments.case118_tracy_2021.stage_d import read
 root, directory = map(Path, sys.argv[1:])
 request = read(directory / "request.json")
 arm = request["arm_id"]
-if arm in (2, 3):
+if arm == 2 and directory.name in ("attempt-002", "attempt-003"):
     r.atomic_immutable_json(root / "STOP", dict(reason="non-solving rehearsal"))
     time.sleep(5)
 else:
@@ -436,7 +443,7 @@ def supervisor(command, directory, root, request):
     return r.supervise([sys.executable, "-c", code, str(root), str(directory)], directory,
         root, request, rss_reader=lambda pid: 1.)
 real_run = r.run
-r.run = functools.partial(real_run, binding_factory=lambda allowance: synthetic_binding(4), supervisor=supervisor)
+r.run = functools.partial(real_run, binding_factory=lambda: synthetic_binding(4), supervisor=supervisor)
 sys.argv = ["run_matched", "--output", str(m.HERE/"results/matched_comparison_rehearsal"),
             "--authorize-execution", "--commit", "a"*40] + sys.argv[3:]
 r.main()
@@ -453,7 +460,8 @@ r.main()
     second = invoke("--resume", "--acknowledge-stop")
     assert second["outcome"] == "operator_stop"
     final = invoke("--resume", "--acknowledge-stop")
-    assert final["progress"]["accepted_arms"] == 2 and final["progress"]["disposed_arms"] == 4
+    assert final["progress"]["accepted_arms"] == final["progress"]["disposed_arms"] == 4
+    assert [a["arm_id"] for a in final["progress"]["attempts"]] == [1, 2, 2, 2, 3, 4]
     assert final["progress"]["worker_seconds"] > second["progress"]["worker_seconds"] > first["progress"]["worker_seconds"]
     assert m.digest(root / "attempts/attempt-001/result.json.gz") == original
     assert invoke("--resume")["outcome"] == "matrix_complete"
@@ -480,20 +488,87 @@ def test_real_supervisor_ceiling_and_failed_child_dispositions(tmp_path, kind):
     assert progress["accepted_arms"] == 0
 
 
-def test_budget_is_clipped_and_not_reset_on_resume(tmp_path, monkeypatch):
+def test_advisory_time_is_not_clipped_or_reset_on_resume(tmp_path, monkeypatch, capsys):
     calls = []
-    supervisor = fake_run(monkeypatch, tmp_path, ["exited", "exited"])
+    supervisor = fake_run(monkeypatch, tmp_path, ["exited", "operator_stop", "exited", "exited"])
     def observed(*args):
         calls.append(args[-1]["wall_seconds"])
         return supervisor(*args)
     binding = synthetic_binding(3)
-    binding["limits"]["total_worker_seconds"] = 3.
+    binding["limits"]["worker_seconds_warning"] = 3.
     root = tmp_path / "results/matched_comparison_budget"
-    result = r.run(root, "a"*40, binding_factory=lambda allowance: binding, supervisor=observed)
-    assert calls == [3., 1.]
-    assert result["outcome"] == "budget_exhausted" and result["progress"]["worker_seconds"] == 4.
-    assert r.run(root, "a"*40, resume=True, supervisor=observed)["outcome"] == "budget_exhausted"
-    assert calls == [3., 1.]
+    result = r.run(root, "a"*40, binding_factory=lambda: binding, supervisor=observed)
+    assert calls == [3600., 3600.]
+    assert result["outcome"] == "operator_stop" and result["progress"]["worker_seconds"] == 4.
+    assert result["progress"]["warnings"][0]["advisory"]
+    final = r.run(root, "a"*40, resume=True, acknowledge_stop=True, supervisor=observed)
+    assert final["outcome"] == "matrix_complete" and final["progress"]["worker_seconds"] == 8.
+    assert calls == [3600.]*4
+    assert "WARNING:" in capsys.readouterr().err
+
+
+def test_live_sampled_effort_exposes_advisory_warning_without_advancing(tmp_path):
+    binding = synthetic_binding(2)
+    binding["limits"]["worker_seconds_warning"] = 3.
+    r.atomic_immutable_json(tmp_path / "binding.json", binding)
+    r.atomic_immutable_json(tmp_path / "protocol.json", dict(protocol=binding["limits"]))
+    append(tmp_path, 1, 1)
+    directory = append(tmp_path, 2, 2, outcome=None, completed=False)
+    r.atomic_json(directory / "phase.json", dict(phase="public_solve", utc=r.utc()))
+    (directory / "resources.jsonl").write_text(json.dumps(dict(elapsed_seconds=1.5, rss_mib=1.))+"\n")
+    progress = r.status(tmp_path)
+    assert progress["worker_seconds"] == 2. and progress["active_sampled_worker_seconds"] == 1.5
+    assert progress["warnings"][0]["observed_worker_seconds"] == 3.5
+    assert progress["accepted_arms"] == 1 and not progress["matrix_complete"]
+    assert not (directory / "supervision.json").exists()
+
+
+def test_legacy_hard_budget_records_remain_readable_without_conversion(tmp_path):
+    binding = synthetic_binding(2)
+    binding.update(schema=1, replacement_allowance=0)
+    binding.pop("interruption_policy")
+    binding["limits"].pop("worker_seconds_warning")
+    binding["limits"].update(total_worker_seconds=20., max_launches=2)
+    r.atomic_immutable_json(tmp_path / "binding.json", binding)
+    r.atomic_immutable_json(tmp_path / "protocol.json", dict(protocol=binding["limits"]))
+    append(tmp_path, 1, 1, outcome="interrupted", completed=False)
+    r.atomic_immutable_json(tmp_path / "attempts/attempt-001/disposition.json", dict(action="dispose"))
+    append(tmp_path, 2, 2)
+    original = m.digest(tmp_path / "binding.json")
+    progress = r.status(tmp_path)
+    assert progress["matrix_complete"] and progress["accepted_arms"] == 1
+    assert progress["worker_seconds"] == 4. and not progress["warnings"]
+    assert m.digest(tmp_path / "binding.json") == original
+
+
+def test_unfinished_arm_cannot_be_skipped_by_disposition(tmp_path):
+    setup(tmp_path, 2)
+    directory = append(tmp_path, 1, 1, outcome="interrupted", completed=False)
+    r.atomic_immutable_json(directory / "disposition.json", dict(action="dispose"))
+    with pytest.raises(ValueError, match="invalid interrupted-attempt disposition"):
+        r.status(tmp_path)
+
+
+def test_completed_numerical_rejection_is_not_retried_on_resume(tmp_path, monkeypatch):
+    supervisor = fake_run(monkeypatch, tmp_path, ["exited"])
+    root = tmp_path / "results/matched_comparison_rejected"
+    setup(root, 2)
+    append(root, 1, 1, accepted=False)
+    result = r.run(root, "a"*40, resume=True, supervisor=supervisor)
+    assert result["progress"]["matrix_complete"] and result["progress"]["accepted_arms"] == 1
+    assert [a["arm_id"] for a in result["progress"]["attempts"]] == [1, 2]
+
+
+def test_report_separates_completion_timing_from_all_interrupted_effort(tmp_path, monkeypatch):
+    from experiments.numerical_preparation import matched_report as report
+    supervisor = fake_run(monkeypatch, tmp_path, ["operator_stop", "exited", "exited"])
+    root = tmp_path / "results/matched_comparison_effort"
+    r.run(root, "a"*40, binding_factory=lambda: synthetic_binding(2), supervisor=supervisor)
+    final = r.run(root, "a"*40, resume=True, acknowledge_stop=True, supervisor=supervisor)
+    rows = report.table(final["progress"], root)
+    assert rows[0]["accepted"] and rows[0]["attempt_count"] == 2
+    assert rows[0]["supervised_seconds"] == 2. and rows[0]["all_attempt_supervised_seconds"] == 4.
+    assert rows[1]["attempt_count"] == 1 and rows[1]["all_attempt_supervised_seconds"] == 2.
 
 
 def test_same_root_has_only_one_supervisor(tmp_path, monkeypatch):

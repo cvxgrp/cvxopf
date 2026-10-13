@@ -37,6 +37,14 @@ def utc():
     return datetime.now(timezone.utc).isoformat()
 
 
+def worker_wall_seconds(limits, T, used):
+    """Current workers get the full ceiling; legacy hard budgets stay readable."""
+    wall = limits["wall_seconds_by_T"][str(T)]
+    if "total_worker_seconds" in limits:
+        wall = min(wall, limits["total_worker_seconds"]-used)
+    return wall
+
+
 def validate_output(root):
     root = Path(root).resolve()
     allowed = (model.HERE / "results").resolve()
@@ -262,8 +270,7 @@ def reconcile(root, binding):
             if arm_id is None:
                 raise ValueError("empty reservation after completed/blocked study")
             arm = binding["rows"][arm_id-1]["arm"]
-            wall = min(binding["limits"]["wall_seconds_by_T"][str(arm["T"])],
-                       binding["limits"]["total_worker_seconds"]-prefix["worker_seconds"])
+            wall = worker_wall_seconds(binding["limits"], arm["T"], prefix["worker_seconds"])
             atomic_immutable_json(directory / "request.json", dict(arm_id=arm_id, wall_seconds=wall,
                 binding=reference(root / "binding.json", root), protocol=reference(root / "protocol.json", root)))
             atomic_immutable_json(directory / "supervision.json", dict(classification="orphaned_interruption",
@@ -291,7 +298,7 @@ def status(root, *, audit=False, _directories=None):
         raise ValueError("frozen protocol differs")
     if audit and model.context() != binding["context"]:
         raise ValueError("independent replay dependencies/input/runtime differ")
-    disposed, attempts, used = {}, [], 0.
+    disposed, attempts, used, active_seconds = {}, [], 0., 0.
     directories = sorted(root.glob("attempts/attempt-*")) if _directories is None else _directories
     for number, directory in enumerate(directories, 1):
         if directory.name != f"attempt-{number:03d}":
@@ -310,10 +317,11 @@ def status(root, *, audit=False, _directories=None):
                 request["protocol"] != reference(root / "protocol.json", root)):
             raise ValueError("attempt binding differs or repeats disposed arm")
         item = binding["rows"][arm_id-1]
-        maximum = binding["limits"]["wall_seconds_by_T"][str(item["arm"]["T"])]
-        if number > binding["limits"]["max_launches"] or not 0 < request["wall_seconds"] <= min(
-                maximum, binding["limits"]["total_worker_seconds"]-used):
-            raise ValueError("request exceeds cumulative allowance")
+        maximum = worker_wall_seconds(binding["limits"], item["arm"]["T"], used)
+        launch_limit = binding["limits"].get("max_launches")
+        if (launch_limit is not None and number > launch_limit or
+                not 0 < request["wall_seconds"] <= maximum):
+            raise ValueError("request exceeds worker or legacy cumulative allowance")
         summary = dict(path=str(directory.relative_to(root)), arm_id=arm_id, accepted=False)
         sup_path = directory / "supervision.json"
         if not sup_path.exists():
@@ -324,6 +332,7 @@ def status(root, *, audit=False, _directories=None):
             samples_path = directory / "resources.jsonl"
             samples = [json.loads(line) for line in samples_path.read_text().splitlines()] if samples_path.exists() else []
             summary["latest_resource"] = samples[-1] if samples else None
+            active_seconds = samples[-1]["elapsed_seconds"] if samples else 0.
             attempts.append(summary)
             break
         sup = read(sup_path)
@@ -389,7 +398,11 @@ def status(root, *, audit=False, _directories=None):
         decision = directory / "disposition.json"
         if decision.exists():
             summary["decision"] = read(decision)
-            if summary["decision"]["action"] == "dispose":
+            action = summary["decision"]["action"]
+            if (action not in {"retry", "dispose"} or arm_id in disposed or
+                    binding.get("schema", 1) >= 2 and action != "retry"):
+                raise ValueError("invalid interrupted-attempt disposition")
+            if action == "dispose":
                 disposed[arm_id] = summary
         attempts.append(summary)
     remaining = [r["arm"]["id"] for r in binding["rows"] if r["arm"]["id"] not in disposed]
@@ -416,8 +429,15 @@ def status(root, *, audit=False, _directories=None):
             ta, tb = (d["timings"]["phases"]["public_solve"] for d in (da, db))
             comparison["public_solve_baseline_over_prepared"] = ta/tb if tb > 0 else None
         pairs.append(comparison)
+    warning_threshold = binding["limits"].get("worker_seconds_warning")
+    warnings = []
+    if warning_threshold is not None and used+active_seconds >= warning_threshold:
+        warnings.append(dict(kind="cumulative_worker_time", advisory=True,
+            threshold_seconds=warning_threshold, observed_worker_seconds=used+active_seconds,
+            message="Cumulative worker effort reached the advisory threshold; continuing unless the operator stops."))
     return dict(rows=rows, pairs=pairs, attempts=attempts, reservations=len(attempts),
         worker_seconds=used, limits=binding["limits"], disposed_arms=len(disposed),
+        active_sampled_worker_seconds=active_seconds, warnings=warnings,
         accepted_arms=sum(a["accepted"] for a in disposed.values()), matrix_complete=not remaining,
         next_arm=None if blocked else (remaining[0] if remaining else None),
         pending_disposition=bool(blocked), independently_replayed=audit,
@@ -428,13 +448,13 @@ def status(root, *, audit=False, _directories=None):
         acceptance_evidence="independent replay" if audit else "hash-checked worker audit receipts")
 
 
-def run(root, commit, *, resume=False, acknowledge_stop=False, replacement_allowance=0,
-        retry_interrupted=False, binding_factory=model.frozen_binding, supervisor=supervise):
+def run(root, commit, *, resume=False, acknowledge_stop=False,
+        binding_factory=model.frozen_binding, supervisor=supervise):
     root = validate_output(root)
     if not resume and root.exists():
         raise ValueError("new launch requires a new output directory")
     if not resume:
-        binding = binding_factory(replacement_allowance)
+        binding = binding_factory()
         revision = model.execution_revision(binding["context"], commit)
         root.mkdir(parents=True)
         atomic_immutable_json(root / "binding.json", binding)
@@ -446,6 +466,8 @@ def run(root, commit, *, resume=False, acknowledge_stop=False, replacement_allow
     with (root / "supervisor.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         binding = read(root / "binding.json")
+        if binding.get("schema") != 2 or binding.get("interruption_policy") != "retry_on_explicit_resume":
+            raise ValueError("historical execution policy requires its original runner; no implicit conversion")
         current = model.context()
         model.execution_revision(current, commit)
         if current != binding["context"]:
@@ -466,42 +488,35 @@ def run(root, commit, *, resume=False, acknowledge_stop=False, replacement_allow
         invocation = root / "invocations" / f"invocation-{time.time_ns()}"
         atomic_immutable_json(invocation / "start.json", dict(utc=utc(), resume=resume,
             telemetry=monitoring(), commit=commit))
-        outcome = "infrastructure_failure"
+        outcome, warned = "infrastructure_failure", False
         try:
             progress = status(root)
             if progress["pending_disposition"]:
                 tail = root / progress["attempts"][-1]["path"]
                 if progress["attempts"][-1]["classification"] == "active_partial":
                     raise ValueError("active partial cannot be disposed")
-                if retry_interrupted:
-                    allowance = binding["limits"]["max_launches"]-len(binding["rows"])
-                    if not resume or progress["reservations"]-progress["disposed_arms"]-1 >= allowance:
-                        raise ValueError("no declared replacement allowance remains")
-                    action = "retry"
-                else:
-                    action = "dispose"
-                atomic_immutable_json(tail / "disposition.json", dict(action=action, utc=utc(),
-                    reason="explicit same-policy resume; failed attempt remains unaccepted"))
+                if not resume:
+                    raise ValueError("interrupted work requires explicit resume")
+                atomic_immutable_json(tail / "disposition.json", dict(action="retry", utc=utc(),
+                    reason="explicit same-policy resume; restart unfinished arm from its frozen cold start"))
             while True:
                 progress = status(root)
                 atomic_json(root / "progress.json", progress)
+                if progress["warnings"] and not warned:
+                    print("WARNING: "+progress["warnings"][0]["message"], file=sys.stderr, flush=True)
+                    warned = True
                 if progress["matrix_complete"]:
                     outcome = "matrix_complete"
                     break
                 if (root / "STOP").exists():
                     outcome = "operator_stop"
                     break
-                if (progress["worker_seconds"] >= binding["limits"]["total_worker_seconds"] or
-                        progress["reservations"] >= binding["limits"]["max_launches"]):
-                    outcome = "budget_exhausted"
-                    break
                 if progress["next_arm"] is None:
                     outcome = "needs_disposition"
                     break
                 verify_sources(binding)
                 item = binding["rows"][progress["next_arm"]-1]
-                wall = min(binding["limits"]["wall_seconds_by_T"][str(item["arm"]["T"])],
-                           binding["limits"]["total_worker_seconds"]-progress["worker_seconds"])
+                wall = worker_wall_seconds(binding["limits"], item["arm"]["T"], progress["worker_seconds"])
                 directory = root / "attempts" / f"attempt-{progress['reservations']+1:03d}"
                 request = dict(arm_id=item["arm"]["id"], wall_seconds=wall,
                     binding=reference(root / "binding.json", root), protocol=reference(root / "protocol.json", root))
@@ -537,17 +552,11 @@ def main():
     parser.add_argument("--commit")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--acknowledge-stop", action="store_true")
-    parser.add_argument("--replacement-allowance", type=int, default=0)
-    parser.add_argument("--retry-interrupted", action="store_true")
     parser.add_argument("--audit", action="store_true")
     args = parser.parse_args()
     root = validate_output(args.output)
-    if (args.resume or args.acknowledge_stop or args.retry_interrupted) and not args.authorize_execution:
-        parser.error("resume/acknowledgement/replacement requires separately authorized execution")
-    if args.retry_interrupted and not args.resume:
-        parser.error("replacement requires explicit resume")
-    if args.resume and args.replacement_allowance:
-        parser.error("replacement allowance is frozen at initial launch, not enlarged on resume")
+    if (args.resume or args.acknowledge_stop) and not args.authorize_execution:
+        parser.error("resume/acknowledgement requires separately authorized execution")
     if args.worker:
         directory = root / "attempts" / args.worker
         if directory.parent.resolve() != (root / "attempts").resolve() or not args.worker.startswith("attempt-"):
@@ -555,7 +564,7 @@ def main():
         worker(root, directory)
         return
     if args.preflight:
-        binding = model.frozen_binding(args.replacement_allowance, canonical=True)
+        binding = model.frozen_binding(canonical=True)
         result = dict(preflight_only=True, optimizer_calls=0, output_created=False,
             limits=binding["limits"], gates=binding["gates"], telemetry=monitoring(),
             context_sha256=model.input_digest(binding["context"]),
@@ -576,8 +585,7 @@ def main():
     else:
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, interrupted)
-        result = run(root, args.commit, resume=args.resume, acknowledge_stop=args.acknowledge_stop,
-            replacement_allowance=args.replacement_allowance, retry_interrupted=args.retry_interrupted)
+        result = run(root, args.commit, resume=args.resume, acknowledge_stop=args.acknowledge_stop)
     print(json.dumps(serializable(result), indent=2, allow_nan=False))
 
 

@@ -37,18 +37,19 @@ HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "results/matched_comparison_001"
 THREAD_KEYS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                "VECLIB_MAXIMUM_THREADS")
-LIMITS = dict(rss_mib=16384., total_worker_seconds=57600., max_launches=16,
+LIMITS = dict(rss_mib=16384., worker_seconds_warning=57600.,
               poll_seconds=1., wall_seconds_by_T={"3": 3600., "24": 3600.})
 
 
 def arms():
-    """Stable identities; pair order alternates independently of solve outcomes."""
+    """Stable identities; counterbalance separately within each formulation."""
     rows = []
     for scenario, start in (("Large deficit", 1165), ("Deficit to surplus", 2439)):
         for T in (3, 24):
             for formulation in ("ac", "socp"):
                 pair = len(rows) // 2 + 1
-                order = ("baseline", "prepared") if pair % 2 else ("prepared", "baseline")
+                fixture_number = len(rows) // 4
+                order = ("baseline", "prepared") if fixture_number % 2 == 0 else ("prepared", "baseline")
                 for treatment in order:
                     rows.append(dict(id=len(rows)+1, pair=pair, scenario=scenario,
                                      start=start, stop=start+T, T=T,
@@ -234,9 +235,7 @@ def ac_start(build, assigned, *, graph=None):
                         physical_start=b.physical_start) for b in bindings]))
 
 
-def frozen_binding(replacement_allowance=0, *, canonical=False):
-    if type(replacement_allowance) is not int or replacement_allowance < 0:
-        raise ValueError("replacement allowance must be a nonnegative integer")
+def frozen_binding(*, canonical=False):
     with no_optimization():
         prepared, study = admit_inputs()
         rows, starts = [], {}
@@ -262,9 +261,8 @@ def frozen_binding(replacement_allowance=0, *, canonical=False):
             a, b = [r for r in rows if r["arm"]["pair"] == pair]
             if a["physical_inputs"] != b["physical_inputs"] or a["settings"] != b["settings"]:
                 raise ValueError("matched pair changes physics or solver settings")
-    return dict(schema=1, experiment="matched_numerical_preparation", context=context(),
-        rows=rows, limits=dict(LIMITS, max_launches=16+replacement_allowance),
-        replacement_allowance=replacement_allowance,
+    return dict(schema=2, experiment="matched_numerical_preparation", context=context(),
+        rows=rows, limits=dict(LIMITS), interruption_policy="retry_on_explicit_resume",
         admission=dict(historical_pins=PINS, source_hashes=study["source_hashes"],
                        storage_device_ids=study["storage_device_ids"]),
         gates=dict(physical=TOLERANCES, socp=asdict(e3.RELAXATION_TOLERANCES),

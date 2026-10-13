@@ -11,6 +11,7 @@ def table(progress, root):
     for row in progress["rows"]:
         arm, disposition = row["arm"], row["disposition"]
         latest = next((a for a in reversed(progress["attempts"]) if a["arm_id"] == arm["id"]), None)
+        attempts = [a for a in progress["attempts"] if a["arm_id"] == arm["id"]]
         record = None
         if latest and (root / latest["path"] / "completion.json").exists():
             record = read(root / latest["path"] / "result.json.gz")
@@ -30,6 +31,8 @@ def table(progress, root):
             ens_mwh=physical.get("metrics", {}).get("energy_not_served_mwh"),
             timings=None if latest is None else latest.get("timings"),
             supervised_seconds=None if latest is None else latest.get("worker_seconds"),
+            attempt_count=len(attempts),
+            all_attempt_supervised_seconds=sum(a.get("worker_seconds", 0.) for a in attempts),
             sampled_peak_rss_mib=None if latest is None else latest.get("peak_sampled_rss_mib")))
     return result
 

@@ -17,7 +17,7 @@ an MPC rollout, or a recreation of an old software environment. The
 [three-hour comparison](TRACY_THREE_STEP_REPORT.md) motivate it but contain
 historical accounting qualifications and are not matched timing controls.
 
-## Small proposed matrix: 16 calls
+## Small proposed matrix: 16 arms
 
 Use the unchanged E3 energy-neutral fixtures below, chosen as a motivating
 deficit case and a contrasting transition, not selected from new solve outcomes.
@@ -69,10 +69,13 @@ transformation caused a change; ablation is outside this short study.
 ## Bounded execution and retained evidence
 
 Propose serial fresh-process workers, one numerical thread, and a deterministic
-pair order alternating baseline-first and prepared-first. Owner-approved budgets
+pair order alternating baseline-first and prepared-first **within each formulation**
+(two of each order for AC, and two of each for SOCP). Owner-approved budgets
 (2026-10-13) are **one hour per whole worker** at both T=3 and T=24, 16 GiB
-sampled RSS, and **16 hours (57,600 s) cumulative supervised worker effort**;
-clip to remaining budget and retain cleanup overrun. Solver iteration limits,
+sampled RSS, and an **advisory warning at 16 hours (57,600 s) cumulative supervised
+worker effort**, not an automatic stop. Every worker retains its full one-hour
+allowance; interrupted effort and cleanup overrun remain counted. The operator
+may stop the study at any time. Solver iteration limits,
 tolerances, physical constraints and acceptance gates are unchanged. Numerical
 failures/timeouts dispose an arm and do not suppress its partner; infrastructure
 faults stop safely. Commit and launch gates still apply.
@@ -84,8 +87,12 @@ superseded by the owner-approved budgets above; it was not the E4 rollout budget
 Reuse existing fixture, prepared-solve, physical-start, audit, archive and process
 helpers; do not copy an entire runner. Provide disk-backed results/logs, atomic
 publication, status and repeatable resume that reuses completed arms. Retain
-interrupted attempts and consumed budgets; any replacement launch needs a declared
-allowance, not an implicit retry. Rehearse stop/resume and publication without OPF
+interrupted attempts and consumed effort. Operator/infrastructure interruptions
+leave the arm pending; an explicitly authorized resume restarts that same arm
+from the frozen cold start in a fresh attempt, without skipping it or requiring
+a replacement reservation. There is no automatic restart while stopped and no
+retry of completed numerical/audit rejections or one-hour timeouts. Rehearse
+stop/resume and publication without OPF
 solves. Admit stable history once, keep per-arm science checks, and record build,
 preparation/solve, audit/archive and total wall clocks separately. Retain native
 iterations/convergence, sampled RSS, starts, restored primals and cost components.
@@ -104,6 +111,7 @@ One pass is a bounded case study, not a runtime-distribution estimate. Different
 accepted AC objectives may reflect different local solutions; equal-cost
 trajectories need not be identical. No universal speedup, global AC optimality,
 infeasibility from solver rejection, or attribution to one preparation component.
-Stop after the declared matrix/budget; additional windows, repetitions or
+Stop after the declared matrix or an operator stop; crossing the cumulative-time
+warning alone does not stop useful computation. Additional windows, repetitions or
 ablations require a separate decision. Next: review this short design, implement
 and rehearse the reused runner, then obtain owner commit and launch approval.
