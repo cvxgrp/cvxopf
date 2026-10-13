@@ -15,10 +15,10 @@ protocols or grant new execution authority.
 | E3+: forced-shedding sixth case | Four arms completed at `13ad35bc5f0e9f8b5d20d54a55d2ab2cd7a26df8`; AC accepted, three convex arms retain numerical qualifications. Their owner-approved use as transfer sources does not change historical acceptance labels. See the [E3+ plan](../experiments/case118_tracy_2021/E3_PLUS_PLAN.md). |
 | Fixed battery-power transfer and diagnostics | The [18-case transfer](../experiments/tracy_battery_transfer/PROTOCOL.md) returned 15 compatible transfers, two native rejections and one timeout. Subsequent [loop diagnostics](../experiments/tracy_socp_transfer_preflight/MULTIGRAPH_REPORT.md) establish modeled incompatibility of those three particular fixed schedules; solver failures alone did not establish it. |
 | Longer-loop coverage | The [five-/six-bus back-test report](../experiments/tracy_socp_transfer_preflight/LONG_LOOPS_REPORT.md) records no additional exclusions and no accepted-witness contradictions. This is retrospective coverage evidence, not a general feasibility oracle. |
-| E4: six-case matched three-hour AC rollout | Owner-directed planning insertion below. Protocol drafted; prepared-rollout integration, implementation, compute budget and numerical execution are not authorized by this update. |
+| E4: six-case matched three-hour AC rollout | Owner-authorized private prepared integration and 24-arm runner implemented for review, with two primary workers and one shared extended-race helper. Non-solving verification only; compute ceilings, numerical qualification and execution approval remain pending. See the [runner](../experiments/tracy_ac_rollout/README.md). |
 
-The diagnostic reports and their code are a separate uncommitted checkpoint
-at this update. Formal M11 closure remains an owner review decision; completion
+The diagnostic reports and their code were committed by the owner at
+`ee42a976f` before this E4 implementation checkpoint. Formal M11 closure remains an owner review decision; completion
 of a numerical study is not itself milestone acceptance. The original Tracy
 Stage D and annual AC work remain held. E4 is a new bounded comparison, not a
 resume of those runs, and does not require completing all of M21/M25.
@@ -803,8 +803,8 @@ or dynamic/voltage stability. Record these as hypotheses for subsequent testing.
 
 ### Gate E4 — Six-case matched three-hour AC rollout
 
-**Owner-directed planning insertion, 2026-10-12. Planning only: no implementation
-or numerical execution authorization.** The governing experiment design is
+**Owner-directed implementation checkpoint, 2026-10-12. Private integration and
+runner implementation authorized; no numerical execution authorization.** The governing experiment design is
 [the E4 protocol](../experiments/tracy_ac_rollout/PROTOCOL.md).
 
 Test whether three-hour receding AC optimizations, advancing one hour at a
@@ -828,7 +828,8 @@ fallback or cycle strengthening is part of this first comparison.
 windows consuming retained, identity-aligned signposts. The
 [inspected integration design](../experiments/tracy_ac_rollout/INTEGRATION_DESIGN.md)
 now identifies reusable helpers, module ownership, a private typed retained-plan
-interface and the implementation review slices; it remains a proposal.
+interface and the implementation review slices. The [implementation checkpoint](../experiments/tracy_ac_rollout/README.md)
+preserves the public guards and reuses the existing extended race supervisor.
 The public M17 hierarchy
 currently rejects both enabled preparation and every configured sheddable
 load. E4 must preserve the original shedding permissions, especially in its
@@ -846,8 +847,8 @@ with support for existing sheddable-load physics, not authorization for new
 device physics, general model-pair selection, three-layer orchestration
 or the aggregate-signpost work in M25.
 
-Review the protocol and narrow integration design, then obtain implementation
-approval. Freeze initialization/recovery details and explicit resource/attempt
+Review the implemented private integration and runner. The owner specified two
+primary workers and one shared helper with the extended race ladder. Freeze explicit resource/attempt
 ceilings in the reviewed runner/protocol checkpoint. After owner commit, bind
 the exact execution source and retained-input manifests before separate launch
 approval. Report every trajectory, including incomplete ones;

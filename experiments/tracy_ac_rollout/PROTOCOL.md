@@ -1,7 +1,9 @@
 # E4 — Six-case matched three-hour AC rollout
 
-Status: owner-directed planning draft, 2026-10-12. **Documentation only. No
-implementation, qualification solves or study execution are authorized.**
+Status: implementation checkpoint, 2026-10-12. The owner authorized the prepared
+integration, 24-arm runner and non-solving tests, with two primary workers and
+one shared race helper using the extended S5 ladder. **No qualification solves
+or study execution are authorized.** See [the implemented runner policy](README.md).
 
 Parent: [M11 Gate E4](../../plans/milestone-11-socp.md#gate-e4--six-case-matched-three-hour-ac-rollout).
 The original Tracy Stage D and annual AC runs remain held. This is a new
@@ -123,7 +125,9 @@ failure, not a certificate of physical infeasibility.
 
 The inspected helper inventory, module ownership and proposed typed retained-plan
 interface are in [the integration design](INTEGRATION_DESIGN.md). That design is
-ready for review, not implemented or approved for execution.
+implemented through private seams and the existing S5 race supervisor, ready
+for review but not approved for numerical execution. Public M17 guards remain
+unchanged; the new capability boundary is separate and experiment-scoped.
 
 The current public hierarchy rejects both enabled numerical preparation and
 every configured sheddable load (`shedding_cost_per_mwh is not None`). E4 must
@@ -182,8 +186,8 @@ assembly, with its unchanged IPOPT settings and physical acceptance tolerances.
 Freeze their resolved values and source identities before launch. No physical
 regularizer, relaxed balance, changed economic weight or silent solver retuning.
 
-The exact initialization and recovery table must be reviewed before numerical
-execution. Use a common deterministic initial-window policy across source arms;
+The implemented [extended race table](README.md#two-primaries-and-one-shared-helper)
+must be reviewed before numerical execution. Use a common deterministic initial-window policy across source arms;
 later primary starts should reuse the preceding accepted window through the
 existing causal shift machinery. Specify extension of the final start column,
 SoC adjustment and T=2/T=1 handling; retain the full canonical IPOPT x0 and
@@ -292,8 +296,8 @@ Keep the protocol, runner tests, selected evidence and final report reviewable.
 | Stage | Scope | Current status |
 | --- | --- | --- |
 | P0 | Review six-case/four-source design, source qualifications and reporting estimands | This planning draft |
-| P1 | Review narrow prepared-rollout integration, ownership and compatibility design | [Design drafted](INTEGRATION_DESIGN.md); owner review pending |
-| P2 | Authorized implementation and non-solving seam/regression verification | Not authorized |
+| P1 | Review narrow prepared-rollout integration, ownership and compatibility design | Owner authorized implementation; [private seams](README.md) preserve public M17 guards |
+| P2 | Authorized implementation and non-solving seam/regression verification | Implemented for review; no numerical solve |
 | P3 | Review runner, frozen source manifest, exact recovery/settings and any bounded qualification | Pending; no solves authorized |
 | P4 | Owner commit, reviewed compute limits and separate study launch approval | Pending |
 | P5 | Execute and independently analyze all attempted trajectories; retain failures | Not authorized |
@@ -308,7 +312,7 @@ that numerical outcome must be frozen in the execution policy. Infrastructure
 failures pause for review rather than being counted as scientific rejections.
 
 Excluded: outer replanning, soft or aggregate signposts, adaptive horizons,
-cycle-strengthened SOCP, new physical models, speculative racing, annual
+cycle-strengthened SOCP, new physical models, annual
 execution, automatic repair of donor schedules, or completion of all M21/M25.
 Each is a possible separately reviewed follow-on, not an implicit response to
 an unsuccessful E4 arm.

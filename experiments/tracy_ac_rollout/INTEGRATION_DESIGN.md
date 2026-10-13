@@ -1,7 +1,19 @@
 # E4 narrow integration design
 
-Status: design proposed for owner review, 2026-10-12. **No implementation,
-public API change, qualification solve or numerical execution authorized.**
+Status: implemented for owner review, 2026-10-12, following explicit approval
+for prepared integration and a two-primary/one-helper extended race runner.
+**No public API change, qualification solve or numerical execution authorized.**
+The [runner checkpoint](README.md) records the implemented policy and gates.
+
+Implementation keeps existing production hierarchy files byte-for-byte
+unchanged: `_prepared_rollout.py` reuses their window/storage/start helpers and
+neutral identity/frame validators without constructing a rejected public input.
+The new pure `_ac_rollout.py` owns retained targets and accepted first actions.
+Instead of refactoring the legacy sequential nine-slot executor, the experiment
+uses the existing S5 race policy/backend/supervisor and exact-once transaction.
+Its small exhaustion hook enables assembly-phase escalation without stopping a
+peer primary; numerical gates, scheduling and loser cleanup are reused. This
+avoids changing historical source-bound solver files or legacy result schemas.
 
 Scope: [the E4 protocol](PROTOCOL.md), consuming retained plans and executing
 prepared AC windows with the existing sheddable-load model. Inspection baseline:
@@ -302,6 +314,6 @@ output directories, solver attempts, authority records or source bindings.
 Approve or revise this private retained-plan/window integration, including
 sharing recovery selection via a typed executor and retaining E4's full audit
 at the experiment boundary. Public M21/M25 generalization remains deferred.
-Implementation may begin only after that approval. Resource limits, exact
-recovery table and engineering comparison thresholds remain separate pending
+Implementation approval has now been given. The extended race table is recorded
+in the runner checkpoint. Global compute ceilings and engineering comparison thresholds remain separate pending
 execution-design choices; they are not implicit defaults in these new types.
