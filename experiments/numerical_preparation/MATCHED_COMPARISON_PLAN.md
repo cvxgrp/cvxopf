@@ -69,11 +69,17 @@ transformation caused a change; ablation is outside this short study.
 ## Bounded execution and retained evidence
 
 Propose serial fresh-process workers, one numerical thread, and a deterministic
-pair order alternating baseline-first and prepared-first. Proposed **whole-worker**
-ceilings are 300 s at T=3 and 600 s at T=24, 16 GiB sampled RSS, and 7,200 s total
-supervised worker effort; clip to remaining budget and retain cleanup overrun.
-These budgets require owner approval before launch. Numerical failures/timeouts
-dispose an arm and do not suppress its partner; infrastructure faults stop safely.
+pair order alternating baseline-first and prepared-first. Owner-approved budgets
+(2026-10-13) are **one hour per whole worker** at both T=3 and T=24, 16 GiB
+sampled RSS, and **16 hours (57,600 s) cumulative supervised worker effort**;
+clip to remaining budget and retain cleanup overrun. Solver iteration limits,
+tolerances, physical constraints and acceptance gates are unchanged. Numerical
+failures/timeouts dispose an arm and do not suppress its partner; infrastructure
+faults stop safely. Commit and launch gates still apply.
+
+The original, unexecuted proposal was 300 s at T=3 and 600 s at T=24, totaling
+7,200 s (two hours) across eight workers of each horizon. That proposal is
+superseded by the owner-approved budgets above; it was not the E4 rollout budget.
 
 Reuse existing fixture, prepared-solve, physical-start, audit, archive and process
 helpers; do not copy an entire runner. Provide disk-backed results/logs, atomic

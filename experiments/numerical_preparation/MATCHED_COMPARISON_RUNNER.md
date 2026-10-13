@@ -105,10 +105,13 @@ and completed rejected arms are never retried. A journal gap after parent loss
 is charged the full reserved ceiling with uncertainty labeled; potentially live
 orphan PIDs require operator inspection, never automatic termination/adoption.
 
-Proposed budgets remain 300 s whole-worker at T=3, 600 s at T=24, 16,384 MiB
-sampled RSS and 7,200 cumulative supervised worker-seconds, with one-second
-polling. Final admission is clipped to remaining time. Cleanup overrun remains
-charged. Reserving replacements does not enlarge the cumulative time budget.
+Owner-approved budgets (2026-10-13) are **3,600 s per whole worker** at both T=3
+and T=24, **16,384 MiB sampled RSS**, and **57,600 cumulative supervised
+worker-seconds (16 hours)**, with one-second polling. These replace the original
+unexecuted 300-/600-second and 7,200-second proposal, not any E4 budget. Solver
+iteration limits and all numerical/physical/acceptance settings are unchanged.
+Final admission is clipped to remaining time. Cleanup overrun remains charged.
+Reserving replacements does not enlarge the cumulative time budget.
 Matrix completion means every arm is disposed, **not** that all were accepted.
 
 ## Commands

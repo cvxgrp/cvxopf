@@ -82,6 +82,14 @@ def test_matrix_matches_design_and_alternates_pair_order():
             and a["treatment"] == "prepared" else "hourly") for a in members)
 
 
+def test_owner_approved_hourly_worker_and_total_budgets():
+    assert m.LIMITS == dict(rss_mib=16384., total_worker_seconds=57600.,
+                           max_launches=16, poll_seconds=1.,
+                           wall_seconds_by_T={"3": 3600., "24": 3600.})
+    assert sum(m.LIMITS["wall_seconds_by_T"][str(arm["T"])]
+               for arm in m.arms()) == m.LIMITS["total_worker_seconds"]
+
+
 @pytest.mark.parametrize("treatment", ["baseline", "prepared"])
 def test_narrow_admitted_slice_round_trips(treatment):
     arm, kwargs, _ = kwargs_for(treatment)

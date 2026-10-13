@@ -37,8 +37,8 @@ HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "results/matched_comparison_001"
 THREAD_KEYS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                "VECLIB_MAXIMUM_THREADS")
-LIMITS = dict(rss_mib=16384., total_worker_seconds=7200., max_launches=16,
-              poll_seconds=1., wall_seconds_by_T={"3": 300., "24": 600.})
+LIMITS = dict(rss_mib=16384., total_worker_seconds=57600., max_launches=16,
+              poll_seconds=1., wall_seconds_by_T={"3": 3600., "24": 3600.})
 
 
 def arms():
