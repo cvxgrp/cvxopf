@@ -23,6 +23,18 @@ of a numerical study is not itself milestone acceptance. The original Tracy
 Stage D and annual AC work remain held. E4 is a new bounded comparison, not a
 resume of those runs, and does not require completing all of M21/M25.
 
+## Proposed matched numerical-preparation follow-up — 2026-10-13
+
+The owner reports E4 execution complete and requested a short fresh comparison
+of baseline versus current prepared AC/SOCP representations. The
+[matched comparison plan](../experiments/numerical_preparation/MATCHED_COMPARISON_PLAN.md)
+proposes two retained Tracy fixtures at T=3 and T=24 (16 calls), identical
+within-pair physical problems, solver controls and independent acceptance gates,
+and bounded resource use. It isolates the preparation bundle from historical
+software/tolerance changes; it is not another rollout or a retrospective rewrite.
+This is planning only, not execution approval or independent E4 closeout review.
+The dated E4 implementation status above remains a historical checkpoint.
+
 ## Historical implementation and execution checkpoints
 
 The following dated narrative records earlier decisions. Present-tense holds
