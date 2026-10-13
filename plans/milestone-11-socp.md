@@ -1,5 +1,34 @@
 # M11 — Sparse voltage-product SOCP relaxation
 
+## Current status and next study — 2026-10-12
+
+The standalone SOCP implementation and its reference/comparison work have
+progressed beyond the historical checkpoints below. This status summary
+supersedes their then-current execution holds; it does not rewrite historical
+protocols or grant new execution authority.
+
+| Gate / follow-up | Recorded progress |
+| --- | --- |
+| A–D: network maps, shared devices, temporal/results contracts and diagnostics | Implemented, with bounded evidence and architectural checks in the [builder report](../experiments/m11_socp/REPORT.md). |
+| E1 and E2 refreshed qualification | Completed: 18 E1 solves and four E2 pairs/eight solves passed; see the [combined report](../experiments/m11_socp/E1_E2_V2_REPORT.md). |
+| E3: five matched 24-hour cases × four formulations | Prepared run completed at `2edc6d3bbeac85bd78f5bf6d9cdc387f851eb0f0`; retained `results/e3_prepared/progress.json` records 20 accepted arms and no unresolved arms. |
+| E3+: forced-shedding sixth case | Four arms completed at `13ad35bc5f0e9f8b5d20d54a55d2ab2cd7a26df8`; AC accepted, three convex arms retain numerical qualifications. Their owner-approved use as transfer sources does not change historical acceptance labels. See the [E3+ plan](../experiments/case118_tracy_2021/E3_PLUS_PLAN.md). |
+| Fixed battery-power transfer and diagnostics | The [18-case transfer](../experiments/tracy_battery_transfer/PROTOCOL.md) returned 15 compatible transfers, two native rejections and one timeout. Subsequent [loop diagnostics](../experiments/tracy_socp_transfer_preflight/MULTIGRAPH_REPORT.md) establish modeled incompatibility of those three particular fixed schedules; solver failures alone did not establish it. |
+| Longer-loop coverage | The [five-/six-bus back-test report](../experiments/tracy_socp_transfer_preflight/LONG_LOOPS_REPORT.md) records no additional exclusions and no accepted-witness contradictions. This is retrospective coverage evidence, not a general feasibility oracle. |
+| E4: six-case matched three-hour AC rollout | Owner-directed planning insertion below. Protocol drafted; prepared-rollout integration, implementation, compute budget and numerical execution are not authorized by this update. |
+
+The diagnostic reports and their code are a separate uncommitted checkpoint
+at this update. Formal M11 closure remains an owner review decision; completion
+of a numerical study is not itself milestone acceptance. The original Tracy
+Stage D and annual AC work remain held. E4 is a new bounded comparison, not a
+resume of those runs, and does not require completing all of M21/M25.
+
+## Historical implementation and execution checkpoints
+
+The following dated narrative records earlier decisions. Present-tense holds
+and pending items in it describe those checkpoints; use the summary above for
+current progress.
+
 Status: implementation started, 2026-10-01. Gate A's sparse network-map increment
 and Gate B's shared-device capability groundwork are implemented and tested;
 the public builder, common extraction, and explicit numerical audit/recovery
@@ -612,6 +641,12 @@ changed interfaces. No milestone closure from solver status alone.
 
 ### Gate E3 — Matched 24-hour Tracy resilience comparison
 
+**Historical design below; current disposition:** prepared E3 completed all
+20 arms, and E3+ added the sixth, forced-shedding case. The original numerical
+records and qualifications remain unchanged. See the current status table and
+the separate [E4 protocol](../experiments/tracy_ac_rollout/PROTOCOL.md) for the
+new rollout study; E3 itself remains a joint full-horizon comparison.
+
 **Owner-directed insertion, 2026-10-02; design approved in principle, execution
 not yet authorized.** After E2 review, compare `singlenode_dc`, `lossy_dc`,
 `socp`, and `ac` on four fixed Tracy/Case118 periods. Each arm solves one complete
@@ -766,12 +801,69 @@ or dynamic/voltage stability. Record these as hypotheses for subsequent testing.
    useful other-model evidence. Stop for scientific review and the next-step
    decision; this study neither resumes the old rollout nor authorizes annual AC.
 
+### Gate E4 — Six-case matched three-hour AC rollout
+
+**Owner-directed planning insertion, 2026-10-12. Planning only: no implementation
+or numerical execution authorization.** The governing experiment design is
+[the E4 protocol](../experiments/tracy_ac_rollout/PROTOCOL.md).
+
+Test whether three-hour receding AC optimizations, advancing one hour at a
+time, approximate the resilience outcomes and physical cost of the retained
+joint 24-hour AC solutions. Compare this flexible energy-signpost handoff with
+the completed, more restrictive battery-power transfers. Use all six E3/E3+
+cases, without selecting only successful transfers. Four retained signpost
+sources per case (`singlenode_dc`, `lossy_dc`, `socp`, and an AC-reference
+control) give 24 proposed rollout trajectories and 576 controlling windows
+before recovery. These counts are design size, not approved solve allowances.
+
+Outer plans stay frozen. Each AC window starts from the realized per-device
+SoC, uses the unchanged physical inputs, and targets the donor's per-device
+energy at its endpoint. All intermediate battery powers remain free. Execute
+only an independently accepted first action; shrink the last windows to two
+and one hours. Keep original final boundary obligations and source numerical
+qualifications explicit. No outer replanning, fleet-sum targets, soft-target
+fallback or cycle strengthening is part of this first comparison.
+
+**Narrow prerequisite:** review the integration design for prepared AC rollout
+windows consuming retained, identity-aligned signposts. The
+[inspected integration design](../experiments/tracy_ac_rollout/INTEGRATION_DESIGN.md)
+now identifies reusable helpers, module ownership, a private typed retained-plan
+interface and the implementation review slices; it remains a proposal.
+The public M17 hierarchy
+currently rejects both enabled preparation and every configured sheddable
+load. E4 must preserve the original shedding permissions, especially in its
+forced-shedding case. Make an explicit ownership/capability decision for the
+newly qualified path; do not bypass either guard or copy a new controller.
+Reuse the existing load device physics, production prepared-solve/verified-start
+boundary, and hierarchy state, window, recovery and audit machinery through the
+smallest typed integration. Include shedding variables in causal starts and
+recovery, and independently check served-load P/Q, shedding cost and
+executed-only ENS. Preserve existing M17 behavior and rejection guards outside
+the newly qualified path. Specify ownership and compatibility tests before
+implementation. This combines a bounded subset of
+[M21's layer-local preparation work](milestone-21-configurable-hierarchy.md#35-numerical-preparation-per-layer)
+with support for existing sheddable-load physics, not authorization for new
+device physics, general model-pair selection, three-layer orchestration
+or the aggregate-signpost work in M25.
+
+Review the protocol and narrow integration design, then obtain implementation
+approval. Freeze initialization/recovery details and explicit resource/attempt
+ceilings in the reviewed runner/protocol checkpoint. After owner commit, bind
+the exact execution source and retained-input manifests before separate launch
+approval. Report every trajectory, including incomplete ones;
+compare executed physical costs and resilience metrics, never sums of
+overlapping window objectives. The AC-reference control is an oracle signpost
+arm, not a global-optimum guarantee or proof of general recursive feasibility.
+
 ## 8. Explicit non-goals
 
 - No resumption of the held Tracy rolling-horizon run, annual AC execution,
   penalty sweep, or claim that its study is complete. Gate E3 is a separate
-  standalone matched-window study with its own pre-execution review.
+  standalone matched-window study; E4 is a separately planned bounded rollout
+  comparison. Neither authorizes historical-run resumption or annual execution.
 - No generic hierarchy rewrite or SOCP-to-AC automatic control-action acceptance.
+  E4's narrow prepared-rollout prerequisite is an explicit reviewed integration
+  task, not permission to remove preparation guards or change public defaults.
 - No new storage, HVDC, shedding, or reactive capability physics.
 - No DC loss proxy added to SOCP, hidden regularizer, or unmatched
   cross-formulation bound. E3 retains the existing lossy-DC proxy separately.

@@ -1,0 +1,35 @@
+{
+  "reason": "Owner-requested read-only historical replay / execution-authorization separation; no mathematical model or archived artifact changes",
+  "changes": {
+    "experiments/tracy_battery_transfer_slice/run.py": {
+      "before_sha256": "a7cf6fd90c2f6562cc7ab026f92308e2518b48ccc49d59c7034ed99ca48d6e07",
+      "after_sha256": "388fa2fdc57c18446b64a6a436a481c71cf51c2cd80b3a9828c21aea7a5073f0",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_battery_transfer_slice__run.py.txt"
+    },
+    "experiments/tracy_battery_transfer_feasibility/run.py": {
+      "before_sha256": "e290b1e478ba16478e5579b4cec47011104cf5d3b1322b78d3a3ae7d51b743ac",
+      "after_sha256": "0b67ad210f8a634c15e357018db4a676477d6365bca43f5ca26b4138c22b3e00",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_battery_transfer_feasibility__run.py.txt"
+    },
+    "experiments/tracy_socp_transfer_preflight/preflight.py": {
+      "before_sha256": "b3eb0c6182bbaf1c98e4ad4a200750e1ab6603ba5863152dd4f5cbcc5c002459",
+      "after_sha256": "1eb49d43e4cc878cb1a2b4da2028b806038a2782b12cfcb95b7bd261b4e74cde",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_socp_transfer_preflight__preflight.py.txt"
+    },
+    "experiments/tracy_socp_transfer_preflight/test_preflight.py": {
+      "before_sha256": "2e57742c636047836e92582a15eb5cd75680b70edcc1a5b155f85f3c6d79c22c",
+      "after_sha256": "1f5b8ccbc2803a2d8d07f13b1d244d5bb26625cea26eb008d3f1ffd1caf3d722",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_socp_transfer_preflight__test_preflight.py.txt"
+    },
+    "experiments/tracy_socp_transfer_preflight/test_automatic.py": {
+      "before_sha256": "18f7a7185b771980a59df33b86323e3b81d71420a5d460a3823450ef6dedfe5b",
+      "after_sha256": "406ce161513dd58030efbf7dc935478ed286f30286cc02785cc2e098bcbc84ee",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_socp_transfer_preflight__test_automatic.py.txt"
+    },
+    "experiments/tracy_socp_transfer_preflight/test_multigraph.py": {
+      "before_sha256": "ef57b12ce76e6cdddf4a0ed869f51c2f5a3d2d4814b16ca1d0d29aad606c3bc7",
+      "after_sha256": "a8536813897774be5bc3344c5cd425e0cf132a92f7fb0c03ca959f957b76d6e9",
+      "snapshot_path": "experiments/tracy_socp_transfer_preflight/replay_source_checkpoint/tracy_socp_transfer_preflight__test_multigraph.py.txt"
+    }
+  }
+}
