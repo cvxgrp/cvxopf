@@ -23,7 +23,7 @@ ROOT = model.ROOT
 ROLLOUT = ROOT / "experiments/tracy_ac_rollout/results/rollout_001"
 FIGURE_NOTES = Path(__file__).with_name("figure_notes.md")
 METHODS = ("singlenode_dc", "lossy_dc", "socp", "ac")
-LABELS = dict(zip(METHODS, ("Copper plate", "Network flow", "SOCP", "Full AC")))
+LABELS = dict(zip(METHODS, ("copper plate", "network flow", "SOCP", "full AC")))
 MARKERS = dict(zip(METHODS, ("s", "D", "^", "o")))
 SCENARIOS = (
     "Large surplus",
@@ -294,9 +294,9 @@ def render(bundle, output):
                 linestyle="none",
                 markersize=4.25,
                 label=(
-                    "AC signposts (rollout only)"
+                    "full AC signposts (rollout only)"
                     if combined and m == "ac"
-                    else "AC signposts"
+                    else "full AC signposts"
                     if rollout and m == "ac"
                     else LABELS[m]
                 ),

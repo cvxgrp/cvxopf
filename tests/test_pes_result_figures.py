@@ -192,10 +192,10 @@ def test_combined_implementation_uses_one_shared_key_and_identical_data(rendered
     combined = saved["03_04_ac_implementation"]
     assert len(combined.legends) == 1
     assert [label.get_text() for label in combined.legends[0].get_texts()] == [
-        "Copper plate",
-        "Network flow",
+        "copper plate",
+        "network flow",
         "SOCP",
-        "AC signposts (rollout only)",
+        "full AC signposts (rollout only)",
     ]
     assert len(combined.axes) == 6
     for index, stem in enumerate(("03_fixed_schedule_transfer", "04_ac_rollouts")):
@@ -220,10 +220,10 @@ def test_full_page_results_have_one_legend_and_three_labeled_subfigures(rendered
     combined = saved["01_03_04_results"]
     assert len(combined.legends) == 1
     assert [x.get_text() for x in combined.legends[0].get_texts()] == [
-        "Copper plate",
-        "Network flow",
+        "copper plate",
+        "network flow",
         "SOCP",
-        "Full AC",
+        "full AC",
     ]
     assert [x.get_text() for x in combined.texts] == [
         "(a) Joint dispatch",

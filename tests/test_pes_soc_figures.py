@@ -45,6 +45,16 @@ def test_stacked_ac_and_copper_plate_show_every_boundary(monkeypatch, tmp_path):
     )
     fig = render(case, [2, 18], tmp_path / "soc")
     assert len(fig.axes) == 3 and len(fig.legends) == 1
+    assert [ax.get_title() for ax in fig.axes[:2]] == [
+        "(b) full AC",
+        "(c) copper plate",
+    ]
+    assert [text.get_text() for text in fig.legends[0].texts] == [
+        "Demand",
+        "Nondispatchable availability",
+        "Fleet total",
+        "Individual batteries",
+    ]
     for ax in fig.axes[:2]:
         assert len(ax.lines) == 3
         fleet = ax.lines[-1]

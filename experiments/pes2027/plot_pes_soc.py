@@ -124,7 +124,7 @@ def render(case, capacities, output):
                 raise ValueError("Boundary coverage differs from retained horizon")
             ax.plot(hours, individual, color=".65", alpha=0.6, lw=0.65)
             ax.plot(hours, fleet, color="black", lw=1.8, zorder=5)
-            ax.set_title(("(b) Full-physics AC", "(c) Copper plate")[index], pad=5)
+            ax.set_title(("(b) full AC", "(c) copper plate")[index], pad=5)
             ax.set_ylabel("SoC / capacity")
             ax.set_ylim(-0.02, 1.02)
             ax.set_xlim(0, hours[-1])
@@ -138,7 +138,7 @@ def render(case, capacities, output):
         edges = np.arange(horizon + 1)
         for key, color, label in (
             ("requested_load_mw", "#0072B2", "Demand"),
-            ("available_renewables_mw", "#228833", "Available renewables"),
+            ("available_renewables_mw", "#228833", "Nondispatchable availability"),
         ):
             values = np.asarray(case[key], dtype=float)
             if values.shape != (horizon,) or not np.isfinite(values).all():
@@ -156,7 +156,13 @@ def render(case, capacities, output):
         fig.legend(
             handles=[
                 Line2D([], [], color="#0072B2", lw=1.3, label="Demand"),
-                Line2D([], [], color="#228833", lw=1.3, label="Available renewables"),
+                Line2D(
+                    [],
+                    [],
+                    color="#228833",
+                    lw=1.3,
+                    label="Nondispatchable availability",
+                ),
                 Line2D([], [], color="black", lw=1.8, label="Fleet total"),
                 Line2D([], [], color=".65", lw=0.65, label="Individual batteries"),
             ],

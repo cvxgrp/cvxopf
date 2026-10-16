@@ -22,6 +22,7 @@ the paper's repository entry point, not a replacement for those scientific recor
 | `figure_notes.md` | Caption drafts, interpretation and scientific qualifications; copied into each result-figure bundle |
 | `plot_pes_results.py` | Non-solving joint/transfer/rollout extraction and comparative figure rendering |
 | `plot_pes_soc.py` | Non-solving input and normalized battery-energy time-series figures |
+| `analyze_rollout_controls.py` | Non-solving trajectory distances for the six full AC-signposted controls in Appendix A5 |
 
 Invoke the plotters as `experiments.pes2027.plot_pes_results` and
 `experiments.pes2027.plot_pes_soc` from the repository root. They continue to
@@ -125,6 +126,13 @@ nonconvex solver will reproduce every coordinate or artifact byte.
 
 ## Regenerate metrics and figures without solving
 
+The current manuscript uses the standardized model names **copper plate**,
+**network flow (NF)**, **SOCP** and **full AC**. Its current label-only renderings
+are `pes_figures_names_001/` and `pes_soc_names_001/` under
+`experiments/case118_tracy_2021/results/`. Their numerical snapshots are
+byte-identical to the original bundles identified above; historical evidence
+and internal formulation keys are unchanged.
+
 The [figure guide](PES_FIGURES.md) and
 [caption notes](figure_notes.md) describe extraction scope,
 units and axes. From the repository root, choose fresh, unused output directories:
@@ -139,6 +147,11 @@ UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache \
 MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
 uv run --extra notebook python -m experiments.pes2027.plot_pes_soc \
   --output experiments/case118_tracy_2021/results/pes_soc_reproduction
+
+UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache \
+MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
+uv run --extra notebook python -m experiments.pes2027.plot_pes_network \
+  --output experiments/case118_tracy_2021/results/pes_network_reproduction
 ```
 
 The first command emits the combined joint/transfer/rollout figure
@@ -152,14 +165,35 @@ the manuscript uses the deficit-to-surplus panel `soc_case_4.pdf`.
 For a layout-only iteration, `--render-only` uses a bundle's saved numerical
 snapshot and updates its rendering artifacts. Use a fresh full extraction
 instead when changing scientific calculations or validating the raw evidence.
-The network panel comes from `stage_a/network_roles.png`; the manuscript clips
-its configured-network half without changing that source image.
+The third command emits `configured_network.pdf` and PNG plus a hashing manifest,
+using identity-checked Stage A siting tables and the pinned PGLib network.
+The manuscript uses this configured-network panel directly. The layout seed,
+solar/wind and battery area scales match the historical view; gray load-node
+areas now scale with Case118 source MW demand, whose shares define configured
+load allocation. Marker scales differ by family. Historical Stage A images
+remain unchanged.
 
 Non-solving figure regressions:
 
 ```sh
-uv run --extra dev pytest tests/test_pes_result_figures.py tests/test_pes_soc_figures.py -q
+uv run --extra dev pytest tests/test_pes_result_figures.py tests/test_pes_soc_figures.py tests/test_pes_network_figures.py -q
 ```
+
+To reproduce the six full AC-signposted trajectory controls without solving,
+choose an unused result filename:
+
+```sh
+UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache \
+uv run python -m experiments.pes2027.analyze_rollout_controls \
+  --output experiments/case118_tracy_2021/results/pes_joint_ac_controls_reproduction/distances.json
+```
+
+The calculation uses all 27 batteries and the 23 interior boundaries, with equal
+device weighting after capacity normalization. It retains mean and maximum
+individual deviations, fleet mean deviations, cost differences and source hashes.
+The reader verifies the retained checkpoint/window/controller identities and
+reconstructs energy from executed powers. Test the distance calculation with
+`uv run --extra dev pytest tests/test_pes_rollout_controls.py -q`.
 
 ## Repeat the numerical study
 
