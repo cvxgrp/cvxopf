@@ -4,6 +4,7 @@ Every test blocks native solver invocation. Retained results are fixtures, not
 new optimization results. Synthetic audit successes are explicitly mocked.
 """
 from dataclasses import asdict, replace
+import json
 from types import SimpleNamespace
 
 import cvxpy as cp
@@ -231,9 +232,68 @@ def test_target_free_copy_and_perturbations_keep_initial_soc_fixed():
         starting_values(hard, snapshot, request, source_slot=6)
 
 
+def retained_inventory(required_paths):
+    """Skip unavailable owner inputs, never broken published evidence."""
+    missing = [str(path) for path in required_paths if not path.exists()]
+    if missing:
+        pytest.skip("owner retained Tracy inputs unavailable: " + ", ".join(missing))
+    return model.inventory()
+
+
 @pytest.fixture(scope="module")
 def retained():
-    return model.inventory()
+    from experiments.case118_tracy_2021.prepare import SOURCE
+
+    return retained_inventory((
+        SOURCE,
+        model.e3_plus.FIXTURE_PATH,
+        model.ROOT / "experiments/case118_tracy_2021/results/e3_prepared/binding.json",
+        model.ROOT / "experiments/case118_tracy_2021/results/e3_plus/binding.json",
+        model.ROOT / "experiments/tracy_battery_transfer/results/transfer_001/binding.json",
+    ))
+
+
+@pytest.mark.parametrize("missing_index", range(5))
+def test_retained_fixture_skips_missing_admission_input(tmp_path, monkeypatch, missing_index):
+    required = [tmp_path / f"input-{i}" for i in range(5)]
+    for index, path in enumerate(required):
+        if index != missing_index:
+            path.write_text("present")
+    monkeypatch.setattr(model, "inventory", lambda: pytest.fail("missing input must skip before admission"))
+    with pytest.raises(pytest.skip.Exception, match=str(required[missing_index])):
+        retained_inventory(required)
+
+
+@pytest.mark.parametrize("damage", ("malformed_json", "hash_mismatch", "missing_nested_file"))
+def test_retained_fixture_does_not_skip_corrupt_present_evidence(tmp_path, monkeypatch, damage):
+    from experiments.case118_tracy_2021 import e3_results
+
+    directory = tmp_path / "e3_prepared"
+    directory.mkdir()
+    binding = directory / "binding.json"
+    binding.write_text("not JSON")
+    required = (binding, *(tmp_path / f"input-{i}" for i in range(4)))
+    for path in required[1:]:
+        path.write_text("present")
+    monkeypatch.setattr(model.transfer, "load_scenarios", lambda: e3_results.load_scenarios(tmp_path))
+    if damage == "malformed_json":
+        error, message = json.JSONDecodeError, "Expecting value"
+    else:
+        binding.write_text(json.dumps(dict(context=dict(
+            cohort="prepared", stage_a_manifest_sha256="0" * 64))))
+        if damage == "missing_nested_file":
+            error, message = FileNotFoundError, "progress.json"
+        else:
+            (directory / "progress.json").write_text(json.dumps(dict(
+                disposed_arms=20, accepted_arms=20, finished=True,
+                active_attempt=None, arms=[{}] * 20)))
+            (tmp_path / "stage_a").mkdir()
+            (tmp_path / "stage_a/manifest.json").write_text("{}")
+            monkeypatch.setattr(e3_results, "HERE", tmp_path)
+            error, message = ValueError, "Stage A manifest mismatch"
+    # Exercise the real inventory/reader chain; no owner artifacts are changed.
+    with pytest.raises(error, match=message):
+        retained_inventory(required)
 
 
 def test_real_24_arm_cohort_preserves_flags_and_physical_matches(retained):
