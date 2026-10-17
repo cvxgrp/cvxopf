@@ -217,10 +217,17 @@ def ac_operating_constraints(
     p_nd: cp.Variable,
     q_nd: cp.Variable,
     p_available,
+    *,
+    normalize_limits: bool = False,
+    use_soc: bool = False,
+    include_real_box: bool = True,
 ) -> list:
     """AC availability bounds and inverter apparent-power circles."""
     rating = _nd_static_data(units)["nd_apparent_power_rating"]
-    constraints = [p_nd >= 0, p_nd <= p_available]
+    constraints = [p_nd >= 0, p_nd <= p_available] if include_real_box else []
+    if normalize_limits:
+        constraints += _normalized_capability_constraints(p_nd, q_nd, rating, use_soc)
+        return constraints
     constraints += [
         cp.sum_squares(cp.vstack([p_nd[n], q_nd[n]])) <= rating[n] ** 2
         for n in range(len(units))
@@ -228,11 +235,29 @@ def ac_operating_constraints(
     return constraints
 
 
-def vectorized_ac_operating_constraints(units, p_nd, q_nd, p_available) -> list:
+def vectorized_ac_operating_constraints(
+    units, p_nd, q_nd, p_available, *, normalize_limits: bool = False,
+    use_soc: bool = False, include_real_box: bool = True,
+) -> list:
     """Time-last availability bounds and per-interval inverter circles."""
     rating = _nd_static_data(units)["nd_apparent_power_rating"]
-    return [p_nd >= 0, p_nd <= p_available,
-            cp.square(p_nd) + cp.square(q_nd) <= rating[:, None] ** 2]
+    constraints = [p_nd >= 0, p_nd <= p_available] if include_real_box else []
+    if normalize_limits:
+        return constraints + _normalized_capability_constraints(
+            p_nd, q_nd, rating[:, None], use_soc
+        )
+    return constraints + [cp.square(p_nd) + cp.square(q_nd) <= rating[:, None] ** 2]
+
+
+def _normalized_capability_constraints(
+    p: cp.Expression, q: cp.Expression, rating: np.ndarray, use_soc: bool,
+) -> list[cp.Constraint]:
+    """Same physical MW/MVAr disk, represented with dimensionless channels."""
+    p_unit, q_unit = cp.multiply(1 / rating, p), cp.multiply(1 / rating, q)
+    if use_soc:
+        channels = cp.vstack([cp.vec(p_unit, order="F"), cp.vec(q_unit, order="F")])
+        return [cp.SOC(np.ones(p.size), channels, axis=0)]
+    return [cp.square(p_unit) + cp.square(q_unit) <= 1]
 
 
 def dc_operating_constraints(

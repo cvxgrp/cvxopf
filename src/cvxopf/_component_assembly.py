@@ -15,6 +15,9 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence, cast
 
 import cvxpy as cp
+from cvxopf._cost_coordinates import ObjectiveCostContribution
+
+from cvxopf._numerical_preparation import ExactBoxBinding, OperatingSetContribution
 
 from cvxopf._component_adapter import (
     ComponentAdapter,
@@ -37,6 +40,7 @@ from cvxopf._temporal_assembly import (
     HorizonVariableSpec,
     ResultProjectionRegistry,
     ResultProjectionSpec,
+    supports_reactive_power,
 )
 
 
@@ -197,7 +201,7 @@ def _validate_injection_contribution(
     expected_shape: tuple[int, ...],
 ) -> None:
     """Enforce exact nodal-channel shapes and formulation channel support."""
-    if formulation != "ac" and contribution.q_pu is not None:
+    if not supports_reactive_power(formulation) and contribution.q_pu is not None:
         raise ValueError(
             f"component {component_name!r} returned a reactive injection "
             f"for formulation {formulation!r}; q_pu must be None"
@@ -316,6 +320,8 @@ def assemble_component_step(
         operating_constraints = binding.operating_constraints(
             component.units, component.data, variables, context
         )
+        if not isinstance(operating_constraints, OperatingSetContribution):
+            raise TypeError("operating hooks must return OperatingSetContribution")
         network_constraints = (
             ()
             if binding.network_constraints is None
@@ -338,9 +344,12 @@ def assemble_component_step(
         contributions[name] = StepContribution(
             variables=variables,
             injection=injection,
-            operating_constraints=operating_constraints,
+            operating_constraints=operating_constraints.constraints,
+            exact_boxes=operating_constraints.exact_boxes,
             network_constraints=network_constraints,
             cost=cost,
+            cost_coordinates=(() if binding.cost_coordinates is None or cost is None else
+                              binding.cost_coordinates(component.data, variables, context, cost)),
             cost_expression_name=(
                 None if cost is None else component.adapter.cost_expression_name
             ),
@@ -561,6 +570,7 @@ def aggregate_step_contributions(
     q_injections: list[cp.Expression] = []
     costs: list[cp.Expression] = []
     expressions: dict[str, cp.Expression] = {}
+    exact_boxes: list[ExactBoxBinding] = []
     for name, contribution in contributions.items():
         duplicate_variables = set(variables).intersection(contribution.variables)
         if duplicate_variables:
@@ -574,6 +584,7 @@ def aggregate_step_contributions(
         if contribution.injection.q_pu is not None:
             q_injections.append(contribution.injection.q_pu)
         operating_constraints.extend(contribution.operating_constraints)
+        exact_boxes.extend(contribution.exact_boxes)
         network_constraints.extend(contribution.network_constraints)
         if contribution.cost is not None:
             if (
@@ -608,6 +619,7 @@ def aggregate_step_contributions(
         network_constraints=tuple(network_constraints),
         cost=ordered_sum(costs),
         expressions=expressions,
+        exact_boxes=tuple(exact_boxes),
     )
 
 
@@ -633,6 +645,7 @@ def aggregate_vectorized_contributions(
     expressions: dict[str, cp.Expression] = {}
     variable_specs: dict[str, HorizonVariableSpec] = {}
     horizon_contributions: dict[str, HorizonContribution] = {}
+    exact_boxes: list[ExactBoxBinding] = []
 
     for component_name, contribution in contributions.items():
         duplicate_variables = set(variables).intersection(contribution.variables)
@@ -655,6 +668,7 @@ def aggregate_vectorized_contributions(
         if model.injection.q_pu is not None:
             q_injections.append(model.injection.q_pu)
         operating_constraints.extend(model.operating_constraints)
+        exact_boxes.extend(model.exact_boxes)
         network_constraints.extend(model.network_constraints)
         if model.stage_cost_rate is not None:
             stage_cost_rates.append(model.stage_cost_rate)
@@ -680,6 +694,7 @@ def aggregate_vectorized_contributions(
             stage_cost_rate=_ordered_expression_sum(stage_cost_rates),
             expressions=expressions,
             horizon=horizon,
+            exact_boxes=tuple(exact_boxes),
         ),
         variable_specs=variable_specs,
     )
@@ -901,6 +916,19 @@ def integrate_vectorized_component_stage_costs(
             )
         costs[expression_name] = integrate_vectorized_stage_cost_rate(rate, delta)
     return MappingProxyType(costs)
+
+
+def collect_vectorized_objective_costs(
+    contributions: Mapping[str, VectorizedComponentContribution],
+    integrated_costs: Mapping[str, cp.Expression],
+) -> tuple[ObjectiveCostContribution, ...]:
+    """Retain complete ordered stage and boundary costs for solve-local assembly."""
+    return tuple(ObjectiveCostContribution(
+        name, contribution.model.stage_cost_rate,
+        (integrated_costs[contribution.cost_expression_name or f"{name}_cost"]
+         if contribution.model.stage_cost_rate is not None else None),
+        contribution.model.horizon.terminal_cost, contribution.model.cost_coordinates,
+    ) for name, contribution in contributions.items())
 
 
 def _validate_publication_step_count(

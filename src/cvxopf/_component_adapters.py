@@ -7,6 +7,8 @@ without duplicating their physics, feasible sets, or cost models.
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import CostCoordinateTerm
+
 from dataclasses import dataclass
 from typing import Literal, Mapping, Sequence, cast
 
@@ -16,6 +18,7 @@ import numpy as np
 from cvxopf import generator, hvdc, load, nondispatchable, storage
 from cvxopf._component_adapter import (
     ACNetworkState,
+    SquaredVoltageNetworkState,
     ComponentAdapter,
     Formulation,
     FormulationAdapter,
@@ -30,12 +33,20 @@ from cvxopf._component_adapter import (
     VectorizedModelContribution,
 )
 from cvxopf._component_assembly import ComponentRequest
+from cvxopf._numerical_preparation import (
+    EXACT_BOX_FAMILIES,
+    OperatingSetContribution,
+    emit_exact_box,
+    prepared_leaf_bounds,
+)
 from cvxopf._temporal_assembly import (
+    PreparedBoxBounds,
     HorizonVariableSpec,
     TemporalClass,
     VariableBoxFamily,
     box_representation_decision,
     prepare_box_bounds,
+    supports_reactive_power,
 )
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.hvdc import HVDCLink
@@ -47,6 +58,18 @@ from cvxopf.storage import StorageUnitIdeal
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
     """Return one prepared numerical array under the typed adapter contract."""
     return cast(np.ndarray, prepared[key])
+
+
+def _require_explicit_bounds(
+    context: VectorizedContext, *families: VariableBoxFamily,
+) -> None:
+    """Keep the reactive device path consistent with the bound registry."""
+    for family in families:
+        decision = box_representation_decision(context.formulation, family)
+        if decision.representation != "explicit":
+            raise RuntimeError(
+                f"{context.formulation} {family.value} requires explicit bounds"
+            )
 
 
 def _leaf_bounds(
@@ -75,7 +98,38 @@ def _leaf_bounds(
         upper_temporal_class=upper_temporal_class,
         variable_temporal_class=variable_temporal_class,
     )
+    if context.numerical_preparation.exact_fixed_boxes and family in EXACT_BOX_FAMILIES:
+        return {"bounds": prepared_leaf_bounds(box, exact=True)}
     return {"bounds": [box.lower, box.upper]}
+
+
+def _selected_box(
+    variable: cp.Variable, lower: np.ndarray, upper: np.ndarray,
+    context: StepContext | VectorizedContext, family: VariableBoxFamily,
+    *, upper_temporal_class: TemporalClass = "static",
+) -> OperatingSetContribution:
+    """Use the temporal authority once, including single-step numeric faces."""
+    vectorized = isinstance(context, VectorizedContext)
+    box = prepare_box_bounds(
+        lower, upper, native_shape=(variable.shape[0],),
+        horizon_steps=context.horizon_steps if isinstance(context, VectorizedContext) else 1,
+        lower_temporal_class="static", upper_temporal_class=upper_temporal_class,
+        variable_temporal_class="interval",
+    )
+    if not vectorized:
+        box = PreparedBoxBounds(box.lower[:, 0], box.upper[:, 0])
+    representation = (
+        box_representation_decision(context.formulation, family).representation
+        if vectorized else "explicit"
+    )
+    return emit_exact_box(variable, box, family, representation)
+
+
+def _capability_options(context: StepContext | VectorizedContext) -> dict[str, bool]:
+    """Keep disabled component invocations unchanged, including keyword shape."""
+    if not context.numerical_preparation.normalize_device_limits:
+        return {}
+    return {"normalize_limits": True, "use_soc": context.formulation == "socp"}
 
 
 def _time_major_values(
@@ -212,7 +266,7 @@ def _load_step_channels(
         _array(prepared, "sheddable_load_indices"),
         cast(int, prepared["nload"]),
     )
-    if context.formulation != "ac":
+    if not supports_reactive_power(context.formulation):
         channels.pop("q_load_served", None)
         channels.pop("q_load_shed", None)
     return channels
@@ -226,7 +280,7 @@ def _load_injections(
 ) -> InjectionContribution:
     channels = _load_step_channels(prepared, variables, context)
     incidence = _array(prepared, "Cload")
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, inv_base_mva = load.ac_injections(
             channels["p_load_served"],
             channels["q_load_served"],
@@ -244,25 +298,25 @@ def _load_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     fraction = variables.get("load_shed_fraction")
     if fraction is None:
-        return ()
+        return OperatingSetContribution()
     parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
     indices = _array(prepared, "sheddable_load_indices")
     maximum_fraction = _array(prepared, "load_max_shed_fraction")[indices]
     constraint_method = (
         load.ac_operating_constraints
-        if context.formulation == "ac"
+        if supports_reactive_power(context.formulation)
         else load.dc_operating_constraints
     )
-    return tuple(
+    return OperatingSetContribution(tuple(
         constraint_method(
             fraction,
             maximum_fraction,
             parameters.eligibility_mask[context.step, indices],
         )
-    )
+    ))
 
 
 def _load_step_cost(
@@ -278,6 +332,20 @@ def _load_step_cost(
     indices = _array(prepared, "sheddable_load_indices")
     costs = _array(prepared, "load_shedding_cost_per_mwh")[indices]
     return load.shedding_cost_rate(p_shed, costs)
+
+
+def _load_cost_coordinates(
+    prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
+    context: StepContext, rate: cp.Expression,
+) -> tuple[CostCoordinateTerm, ...]:
+    fraction = variables.get("load_shed_fraction")
+    if fraction is None:
+        return ()
+    indices = _array(prepared, "sheddable_load_indices")
+    parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
+    weights = cp.multiply(_array(prepared, "load_shedding_cost_per_mwh")[indices],
+                          parameters.p_eligible_mw[context.step, indices])
+    return (CostCoordinateTerm(fraction, weights, rate, "shedding"),)
 
 
 def _load_step_expressions(
@@ -324,7 +392,8 @@ def _load_vectorized_variable_specs(
     nsheddable = cast(int, prepared["nsheddable"])
     if nsheddable == 0:
         return ()
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
+        _require_explicit_bounds(context, VariableBoxFamily.LOAD_SHED_FRACTION)
         return (HorizonVariableSpec("load_shed_fraction", (nsheddable,)),)
     indices = _array(prepared, "sheddable_load_indices")
     maximum = _array(prepared, "load_max_shed_fraction")[indices]
@@ -391,7 +460,7 @@ def _load_vectorized_assembly(
         p_served = p_load
         q_served = q_load
         expressions["p_load_served"] = p_served
-        if context.formulation == "ac":
+        if supports_reactive_power(context.formulation):
             expressions["q_load_served"] = q_served
     else:
         indices = _array(prepared, "sheddable_load_indices")
@@ -411,7 +480,7 @@ def _load_vectorized_assembly(
             interval_axis=1,
         )
         q_served = channels["q_load_served"]
-        if context.formulation != "ac":
+        if not supports_reactive_power(context.formulation):
             channels.pop("q_load_served", None)
             channels.pop("q_load_shed", None)
         else:
@@ -436,7 +505,7 @@ def _load_vectorized_assembly(
                 "energy_not_served": cp.sum(ens_by_load),
             }
         )
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = load.ac_injections(p_served, q_served, _array(prepared, "Cload"))
     else:
         p_pu, q_pu, scale = load.dc_injections(p_served, _array(prepared, "Cload"))
@@ -444,6 +513,10 @@ def _load_vectorized_assembly(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=constraints,
         stage_cost_rate=stage_cost_rate,
+        cost_coordinates=(() if fraction is None or context.formulation != "ac" else
+                          (CostCoordinateTerm(fraction,
+                           cp.Constant(costs[:, np.newaxis] * eligible_values[indices]),
+                           stage_cost_rate, "shedding", 0),)),
         expressions=expressions,
         horizon=horizon,
     )
@@ -455,6 +528,7 @@ LOAD_AC = FormulationAdapter[Load](
     injections=_load_injections,
     operating_constraints=_load_operating_constraints,
     step_cost=_load_step_cost,
+    cost_coordinates=_load_cost_coordinates,
     step_expressions=_load_step_expressions,
     horizon=_load_horizon,
     vectorized_variable_specs=_load_vectorized_variable_specs,
@@ -507,6 +581,7 @@ LOAD_ADAPTER = ComponentAdapter[Load, LoadInputs | None](
     metadata=_load_metadata,
     formulations={
         "ac": LOAD_AC,
+        "socp": LOAD_AC,
         "lossy_dc": LOAD_DC,
         "singlenode_dc": LOAD_DC,
     },
@@ -532,7 +607,7 @@ def _generator_metadata(
     prepared: Mapping[str, object],
     formulation: Formulation,
 ) -> Mapping[str, object]:
-    return generator._build_metadata(dict(prepared), reactive=formulation == "ac")
+    return generator._build_metadata(dict(prepared), reactive=supports_reactive_power(formulation))
 
 
 def _generator_variable_specs(
@@ -542,7 +617,7 @@ def _generator_variable_specs(
 ) -> tuple[VariableSpec, ...]:
     shape = (cast(int, prepared["ng"]),)
     specs = [VariableSpec("Pg", shape)]
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         specs.append(VariableSpec("Qg", shape))
     return tuple(specs)
 
@@ -553,7 +628,7 @@ def _generator_injections(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> InjectionContribution:
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, inv_base_mva = generator.ac_injections(
             list(units),
             variables["Pg"],
@@ -576,8 +651,8 @@ def _generator_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
-    if context.formulation == "ac":
+) -> OperatingSetContribution:
+    if supports_reactive_power(context.formulation):
         constraints = generator.ac_operating_constraints(
             variables["Pg"],
             variables["Qg"],
@@ -585,6 +660,7 @@ def _generator_operating_constraints(
             _array(prepared, "Pgmax"),
             _array(prepared, "Qgmin"),
             _array(prepared, "Qgmax"),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         )
     else:
         constraints = generator.dc_operating_constraints(
@@ -592,24 +668,35 @@ def _generator_operating_constraints(
             _array(prepared, "Pgmin"),
             _array(prepared, "Pgmax"),
         )
-    return tuple(constraints)
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["Pg"], _array(prepared, "Pgmin"), _array(prepared, "Pgmax"),
+            context, VariableBoxFamily.DISPATCHABLE_P,
+        )
+        other = tuple(constraints) if supports_reactive_power(context.formulation) else ()
+        return OperatingSetContribution(box.constraints + other, box.exact_boxes)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _generator_network_constraints(
     units: Sequence[DispatchableGenerator],
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
-    context: StepContext,
+    context: StepContext | VectorizedContext,
 ) -> tuple[cp.Constraint, ...]:
     state = context.network_state
-    if context.formulation == "ac":
-        assert isinstance(state, ACNetworkState)
-        constraints = generator.ac_network_constraints(
+    if supports_reactive_power(context.formulation):
+        assert isinstance(state, (ACNetworkState, SquaredVoltageNetworkState))
+        squared = isinstance(state, SquaredVoltageNetworkState)
+        voltage = (state.voltage_squared if isinstance(state, SquaredVoltageNetworkState)
+                   else state.voltage)
+        constraints = generator.voltage_setpoint_constraints(
             list(units),
-            state.voltage,
+            voltage,
             dict(context.ext_to_int),
             state.controlled_buses,
             enforce_vset=state.enforce_vset,
+            squared=squared,
         )
     else:
         constraints = generator.dc_network_constraints(
@@ -656,7 +743,10 @@ def _generator_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     ng = cast(int, prepared["ng"])
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
+        _require_explicit_bounds(
+            context, VariableBoxFamily.DISPATCHABLE_P, VariableBoxFamily.DISPATCHABLE_Q,
+        )
         return (HorizonVariableSpec("Pg", (ng,)), HorizonVariableSpec("Qg", (ng,)))
     attributes = _leaf_bounds(
         _array(prepared, "Pgmin"),
@@ -676,7 +766,8 @@ def _generator_vectorized_assembly(
 ) -> VectorizedModelContribution:
     constraints: tuple[cp.Constraint, ...] = ()
     network: tuple[cp.Constraint, ...] = ()
-    if context.formulation == "ac":
+    box = OperatingSetContribution()
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = generator.ac_injections(
             list(units), variables["Pg"], variables["Qg"],
             dict(context.ext_to_int), incidence=_array(prepared, "Cg"),
@@ -685,18 +776,20 @@ def _generator_vectorized_assembly(
             variables["Pg"], variables["Qg"],
             *[_array(prepared, key)[:, np.newaxis]
               for key in ("Pgmin", "Pgmax", "Qgmin", "Qgmax")],
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         ))
-        state = context.network_state
-        assert isinstance(state, ACNetworkState)
-        network = tuple(generator.ac_network_constraints(
-            list(units), state.voltage, dict(context.ext_to_int), state.controlled_buses,
-            enforce_vset=state.enforce_vset,
-        ))
+        network = _generator_network_constraints(units, prepared, variables, context)
     else:
         p_pu, q_pu, scale = generator.dc_injections(
             list(units), variables["Pg"], dict(context.ext_to_int),
             incidence=_array(prepared, "Cg"),
         )
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["Pg"], _array(prepared, "Pgmin"), _array(prepared, "Pgmax"),
+            context, VariableBoxFamily.DISPATCHABLE_P,
+        )
+        constraints = box.constraints + constraints
     cost_rate = generator.horizon_cost_rate(
         _array(prepared, "gencost"),
         context.base_mva * variables["Pg"],
@@ -707,6 +800,7 @@ def _generator_vectorized_assembly(
         operating_constraints=constraints,
         network_constraints=network,
         stage_cost_rate=cost_rate,
+        exact_boxes=box.exact_boxes,
     )
 
 
@@ -738,6 +832,7 @@ GENERATOR_ADAPTER = ComponentAdapter[DispatchableGenerator, None](
     metadata=_generator_metadata,
     formulations={
         "ac": GENERATOR_AC,
+        "socp": GENERATOR_AC,
         "lossy_dc": GENERATOR_DC,
         "singlenode_dc": GENERATOR_DC,
     },
@@ -821,7 +916,7 @@ def _nd_variable_specs(
 ) -> tuple[VariableSpec, ...]:
     shape = (cast(int, prepared["nnd"]),)
     specs = [VariableSpec("p_nd", shape)]
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         specs.append(VariableSpec("q_nd", shape))
     return tuple(specs)
 
@@ -832,7 +927,7 @@ def _nd_injections(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> InjectionContribution:
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, inv_base_mva = nondispatchable.ac_injections(
             list(units),
             variables["p_nd"],
@@ -855,14 +950,16 @@ def _nd_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     available = _array(prepared, "nd_available_mw")[context.step]
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         constraints = nondispatchable.ac_operating_constraints(
             list(units),
             variables["p_nd"],
             variables["q_nd"],
             available,
+            **_capability_options(context),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         )
     else:
         constraints = nondispatchable.dc_operating_constraints(
@@ -870,7 +967,16 @@ def _nd_operating_constraints(
             variables["p_nd"],
             available,
         )
-    return tuple(constraints)
+    if context.numerical_preparation.exact_fixed_boxes:
+        box = _selected_box(
+            variables["p_nd"], np.zeros(len(units)), available,
+            context, VariableBoxFamily.NONDISPATCHABLE_REAL_POWER,
+        )
+        other = tuple(constraints) if supports_reactive_power(context.formulation) else (
+            variables["p_nd"] <= _array(prepared, "nd_apparent_power_rating"),
+        )
+        return OperatingSetContribution(box.constraints + other, box.exact_boxes)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _nd_horizon(
@@ -895,7 +1001,8 @@ def _nd_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     nnd = cast(int, prepared["nnd"])
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
+        _require_explicit_bounds(context, VariableBoxFamily.NONDISPATCHABLE_REAL_POWER)
         return (HorizonVariableSpec("p_nd", (nnd,)), HorizonVariableSpec("q_nd", (nnd,)))
     temporal_class = cast(TemporalClass, prepared["nd_available_temporal_class"])
     available = (
@@ -927,7 +1034,8 @@ def _nd_vectorized_assembly(
     context: VectorizedContext,
 ) -> VectorizedModelContribution:
     constraints: tuple[cp.Constraint, ...] = ()
-    if context.formulation == "ac":
+    box = OperatingSetContribution()
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = nondispatchable.ac_injections(
             list(units), variables["p_nd"], variables["q_nd"],
             dict(context.ext_to_int), incidence=_array(prepared, "Cnd"),
@@ -935,15 +1043,28 @@ def _nd_vectorized_assembly(
         constraints = tuple(nondispatchable.vectorized_ac_operating_constraints(
             list(units), variables["p_nd"], variables["q_nd"],
             _array(prepared, "nd_available_mw").T,
+            **_capability_options(context),
+            **({"include_real_box": False} if context.numerical_preparation.exact_fixed_boxes else {}),
         ))
     else:
         p_pu, q_pu, scale = nondispatchable.dc_injections(
             list(units), variables["p_nd"], dict(context.ext_to_int),
             incidence=_array(prepared, "Cnd"),
         )
+    if context.numerical_preparation.exact_fixed_boxes:
+        available = _array(prepared, "nd_available_mw")
+        upper = available if supports_reactive_power(context.formulation) else np.minimum(
+            available, _array(prepared, "nd_apparent_power_rating")[None, :]
+        )
+        box = _selected_box(
+            variables["p_nd"], np.zeros(len(units)), upper, context,
+            VariableBoxFamily.NONDISPATCHABLE_REAL_POWER, upper_temporal_class="interval",
+        )
+        constraints = box.constraints + constraints
     return VectorizedModelContribution(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=constraints,
+        exact_boxes=box.exact_boxes,
     )
 
 
@@ -971,6 +1092,7 @@ NONDISPATCHABLE_ADAPTER = ComponentAdapter[NondispatchableUnit, NondispatchableI
     metadata=_nd_metadata,
     formulations={
         "ac": ND_AC,
+        "socp": ND_AC,
         "lossy_dc": ND_DC,
         "singlenode_dc": ND_DC,
     },
@@ -1006,7 +1128,7 @@ def _storage_variable_specs(
 ) -> tuple[VariableSpec, ...]:
     shape = (cast(int, prepared["ns"]),)
     specs = [VariableSpec("b", shape)]
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         specs.append(VariableSpec("b_q", shape))
     specs.append(VariableSpec("soc", shape))
     return tuple(specs)
@@ -1018,7 +1140,7 @@ def _storage_injections(
     variables: Mapping[str, cp.Variable],
     context: StepContext,
 ) -> InjectionContribution:
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, inv_base_mva = storage.ac_injections(
             list(units),
             variables["b"],
@@ -1041,13 +1163,14 @@ def _storage_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
-    if context.formulation == "ac":
+) -> OperatingSetContribution:
+    if supports_reactive_power(context.formulation):
         constraints = storage.ac_operating_constraints(
             list(units),
             variables["b"],
             variables["b_q"],
             variables["soc"],
+            **_capability_options(context),
         )
     else:
         constraints = storage.dc_operating_constraints(
@@ -1055,7 +1178,7 @@ def _storage_operating_constraints(
             variables["b"],
             variables["soc"],
         )
-    return tuple(constraints)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _storage_step_cost(
@@ -1065,6 +1188,14 @@ def _storage_step_cost(
     context: StepContext,
 ) -> cp.Expression:
     return storage.storage_cost_expr(list(units), variables["b"])
+
+
+def _storage_cost_coordinates(
+    prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
+    context: StepContext, rate: cp.Expression,
+) -> tuple[CostCoordinateTerm, ...]:
+    return (CostCoordinateTerm(variables["b"], cp.Constant(_array(prepared, "storage_aging_weight")),
+                               rate, "cycling"),)
 
 
 def _storage_horizon(
@@ -1091,7 +1222,8 @@ def _storage_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     ns = cast(int, prepared["ns"])
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
+        _require_explicit_bounds(context, VariableBoxFamily.STORAGE_SOC)
         return (
             HorizonVariableSpec("b", (ns,)), HorizonVariableSpec("b_q", (ns,)),
             HorizonVariableSpec("soc", (ns,), temporal_class="boundary",
@@ -1135,13 +1267,14 @@ def _storage_vectorized_assembly(
     power = variables["b"]
     soc = variables["soc"]
     operating: tuple[cp.Constraint, ...] = ()
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
         p_pu, q_pu, scale = storage.ac_injections(
             list(units), power, variables["b_q"], dict(context.ext_to_int),
             incidence=_array(prepared, "Cs"),
         )
         operating = tuple(storage.vectorized_ac_operating_constraints(
             list(units), power, variables["b_q"], soc,
+            **_capability_options(context),
         ))
     else:
         p_pu, q_pu, scale = storage.dc_injections(
@@ -1159,6 +1292,10 @@ def _storage_vectorized_assembly(
         injection=InjectionContribution(p_pu, q_pu, scale),
         operating_constraints=operating,
         stage_cost_rate=stage_cost_rate,
+        cost_coordinates=(() if context.formulation != "ac" else
+                          (CostCoordinateTerm(power,
+                           cp.Constant(_array(prepared, "storage_aging_weight")[:, np.newaxis]),
+                           stage_cost_rate, "cycling", 0),)),
         horizon=HorizonContribution(
             constraints=tuple(constraints),
             terminal_cost=terminal_cost,
@@ -1173,6 +1310,7 @@ STORAGE_AC = FormulationAdapter[StorageUnitIdeal](
     injections=_storage_injections,
     operating_constraints=_storage_operating_constraints,
     step_cost=_storage_step_cost,
+    cost_coordinates=_storage_cost_coordinates,
     horizon=_storage_horizon,
     vectorized_variable_specs=_storage_vectorized_variable_specs,
     vectorized_assembly=_storage_vectorized_assembly,
@@ -1193,6 +1331,7 @@ STORAGE_ADAPTER = ComponentAdapter[StorageUnitIdeal, None](
     metadata=_storage_metadata,
     formulations={
         "ac": STORAGE_AC,
+        "socp": STORAGE_AC,
         "lossy_dc": STORAGE_DC,
         "singlenode_dc": STORAGE_DC,
     },
@@ -1309,7 +1448,7 @@ def _hvdc_injections(
     context: StepContext,
 ) -> InjectionContribution:
     injection_method = (
-        hvdc.ac_injections if context.formulation == "ac" else hvdc.dc_injections
+        hvdc.ac_injections if supports_reactive_power(context.formulation) else hvdc.dc_injections
     )
     p_pu, q_pu, inv_base_mva = injection_method(
         list(units),
@@ -1329,10 +1468,10 @@ def _hvdc_operating_constraints(
     prepared: Mapping[str, object],
     variables: Mapping[str, cp.Variable],
     context: StepContext,
-) -> tuple[cp.Constraint, ...]:
+) -> OperatingSetContribution:
     constraint_method = (
         hvdc.ac_operating_constraints
-        if context.formulation == "ac"
+        if supports_reactive_power(context.formulation)
         else hvdc.dc_operating_constraints
     )
     constraints = constraint_method(
@@ -1343,7 +1482,7 @@ def _hvdc_operating_constraints(
         _array(prepared, "hvdc_p_max_mw")[context.step],
         context.step,
     )
-    return tuple(constraints)
+    return OperatingSetContribution(tuple(constraints))
 
 
 def _hvdc_step_cost(
@@ -1376,7 +1515,8 @@ def _hvdc_vectorized_variable_specs(
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
     count = cast(int, prepared["n_hvdc"])
-    if context.formulation == "ac":
+    if supports_reactive_power(context.formulation):
+        _require_explicit_bounds(context, VariableBoxFamily.HVDC_INPUT_POWER)
         return (HorizonVariableSpec("p_hvdc_in", (count,)),
                 HorizonVariableSpec("p_hvdc_out", (count,)))
     temporal_class = cast(TemporalClass, prepared["hvdc_temporal_class"])
@@ -1445,7 +1585,7 @@ def _hvdc_vectorized_assembly(
     )
     coefficients = _hvdc_vectorized_coefficients(units, prepared)
     cost_rate = hvdc.hvdc_cost_expr(list(units), p_in)
-    bounds = () if context.formulation != "ac" else (
+    bounds = () if not supports_reactive_power(context.formulation) else (
         p_in >= _array(prepared, "hvdc_p_min_mw").T,
         p_in <= _array(prepared, "hvdc_p_max_mw").T,
     )
@@ -1485,6 +1625,7 @@ HVDC_ADAPTER = ComponentAdapter[HVDCLink, HVDCInputs | None](
     metadata=_hvdc_metadata,
     formulations={
         "ac": HVDC_AC,
+        "socp": HVDC_AC,
         "lossy_dc": HVDC_DC,
         "singlenode_dc": HVDC_NULL,
     },

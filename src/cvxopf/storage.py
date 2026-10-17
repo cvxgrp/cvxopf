@@ -490,14 +490,22 @@ def ac_operating_constraints(
     b: cp.Variable,
     b_q: cp.Variable,
     soc: cp.Variable,
+    *,
+    normalize_limits: bool = False,
+    use_soc: bool = False,
 ) -> list:
     """AC inverter circle and per-step state-of-charge bounds."""
     data = _storage_static_data(storage_units)
-    constraints = [
-        cp.sum_squares(cp.vstack([b[s], b_q[s]]))
-        <= data["storage_apparent_power_rating"][s] ** 2
-        for s in range(len(storage_units))
-    ]
+    if normalize_limits:
+        constraints = _normalized_capability_constraints(
+            b, b_q, data["storage_apparent_power_rating"], use_soc
+        )
+    else:
+        constraints = [
+            cp.sum_squares(cp.vstack([b[s], b_q[s]]))
+            <= data["storage_apparent_power_rating"][s] ** 2
+            for s in range(len(storage_units))
+        ]
     constraints += [
         soc >= 0.0,
         soc <= data["storage_capacity"],
@@ -505,15 +513,34 @@ def ac_operating_constraints(
     return constraints
 
 
-def vectorized_ac_operating_constraints(storage_units, b, b_q, soc) -> list:
+def vectorized_ac_operating_constraints(
+    storage_units, b, b_q, soc, *, normalize_limits: bool = False,
+    use_soc: bool = False,
+) -> list:
     """Time-last inverter circles and post-step energy bounds."""
     data = _storage_static_data(storage_units)
-    return [
-        cp.square(b) + cp.square(b_q)
-        <= data["storage_apparent_power_rating"][:, None] ** 2,
+    if normalize_limits:
+        capability = _normalized_capability_constraints(
+            b, b_q, data["storage_apparent_power_rating"][:, None], use_soc
+        )
+    else:
+        capability = [cp.square(b) + cp.square(b_q)
+                      <= data["storage_apparent_power_rating"][:, None] ** 2]
+    return capability + [
         soc[:, 1:] >= 0,
         soc[:, 1:] <= data["storage_capacity"][:, None],
     ]
+
+
+def _normalized_capability_constraints(
+    b: cp.Expression, b_q: cp.Expression, rating: np.ndarray, use_soc: bool,
+) -> list[cp.Constraint]:
+    """Represent the existing disk in rating-normalized, dimensionless power."""
+    p_unit, q_unit = cp.multiply(1 / rating, b), cp.multiply(1 / rating, b_q)
+    if use_soc:
+        channels = cp.vstack([cp.vec(p_unit, order="F"), cp.vec(q_unit, order="F")])
+        return [cp.SOC(np.ones(b.size), channels, axis=0)]
+    return [cp.square(p_unit) + cp.square(q_unit) <= 1]
 
 
 def dc_operating_constraints(
