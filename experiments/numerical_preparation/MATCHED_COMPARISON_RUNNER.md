@@ -1,9 +1,15 @@
 # Serial matched comparison runner
 
-Implementation of [the reviewed design](MATCHED_COMPARISON_PLAN.md). No OPF
-execution is authorized by this document or by passing the rehearsal tests.
-Finalize E4 evidence, review/commit this implementation, and obtain approval of
-the binding, budgets and launch command before numerical execution.
+Implementation of [the reviewed design](MATCHED_COMPARISON_PLAN.md). The
+owner-authorized `matched_comparison_001` study completed on 2026-10-13 with
+16 terminal outcomes: 12 accepted, three native rejections and one timeout.
+The [results report](MATCHED_COMPARISON_REPORT.md) provides the independent
+replay, exact timing/cost evidence and publication figures. The implementation
+checks at the end of this guide describe the earlier pre-launch checkpoint.
+
+This document and passing rehearsal tests do not authorize another OPF run.
+New numerical execution still requires reviewed, committed source, fresh output,
+explicit budgets, a frozen binding and matching owner launch authority.
 
 ## Scientific configuration
 
@@ -197,11 +203,12 @@ optional telemetry failure and required RSS failure. These are lifecycle and
 analytic evidence, not new Tracy solve results. Full Tracy preflight constructs
 all 16 graphs and eight complete AC starts with native optimization forbidden.
 
-Observed implementation verification, 2026-10-13: **194 focused non-solving
+Observed pre-launch implementation verification, 2026-10-13: **194 focused non-solving
 tests passed**, including 30 matched-runner checks. The fresh-process CLI
 rehearsal stopped and resumed twice, retained the first publication hash and
 carried cumulative effort. Full Tracy CLI preflight passed with zero optimizer
 calls and no execution directory created. Actual process/RSS access and bounded
 advisory host observations were checked with host permission; sandboxed `ps`
-without that permission was correctly unavailable. No numerical timing study,
-native OPF solve, execution binding/authority, commit or launch was performed.
+without that permission was correctly unavailable. At that pre-launch checkpoint,
+no numerical timing study, native OPF solve, execution binding/authority, commit
+or launch had been performed; the later completed study is reported above.

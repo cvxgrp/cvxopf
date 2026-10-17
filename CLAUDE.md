@@ -110,11 +110,15 @@ current inventory; do not treat this summary as an exhaustive file list.
 Always use `uv run` so the correct virtual environment and extras are used:
 
 ```bash
-uv run --extra dev pytest tests/ -v
+uv run --extra dev --extra notebook pytest tests/ -v
 ```
 
 Expected result: all tests pass; use the collected count from the current
 branch rather than a fixed historical test count.
+The full suite needs the `notebook` extra for Matplotlib/NetworkX figure
+regressions, matching CI's `.[dev,notebook]` installation. Owner-data tests
+explicitly skip unavailable retained inputs; corrupt admitted evidence must
+still fail rather than being hidden by a broad skip or exception handler.
 
 To run a single test file:
 
@@ -125,7 +129,7 @@ uv run --extra dev pytest tests/test_network.py -v
 To run with coverage:
 
 ```bash
-uv run --extra dev pytest tests/ --cov=cvxopf --cov-branch --cov-report=term-missing
+uv run --extra dev --extra notebook pytest tests/ --cov=cvxopf --cov-branch --cov-report=term-missing
 ```
 
 Do not use plain `pytest` without `uv run --extra dev` — it may use the
@@ -259,6 +263,7 @@ regularization. See
 | Formulation | Result keys |
 |---|---|
 | AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`, `branch_p_from`, `branch_q_from`, `branch_p_to`, `branch_q_to`, `branch_s_from`, `branch_s_to`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |
+| SOCP | `status`, `objective`, `Pg`, `Qg`, `w`, `W_re`, `W_im`, `Vm_relaxed`, `voltage_product_pairs`, `p_net`, `q_net`, signed branch-terminal powers and `branch_loss_mw`; conditional device fields follow the shared models. No `Vm` or `Va_deg` AC solution is implied |
 | Lossy DC | `status`, `objective`, `Pg`, `p_flows`, `p_net`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` when `hvdc` is not None. `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 | Single‑node DC | `status`, `objective`, `Pg`, `p_net`. `p_flows`, `Vm`, `Va_deg`, `Qg`, `q_net` absent |
 
@@ -317,17 +322,20 @@ dict — the branch table is present but ignored.
 
 The default solver is CLARABEL (nlp=False).
 
-### Future formulations
+### `"socp"` — Sparse voltage-product relaxation
 
 `"socp"` is now publicly wired through both build entry points. It uses sparse
 voltage products and the same P/Q device bindings as AC, with convex solving.
 `extract_results` publishes lifted values and `Vm_relaxed`, never AC angles.
 `audit_socp_relaxation` and `recover_socp_voltage` are explicit non-solving,
 non-mutating operations in `socp_diagnostics.py`; no automatic AC acceptance or
-certified lower bound is provided. M11 matched-comparison evidence is implemented
-and executed for owner review, not yet milestone closure. See
+certified lower bound is provided. Reference and matched-comparison studies
+are complete; formal M11 closure remains an owner decision. See
 `experiments/m11_socp/REPORT.md` for the implementation checkpoint and
-`experiments/m11_socp/E2_REPORT.md` for the matched evidence.
+`experiments/m11_socp/E1_E2_V2_REPORT.md` for the refreshed reference and matched
+evidence, and `experiments/pes2027/README.md` for the later Tracy comparisons.
+
+### Future formulations
 
 The dispatch architecture in `problem.py` accepts new formulation keys
 without API changes. Planned future formulations:
@@ -385,6 +393,7 @@ Both emit `DeprecationWarning` when called.
 | `branch_limit_sentinel` | float | 1e6 | DC only |
 | `sparse_pq` | bool | True | AC only |
 | `vectorize_pq` | bool | True | AC only; spatial P/Q expression/constraint batching |
+| `numerical_preparation` | `NumericalPreparation` | Disabled policy | Immutable build-time representation choice; validated by formulation and assembly path |
 
 `delta` is not an `OPFOptions` field. It is a separate parameter on
 `build_opf` and `build_opf_multistep`. It must always be a finite, strictly
@@ -398,17 +407,19 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`). When `storage` is not None, adds `b`, `b_q` (AC only), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. When `nondispatchable` is not None, adds `p_nd`, `q_nd` (AC only) as `cp.Variable (nnd,)` single-step, time-last arrays by default multistep, or lists in explicit stepwise mode. All storage keys absent when `storage=None`; all ND keys absent when `nondispatchable=None`. |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`); SOCP uses `w`, `W_re`, `W_im`. Storage adds `b`, `b_q` (AC/SOCP), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. Nondispatchable units add `p_nd`, `q_nd` (AC/SOCP) in the same layouts. All storage keys are absent when `storage=None`; all ND keys are absent when `nondispatchable=None`. |
 | `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
-| `formulation` | str | `"ac"`, `"lossy_dc"`, or `"singlenode_dc"` |
+| `formulation` | str | `"ac"`, `"socp"`, `"lossy_dc"`, or `"singlenode_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
+| `numerical_preparation` | `NumericalPreparation` | Immutable build-time policy snapshot; changing options requires rebuilding |
+| `preparation_evidence` | `PreparationEvidence` or None | Latest native/restoration diagnostics; not an automatic physical-acceptance certificate |
 
 ### `StorageUnitIdeal` fields
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `bus` | int | required | External (MATPOWER) bus ID |
-| `apparent_power_rating` | float | required | S_max (MVA); AC: circle constraint; DC: real power bound |
+| `apparent_power_rating` | float | required | S_max (MVA); AC/SOCP: circle constraint; DC: real power bound |
 | `capacity` | float | required | Energy capacity Q (MWh) |
 | `initial_soc` | float | required | Initial state of charge (MWh); 0 ≤ initial_soc ≤ capacity |
 | `aging_weight` | float | 1e-2 | L1 cycling penalty weight λ (objective units/MWh); 0.0 = zero-cost storage |
@@ -423,7 +434,7 @@ global problem parameter passed to `build_opf` / `build_opf_multistep` (default 
 |---|---|---|---|
 | `bus` | int | required | External (MATPOWER) bus ID |
 | `p_available` | float | required | Available real power (MW); >= 0. Used directly in single-step. In multistep, serves as a constant fallback if `df_nd` is not provided. |
-| `apparent_power_rating` | float | required | S_max (MVA); inverter nameplate rating. AC: radius of apparent-power circle. DC: explicit real-power upper bound, separate from availability. Must be > 0. |
+| `apparent_power_rating` | float | required | S_max (MVA); inverter nameplate rating. AC/SOCP: radius of apparent-power circle. DC: explicit real-power upper bound, separate from availability. Must be > 0. |
 | `device_id` | str or None | None | Stable external identity. Required only when `df_nd` is supplied. |
 
 `df_nd` (available power time series) is **not** a field on `NondispatchableUnit`.
@@ -443,7 +454,7 @@ numerical zero while remaining distinguishable in metadata. A finite positive
 by `max_shed_fraction` and the current positive-demand eligibility mask.
 
 For multistep builds, `loads=None` selects the legacy MATPOWER-compatible mode
-and requires positional `df_P` (plus `df_Q` for AC). Supplying `loads`, including
+and requires positional `df_P` (plus `df_Q` for AC/SOCP). Supplying `loads`, including
 `loads=[]`, selects explicit-load mode: legacy frames are rejected, and
 `df_load_p`/`df_load_q` columns must exactly match `Load.device_id` values.
 Omitted explicit trajectories use tiled static device values. DC formulations
@@ -465,12 +476,16 @@ problem.py    →  nondispatchable.py      (NondispatchableUnit, re-exported)
 problem.py    →  generator.py            (DispatchableGenerator, case normalization)
 problem.py    →  load.py                 (Load, MATPOWER conversion, time-series preparation)
 problem.py    →  ac_problem.py           (deferred, inside functions)
+problem.py    →  socp_problem.py         (deferred, inside functions)
 problem.py    →  dc_problem.py           (deferred, inside functions)
 problem.py    →  singlenode_dc_problem.py (deferred, inside functions)
 formulation builders → _component_adapters.py (central component registry)
 _component_adapters.py → component modules (typed bindings to owned models)
 formulation builders → _component_assembly.py (generic contribution assembly)
 ac_problem.py →  network.py, data.py
+ac_problem.py, socp_problem.py → _admittance_preparation.py
+socp_problem.py → _voltage_product.py
+socp_diagnostics.py → numeric audit/recovery of extracted lifted primals
 dc_problem.py →  network.py, data.py
 generator.py  →  cost.py                (authoritative polynomial/PWL expressions)
 hierarchical.py → problem.py            (reviewed outer/inner build API)
@@ -531,7 +546,7 @@ behavior exactly.
 Component variables remain builder-owned: adapters return `VariableSpec`
 objects and never construct `cp.Variable`. Engineering-unit nodal injections
 use a component-created, unbound inverse-base parameter; the shared assembler
-alone binds it to `1 / baseMVA`. AC bindings may return both real and reactive
+alone binds it to `1 / baseMVA`. AC/SOCP bindings may return both real and reactive
 channels, while DC bindings return real power with reactive power represented
 by `None`, never scalar zero. Component variable, metadata, step-expression,
 and horizon-expression names share flattened public namespaces with
@@ -582,7 +597,7 @@ Why this invariant matters:
 
 - **Devices compose into any formulation unchanged.** Because a device model is
   DCP, the same operating-constraint / injection / cost methods plug into AC,
-  lossy DC, singlenode, and future SOCP without a DNLP variant. This is exactly
+  lossy DC, singlenode, and SOCP without a DNLP variant. This is exactly
   what makes the Milestone 16 "model a component once, plug into any network"
   contract possible.
 - **Agents never need to understand DNLP.** DNLP knowledge is confined to
@@ -591,12 +606,10 @@ Why this invariant matters:
   without understanding the paper — already a hard rule in "What not to do".)
 - **SOCP (Milestone 11) reuses the device layer.** SOCP is a convex relaxation
   whose *network* physics are themselves DCP (second-order cone constraints on
-  lifted variables — no DNLP bypass anywhere), making it the first fully-DCP
-  network formulation. Because every device is already DCP, the SOCP
-  constructor can compose the existing DCP device contributions. The new work
-  remains substantial—network variables, cone constraints, audits, results,
-  and explicit component capability declarations—but does not require a second
-  implementation of every device model.
+  lifted variables — no DNLP bypass anywhere), so the entire SOCP problem is
+  DCP-valid. Its implemented builders compose the existing device contributions
+  with voltage-product maps, cone constraints, explicit audits and recovery,
+  without a second implementation of every device model.
 
 When you add or edit a device model, assert `is_dcp()` on its constraints and
 cost **directly** (per-object checks below) — a device term that only passes
@@ -780,7 +793,7 @@ their plans are not imported by this documentation-only addition.
 | 8 — Nondispatchable generators | ✅ Complete | `NondispatchableUnit`; `nondispatchable=` and `df_nd=` on `build_opf` / `build_opf_multistep`. AC circle ∩ `0≤p_nd≤R_t`; DC retains separate availability and apparent-power-rating bounds; no cost/curtailment penalty. See `plans/milestone-8-nondispatchable.md`. |
 | 9 — Sparse P/Q variables for AC-OPF | ✅ Complete | `OPFOptions.sparse_pq` (default `True`); flat `P_vec`/`Q_vec` over Ybus pattern with scatter matrix `Rp`. See `plans/milestone-9-sparse-pq.md`. |
 | 10 — Single-node DC dispatch | ✅ Complete | `"singlenode_dc"` formulation; `make_singlenode_case` convenience constructor |
-| 11 — SOCP (convex) network model | In progress | Public sparse voltage-product builders, shared extraction and explicit audit/recovery implemented. E1 independent references accepted; E2 matched AC/SOCP containment, device accounting and bounded evidence implemented and executed for owner review. Milestone closure remains pending. See `plans/milestone-11-socp.md` and `experiments/m11_socp/E2_REPORT.md`. |
+| 11 — SOCP (convex) network model | In progress | Public sparse voltage-product builders, shared extraction and explicit audit/recovery implemented. Refreshed reference and matched AC/SOCP studies are complete; later Tracy comparisons, transfers, rollouts and serial preparation results are documented. Formal milestone closure remains an owner decision. See `plans/milestone-11-socp.md`, `experiments/m11_socp/E1_E2_V2_REPORT.md` and `experiments/pes2027/README.md`. |
 | 12 — Extend battery parameters: final SoC, penalty vs constraint | ✅ Complete | Storage-owned terminal equality or zero-shortfall constraints and linear/quadratic, one-/two-sided terminal costs, consistently composed across formulations. See `plans/milestone-12-storage-terminal-soc.md`. |
 | 13 — Extend CVXPY parameterization for problem data | 🔲 Future | Faster repeated solves of the same graph over new data |
 | 14 — Time-vectorized multistep formulations | ✅ Complete | All three vectorized formulations, applicable correctness and hierarchy checks, and agreed bounded comparisons are complete and owner-accepted. The accepted 8,760-hour Case118 S4 solve closes the lossy-DC scaling gate. Single-node DC and AC reuse the shared component architecture and existing AC initialization helpers; Case9 Tracy results cover T=3, T=24 and T=168. Stepwise AC at T=168 timed out at 180 and 1,800 seconds: numerical results remain unavailable, but the accepted bounded outcomes satisfy the comparison requirement and are not a closure blocker. The additional independent Case118 three-hour replay is complete (126/126 accepted); the owner accepted it and closed M14 on 2026-09-20. See `experiments/case118_vectorization_replay/REPORT.md` for weighted timing gains, nonuniform tail behavior, numerical differences, and cooling observations. Time-vectorized multistep assembly is now the default across formulations; explicit stepwise assembly remains available. DCP retains the appropriate CPP/SCIPY backend, AC retains DNLP/IPOPT and no new leaf-bound migration. The completed four-condition Case118 study supports combined AC vectorization with automatic sparse dispatch disabled; see `experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md`. See `plans/milestone-14-time-vectorization.md`. |
@@ -805,6 +818,7 @@ their plans are not imported by this documentation-only addition.
 |---|---|---|
 | `cvxpy` | `>=1.9.3` | DNLP interface and sparse derivative fix for repeated array indices |
 | `numpy` | none | Array math, Ybus construction |
+| `scipy` | none | Sparse network/admittance maps and numerical preparation |
 | `pandas` | none | Time-series load input |
 | `cyipopt` | none | Python interface to IPOPT |
 
@@ -815,7 +829,8 @@ or `cyipopt` will fail to build with a linker error.
 
 ### Development extras
 `pytest`, `pytest-cov` — installed via `pip install -e ".[dev]"` or
-`uv run --extra dev`.
+`uv run --extra dev`. Complete figure regression coverage additionally requires
+the `notebook` extra; use `.[dev,notebook]` or both `uv run` extras as above.
 
 ### Hierarchical temporal assembly
 

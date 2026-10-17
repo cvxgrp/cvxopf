@@ -37,8 +37,16 @@ curtailment is shown on a linear GWh scale.
 
 ## Figure 2: Numerical preparation comparison
 
-Pending the separately implemented matched preparation study. No historical
-unmatched runtime comparison is substituted and no result is fabricated.
+Completed timing and reconstructed physical-cost figures are documented in
+`experiments/numerical_preparation/MATCHED_COMPARISON_REPORT.md`
+(repository-root-relative). That separate bundle provides vector exports,
+exact all-arm data and captions. It retains three baseline
+SOCP native rejections and one AC whole-worker timeout, and reports speedup
+ratios only for pairs accepted on both sides. AC native adapter clocks are
+diagnostic, not comparable speedup clocks. The cost figure shows standalone
+horizon objectives, not implemented rollout totals; its near-zero display band
+does not replace small measured costs with exact zeros. These figures are
+separate from the `01_03_04_results` rendering and its historical metric snapshot.
 
 ## Figure 3: Fixed battery-power transfer
 

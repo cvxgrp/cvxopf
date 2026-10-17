@@ -700,3 +700,11 @@ They are not a matched speedup benchmark. Native effort, cumulative worker
 effort and elapsed time are distinct quantities; neither favorable native
 timing nor these six selected days establishes annual throughput or a preferred
 universal horizon.
+
+For baseline-versus-prepared timing, use the separate
+[serial matched-comparison report](../numerical_preparation/MATCHED_COMPARISON_REPORT.md)
+and its exact all-arm data. That study counterbalances treatment order and
+compares public-solve and whole-worker times only for jointly accepted pairs.
+Its AC adapter timers are diagnostic because derivative-oracle construction
+falls inside different clock boundaries. Its standalone-horizon physical costs
+must not be substituted for the executed-only rollout totals above.

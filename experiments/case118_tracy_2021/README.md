@@ -1,10 +1,12 @@
 # Tracy 2021 → Case118
 
-**Study on hold by owner decision, 2026-10-01.** The current evidence checkpoint
-is closed in preparation for M11 implementation. See the
+**Historical Stage A–D hold by owner decision, 2026-10-01.** That evidence
+checkpoint was closed before SOCP implementation. See the
 [closing evidence checkpoint](EVIDENCE_CHECKPOINT.md) for results, limitations,
 and retained artifacts. Further Tracy solves, retries, policy changes and
-study resumption require new owner authorization.
+study resumption require new owner authorization. Later, separately authorized
+matched joint and rollout studies are summarized below; they do not resume or
+close the held Stage D/annual-AC work.
 
 Stage A inputs are approved, the 72-arm Stage B DC comparison is complete,
 and both Stage C annual DC solves are independently accepted. Stage D execution
@@ -16,7 +18,7 @@ authorization to run while the study is on hold.
 Start with [the input report](STAGE_A_REPORT.md), then the
 [study plan](../../plans/case118-tracy-2021-study-plan.md).
 
-## M11 E3 selection checkpoint
+## Later matched joint and AC implementation studies
 
 The separate matched 24-hour comparison has a
 [no-solve selection plan](E3_SELECTION_PLAN.md) and
@@ -24,10 +26,21 @@ The separate matched 24-hour comparison has a
 annual lossy-DC states. The owner accepted the four selected dates.
 The owner subsequently selected a separate deficit-depletion leg with
 [60%-to-25% per-device boundaries](E3_BOUNDARY_DECISIONS.md). The
-[bounded 20-problem protocol](E3_PROTOCOL.md) and restartable `run_e3.py` runner
-are implemented for review, with queued per-attempt protocol revisions.
-No E3 numerical runner has been launched; this does not resume Stage D or
-change the historical study's hold status.
+[original bounded 20-problem protocol](E3_PROTOCOL.md) remains historical.
+The later [prepared E3 protocol](E3_PREPARED_PROTOCOL.md) produced the five
+matched 24-hour scenarios across four network models; [E3+](E3_PLUS_PROTOCOL.md)
+added the sixth, forced-shedding scenario. Its qualified convex source outcomes
+retain their original classifications and owner-approved source-use scope.
+
+The [PES appendix and reproduction guide](../pes2027/README.md) connect these
+joint cohorts to 18 fixed-power transfers, 24 energy-signpost AC rollouts,
+subsequent loop certificates and retained-data figures. The guide distinguishes
+completed trajectory reconstruction from full native/recovery replay, identifies
+the rollout continuation, and explains why the hash-bound pre-launch runner
+documents remain unchanged. It also links the separate
+[serial numerical-preparation results](../numerical_preparation/MATCHED_COMPARISON_REPORT.md).
+None of these later studies lifts the original Stage D hold or supplies an
+annual Tracy AC trajectory.
 
 ## Reproduce the input package
 

@@ -1,7 +1,7 @@
 # PES 2027 paper appendix and reproduction
 
 This folder accompanies **Network-Model Fidelity in Intertemporal Storage
-Dispatch: A Matched Comparison of Four Power-System Models**, by Bennet Meyers.
+Dispatch: A Matched Study with CVXOPF**, by Bennet Meyers.
 It connects the paper's six matched Case118 treatments, fixed battery-power
 transfers and three-hour AC rollouts to their input preparation, numerical
 protocols, retained evidence and figure-generation tools.
@@ -22,10 +22,12 @@ the paper's repository entry point, not a replacement for those scientific recor
 | `figure_notes.md` | Caption drafts, interpretation and scientific qualifications; copied into each result-figure bundle |
 | `plot_pes_results.py` | Non-solving joint/transfer/rollout extraction and comparative figure rendering |
 | `plot_pes_soc.py` | Non-solving input and normalized battery-energy time-series figures |
+| `plot_pes_network.py` | Configured-network topology and asset-marker figure |
+| `plot_pes_rollout_soc.py` | Joint full AC/copper-plate trajectories and reconstructed copper-plate-signposted AC rollout |
 | `analyze_rollout_controls.py` | Non-solving trajectory distances for the six full AC-signposted controls in Appendix A5 |
 
-Invoke the plotters as `experiments.pes2027.plot_pes_results` and
-`experiments.pes2027.plot_pes_soc` from the repository root. They continue to
+Invoke these tools through their `experiments.pes2027.*` module names from the
+repository root. They continue to
 read the original study directories; relocating the tools does not relocate
 or rewrite historical evidence. Their regression tests remain under `tests/`.
 
@@ -96,6 +98,7 @@ package. Current readers deliberately check those paths and their recorded hashe
 | Forced fixture reference | `experiments/objective_assembly_qualification/results/qualification_002/binding.json` | Exact E3+ mathematical inputs and shortage witness |
 | Fixed-power transfers | `experiments/tracy_battery_transfer/results/transfer_001/` | Eighteen original outcomes, including unresolved attempts |
 | Energy-signpost rollouts | `experiments/tracy_ac_rollout/results/rollout_001/` | Twenty-four trajectories, including their continuation generation |
+| Serial numerical-preparation comparison | `experiments/numerical_preparation/results/matched_comparison_001/` | Sixteen separate baseline/prepared arms; required for a fresh timing-study replay |
 
 Include the completion manifests, supervision, input/source bindings,
 native/preparation/start evidence, logs and any referenced prior evidence;
@@ -114,12 +117,13 @@ Read all generations together; neither continuation nor later analysis replaces
 the original attempt records. Transfer execution identity is in its retained
 `binding.json`; every arm retains its own source and completion identities.
 
-Two snapshots used by the current manuscript are:
+Retained snapshots used by the paper tools are:
 
 | Snapshot | SHA-256 |
 | --- | --- |
 | `experiments/tracy_battery_transfer/results/transfer_001/report.json` | `3375d14c9d50a0a1a4d8439e3f1950313dfe373820a38ef667e35188383266a5` |
 | `experiments/case118_tracy_2021/results/pes_figures_review_001/figure_data.json` | `0f07ff41289529b0d496f3085351b77f9c1817cf31512830fe3fffc6f5a27462` |
+| `experiments/case118_tracy_2021/results/pes_soc_review_003/soc_data.json` | `9ba23d8dcc1137d9f7efa90962379ffc05545f146596b7c4975a982317b27c35` |
 
 These identify historical inputs to the paper, not a promise that rerunning a
 nonconvex solver will reproduce every coordinate or artifact byte.
@@ -152,6 +156,11 @@ UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache \
 MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
 uv run --extra notebook python -m experiments.pes2027.plot_pes_network \
   --output experiments/case118_tracy_2021/results/pes_network_reproduction
+
+UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache \
+MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
+uv run --extra notebook python -m experiments.pes2027.plot_pes_rollout_soc \
+  --output experiments/case118_tracy_2021/results/pes_rollout_soc_reproduction
 ```
 
 The first command emits the combined joint/transfer/rollout figure
@@ -173,10 +182,36 @@ areas now scale with Case118 source MW demand, whose shares define configured
 load allocation. Marker scales differ by family. Historical Stage A images
 remain unchanged.
 
+The fourth command compares the deficit-to-surplus joint full AC and copper-plate
+energy trajectories with a copper-plate-signposted AC rollout. It reconstructs
+realized energy from executed powers, not overlapping window forecasts, and
+writes `copper_plate_signposted_ac_soc.pdf`, PNG, exact figure data and a manifest.
+This reader additionally requires the retained joint-trajectory snapshot listed
+above. Its extraction is a historical trajectory audit, not a full native replay.
+
+### Serial matched numerical-preparation figures
+
+The [completed comparison report](../numerical_preparation/MATCHED_COMPARISON_REPORT.md)
+and its tracked `figures/matched_comparison_001/` bundle provide vector timing
+and physical-cost figures, all-arm CSV/JSON data and provenance. The study
+accepted all eight prepared arms and four baseline arms; three baseline SOCP
+rejections and the baseline AC timeout remain explicit. Timing ratios use only
+jointly accepted pairs and comparable public-solve/whole-worker clocks, not AC
+adapter timers. These are separate cold-start horizon optimizations, not the
+rolling implemented costs in Appendix A5.
+
+The report gives solver-forbidden extraction and fresh-output reproduction
+commands. Its tracked compact results are inspectable in a fresh clone; a new
+independent replay also requires the original ignored study archives and bound
+environment. No historical timing comparison is substituted for this study.
+
 Non-solving figure regressions:
 
 ```sh
-uv run --extra dev pytest tests/test_pes_result_figures.py tests/test_pes_soc_figures.py tests/test_pes_network_figures.py -q
+uv run --extra dev --extra notebook pytest -q \
+  tests/test_pes_result_figures.py tests/test_pes_soc_figures.py \
+  tests/test_pes_network_figures.py tests/test_pes_rollout_soc_figures.py \
+  tests/test_pes_rollout_controls.py tests/test_matched_publication.py
 ```
 
 To reproduce the six full AC-signposted trajectory controls without solving,
@@ -218,6 +253,14 @@ they do not optimize.
 5. Independently analyze finalized evidence, then regenerate the paper metrics
    and figures. Keep solver outcomes, physical acceptance, economic accounting
    and later incompatibility certificates distinct.
+
+The rollout protocol, integration design and runner README are frozen sources
+in the historical execution binding. Their implementation-checkpoint statements
+describe the pre-launch state, not the current run status; they remain unchanged
+to preserve replay identity. Current completed-trajectory evidence and the scope
+of its later reconstruction are described in [Appendix A4](APPENDIX.md#a4-transfer-and-rollout-construction)
+and the figure guide. The older Stage D hold and annual-AC limitations remain
+separate from this completed, explicitly authorized 24-arm rollout study.
 
 The rollout's historical run-wide ceilings were 2,304 launches and 172,800
 supervised worker-seconds, with 300-second build and post-solve ceilings and

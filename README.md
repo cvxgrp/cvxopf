@@ -19,8 +19,9 @@ grounded: it must coordinate decisions across long horizons while retaining
 the AC network constraints that determine whether a plan is realizable.
 
 `cvxopf` is designed for that research problem. From one modeling framework it
-supports nonlinear AC-OPF, convex lossy DC OPF, and single-node economic
-dispatch, together with multistep load, generation, storage, and transmission
+supports nonlinear AC-OPF, the convex voltage-product SOCP relaxation, lossy
+DC OPF, and single-node economic dispatch, together with multistep load,
+generation, storage, and transmission
 models. It is not intended merely as another OPF wrapper. It is the foundation
 for a scientifically coherent method for studying long-duration, uncertain,
 and compound resilience events without giving up access to nonlinear network
@@ -113,7 +114,7 @@ dispatch trajectory.
 
 Nondispatchable resources are likewise first-class devices rather than generic
 generator boxes: time-varying real-power availability is coupled to a convex
-inverter apparent-power region in AC and to separate availability and rating
+inverter apparent-power region in AC/SOCP and to separate availability and rating
 bounds in DC. This preserves the converter-capacity limit without adding
 nonconvexity.
 
@@ -172,7 +173,7 @@ across all formulations.
 flowchart LR
     user["User inputs<br/>case · time series · devices"] --> api["Public build API<br/>validation and formulation selection"]
 
-    api --> physics["Formulation-owned network physics<br/>AC · lossy DC · single-node DC"]
+    api --> physics["Formulation-owned network physics<br/>AC · SOCP · lossy DC · single-node DC"]
     api --> assembly["Shared typed component assembly"]
     devices["Component-owned models<br/>generation · storage · loads<br/>nondispatchable · HVDC"] --> assembly
     assembly --> physics
@@ -202,6 +203,7 @@ Milestone 17 hierarchical controller above that boundary.
 | Key | Description | Convex | Solver |
 |---|---|---|---|
 | `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9.3`) | No | IPOPT |
+| `"socp"` | Sparse voltage-product AC relaxation with shared active/reactive devices and two-terminal branch limits; not automatically AC-realizable | Yes | CLARABEL |
 | `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
 | `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
 
@@ -430,7 +432,7 @@ feasibility are distinct. An SOCP primal objective is a numerical relaxation
 optimum estimate, **not a certified lower bound**. Cross-formulation comparisons
 require matched full-admittance AC physics, all devices/costs and temporal
 policies; no public bound certificate or automatic hierarchy acceptance is
-provided. See the [checkpoint plan](experiments/m11_socp/PLAN.md).
+provided. See the [reference and matched AC/SOCP regression results](experiments/m11_socp/E1_E2_V2_REPORT.md).
 
 **Lossy DC OPF:**
 
@@ -479,7 +481,7 @@ print(f"Pg (MW):   {results['Pg']}")
 ```
 
 The `examples/case14_formulation_comparison.py` script solves the IEEE
-14-bus case with all three formulations side by side and contrasts their
+14-bus case with AC, lossy DC and copper plate side by side and contrasts their
 dispatch and implied losses.
 
 ### First-class dispatchable generators
@@ -571,7 +573,7 @@ print(f"Integrated horizon objective: {results['objective']:.2f}")
 print(f"Pg per step (MW):\n{results['Pg']}")
 ```
 
-Time-vectorized assembly is the default for `"ac"`, `"lossy_dc"`, and
+Time-vectorized assembly is the default for `"ac"`, `"socp"`, `"lossy_dc"`, and
 `"singlenode_dc"`. `build.solve()` selects SCIPY
 canonicalization and CLARABEL for convex formulations; AC uses the same
 DNLP/IPOPT path as stepwise AC, with no CPP/SCIPY backend selection.
@@ -661,11 +663,21 @@ Terminal storage penalties occur once and are not multiplied by `delta`.
 objective composition can be audited. This corrects the former unscaled
 per-step sum for `delta != 1`; `delta=1` results are unchanged.
 
-### AC numerical preparation and objective assembly
+### Opt-in numerical preparation and AC objective assembly
 
 Numerical preparation changes the internal solve representation, not the
 physical model or economic weights. Select it when building, then use
 `build.solve()`; calling `build.prob.solve()` bypasses this supported boundary.
+`NumericalPreparation()` is disabled by default. Supported convex policies
+can remove exactly fixed coordinates and use `canonical_scaling="joint5"`;
+SOCP also supports normalized device limits. Convex formulations retain their
+original economic coordinates and hourly objective assembly. AC supports
+cost coordinates but rejects canonical scaling; unsupported combinations fail
+explicitly. Public `solve_hierarchical_opf()` currently rejects enabled
+preparation rather than silently changing its validated workflow.
+
+For standalone time-vectorized AC, the following selects the prepared
+component-first representation:
 
 ```python
 from cvxopf import NumericalPreparation, OPFOptions
@@ -757,7 +769,7 @@ automatic choice. `max_generation_marginal_cost(...)` is a convenient
 generator-only diagnostic under its documented convex monotone assumptions;
 it is not a system-wide sufficiency certificate.
 
-One interruption fraction applies to both active and reactive service in AC,
+One interruption fraction applies to both active and reactive service in AC/SOCP,
 preserving the configured reactive sign and ratio. DC formulations optimize
 active service only while retaining reactive input as metadata. Shedding is an
 interval-average power decision under the piecewise-constant model. Per-load
@@ -844,7 +856,7 @@ same physical signals are represented at a finer resolution. See
 Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
 produce up to a time-varying available power `R_t` determined by ambient
 conditions. The OPF can curtail freely; there is no cost for generation or
-curtailment. In AC, the inverter also provides reactive power support within
+curtailment. In AC/SOCP, the inverter also provides reactive power support within
 its apparent power rating. In DC, reactive power is absent, but the
 availability and apparent-power rating remain as separate real-power upper
 bounds. Passing a multi-day solar availability profile via `df_nd` lets the
@@ -900,8 +912,9 @@ receives power at the from-bus and gives
 `p_out = -p_in / (1 - loss_frac)`. Links can be built
 directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
 `hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
-loss (`loss0`, emitting a `UserWarning`); it applies to both the AC and lossy
-DC formulations.
+loss (`loss0`, emitting a `UserWarning`); it applies to AC, SOCP, and lossy
+DC. Single-node dispatch uses an explicit null HVDC model because the two
+network terminals collapse to the same bus.
 
 ```python
 from cvxopf.testcases.case9_dcline import case9_dcline
@@ -927,6 +940,10 @@ print(f"HVDC loss (MW):     {results['hvdc_loss']}")
 src/cvxopf/           Core package
   problem.py          Public API: build_opf, build_opf_multistep
   ac_problem.py       AC-OPF helpers (DNLP formulation)
+  socp_problem.py     Sparse voltage-product SOCP builders
+  socp_diagnostics.py Explicit relaxation audits and voltage recovery
+  _admittance_preparation.py  Shared AC/SOCP electrical data preparation
+  _numerical_preparation.py   Opt-in representation policy and evidence
   dc_problem.py       Lossy DC OPF helpers (convex QP)
   singlenode_dc_problem.py  Single-node DC dispatch helpers (convex QP)
   network.py          Ybus, incidence matrices, reindexing
@@ -949,6 +966,25 @@ experiments/          Reviewed scientific studies and retained protocols
 plans/                Milestone plans and implementation records
 ```
 
+## Scientific studies and paper evidence
+
+- [SOCP reference and matched AC/SOCP regressions](experiments/m11_socp/E1_E2_V2_REPORT.md)
+  compare independently audited solutions against frozen external references
+  and matched device/horizon cases.
+- [Serial numerical-preparation comparison](experiments/numerical_preparation/MATCHED_COMPARISON_REPORT.md)
+  reports all 16 arm outcomes, comparable timing clocks, reconstructed physical
+  costs, and publication-ready figures with exact data and provenance.
+- [IEEE PES companion appendix and reproduction guide](experiments/pes2027/README.md)
+  connect six matched Tracy scenarios, fixed-power transfers, energy-signpost
+  AC rollouts, loop certificates, and retained-data figures.
+
+Raw study archives and the owner-supplied Tracy CSV are not included in a
+fresh clone. Reports distinguish accepted solutions, qualified source use,
+numerical failures, timeouts, and independent certificate scope. These studies
+do not establish global AC optimality, universal timing improvements, or
+automatic AC realizability of SOCP results. Historical Stage D and annual-AC
+holds remain separate from the later standalone and rollout studies.
+
 ## Development
 
 Clone the repository and install in editable mode with development
@@ -962,29 +998,30 @@ cd cvxopf
 If you have `uv` installed, that's it. Just run things with `uv` from the
 project root.
 
-If you are managing your own virtual environment, install the development
-dependencies with pip:
-
-```bash
-pip install -e ".[dev]"
-```
-
-If you want to run the Marimo notebooks, you'll want the notebook
-dependencies as well:
+For the complete test suite, include the plotting dependencies as CI does.
+With `uv`, select both extras when running tests below. If you manage your own
+virtual environment, install them with pip:
 
 ```bash
 pip install -e ".[dev,notebook]"
 ```
 
+The `notebook` extra also supplies Marimo; figure regressions require its
+Matplotlib and NetworkX dependencies even when no notebook is run.
+
 To run the test suite:
 
 ```bash
 # If using uv (recommended)
-uv run --extra dev pytest tests/ -v
+uv run --extra dev --extra notebook pytest tests/ -v
 
 # If installed directly with pip
 pytest tests/ -v
 ```
+
+Owner-data integration tests skip when their declared retained inputs are
+absent. Present-but-corrupt inputs and incomplete admitted result bundles
+still fail validation; synthetic test fixtures are not study evidence.
 
 Run the project lint policy with:
 
@@ -1025,11 +1062,12 @@ package environment.
 - [x] Sparse P/Q variables for AC-OPF
 - [x] Single-node equivalent "copper plate" model
 - [ ] SOCP network model — public builder, extraction and explicit audit/recovery
-  implemented; matched-comparison evidence and milestone closure remain pending.
+  implemented, with completed reference, matched-comparison and Tracy studies
+  linked above; formal milestone closure remains an owner decision.
 - [x] Extend battery parameters: terminal equality/shortfall constraints and linear/quadratic terminal costs
 - [ ] Extend CVXPY parameterization for faster repeated solves
 - [x] M14 agreed implementation, validation and bounded comparison requirements:
-  all three time-vectorized formulations are reviewed and owner-accepted. M14a–c are complete and
+  the three formulations in M14's scope are reviewed and owner-accepted. M14a–c are complete and
   merged into `main` with the completed Case118 study. The vectorized lossy-DC
   path's conditioned 24/168/720 prefix ladder and 8,760-hour annual outer are
   accepted. Time-vectorized multistep assembly is now the default; explicit

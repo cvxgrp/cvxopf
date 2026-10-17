@@ -13,7 +13,7 @@ original experiment directories.
 | Figure | Content |
 | --- | --- |
 | `01_joint_dispatch` | Styled markers with stems from zero for six matched 24-hour cases and four models: common device cost, ENS and nondispatchable curtailment. |
-| 02, pending | Baseline/prepared numerical comparison; no completed matched results were available when these drafts were generated. |
+| Numerical-preparation comparison | Completed separately: [report and tracked timing/physical-cost figures](../numerical_preparation/MATCHED_COMPARISON_REPORT.md), with all rejected and timed-out arms retained. Not part of `01_03_04_results`. |
 | `03_fixed_schedule_transfer` | AC outcomes with fixed donor battery powers, relative to unrestricted full AC. The three unresolved solver outcomes remain explicit; the caption separately identifies subsequent loop exclusions. |
 | `04_ac_rollouts` | Executed-only 24-hour totals from three-hour AC rollouts, relative to full AC, including the AC-signpost control. Axes match Figure 3. |
 | `03_04_ac_implementation` | Manuscript combination: fixed-power transfers above rollouts, with one shared legend and the AC-signpost key explicitly rollout-only. The separate review plots remain available. |
@@ -55,7 +55,7 @@ XDG_CACHE_HOME=/private/tmp/cvxopf-pes-cache MPLCONFIGDIR=/private/tmp/cvxopf-pe
 UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
 VECLIB_MAXIMUM_THREADS=1 uv run --offline --no-sync --extra notebook \
 python -m experiments.pes2027.plot_pes_results \
-  --output experiments/case118_tracy_2021/results/pes_figures_review_002
+  --output experiments/case118_tracy_2021/results/pes_figures_reproduction
 ```
 
 For layout iteration only, add `--render-only` and point to an existing bundle.
@@ -97,3 +97,14 @@ The three area scales are separate; parallel circuits share a drawn edge.
 The paper uses `results/pes_network_review_002/configured_network.pdf` beneath
 `experiments/case118_tracy_2021/`; the historical Stage A images are untouched.
 The reproduction command is in [README.md](README.md).
+
+## Joint and rollout battery trajectories
+
+`plot_pes_rollout_soc.py` compares the deficit-to-surplus joint full AC and
+copper-plate schedules with the copper-plate-signposted AC rollout. It uses
+all 25 boundaries and reconstructs executed energy from retained first actions.
+`analyze_rollout_controls.py` applies the appendix's capacity-normalized distance
+to all six full AC-signposted controls over the 23 interior boundaries. Neither
+tool solves an OPF or claims convergence under repeated rollout passes.
+Both require the pinned figure snapshots and retained controller evidence;
+commands and expected outputs are in [README.md](README.md).
