@@ -103,12 +103,18 @@ def inputs_for_arm(p, arm: Arm) -> dict:
     return kwargs
 
 
-def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
+def audit_result(result: dict, kwargs: dict, named_costs: dict, *, network_audit=None,
+                 total_cost_relative_tolerance=None) -> dict:
     """Reconstruct physics/accounting from input devices, not build expressions.
 
     This audit is deliberately specific to the approved ideal-storage, all-loads
     sheddable, no-HVDC fleet. It refuses missing/nonfinite/misshaped payloads.
+    The optional prospective SOCP total-cost gate is distinct from the unchanged
+    component-cost gates. Omitting it preserves historical audit behavior.
     """
+    if total_cost_relative_tolerance is not None:
+        if kwargs["formulation"] != "socp" or total_cost_relative_tolerance != 1e-6:
+            raise ValueError("only the prospective SOCP total-cost gate is supported")
     checks = {}
     limits = {}
 
@@ -157,14 +163,16 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
     )
     dc = kwargs["formulation"] == "lossy_dc"
     ac = kwargs["formulation"] == "ac"
-    shape["p_net"] = (T, len(bus)) if dc or ac else (T,)
-    if ac:
+    socp = kwargs["formulation"] == "socp"
+    if socp and network_audit is None:
+        raise ValueError("SOCP requires an independent lifted-network audit")
+    reactive = ac or socp
+    shape["p_net"] = (T, len(bus)) if dc or reactive else (T,)
+    if reactive:
         shape.update(
             Qg=(T, len(gen)),
             b_q=(T, len(storage)),
             q_nd=(T, len(nd)),
-            Vm=(T, len(bus)),
-            Va_deg=(T, len(bus)),
             q_net=(T, len(bus)),
             q_load_served=(T, len(loads)),
             q_load_shed=(T, len(loads)),
@@ -178,6 +186,8 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
             "branch_s_to",
         ):
             shape[name] = (T, len(branch))
+    if ac:
+        shape.update(Vm=(T, len(bus)), Va_deg=(T, len(bus)))
     if dc:
         shape["p_flows"] = (T, len(branch))
     try:
@@ -254,7 +264,7 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
     ):
         for j, device in enumerate(devices):
             injection[:, bus_index[device.bus]] += values[:, j]
-    reported = injection if dc or ac else injection.sum(axis=1)
+    reported = injection if dc or reactive else injection.sum(axis=1)
     check(
         "injection_reporting_mw", maximum(a["p_net"] - reported), TOLERANCES["power_mw"]
     )
@@ -268,7 +278,9 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
             balance[:, bus_index[int(row[0])]] -= a["p_flows"][:, j]
             balance[:, bus_index[int(row[1])]] += a["p_flows"][:, j]
         loss = float(dt * np.sum(branch[:, 2] * (a["p_flows"] / case["baseMVA"]) ** 2))
-    if ac:
+    if network_audit is not None:
+        network_audit(a, kwargs, injection, check, box)
+    elif ac:
         # Shared device/accounting checks above remain identical to Stage B/C.
         from .stage_d_physics import audit_ac_network
 
@@ -302,7 +314,11 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
         check(
             key + "_accounting",
             residual,
-            TOLERANCES["cost_abs"] + TOLERANCES["cost_rel"] * abs(expected),
+            TOLERANCES["cost_abs"] + (
+                total_cost_relative_tolerance
+                if key == "objective" and total_cost_relative_tolerance is not None
+                else TOLERANCES["cost_rel"]
+            ) * abs(expected),
         )
     ens = dt * a["p_load_shed"].sum(axis=0)
     check(
@@ -315,7 +331,7 @@ def audit_result(result: dict, kwargs: dict, named_costs: dict) -> dict:
         abs(float(a["energy_not_served"]) - ens.sum()),
         TOLERANCES["energy_mwh"],
     )
-    statuses = {"optimal", "optimal_inaccurate"} if ac else {"optimal"}
+    statuses = {"optimal", "optimal_inaccurate"} if reactive else {"optimal"}
     passed = result["status"] in statuses and all(
         np.isfinite(v) and v <= limits[k] for k, v in checks.items()
     )

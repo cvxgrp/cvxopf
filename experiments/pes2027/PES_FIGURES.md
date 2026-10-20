@@ -1,0 +1,110 @@
+# PES result-figure review drafts
+
+Non-solving figure drafts, 2026-10-13. These are for visual iteration, not a
+new numerical study. The current model-name renderings are in
+`experiments/case118_tracy_2021/results/pes_figures_names_001/` and
+`experiments/case118_tracy_2021/results/pes_soc_names_001/`.
+They reuse byte-identical numerical snapshots from `pes_figures_review_001/`
+and `pes_soc_review_003/`; those original bundles remain unchanged.
+(repository-root-relative; ignored PNG and vector PDF exports).
+Paper-specific plotters and notes live here; retained evidence stays in the
+original experiment directories.
+
+| Figure | Content |
+| --- | --- |
+| `01_joint_dispatch` | Styled markers with stems from zero for six matched 24-hour cases and four models: common device cost, ENS and nondispatchable curtailment. |
+| Numerical-preparation comparison | Completed separately: [report and tracked timing/physical-cost figures](../numerical_preparation/MATCHED_COMPARISON_REPORT.md), with all rejected and timed-out arms retained. Not part of `01_03_04_results`. |
+| `03_fixed_schedule_transfer` | AC outcomes with fixed donor battery powers, relative to unrestricted full AC. The three unresolved solver outcomes remain explicit; the caption separately identifies subsequent loop exclusions. |
+| `04_ac_rollouts` | Executed-only 24-hour totals from three-hour AC rollouts, relative to full AC, including the AC-signpost control. Axes match Figure 3. |
+| `03_04_ac_implementation` | Manuscript combination: fixed-power transfers above rollouts, with one shared legend and the AC-signpost key explicitly rollout-only. The separate review plots remain available. |
+| `01_03_04_results` | Full-page manuscript figure with one shared legend: (a) joint dispatch, (b) fixed-power transfers, (c) energy-signpost rollouts. Pink means full AC in (a) and its energy-signpost control in (c), absent in (b). |
+
+The plotter reuses `e3_results`, retained-transfer admission, and the rollout
+`audit.trajectory` reconstruction. All 24 reconstructed rollout days pass its
+physical/accounting checks; forced-shedding trajectories also pass the existing
+input-only ENS witness. Source references, executed-window hashes, controlling
+records, supervision and state continuity are checked. This is **not** a full
+replay of native canonical starts, losing attempts, or recovery policy. Joint
+and transfer classifications are historical retained evidence, not new solves
+or new native acceptance decisions.
+
+Common device cost excludes `dc_loss_cost`; integrated cost is not multiplied
+by delta again. Energy sums use delta once. Rollouts aggregate only executed
+first actions, never overlapping prediction objectives. Source qualifications
+remain in the retained data and accompanying notes, not marker styling.
+Numerical-scale positive and negative values are not clipped; symmetric-log
+axis definitions and linear ranges are documented in the caption notes.
+Local AC references are not globally optimal certificates. Signed differences
+are descriptive, including near-zero negative values for the AC-signpost control.
+
+`figure_data.json` retains unrounded metrics, source hashes and trajectory audits;
+`manifest.json` hashes that snapshot, the PNG/PDF files and `figure_notes.md`.
+The canonical [figure notes](figure_notes.md) are copied beside every rendering
+bundle. They contain proposed LaTeX captions, interpretation and qualifications;
+plots retain only panel labels, units, legends and minimal missing-data indicators.
+No historical artifact is rewritten. Figures are 7.2 by 3.0 inches for compact
+two-column PES placement (5.4 inches tall for the two-row combination and 8.2
+for the full-page three-row figure), with unchanged 8-point labels and marker styles;
+plot and legend marker sizes are 15% smaller than the initial review draft.
+Vertical compression changes spacing, not values or axis definitions.
+
+Generate a fresh bundle from retained owner-supplied archives:
+
+```sh
+XDG_CACHE_HOME=/private/tmp/cvxopf-pes-cache MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
+UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+VECLIB_MAXIMUM_THREADS=1 uv run --offline --no-sync --extra notebook \
+python -m experiments.pes2027.plot_pes_results \
+  --output experiments/case118_tracy_2021/results/pes_figures_reproduction
+```
+
+For layout iteration only, add `--render-only` and point to an existing bundle.
+That rereads the retained metric snapshot and overwrites only its review figures
+and rendering manifest, not numerical evidence. It does not revalidate raw input
+archives; use a fresh collection if the scientific extraction changes.
+
+## Battery time-series trial
+
+`plot_pes_soc.py` reads the finalized E3/E3+ inventory without building models
+or solving. It retains boundary energies, capacity identities, source archive
+hashes and execution commits in a separate `soc_data.json` snapshot. Review
+outputs are in `experiments/case118_tracy_2021/results/pes_soc_review_003/`
+(repository-root-relative); historical evidence is unchanged.
+
+The single-column trial places common hourly requested demand and available
+nondispatchable power above stacked full AC/copper plate **joint** schedules. Gray SoC curves are
+each device's energy divided by its capacity; bold black is total fleet energy
+divided by total fleet capacity, not the unweighted mean of device percentages.
+The initial boundary is included. The draft uses the deficit-to-surplus
+treatment as an illustrative contrast, not a new selection or acceptance gate.
+All six treatments are exported for author comparison.
+
+```sh
+UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache MPLCONFIGDIR=/private/tmp/cvxopf-pes-mpl \
+uv run --offline --no-sync --extra notebook \
+python -m experiments.pes2027.plot_pes_soc \
+  --output experiments/case118_tracy_2021/results/pes_soc_reproduction
+```
+
+## Configured network panel
+
+`plot_pes_network.py` generates the final paper's configured-network panel from
+hash-checked Stage A tables and the pinned PGLib topology. It preserves the
+historical spring-layout seed (42), topology and asset scales, and sizes gray
+load nodes by source MW demand (the allocation shares used in the study).
+Solar/wind squares sum channel peaks; battery circles use active MW ratings.
+The three area scales are separate; parallel circuits share a drawn edge.
+The paper uses `results/pes_network_review_002/configured_network.pdf` beneath
+`experiments/case118_tracy_2021/`; the historical Stage A images are untouched.
+The reproduction command is in [README.md](README.md).
+
+## Joint and rollout battery trajectories
+
+`plot_pes_rollout_soc.py` compares the deficit-to-surplus joint full AC and
+copper-plate schedules with the copper-plate-signposted AC rollout. It uses
+all 25 boundaries and reconstructs executed energy from retained first actions.
+`analyze_rollout_controls.py` applies the appendix's capacity-normalized distance
+to all six full AC-signposted controls over the 23 interior boundaries. Neither
+tool solves an OPF or claims convergence under repeated rollout passes.
+Both require the pinned figure snapshots and retained controller evidence;
+commands and expected outputs are in [README.md](README.md).

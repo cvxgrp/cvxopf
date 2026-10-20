@@ -93,7 +93,7 @@ def test_generator_adapter_preserves_injections_constraints_and_cost(formulation
     injection = binding.injections(units, prepared, variables, step)
     constraints = binding.operating_constraints(
         units, prepared, variables, step
-    )
+    ).constraints
     network_constraints = binding.network_constraints(
         units, prepared, variables, step
     )
@@ -187,7 +187,7 @@ def test_nd_adapter_preserves_scaled_injections_and_dcp_constraints(
     injection = binding.injections(units, prepared, variables, step)
     constraints = binding.operating_constraints(
         units, prepared, variables, step
-    )
+    ).constraints
 
     assert injection.inv_base_mva is not None
     assert injection.inv_base_mva.value is None
@@ -323,7 +323,7 @@ def test_storage_adapter_preserves_step_and_horizon_contributions(
     assert (injection.q_pu is not None) is (formulation == "ac")
     constraints = binding.operating_constraints(
         units, prepared, variables_0, step
-    )
+    ).constraints
     assert all(constraint.is_dcp() for constraint in constraints)
     assert binding.step_cost(
         units, prepared, variables_0, step
@@ -429,7 +429,7 @@ def test_hvdc_adapter_preserves_active_contributions(formulation):
     bind_injection_scale(injection, preparation.base_mva)
     constraints = binding.operating_constraints(
         units, prepared, variables, step
-    )
+    ).constraints
     assert len(constraints) == 3
     assert constraints[0].args[0].value[0] == pytest.approx(5.0)
     assert constraints[1].args[1].value[0] == pytest.approx(20.0)

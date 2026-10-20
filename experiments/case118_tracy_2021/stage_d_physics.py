@@ -36,6 +36,22 @@ def audit_ac_network(a, kwargs, injection, check, box):
     absolute("ac_p_reporting_pu", (a["p_net"] - physical.real) / base, 1e-6)
     absolute("ac_q_reporting_pu", (a["q_net"] - physical.imag) / base, 1e-6)
     box("voltage_pu", a["Vm"], case["bus"][:, 12], case["bus"][:, 11], 1e-6)
+    vf, vt = voltage[:, adm.from_bus], voltage[:, adm.to_bus]
+    audit_reactive_channels(
+        a, kwargs, check, box,
+        vf * np.conj(vf * adm.yff + vt * adm.yft) * base,
+        vt * np.conj(vf * adm.ytf + vt * adm.ytt) * base,
+    )
+
+
+def audit_reactive_channels(a, kwargs, check, box, branch_from, branch_to):
+    """Representation-independent P/Q reporting and capability checks."""
+    internal, _ = reindex_case_to_consecutive(kwargs["case"])
+    adm = make_branch_admittance(internal)
+
+    def absolute(name, values, limit):
+        check(name, float(np.max(np.abs(values), initial=0)), limit)
+
     box(
         "generator_q_mvar",
         a["Qg"],
@@ -71,10 +87,9 @@ def audit_ac_network(a, kwargs, injection, check, box):
         np.hypot(a["p_nd"], a["q_nd"]),
         np.array([d.apparent_power_rating for d in kwargs["nondispatchable"]]),
     )
-    vf, vt = voltage[:, adm.from_bus], voltage[:, adm.to_bus]
     for side, values in (
-        ("from", vf * np.conj(vf * adm.yff + vt * adm.yft) * base),
-        ("to", vt * np.conj(vf * adm.ytf + vt * adm.ytt) * base),
+        ("from", branch_from),
+        ("to", branch_to),
     ):
         values = values[:, adm.status]
         for component, expected in (

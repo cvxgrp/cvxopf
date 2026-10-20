@@ -1,0 +1,34 @@
+{
+  "assurance": "scientific report-only retrospective back-test",
+  "new_opf_solves": 0,
+  "topology_matches_independently_enumerated_baseline": true,
+  "existing_files_unchanged": 192,
+  "driver_protocol_and_baseline_hashes_match": true,
+  "loop_hours": 32832,
+  "completed_certificates": 0,
+  "unsupported_or_skipped_checks": 0,
+  "cap_exhausted_checks": 32832,
+  "tested_boxes_per_dispatch_search": 64,
+  "unresolved_frontier_boxes_per_search": 65,
+  "excluded_boxes": 0,
+  "actual_box_visits_including_geometry_roots": 2102616,
+  "dispatch_box_visits": 2101248,
+  "compatible_witness_contradictions": 0,
+  "ac_control_contradictions": 0,
+  "pytest": {
+    "command": "UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache uv run --extra dev python -m pytest experiments/tracy_socp_transfer_preflight experiments/tracy_battery_transfer_slice/test_slice.py experiments/tracy_battery_transfer_feasibility/test_feasibility.py experiments/tracy_battery_transfer_loop/test_analysis.py -q",
+    "passed": 135,
+    "skipped": 0,
+    "elapsed_seconds": 46.21,
+    "warnings": 1,
+    "warning": "CVXPY dependency-import warning about mixed OpenMP runtimes; no solver invoked"
+  },
+  "ruff_new_python_files": {"lint": "passed", "format": "passed"},
+  "sha256": {
+    "FORCED_SUBDIVISION_EVIDENCE.json": "1e14f34769da8f2ba67ac8cd14be362972fda9569de596f057628ad4b9f17331",
+    "FORCED_SUBDIVISION_REPORT.md": "ea32d64518d640058d5963b2405d62355d60ee532e82dfb5042fc931d82c989c",
+    "FORCED_SUBDIVISION_PROTOCOL.md": "5413a408aaba862d033c7c35581b3053661c9897d1219aff2bc5e6685318ff2f",
+    "forced_subdivision.py": "666c5987aa6fd39b2b355655e7c143319749cd01e96c067e8481ded4e369d64b",
+    "test_forced_subdivision.py": "93f9960a68abc0b48de8ce9dd476b4200190286564b03bab3b88526d5dff499b"
+  }
+}

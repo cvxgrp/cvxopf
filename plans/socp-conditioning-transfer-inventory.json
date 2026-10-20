@@ -1,0 +1,1476 @@
+{
+  "destination_branch": "socp",
+  "destination_commit": "dc1c5ace2d787fda563f99c0d3c11a48ba3e9b6a",
+  "destination_root": "/Users/bmeyers/github/cvxopf",
+  "document_counts": {
+    "decision_or_index": 2,
+    "protocol": 9,
+    "report": 28
+  },
+  "entries": [
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9,
+      "destination": "experiments/socp_conditioning/.gitignore",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/.gitignore",
+      "production_promotion": false,
+      "role": "ignore_rule",
+      "sha256": "f370ad043ec0c98a166fd98646c3b94280ed78bc996223b6cca2ba936f7c6781"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2131,
+      "destination": "experiments/socp_conditioning/ACCEPTANCE_DECISION.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/ACCEPTANCE_DECISION.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "611ad6192ef83836c9c39dbfa9836af86f919c23a42fcdfffc7aea76cef381d6"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2169,
+      "destination": "experiments/socp_conditioning/BUILTIN_LINSOLVER_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/BUILTIN_LINSOLVER_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "44ac4c058d44f3f5e5062a9a1507e8d6fd5935cedc821991ef1e575e6da2511c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7820,
+      "destination": "experiments/socp_conditioning/BUILTIN_LINSOLVER_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/BUILTIN_LINSOLVER_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "717e9b2a0faf3c9e31d4deda2ee41284b45112d28a3e4e0bdae6bbdd57de5d35"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2970,
+      "destination": "experiments/socp_conditioning/COMPENSATED_CONE_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/COMPENSATED_CONE_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "10d532040e7bdd7ae6fd4b4e4c55dad4fb2d114f393a1ffcb47163b9a387f9e7"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7742,
+      "destination": "experiments/socp_conditioning/COMPENSATED_CONE_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/COMPENSATED_CONE_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "d5fd73573715441211b8951adc1e621f6e4006d3ba95db4b3c8dd2ff608d441e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2777,
+      "destination": "experiments/socp_conditioning/CONE_INTERIORITY_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/CONE_INTERIORITY_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "8aa772223f327fc58f92008813946240d341a9bc375b9382029b9adfe2558d42"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7613,
+      "destination": "experiments/socp_conditioning/CONE_INTERIORITY_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/CONE_INTERIORITY_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "b40d2f9f31ceb7b91b74e28f6a375dd0458a71d0d2aadde4e949d913bb3e8dc0"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5591,
+      "destination": "experiments/socp_conditioning/CONE_SCALING_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/CONE_SCALING_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "d9962df633b62a458ca3e0eb6ffd48be128e7972bc5a89d60d591652b75a7199"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3802,
+      "destination": "experiments/socp_conditioning/COPT_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/COPT_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "e239d5aab59f8cb8cd9e6af7f3cb73ed0c3a70a621f5d0f98624df005b1c3e80"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4083,
+      "destination": "experiments/socp_conditioning/EQUILIBRATION_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/EQUILIBRATION_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "5f42aa175ae678c47f9cc11dadfe61f0cedc3c23072717772af538e2b43b730e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4357,
+      "destination": "experiments/socp_conditioning/FIXED_BOX_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/FIXED_BOX_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "d60aec0c0338b710836639856d1eb30f8349cf30c38e4f40444f0edb0c9f9d37"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4932,
+      "destination": "experiments/socp_conditioning/FIXED_SUBSTITUTION_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/FIXED_SUBSTITUTION_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "0c6ef713b1170599252e49e5810323f214f57b43dff5a245ce1fae58ba47cf88"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2933,
+      "destination": "experiments/socp_conditioning/FOUR_CONDITIONS_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/FOUR_CONDITIONS_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "280407d8b123b70587dbe98ff42445cb4f0a4e7206291604c3209bd6ab767208"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8054,
+      "destination": "experiments/socp_conditioning/FOUR_CONDITIONS_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/FOUR_CONDITIONS_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "74ab7eebb6776b0b919749c02767c5ae4200e7a9844b060d84c067f85b61a6a6"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5308,
+      "destination": "experiments/socp_conditioning/JOINT_FIXED_BOX_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/JOINT_FIXED_BOX_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "5a9b4f6aee65fab11b5974755af2b191231a40582e8026258cf4f7bc1aa49f5f"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7764,
+      "destination": "experiments/socp_conditioning/JOINT_FOLLOWUP_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/JOINT_FOLLOWUP_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "80bd910c2a848b84bcdd45d757c9e4afd7c8a5b3c9ea5f3e9665c6d2a7dbed02"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4939,
+      "destination": "experiments/socp_conditioning/JOINT_SCALING_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/JOINT_SCALING_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "725dd672bcaf77877ecd14975d50a229d09b9e4bbb3d468668a36584c6e8a05c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6740,
+      "destination": "experiments/socp_conditioning/KKT_FACTORIZATION_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/KKT_FACTORIZATION_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "9d299314315e2e3e582521b002ab227647a1a366864fef5f3fbc42967bd6dc72"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4187,
+      "destination": "experiments/socp_conditioning/KKT_SCALING_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/KKT_SCALING_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "5558e57ef412f60bd56d14d69f0b9b99bfc4e1945828ac4fb2f0ceb65787866f"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5489,
+      "destination": "experiments/socp_conditioning/MATRIX_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/MATRIX_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "043f9078a6f674c71b36c488d2b8ae532291ce098caaa7280928cf9f16582e46"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3589,
+      "destination": "experiments/socp_conditioning/MINIMUM_STEP_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/MINIMUM_STEP_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "96c4f71add715ee39ab9b2c0a79bb302427f955fdf1fd3bdf9da5f06e34a5d6c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4040,
+      "destination": "experiments/socp_conditioning/MOSEK_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/MOSEK_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "b69aede8ebf897df7c997c5b8dfba041bb620679bb955175f11bcea7e46c163c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6581,
+      "destination": "experiments/socp_conditioning/NATIVE_KKT_SCALING_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/NATIVE_KKT_SCALING_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "5299cd14088cfb206ea3854d1b3839d074ed9aa6ded9acf663ca3c5ced3e01d0"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3836,
+      "destination": "experiments/socp_conditioning/NATIVE_LU_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/NATIVE_LU_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "afb1805d4c423166b70cd474ec4516808f5bbaf4a6e3bc9d6b15b0f5a5d4952c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8397,
+      "destination": "experiments/socp_conditioning/NATIVE_LU_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/NATIVE_LU_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "35bfb7803de34c8e5041f48d81923e1fcce76e2136e927a757e6305ecf8fdd14"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6104,
+      "destination": "experiments/socp_conditioning/NATIVE_STEP_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/NATIVE_STEP_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "1eaf32b8376f19c27a934acc200a39f72804909d6f29fae309ee65fce67745ef"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5255,
+      "destination": "experiments/socp_conditioning/NO_SHEDDING_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/NO_SHEDDING_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "740f52248cc63c006e4a8ce1612b86f4704df7f2062518f6185914f313df0ab9"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7470,
+      "destination": "experiments/socp_conditioning/OPTIMALITY_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/OPTIMALITY_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "e3bd970aef5b43d44b8e184e46877616832993508bcc5659e42cf77da26277fd"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2487,
+      "destination": "experiments/socp_conditioning/PRACTICAL_LU_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/PRACTICAL_LU_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "1c456fd95fa971b21f33ff6854699958e77e24ca80b56f4d0d19e0d0b752e5ee"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9890,
+      "destination": "experiments/socp_conditioning/PRACTICAL_LU_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/PRACTICAL_LU_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "0ec7a7606e55da86adfb7f1702fb93445797f32225ca85cff0c3e52bbef2b578"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 24043,
+      "destination": "experiments/socp_conditioning/PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "cf32c9691b0269c7b4bc9bc21fdec287d57a4edd857c88f6a9939bd7838a4f1c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4429,
+      "destination": "experiments/socp_conditioning/REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "e7e6fa09cdb0a9e24cc83183183b278b5e443a712780dd492a82779533c6383e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3429,
+      "destination": "experiments/socp_conditioning/SHARED_CONE_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/SHARED_CONE_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "4b4507f49f92255fe9db0cefa7128b30a94f1929e53c9ea1ebf7aec2ab978e60"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7881,
+      "destination": "experiments/socp_conditioning/SHARED_CONE_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/SHARED_CONE_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "0960b5920e99877ccd5975d88a142b8307bd3de0297267737cac6d62b1dc8ada"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 13513,
+      "destination": "experiments/socp_conditioning/STUDY_INDEX.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/STUDY_INDEX.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "f8c8d837563e846a20d7ac2751c1f314411ef71e292c89b2f50d121419ddcdfa"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6331,
+      "destination": "experiments/socp_conditioning/SURPLUS_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/SURPLUS_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "2e11fb56c1793831c4130a195e33cd3f034f56d6222834d73676ef4fb080c499"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3737,
+      "destination": "experiments/socp_conditioning/SWEEP_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/SWEEP_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "a6cdbeb4f6095f29c1675a8a44f0e0a8bb5c076bdd8900106ce96444b2c65854"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2794,
+      "destination": "experiments/socp_conditioning/TERMINATION_PROTOCOL.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/TERMINATION_PROTOCOL.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "3942e471d4321ec9f26d3f9261be4a6a427897be3307bdd67aefad4a8c8e6e0d"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5776,
+      "destination": "experiments/socp_conditioning/TERMINATION_REPORT.md",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/TERMINATION_REPORT.md",
+      "production_promotion": false,
+      "role": "historical_record",
+      "sha256": "3d9f0e78b707a6060d0042572be20b85e8c937917ff3b1a18ce4a3c5b13a57ac"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9010,
+      "destination": "experiments/socp_conditioning/builtin_linsolvers.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "practical_lu"
+      ],
+      "path": "experiments/socp_conditioning/builtin_linsolvers.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "4bdf501a8980df84967f657e9930fd1785eb52c71e771739e079852cc566c1eb"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5676,
+      "destination": "experiments/socp_conditioning/builtin_linsolvers_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "builtin_linsolvers",
+        "practical_lu_analysis"
+      ],
+      "path": "experiments/socp_conditioning/builtin_linsolvers_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "7e6e862177abcec935203c4e3ae41c8d2f8479349cc591b99fc753bfdb04b7f7"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9357,
+      "destination": "experiments/socp_conditioning/compensated_cone.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_interiority",
+        "diagnostic",
+        "native_lu_probe",
+        "native_step_probe",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/compensated_cone.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "c87d749e78680e69486aef87fc28667f9991a25546fc897cb59ca5c96609f986"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4136,
+      "destination": "experiments/socp_conditioning/compensated_cone_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "compensated_cone",
+        "diagnostic",
+        "native_step_analysis"
+      ],
+      "path": "experiments/socp_conditioning/compensated_cone_analysis.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "eefdedd52569d1818864f02c04b198fe78b6fab1f4f4325ec5837c038d9e9d5c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7318,
+      "destination": "experiments/socp_conditioning/cone_interiority.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "native_lu_probe",
+        "native_step_probe",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/cone_interiority.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "e2ddfb5678c5b8fa63d22afef12cc5c3afafdec62dc9f6728f25a4a1dde1d41e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7549,
+      "destination": "experiments/socp_conditioning/cone_interiority_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_interiority",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "native_step_analysis",
+        "no_shedding",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/cone_interiority_analysis.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "23757bab02b2a0f87c6ee8e16ba1f127dbfe4c53f5e80928f150ef464381f727"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 17666,
+      "destination": "experiments/socp_conditioning/cone_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "matrix_conditioning",
+        "mosek_check",
+        "no_shedding",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/cone_scaling.py",
+      "production_promotion": false,
+      "role": "transformation_extraction_seed",
+      "sha256": "aae745cdee8509de5c5718c4757b9ce7c38ad9fe448f85d7434937ce3a2b59a7"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6568,
+      "destination": "experiments/socp_conditioning/cone_scaling_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "diagnostic",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/cone_scaling_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "4703a2fd35ecebd15186a392ee2984c779ce4e77b5690f0692a943fdac1a857e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6331,
+      "destination": "experiments/socp_conditioning/copt_check.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "mosek_check"
+      ],
+      "path": "experiments/socp_conditioning/copt_check.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "cd1c6c2f2fd7abe8956571b2a60c42ef3a3507b3ad432d175d1e8e73abdd43bf"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 35163,
+      "destination": "experiments/socp_conditioning/diagnostic.py",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/diagnostic.py",
+      "production_promotion": false,
+      "role": "transformation_extraction_seed",
+      "sha256": "65c238fb1cdb0cbce189b3514da594f836395fbcdaad366cc23ccd42e9f24867"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4603,
+      "destination": "experiments/socp_conditioning/equilibration_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/equilibration_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "9395c49381d6292572ba9c868a5e2b644e9bc2bcd4e3b0604d28c6ceaee3a298"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3495,
+      "destination": "experiments/socp_conditioning/fixed_box_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/fixed_box_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "f6797ffe71d14b1208969abb4aadf6831b7144d02fe0a41017c8e51f13ba6f6d"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7866,
+      "destination": "experiments/socp_conditioning/fixed_substitution.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "diagnostic",
+        "joint_fixed_boxes",
+        "joint_scaling",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/fixed_substitution.py",
+      "production_promotion": false,
+      "role": "transformation_extraction_seed",
+      "sha256": "fe7f0e5f5bdf8345f60c0c9500575487a09d97263f02dbca58b6bee753a5376e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 16865,
+      "destination": "experiments/socp_conditioning/four_conditions.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "builtin_linsolvers",
+        "practical_lu_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/four_conditions.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "10f0fda248708a17b763f5afff39a9fd1da83faf35947f77cf99fc307e0857dc"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2351,
+      "destination": "experiments/socp_conditioning/joint_deficit.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "diagnostic",
+        "joint_scaling"
+      ],
+      "path": "experiments/socp_conditioning/joint_deficit.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "a48ebb56fd0272e67f6db9cbc288efe00682cff6963d2361385824d7c7ecf070"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5395,
+      "destination": "experiments/socp_conditioning/joint_fixed_box_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "joint_fixed_boxes",
+        "joint_scaling",
+        "matrix_conditioning",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/joint_fixed_box_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "8537eb788890f0ce43da638af683cdeae102847e03ed77752959d449254ffb88"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6543,
+      "destination": "experiments/socp_conditioning/joint_fixed_boxes.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "joint_scaling",
+        "matrix_conditioning",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/joint_fixed_boxes.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "488767c543158b17895f92ea091b9484fec10bc480ef3cadbcece4e23fbd8cf5"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2897,
+      "destination": "experiments/socp_conditioning/joint_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "diagnostic"
+      ],
+      "path": "experiments/socp_conditioning/joint_scaling.py",
+      "production_promotion": false,
+      "role": "transformation_extraction_seed",
+      "sha256": "f1c9eb1ca4308696baf32ccde8a137c28873b57bf46f7459ef53ae7bf3c9ce25"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4982,
+      "destination": "experiments/socp_conditioning/joint_stopping_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling_analysis",
+        "diagnostic",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/joint_stopping_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "83f7b5814f81cae1ed2da0f19e2046f49e2938a8a80bdffa0754f1ba17c25bda"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1322,
+      "destination": "experiments/socp_conditioning/kkt_capture.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "native_step_probe"
+      ],
+      "path": "experiments/socp_conditioning/kkt_capture.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "241141cac6135f010bcc03e02edec66012fba8b2b3dcefe0453e420e1b9662f4"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9920,
+      "destination": "experiments/socp_conditioning/kkt_factorization.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "mosek_check",
+        "native_step_probe"
+      ],
+      "path": "experiments/socp_conditioning/kkt_factorization.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "15c29bec92a63400ebb729606a8e8433c14c34184050bc40bff2c0d67f54b381"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 6120,
+      "destination": "experiments/socp_conditioning/kkt_residual_check.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling_analysis",
+        "diagnostic",
+        "kkt_factorization",
+        "mosek_check",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/kkt_residual_check.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "32b3d288566c9a87cdfcf1dcbff48724fc67ee5d1fcac4554906dd98b4064984"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8534,
+      "destination": "experiments/socp_conditioning/kkt_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "kkt_factorization",
+        "kkt_residual_check",
+        "mosek_check"
+      ],
+      "path": "experiments/socp_conditioning/kkt_scaling.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "9e9c5e8b1f4d205bd8d097f8923123d0a92e011c7a54285fd9751909c232583b"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3642,
+      "destination": "experiments/socp_conditioning/lu_bridge.py",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/lu_bridge.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "c9b7a486d8f6826bdb4a9a7806b3fdae3d75345b09c70985a237bb5a3d66cacf"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 15857,
+      "destination": "experiments/socp_conditioning/matrix_conditioning.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "mosek_check",
+        "no_shedding",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/matrix_conditioning.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "5ab316c7efa0f19bfdbf64a7b9402db0bf70736c5d739dcc502a0623b7f98103"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4751,
+      "destination": "experiments/socp_conditioning/minimum_step.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/minimum_step.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "f3a6570c8e70f92f5b44b980e699a0b2e1310c16f6d97b3b48d9b3d1f4876b20"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8865,
+      "destination": "experiments/socp_conditioning/mosek_check.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic"
+      ],
+      "path": "experiments/socp_conditioning/mosek_check.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "d600db58e5bd18610fbed7a000dce48eb32e42e93bf3afbd1b084163bb6e3255"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7456,
+      "destination": "experiments/socp_conditioning/native_kkt_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "minimum_step",
+        "mosek_check",
+        "native_step_analysis",
+        "native_step_probe",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/native_kkt_scaling.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "15c364ebac04ed2b0d6479834bc473e2dab84345135ed8be752b3e850237552e"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9093,
+      "destination": "experiments/socp_conditioning/native_lu_probe.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "lu_bridge",
+        "minimum_step",
+        "mosek_check",
+        "native_kkt_scaling",
+        "native_step_analysis",
+        "native_step_probe",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/native_lu_probe.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "a661e56163447aeda7581469985aa7f61249f9bb40e84bcf039179d0149900bc"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 10642,
+      "destination": "experiments/socp_conditioning/native_step_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling_analysis",
+        "diagnostic",
+        "native_step_probe",
+        "no_shedding",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/native_step_analysis.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "205f759193df782a550a1c9a4f5fc43ec558f398db86bf6e6d212ddddcbfb092"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9941,
+      "destination": "experiments/socp_conditioning/native_step_probe.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "minimum_step",
+        "mosek_check",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/native_step_probe.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "3b2db3dc968875995839eea6392f641d154bc37cae7861c6febca9bcc863290c"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5495,
+      "destination": "experiments/socp_conditioning/no_shedding.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "copt_check",
+        "diagnostic",
+        "mosek_check"
+      ],
+      "path": "experiments/socp_conditioning/no_shedding.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "51e548e579be4514166d6d6f25416c7866604af249e99fba37e1d3e50b6386f8"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 15589,
+      "destination": "experiments/socp_conditioning/optimality_audit.py",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/optimality_audit.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "a4a654c1ca020db1dac1f6d1709d515e17f065c989aa7ff6cd12af3ef618d117"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5632,
+      "destination": "experiments/socp_conditioning/plot_joint_trajectories.py",
+      "destination_exists": false,
+      "experiment_dependencies": [],
+      "path": "experiments/socp_conditioning/plot_joint_trajectories.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "23c9f08bc132d16b6ca7fd0241cdd14c971a7be6d507d574d2901f543fe442fd"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8366,
+      "destination": "experiments/socp_conditioning/practical_lu.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "native_lu_probe"
+      ],
+      "path": "experiments/socp_conditioning/practical_lu.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "3cd5a53695e9aae50b751c85353dd475babc4dde9b79e8c97a5ee23370d79c57"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 5164,
+      "destination": "experiments/socp_conditioning/practical_lu_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "practical_lu"
+      ],
+      "path": "experiments/socp_conditioning/practical_lu_analysis.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "b31ad6d88cd428a5f90728090915a4b01e73d64a9e6f5200912043790e7d674f"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8566,
+      "destination": "experiments/socp_conditioning/shared_cone.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "compensated_cone",
+        "diagnostic",
+        "native_lu_probe",
+        "native_step_probe",
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/shared_cone.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "3163a4b984f6cb1dfa955c44276861ed5eb27db753fcedbe4186ea416dbe4e49"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4962,
+      "destination": "experiments/socp_conditioning/shared_cone_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_interiority_analysis",
+        "shared_cone"
+      ],
+      "path": "experiments/socp_conditioning/shared_cone_analysis.py",
+      "production_promotion": false,
+      "role": "historical_native_experiment",
+      "sha256": "7810d5e0c3a196833eeb03a8e2ac1aa11fff8eab0ff2f03983d1e2d231dd0dde"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 7874,
+      "destination": "experiments/socp_conditioning/substitution_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling_analysis",
+        "diagnostic",
+        "fixed_substitution",
+        "joint_scaling",
+        "matrix_conditioning",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/substitution_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "b68f92b48640ad60e4f389658014f8ea10ff4ed47e54436d4ff8b2e618cdfd38"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 8847,
+      "destination": "experiments/socp_conditioning/termination_analysis.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "fixed_substitution",
+        "joint_scaling",
+        "no_shedding",
+        "optimality_audit",
+        "termination_probe"
+      ],
+      "path": "experiments/socp_conditioning/termination_analysis.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "a899193ca54675e276aa599df750867b471e55f027488410ea39bd7d1da7d052"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 20754,
+      "destination": "experiments/socp_conditioning/termination_probe.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "fixed_substitution",
+        "joint_scaling",
+        "matrix_conditioning",
+        "mosek_check",
+        "no_shedding",
+        "optimality_audit"
+      ],
+      "path": "experiments/socp_conditioning/termination_probe.py",
+      "production_promotion": false,
+      "role": "historical_diagnostic",
+      "sha256": "f97fa7582c638c85116d0c8156c0202361cb3fd41e54e4e3378455fc73390189"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1044,
+      "destination": "tests/test_socp_conditioning_builtin_linsolvers.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "builtin_linsolvers"
+      ],
+      "path": "tests/test_socp_conditioning_builtin_linsolvers.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "69357de2b8a6db8491d568d98d28628f2914decb58a2889b5e701848a0fb1b08"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1072,
+      "destination": "tests/test_socp_conditioning_compensated_cone.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "compensated_cone"
+      ],
+      "path": "tests/test_socp_conditioning_compensated_cone.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "1b3510b25fd4cf44e0dc41a8ad48cf4c45d4c3e00b9231f25b7ce44e8e9aa9bd"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3347,
+      "destination": "tests/test_socp_conditioning_cone_interiority.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_interiority",
+        "cone_interiority_analysis"
+      ],
+      "path": "tests/test_socp_conditioning_cone_interiority.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "1a574a0769718df8ce2117e78f887e9f4d442b4f520b7d78174bffe60bfff98d"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 4250,
+      "destination": "tests/test_socp_conditioning_cone_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "cone_scaling_analysis",
+        "diagnostic",
+        "optimality_audit"
+      ],
+      "path": "tests/test_socp_conditioning_cone_scaling.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "631479e65293ad514ce254735272ee19e8f2dfcbb3a10cb5bfbaa84a1d645d51"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1089,
+      "destination": "tests/test_socp_conditioning_copt.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "copt_check"
+      ],
+      "path": "tests/test_socp_conditioning_copt.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "e813d85774fa411c93bf78df91093b1285f9cffeee1735e0cd801ab9a0033ad4"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 9229,
+      "destination": "tests/test_socp_conditioning_diagnostic.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic"
+      ],
+      "path": "tests/test_socp_conditioning_diagnostic.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "072279cbd11746a65085dab5da5c3d09b5c0422ad4945f831e7f9faab7d2dd51"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1948,
+      "destination": "tests/test_socp_conditioning_equilibration.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic"
+      ],
+      "path": "tests/test_socp_conditioning_equilibration.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "cd4fb1609d988836a8492cb30e6296d915eabc52998e3aff3f6dd1eb489bdd75"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1827,
+      "destination": "tests/test_socp_conditioning_fixed_boxes.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic"
+      ],
+      "path": "tests/test_socp_conditioning_fixed_boxes.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "25bc892fad26f024150e77904f14dce04372f01f553100dcfa58744ab2f2fdf3"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2366,
+      "destination": "tests/test_socp_conditioning_four_conditions.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "four_conditions"
+      ],
+      "path": "tests/test_socp_conditioning_four_conditions.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "7e275138a9ddcb19a8074f554287ee8a13d9ba986c88074402033b87bb9587e1"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2833,
+      "destination": "tests/test_socp_conditioning_joint_fixed_boxes.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "joint_fixed_boxes",
+        "joint_scaling"
+      ],
+      "path": "tests/test_socp_conditioning_joint_fixed_boxes.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "cfede80cba0024db665bb7251215ec5f365a5a065f2678a74e3f49d48f420d08"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2599,
+      "destination": "tests/test_socp_conditioning_joint_followup.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "joint_deficit",
+        "joint_scaling",
+        "joint_stopping_analysis"
+      ],
+      "path": "tests/test_socp_conditioning_joint_followup.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "aee2fc90f2fe37613e823d57c5daedbfac29332d7362cde51c458d9360c6ee18"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2602,
+      "destination": "tests/test_socp_conditioning_joint_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_scaling",
+        "diagnostic",
+        "joint_scaling",
+        "optimality_audit"
+      ],
+      "path": "tests/test_socp_conditioning_joint_scaling.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "f58c7a8d7b74d5321fabd685e756913ac99b293a5fb670662af4966ee7f6a8a0"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1419,
+      "destination": "tests/test_socp_conditioning_kkt.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "kkt_factorization",
+        "kkt_residual_check",
+        "native_step_probe"
+      ],
+      "path": "tests/test_socp_conditioning_kkt.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "7791ea841cf1409a21e163f9cc02fd4c534b6e5501b5b31acb0b685876bba926"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 939,
+      "destination": "tests/test_socp_conditioning_kkt_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "kkt_scaling"
+      ],
+      "path": "tests/test_socp_conditioning_kkt_scaling.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "ebf9a1463d646e61b9f2b5fdd6066b2847649268e188060e767ceb23693182cd"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2110,
+      "destination": "tests/test_socp_conditioning_matrices.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "matrix_conditioning"
+      ],
+      "path": "tests/test_socp_conditioning_matrices.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "1e92ddfa00180f13f4d023bfceaec956413b82cdb463e6c90ad7ee6e2233bce0"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 665,
+      "destination": "tests/test_socp_conditioning_minimum_step.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "minimum_step"
+      ],
+      "path": "tests/test_socp_conditioning_minimum_step.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "f3554745a27fa5f2ec2f9c0a0c1de655ca55b09f6ceda23d449cb1da549b0adc"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1565,
+      "destination": "tests/test_socp_conditioning_mosek.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "mosek_check"
+      ],
+      "path": "tests/test_socp_conditioning_mosek.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "15d1693ecf35655796412b0cb1f0c9d4f4ed03f3d7e4769bd898d60f99d24397"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1934,
+      "destination": "tests/test_socp_conditioning_native_kkt_scaling.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "native_kkt_scaling"
+      ],
+      "path": "tests/test_socp_conditioning_native_kkt_scaling.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "74bee9ad63983a8fbaa61302d8f0bd9588581a99d27231ab5866e9729b4bec97"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3954,
+      "destination": "tests/test_socp_conditioning_native_lu.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "lu_bridge",
+        "native_lu_probe"
+      ],
+      "path": "tests/test_socp_conditioning_native_lu.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "4225a3616f66589abed23b617520fc6fa546c156908ad28acad4a0ec2c870d17"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2596,
+      "destination": "tests/test_socp_conditioning_native_step.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "native_step_analysis",
+        "native_step_probe"
+      ],
+      "path": "tests/test_socp_conditioning_native_step.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "2e1189b8e99e5c3fad69b7b46da93e883534ed0b900527538a2a9804944cfa5f"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1312,
+      "destination": "tests/test_socp_conditioning_no_shedding.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "diagnostic",
+        "no_shedding"
+      ],
+      "path": "tests/test_socp_conditioning_no_shedding.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "f14d780430580ebc591d87e6ca5dd5beb96ce3af4851ae383e27258fbf9f1f79"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3815,
+      "destination": "tests/test_socp_conditioning_optimality.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "optimality_audit"
+      ],
+      "path": "tests/test_socp_conditioning_optimality.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "0ac2146c1df768b6b7059193b44f936839d3539def493b1023b96fe03a5ad292"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1718,
+      "destination": "tests/test_socp_conditioning_practical_lu.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "practical_lu",
+        "practical_lu_analysis"
+      ],
+      "path": "tests/test_socp_conditioning_practical_lu.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "a30fb816b194b66e92de72ca953987fe7400ccafb37406ad2f9047026ece4f8a"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1088,
+      "destination": "tests/test_socp_conditioning_precise_gap.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "optimality_audit"
+      ],
+      "path": "tests/test_socp_conditioning_precise_gap.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "507e14dad27cc564820834e5d98cb36b6fd7bc7e57c06bd74a499be25e88b10f"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 1762,
+      "destination": "tests/test_socp_conditioning_shared_cone.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "cone_interiority_analysis",
+        "shared_cone"
+      ],
+      "path": "tests/test_socp_conditioning_shared_cone.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "4226f53b43f5feb0a17db7ec94700639776ab604bfc77693c3eabdc9ae050f30"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 2617,
+      "destination": "tests/test_socp_conditioning_substitution.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "fixed_substitution"
+      ],
+      "path": "tests/test_socp_conditioning_substitution.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "342a154379e32388583e734e04cb43bda348ba4ba8a65fe202829e77e4679559"
+    },
+    {
+      "action": "copy_exact_for_preservation",
+      "bytes": 3419,
+      "destination": "tests/test_socp_conditioning_termination.py",
+      "destination_exists": false,
+      "experiment_dependencies": [
+        "termination_analysis",
+        "termination_probe"
+      ],
+      "path": "tests/test_socp_conditioning_termination.py",
+      "production_promotion": false,
+      "role": "historical_test",
+      "sha256": "3a870b0beb9f98a9171f7bfd2ca261cb11a26c852036e515037bf61c21fd673d"
+    }
+  ],
+  "schema": 1,
+  "source_commit": "dc1c5ace2d787fda563f99c0d3c11a48ba3e9b6a",
+  "source_root": "/Users/bmeyers/.codex/worktrees/socp-ac-scaling/cvxopf",
+  "transfer_count": 108,
+  "inventory_date_local": "2026-10-06",
+  "transfer_status": "plan_only_no_files_transferred",
+  "exclusions": [
+    "experiments/socp_conditioning/results/** from reviewable transfer",
+    "**/__pycache__/**",
+    "*.pyc",
+    "temporary Rust checkout, target build directories, Cargo/Rustup/uv caches",
+    "installed solver packages, environments and dependencies",
+    "all unrelated checkout files"
+  ],
+  "evidence_manifest": "socp-conditioning-evidence-inventory.json"
+}

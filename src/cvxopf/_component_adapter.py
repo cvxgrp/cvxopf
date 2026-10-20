@@ -7,6 +7,8 @@ bindings over the authoritative device modules live in ``_component_adapters``.
 
 from __future__ import annotations
 
+from cvxopf._cost_coordinates import CostCoordinateTerm
+
 from dataclasses import dataclass, field
 from enum import Enum
 import math
@@ -14,6 +16,7 @@ from numbers import Real
 from types import MappingProxyType
 from typing import (
     Generic,
+    Callable,
     Mapping,
     Protocol,
     Sequence,
@@ -21,6 +24,13 @@ from typing import (
 )
 
 import cvxpy as cp
+
+from cvxopf._numerical_preparation import (
+    ExactBoxBinding,
+    NumericalPreparation,
+    OperatingSetContribution,
+    validate_preparation,
+)
 
 from cvxopf._temporal_assembly import Formulation as Formulation
 from cvxopf._temporal_assembly import HorizonVariableSpec
@@ -104,7 +114,30 @@ class DCNetworkState:
     """Explicit empty network state for DC component constraints."""
 
 
-NetworkState = ACNetworkState | DCNetworkState
+@dataclass(frozen=True)
+class SquaredVoltageNetworkState:
+    """Lifted network voltage state; device power channels remain P and Q."""
+
+    voltage_squared: cp.Variable
+    controlled_buses: tuple[int, ...]
+    enforce_vset: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "controlled_buses", tuple(self.controlled_buses))
+
+
+NetworkState = ACNetworkState | SquaredVoltageNetworkState | DCNetworkState
+
+
+def _validate_network_state(formulation: Formulation, state: NetworkState) -> None:
+    expected = {
+        "ac": ACNetworkState,
+        "socp": SquaredVoltageNetworkState,
+        "lossy_dc": DCNetworkState,
+        "singlenode_dc": DCNetworkState,
+    }[formulation]
+    if not isinstance(state, expected):
+        raise ValueError(f"formulation={formulation!r} requires {expected.__name__}")
 
 
 @dataclass(frozen=True)
@@ -116,6 +149,7 @@ class StepContext:
     base_mva: float
     ext_to_int: Mapping[int, int]
     network_state: NetworkState
+    numerical_preparation: NumericalPreparation = NumericalPreparation()
 
     def __post_init__(self) -> None:
         if not isinstance(self.step, int) or isinstance(self.step, bool):
@@ -123,13 +157,8 @@ class StepContext:
         if self.step < 0:
             raise ValueError("step must be a nonnegative integer")
         _validate_positive_real("base_mva", self.base_mva)
-        if self.formulation == "ac":
-            if not isinstance(self.network_state, ACNetworkState):
-                raise ValueError("formulation='ac' requires ACNetworkState")
-        elif not isinstance(self.network_state, DCNetworkState):
-            raise ValueError(
-                f"formulation={self.formulation!r} requires DCNetworkState"
-            )
+        _validate_network_state(self.formulation, self.network_state)
+        validate_preparation(self.numerical_preparation, self.formulation)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -161,6 +190,7 @@ class VectorizedContext:
     base_mva: float
     ext_to_int: Mapping[int, int]
     network_state: NetworkState
+    numerical_preparation: NumericalPreparation = NumericalPreparation()
 
     def __post_init__(self) -> None:
         if (
@@ -171,13 +201,8 @@ class VectorizedContext:
             raise ValueError("horizon_steps must be a positive integer")
         _validate_positive_real("delta", self.delta)
         _validate_positive_real("base_mva", self.base_mva)
-        if self.formulation == "ac":
-            if not isinstance(self.network_state, ACNetworkState):
-                raise ValueError("formulation='ac' requires ACNetworkState")
-        elif not isinstance(self.network_state, DCNetworkState):
-            raise ValueError(
-                f"formulation={self.formulation!r} requires DCNetworkState"
-            )
+        _validate_network_state(self.formulation, self.network_state)
+        validate_preparation(self.numerical_preparation, self.formulation)
         object.__setattr__(self, "ext_to_int", _readonly(self.ext_to_int))
 
 
@@ -238,6 +263,8 @@ class StepContribution:
     cost: cp.Expression | None = None
     cost_expression_name: str | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
+    exact_boxes: tuple[ExactBoxBinding, ...] = ()
+    cost_coordinates: tuple[CostCoordinateTerm, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables", _readonly(self.variables))
@@ -252,6 +279,7 @@ class StepContribution:
             tuple(self.network_constraints),
         )
         object.__setattr__(self, "expressions", _readonly(self.expressions))
+        object.__setattr__(self, "exact_boxes", tuple(self.exact_boxes))
 
 
 @dataclass(frozen=True)
@@ -277,6 +305,8 @@ class VectorizedModelContribution:
     stage_cost_rate: cp.Expression | None = None
     expressions: Mapping[str, cp.Expression] = field(default_factory=dict)
     horizon: HorizonContribution = field(default_factory=HorizonContribution)
+    exact_boxes: tuple[ExactBoxBinding, ...] = ()
+    cost_coordinates: tuple[CostCoordinateTerm, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -284,6 +314,7 @@ class VectorizedModelContribution:
         )
         object.__setattr__(self, "network_constraints", tuple(self.network_constraints))
         object.__setattr__(self, "expressions", _readonly(self.expressions))
+        object.__setattr__(self, "exact_boxes", tuple(self.exact_boxes))
 
 
 @dataclass(frozen=True)
@@ -355,7 +386,7 @@ class InjectionHook(Protocol[UnitT_contra]):
 
 
 class ConstraintHook(Protocol[UnitT_contra]):
-    """Return operating or device-to-network constraints for one step."""
+    """Return device-to-network constraints for one step."""
 
     def __call__(
         self,
@@ -364,6 +395,18 @@ class ConstraintHook(Protocol[UnitT_contra]):
         variables: Mapping[str, cp.Variable],
         context: StepContext,
     ) -> tuple[cp.Constraint, ...]: ...
+
+
+class OperatingSetHook(Protocol[UnitT_contra]):
+    """Return typed operating constraints and fixed-box provenance."""
+
+    def __call__(
+        self,
+        units: Sequence[UnitT_contra],
+        prepared: Mapping[str, object],
+        variables: Mapping[str, cp.Variable],
+        context: StepContext,
+    ) -> OperatingSetContribution: ...
 
 
 class StepCostHook(Protocol[UnitT_contra]):
@@ -432,9 +475,11 @@ class FormulationAdapter(Generic[UnitT]):
     capability: FormulationCapability
     variable_specs: VariableSpecHook[UnitT] | None = None
     injections: InjectionHook[UnitT] | None = None
-    operating_constraints: ConstraintHook[UnitT] | None = None
+    operating_constraints: OperatingSetHook[UnitT] | None = None
     network_constraints: ConstraintHook[UnitT] | None = None
     step_cost: StepCostHook[UnitT] | None = None
+    cost_coordinates: Callable[[Mapping[str, object], Mapping[str, cp.Variable], StepContext,
+                                cp.Expression], tuple[CostCoordinateTerm, ...]] | None = None
     step_expressions: StepExpressionHook[UnitT] | None = None
     horizon: HorizonHook[UnitT] | None = None
     vectorized_variable_specs: VectorizedVariableSpecHook[UnitT] | None = None
@@ -465,6 +510,7 @@ class FormulationAdapter(Generic[UnitT]):
                 *required,
                 self.network_constraints,
                 self.step_cost,
+                self.cost_coordinates,
                 self.step_expressions,
                 self.vectorized_variable_specs,
                 self.vectorized_assembly,
@@ -493,7 +539,7 @@ class ComponentAdapter(Generic[UnitT, InputT]):
             or not self.cost_expression_name
         ):
             raise ValueError("component cost expression name must be a nonempty string")
-        expected = {"ac", "lossy_dc", "singlenode_dc"}
+        expected = {"ac", "socp", "lossy_dc", "singlenode_dc"}
         if set(self.formulations) != expected:
             raise ValueError(
                 "component adapter formulations must contain exactly "

@@ -37,7 +37,7 @@ import pytest
 
 from cvxopf.testcases import case9, case14, case57
 from cvxopf.testcases.case9_pwl import case9_pwl
-from cvxopf.problem import build_opf
+from cvxopf.problem import build_opf, OPFOptions, NumericalPreparation
 from cvxopf.results import extract_results, compare_to_reference
 
 
@@ -81,8 +81,16 @@ def _load_fixture(name: str) -> dict:
     return {k: np.asarray(v) if isinstance(v, list) else v for k, v in data.items()}
 
 
-def _solve(case_fn) -> dict:
-    build = build_opf(case_fn(), formulation="ac")
+@pytest.fixture(params=[NumericalPreparation(),
+                       NumericalPreparation(normalize_device_limits=True, exact_fixed_boxes=True,
+                                            cost_coordinates=True)], ids=["baseline", "prepared-ac"])
+def preparation_policy(request):
+    """Replay unchanged committed references through both production paths."""
+    return request.param
+
+
+def _solve(case_fn, policy) -> dict:
+    build = build_opf(case_fn(), formulation="ac", options=OPFOptions(numerical_preparation=policy))
     build.solve()
     return extract_results(build)
 
@@ -94,9 +102,9 @@ def _solve(case_fn) -> dict:
 
 class TestCase9VsPypower:
     @pytest.fixture(autouse=True)
-    def load_ref(self):
+    def load_ref(self, preparation_policy):
         self.ref = _load_fixture("case9_pypower_reference.json")
-        self.results = _solve(case9)
+        self.results = _solve(case9, preparation_policy)
         self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
@@ -175,9 +183,9 @@ class TestCase9VsPypower:
 
 class TestCase9PwlVsPypower:
     @pytest.fixture(autouse=True)
-    def load_ref(self):
+    def load_ref(self, preparation_policy):
         self.ref = _load_fixture("case9_pwl_pypower_reference.json")
-        self.results = _solve(case9_pwl)
+        self.results = _solve(case9_pwl, preparation_policy)
         self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
@@ -226,9 +234,9 @@ class TestCase9PwlVsPypower:
 
 class TestCase14VsPypower:
     @pytest.fixture(autouse=True)
-    def load_ref(self):
+    def load_ref(self, preparation_policy):
         self.ref = _load_fixture("case14_pypower_reference.json")
-        self.results = _solve(case14)
+        self.results = _solve(case14, preparation_policy)
         self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):
@@ -311,9 +319,9 @@ class TestCase57VsPypower:
     PG_ATOL = 0.2  # case57 needs wider tolerance than case9/case14
 
     @pytest.fixture(autouse=True)
-    def load_ref(self):
+    def load_ref(self, preparation_policy):
         self.ref = _load_fixture("case57_pypower_reference.json")
-        self.results = _solve(case57)
+        self.results = _solve(case57, preparation_policy)
         self.comp = compare_to_reference(self.results, self.ref)
 
     def test_solve_status_optimal(self):

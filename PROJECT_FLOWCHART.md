@@ -18,6 +18,7 @@ flowchart TD
     subgraph formulations["Formulation-local problem builders"]
         direction LR
         ac["<b>AC</b><br/>voltage and angle variables<br/>nonlinear P/Q network equations<br/>one P and one Q balance<br/>two-terminal branch flows and thermal limits"]
+        socp["<b>SOCP relaxation</b><br/>squared voltages and edge products<br/>convex cone constraints · P/Q balances<br/>two-terminal branch limits"]
         ldc["<b>Lossy DC</b><br/>branch-flow variables<br/>convex quadratic loss penalty<br/>nodal P balances"]
         sn["<b>Single-node DC</b><br/>copper-plate model<br/>one aggregate P balance"]
     end
@@ -48,7 +49,7 @@ flowchart TD
     subgraph solve_results["Solve and stable results"]
         solver{"<b>Select solver</b><br/>according to formulation"}
         ipopt["<b>IPOPT</b><br/>nonconvex AC / DNLP"]
-        convex["<b>Convex solver</b><br/>lossy and single-node DC"]
+        convex["<b>Convex solver</b><br/>SOCP · lossy and single-node DC"]
         extract["<b>Extract results</b><br/>schema initialized from built model"]
         success["<b>Usable core primal solution</b><br/>populate available arrays and scalar costs"]
         unsuccessful["<b>No usable core primal solution</b><br/>retain known exogenous inputs and device keys<br/>primal arrays = None · scalar costs = NaN"]
@@ -57,6 +58,7 @@ flowchart TD
 
     user --> api --> validation --> dispatch
     dispatch --> ac
+    dispatch --> socp
     dispatch --> ldc
     dispatch --> sn
 
@@ -77,6 +79,7 @@ flowchart TD
     step --> scale --> horizon --> publish
 
     ac --> compose
+    socp --> compose
     ldc --> compose
     sn --> compose
     scale --> compose
@@ -101,11 +104,19 @@ flowchart TD
     classDef output fill:#fdecec,stroke:#b74b4b,color:#551d1d
 
     class api,validation,dispatch public
-    class ac,ldc,sn,compose,objective formulation
+    class ac,socp,ldc,sn,compose,objective formulation
     class requests,prepare,registry,step,scale,horizon,publish assembly
     class gen,storage,nd,load,hvdc component
     class build,solver,ipopt,convex,extract,success,unsuccessful,results output
 ```
+
+The build can select an immutable, opt-in numerical-preparation policy.
+`build.solve()` owns the supported prepared solver bridge and restores public
+physical coordinates; calling `build.prob.solve()` bypasses it. The diagram
+shows the shared construction and result boundaries, not automatic recovery
+or acceptance of a relaxed point. SOCP relaxation auditing and voltage recovery
+are explicit, non-solving operations after extraction; recovery is not a repair
+solve or a global-optimality certificate.
 
 ## Component contribution lifecycle
 

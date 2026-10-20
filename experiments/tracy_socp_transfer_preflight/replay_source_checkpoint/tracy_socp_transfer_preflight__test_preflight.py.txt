@@ -1,0 +1,202 @@
+"""Non-solving point-screen, classification and retained back-test regressions."""
+
+import copy
+import json
+
+import cvxpy as cp
+import numpy as np
+import pytest
+
+from cvxopf import build_opf
+from cvxopf.testcases import case9
+from experiments.tracy_socp_transfer_preflight import preflight as p
+
+
+def test_short_cycles_are_complete_unique_and_deterministic():
+    pairs = np.array([[0, 1], [0, 2], [1, 2], [1, 3], [2, 3], [3, 4]])
+    expected = [(0, 1, 2), (0, 1, 3, 2), (1, 2, 3)]
+    assert p.short_cycles(pairs) == expected
+    assert p.short_cycles(pairs[::-1]) == expected
+    assert p.short_cycles(np.array([[0, 1], [1, 2]])) == []
+
+
+def test_rank_one_products_close_cycles():
+    pairs = np.array([[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]])
+    V = np.array([[1, 1.02 * np.exp(0.3j), 0.98 * np.exp(-0.2j), np.exp(0.4j)]])
+    z = V[:, pairs[:, 0]] * V[:, pairs[:, 1]].conj()
+    errors, valid = p.cycle_errors(z, pairs, p.short_cycles(pairs))
+    assert valid.all() and np.max(abs(errors)) < 1e-15
+    # An edge-phase change keeps cones tight but destroys cycle consistency.
+    changed = z.copy()
+    changed[:, 0] *= np.exp(0.5j)
+    errors, valid = p.cycle_errors(changed, pairs, p.short_cycles(pairs))
+    assert valid.all() and np.max(abs(errors)) == pytest.approx(0.5)
+    assert np.allclose(abs(changed), abs(z))
+
+
+def test_wrap_and_undefined_phases_are_not_fabricated():
+    pairs = np.array([[0, 1], [0, 2], [1, 2]])
+    z = np.exp(1j * np.array([[3.0, -3.0, 3.0]]))
+    errors, valid = p.cycle_errors(z, pairs, [(0, 1, 2)])
+    assert abs(errors[0, 0]) <= np.pi and valid[0, 0]
+    z[0, 0] = 0
+    errors, valid = p.cycle_errors(z, pairs, [(0, 1, 2)])
+    assert not valid[0, 0]
+    assert np.isnan(errors[0, 0])
+    z[0, 0] = np.nan
+    _, valid = p.cycle_errors(z, pairs, [(0, 1, 2)])
+    assert not valid[0, 0]
+
+
+def test_optimizer_guard_blocks_both_entry_points_and_restores():
+    original = cp.Problem.solve
+    build = build_opf(case9(), formulation="ac")
+    with p.no_optimization():
+        with pytest.raises(RuntimeError, match="must not invoke an optimizer"):
+            build.solve()
+        with pytest.raises(RuntimeError, match="must not invoke an optimizer"):
+            build.prob.solve()
+        with p.no_optimization():
+            with pytest.raises(RuntimeError):
+                build.prob.solve()
+        with pytest.raises(RuntimeError):
+            build.prob.solve()
+    assert cp.Problem.solve is original and build.prob.status is None
+
+
+@pytest.mark.parametrize(
+    "status",
+    ["unresolved_budget", "no_forward_export_trigger", "template_not_applicable"],
+)
+def test_non_exclusions_never_become_feasibility(status):
+    assert p.classify_schedule([dict(status=status)], False) == "unresolved"
+
+
+def test_certificate_and_witness_are_distinct_and_conflicts_fail():
+    hours = [dict(status="certified_incompatible")]
+    assert p.classify_schedule(hours, False) == "certified_incompatible"
+    assert p.classify_schedule([], True) == "audited_recovered_witness"
+    with pytest.raises(ValueError, match="contradicts"):
+        p.classify_schedule(hours, True)
+
+
+def test_real_certificate_unknown_budget_and_no_input_mutation():
+    from experiments.tracy_battery_transfer import model as transfer
+    from experiments.tracy_battery_transfer_slice import model as slices
+    from experiments.case118_tracy_2021 import e3_prepared
+
+    with p.no_optimization():
+        view = slices.construct(
+            4, transfer.source_inventory(), e3_prepared.verified_inputs()
+        )
+        build, kwargs, powers, _, _, row = view
+        before = copy.deepcopy(kwargs["case"]["bus"])
+        targets = row["original_terminal_soc_mwh"]
+        report = p.screen_schedule(kwargs, powers, 2452, targets, max_boxes=64)
+        assert report["verdict"] == "certified_incompatible"
+        assert (
+            report["hours"][0]["hour"] == 2452 and report["battery_precheck"]["passed"]
+        )
+        unresolved = p.screen_schedule(kwargs, powers, 2452, targets, max_boxes=1)
+        assert unresolved["verdict"] == "unresolved"
+        assert unresolved["hours"][0]["status"] == "unresolved_budget"
+        assert build.prob.status is None and np.array_equal(
+            before, kwargs["case"]["bus"]
+        )
+        with pytest.raises(ValueError, match="source storage schedule fails"):
+            p.screen_schedule(kwargs, powers + 1, 2452, targets)
+        unrated = copy.deepcopy(kwargs)
+        for r in unrated["case"]["branch"]:
+            if tuple(r[:2]) == (24, 70):
+                r[5] = 0
+        assert (
+            p.screen_schedule(unrated, powers, 2452, targets)["hours"][0]["status"]
+            == "template_not_applicable"
+        )
+        with pytest.raises(ValueError, match="box budget"):
+            p.screen_schedule(kwargs, powers, 2452, targets, max_boxes=0)
+
+
+def test_constraint_failures_are_localized_including_terminal_boundary():
+    audit = {
+        "residuals": {
+            "p_balance": dict(passed=False, by_interval=[0, 2, 0], tolerance=1),
+            "storage_terminal": dict(passed=False, by_interval=[2], tolerance=1),
+        }
+    }
+    assert p.constraint_failures_at_hour(audit, 0, 3) == []
+    assert p.constraint_failures_at_hour(audit, 1, 3) == ["p_balance"]
+    assert p.constraint_failures_at_hour(audit, 2, 3) == ["storage_terminal"]
+
+
+def test_historical_context_accepts_new_analysis_but_not_physics_changes():
+    saved = dict(
+        commit="old",
+        clean=True,
+        sources={"src/cvxopf/ac_problem.py": "a"},
+        packages={"numpy": "fixed"},
+    )
+    current = dict(
+        saved,
+        commit="new",
+        clean=False,
+        sources=dict(
+            saved["sources"],
+            **{"experiments/tracy_socp_transfer_preflight/preflight.py": "new"},
+        ),
+    )
+    assert p.historical_context_matches(saved, current)
+    added = copy.deepcopy(current)
+    added["sources"]["experiments/tracy_battery_transfer_starts/run.py"] = (
+        "recovery-only"
+    )
+    assert p.historical_context_matches(
+        saved, added, {"experiments/tracy_battery_transfer_starts/run.py"}
+    )
+    changed = copy.deepcopy(current)
+    changed["sources"]["src/cvxopf/ac_problem.py"] = "changed"
+    assert not p.historical_context_matches(saved, changed)
+    changed = copy.deepcopy(current)
+    changed["sources"]["src/cvxopf/another_network.py"] = "new"
+    assert not p.historical_context_matches(saved, changed)
+
+
+def test_selected_backtest_evidence_labels_and_scope():
+    path = p.HERE / "EVIDENCE.json"
+    if not path.exists():
+        pytest.skip("selected back-test evidence not saved yet")
+    report = json.loads(path.read_text())
+    assert report["sources"]["analysis_sha256"] == p.transfer.sha(p.Path(p.__file__))
+    assert (
+        report["policy"]["report_only"] and report["policy"]["new_optimizer_calls"] == 0
+    )
+    assert report["historical_bytes_unchanged"]
+    s = report["summary"]
+    assert (
+        s["retained_transfers"],
+        s["audited_compatible"],
+        s["native_rejections"],
+        s["timeouts"],
+    ) == (18, 15, 2, 1)
+    assert (
+        s["certified_incompatible"] == 3 and s["contradictions_among_compatible"] == 0
+    )
+    assert s["socp_point_warnings"] == 6 and s["socp_point_warnings_on_compatible"] == 5
+    assert s["unresolved"] == 15 and s["recovered_witnesses"] == 0
+    for row in report["transfers"]:
+        assert len(row["hours"]) == 24
+        certified = [
+            h["hour"] for h in row["hours"] if h["status"] == "certified_incompatible"
+        ]
+        assert certified == ([2452] if row["job"]["id"] in (13, 14, 15) else [])
+        if row["job"]["donor"] != "socp":
+            assert row["socp_point_warning"] is None
+    assert len(report["ac_controls"]) == 6
+    assert all(c["certificate_count"] == 0 for c in report["ac_controls"])
+    forced = next(
+        s for s in report["socp_points"] if s["scenario"].startswith("Forced shedding")
+    )
+    assert (
+        forced["historical_classification"] == "rejected"
+        and not forced["relaxation_feasible"]
+    )
