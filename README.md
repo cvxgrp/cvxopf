@@ -7,6 +7,11 @@ Optimal power flow via CVXPY, supporting AC-OPF (nonconvex, DNLP),
 the sparse voltage-product SOCP relaxation, lossy DC OPF (convex QP), and
 single-node DC dispatch (convex QP).
 
+## Acknowledgments
+
+This work is supported by the U.S. Department of Energy's Office of Electricity
+through a grant from the Grid Controls and Communications Division.
+
 ## Motivation
 
 Grid resilience events rarely happen in an instant. The most consequential
