@@ -15,7 +15,7 @@ from typing import Literal, Mapping, Sequence, cast
 import cvxpy as cp
 import numpy as np
 
-from cvxopf import generator, hvdc, load, nondispatchable, storage
+from cvxopf import generator, hvdc, load, nondispatchable, storage, storage_lossy
 from cvxopf._component_adapter import (
     ACNetworkState,
     SquaredVoltageNetworkState,
@@ -53,6 +53,7 @@ from cvxopf.hvdc import HVDCLink
 from cvxopf.load import Load
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.storage import StorageUnitIdeal
+from cvxopf.storage_lossy import StorageUnitLossy
 
 
 def _array(prepared: Mapping[str, object], key: str) -> np.ndarray:
@@ -1338,6 +1339,181 @@ STORAGE_ADAPTER = ComponentAdapter[StorageUnitIdeal, None](
 )
 
 
+def _lossy_storage_prepare(
+    units: Sequence[StorageUnitLossy],
+    inputs: None,
+    context: PreparationContext,
+) -> Mapping[str, object]:
+    return storage_lossy._prepare_data(
+        list(units),
+        context.nb,
+        dict(context.ext_to_int),
+        set(context.ext_bus_ids),
+        context.delta,
+    )
+
+
+def _lossy_storage_metadata(
+    prepared: Mapping[str, object],
+    formulation: Formulation,
+) -> Mapping[str, object]:
+    return dict(prepared)
+
+
+def _require_disabled_preparation(context: StepContext | VectorizedContext) -> None:
+    """Lossy storage is qualified only under the default disabled policy."""
+    if context.numerical_preparation.enabled:
+        raise ValueError(
+            "lossy storage supports only the default (disabled) "
+            "numerical-preparation policy"
+        )
+
+
+def _lossy_storage_variable_names(formulation: Formulation) -> tuple[str, ...]:
+    reactive = ("ls_b_q",) if supports_reactive_power(formulation) else ()
+    return ("ls_p_ch", "ls_p_dis", *reactive)
+
+
+def _lossy_storage_variable_specs(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    context: StepContext,
+) -> tuple[VariableSpec, ...]:
+    _require_disabled_preparation(context)
+    shape = (cast(int, prepared["n_ls"]),)
+    names = (*_lossy_storage_variable_names(context.formulation), "ls_soc")
+    return tuple(VariableSpec(name, shape) for name in names)
+
+
+def _lossy_storage_injections(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> InjectionContribution:
+    return InjectionContribution(*storage_lossy.injections(
+        variables["ls_p_ch"], variables["ls_p_dis"], variables.get("ls_b_q"),
+        _array(prepared, "Cls"),
+    ))
+
+
+def _lossy_storage_operating_constraints(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> OperatingSetContribution:
+    return OperatingSetContribution(tuple(storage_lossy.operating_constraints(
+        list(units), variables["ls_p_ch"], variables["ls_p_dis"],
+        variables["ls_soc"], variables.get("ls_b_q"),
+    )))
+
+
+def _lossy_storage_step_cost(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: StepContext,
+) -> cp.Expression:
+    return storage_lossy.throughput_cost_rate(
+        list(units), variables["ls_p_ch"], variables["ls_p_dis"]
+    )
+
+
+def _lossy_storage_horizon_contribution(
+    units: Sequence[StorageUnitLossy],
+    constraints: Sequence[cp.Constraint],
+    terminal_soc: cp.Expression,
+) -> HorizonContribution:
+    terminal_cost = storage.terminal_cost_expr(list(units), terminal_soc)
+    return HorizonContribution(
+        constraints=tuple(constraints),
+        terminal_cost=terminal_cost,
+        expressions=(
+            {} if terminal_cost is None else {"ls_terminal_cost": terminal_cost}
+        ),
+    )
+
+
+def _lossy_storage_horizon(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    variable_history: Mapping[str, Sequence[cp.Variable]],
+    context: HorizonContext,
+) -> HorizonContribution:
+    soc_history = list(variable_history["ls_soc"])
+    constraints = storage_lossy.coupling_constraints(
+        list(units),
+        list(variable_history["ls_p_ch"]),
+        list(variable_history["ls_p_dis"]),
+        soc_history,
+        context.delta,
+    )
+    return _lossy_storage_horizon_contribution(units, constraints, soc_history[-1])
+
+
+def _lossy_storage_vectorized_variable_specs(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    context: VectorizedContext,
+) -> tuple[HorizonVariableSpec, ...]:
+    _require_disabled_preparation(context)
+    n_ls = cast(int, prepared["n_ls"])
+    return (
+        *(HorizonVariableSpec(name, (n_ls,))
+          for name in _lossy_storage_variable_names(context.formulation)),
+        HorizonVariableSpec("ls_soc", (n_ls,), temporal_class="boundary",
+                            result_view="post_step_boundaries"),
+    )
+
+
+def _lossy_storage_vectorized_assembly(
+    units: Sequence[StorageUnitLossy],
+    prepared: Mapping[str, object],
+    variables: Mapping[str, cp.Variable],
+    context: VectorizedContext,
+) -> VectorizedModelContribution:
+    p_ch, p_dis, soc = variables["ls_p_ch"], variables["ls_p_dis"], variables["ls_soc"]
+    b_q = variables.get("ls_b_q")
+    constraints = storage_lossy.vectorized_coupling_constraints(
+        list(units), p_ch, p_dis, soc, context.delta
+    )
+    return VectorizedModelContribution(
+        injection=InjectionContribution(*storage_lossy.injections(
+            p_ch, p_dis, b_q, _array(prepared, "Cls")
+        )),
+        operating_constraints=tuple(storage_lossy.operating_constraints(
+            list(units), p_ch, p_dis, soc[:, 1:], b_q
+        )),
+        stage_cost_rate=storage_lossy.throughput_cost_rate(list(units), p_ch, p_dis),
+        horizon=_lossy_storage_horizon_contribution(units, constraints, soc[:, -1]),
+    )
+
+
+LOSSY_STORAGE_ACTIVE = FormulationAdapter[StorageUnitLossy](
+    capability=FormulationCapability.ACTIVE,
+    variable_specs=_lossy_storage_variable_specs,
+    injections=_lossy_storage_injections,
+    operating_constraints=_lossy_storage_operating_constraints,
+    step_cost=_lossy_storage_step_cost,
+    horizon=_lossy_storage_horizon,
+    vectorized_variable_specs=_lossy_storage_vectorized_variable_specs,
+    vectorized_assembly=_lossy_storage_vectorized_assembly,
+)
+LOSSY_STORAGE_ADAPTER = ComponentAdapter[StorageUnitLossy, None](
+    name="lossy_storage",
+    prepare=_lossy_storage_prepare,
+    metadata=_lossy_storage_metadata,
+    formulations={
+        "ac": LOSSY_STORAGE_ACTIVE,
+        "socp": LOSSY_STORAGE_ACTIVE,
+        "lossy_dc": LOSSY_STORAGE_ACTIVE,
+        "singlenode_dc": LOSSY_STORAGE_ACTIVE,
+    },
+    cost_expression_name="ls_cost",
+)
+
+
 @dataclass(frozen=True)
 class HVDCInputs:
     """Normalized per-step HVDC transfer boxes in MW."""
@@ -1640,6 +1816,7 @@ def component_requests(
     load_inputs: LoadInputs | None = None,
     load_participates_when_empty: bool = False,
     storage_units: Sequence[StorageUnitIdeal] = (),
+    lossy_storage_units: Sequence[StorageUnitLossy] = (),
     nondispatchable_units: Sequence[NondispatchableUnit] = (),
     nondispatchable_inputs: NondispatchableInputs | None = None,
     hvdc_links: Sequence[HVDCLink] = (),
@@ -1667,6 +1844,11 @@ def component_requests(
         ComponentRequest(
             STORAGE_ADAPTER,
             tuple(storage_units),
+            required_capability=FormulationCapability.ACTIVE,
+        ),
+        ComponentRequest(
+            LOSSY_STORAGE_ADAPTER,
+            tuple(lossy_storage_units),
             required_capability=FormulationCapability.ACTIVE,
         ),
         ComponentRequest(

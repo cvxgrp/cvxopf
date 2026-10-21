@@ -282,3 +282,104 @@ Renewable curtailment remains separately reported as a metric of interest.
 - Integer unit commitment.
 - A general-purpose mixed-integer storage API.
 - Changes to the zero-cost renewable-curtailment policy.
+
+## 11. First-implementation decisions (owner, 2026-10-21)
+
+These decisions resolve the items Section 2 requires before implementation
+and fix the scope of the first implementation. Sections 1-10 remain the
+governing milestone plan.
+
+### 11.1 Device and energy dynamics
+
+Public dataclass `StorageUnitLossy` in its own component module
+`storage_lossy.py`. Fields are those of `StorageUnitIdeal` (`bus`,
+`apparent_power_rating`, `capacity`, `initial_soc`, `aging_weight`, the
+Milestone 12 terminal fields, `device_id`) with identical semantics, plus:
+
+- `charge_efficiency` in (0, 1];
+- `discharge_efficiency` in (0, 1];
+- `self_discharge_per_hour` in [0, 1): fraction of stored energy lost per
+  hour.
+
+The loss model is proportional self-discharge (Section 2, option 3). The
+parameter is hourly so device physics does not depend on the problem's
+`delta`. Per-interval retention is the constant
+
+    r = (1 - self_discharge_per_hour) ** delta
+
+computed at preparation, so the transition stays affine:
+
+    soc[t+1] = r * soc[t] + delta * (eta_ch * p_ch[t] - p_dis[t] / eta_dis)
+
+Self-discharge acts on the energy stored at the start of the interval.
+Conversion loss and self-discharge are reported separately (Section 2):
+
+    conversion_loss[t] = delta * ((1 - eta_ch) * p_ch[t]
+                                  + (1 / eta_dis - 1) * p_dis[t])   (MWh)
+    self_discharge[t]  = (1 - r) * soc[t]                          (MWh)
+
+### 11.2 Operating set: relaxed mode constraint
+
+`p_ch >= 0`, `p_dis >= 0`, net injection `b = p_dis - p_ch` (an expression,
+not a variable). The rating `S = apparent_power_rating` is both the charge
+and the discharge rating. The binary-mode bounds of Section 6 with `z`
+relaxed to [0, 1],
+
+    p_ch <= S * z,   p_dis <= S * (1 - z),   0 <= z <= 1,
+
+hold for some `z` exactly when
+
+    p_ch + p_dis <= S.
+
+This projected (convex-hull) constraint is used directly. No `z` variable
+is created. The DC real-power bound `|b| <= S` is implied and is not added
+separately. AC and SOCP keep the ideal-storage apparent-power circle on
+`(b, b_q)`. SoC bounds `0 <= soc <= capacity` are unchanged.
+
+### 11.3 Throughput regularization
+
+Stage-cost rate `aging_weight * (p_ch + p_dis)`, time-integrated by shared
+assembly. `aging_weight` must be strictly positive (Section 3), unlike
+`StorageUnitIdeal`, which admits zero. The default is 1e-2, matching ideal
+storage.
+
+### 11.4 Public API and component wiring
+
+- New `lossy_storage=` argument on `build_opf` and `build_opf_multistep`,
+  threaded through every formulation parser to `component_requests()`.
+- New `LOSSY_STORAGE_ADAPTER`, `ACTIVE` in `ac`, `socp`, `lossy_dc`, and
+  `singlenode_dc`.
+- `StorageUnitIdeal`, its adapter, and its result keys are unchanged.
+- Names use the `ls_` prefix to stay distinct in the shared flattened
+  namespaces: variables `ls_p_ch`, `ls_p_dis`, `ls_soc`, and `ls_b_q`
+  (AC/SOCP); detection by `"n_ls" in build.data`.
+- Vectorized multistep assembly represents every lossy-storage box as an
+  explicit constraint. No new `VariableBoxFamily` or leaf-bound
+  qualification is added.
+- Only the default (disabled) numerical-preparation policy is supported for
+  lossy storage. Builds that combine lossy storage with any other policy are
+  rejected with a clear error.
+
+### 11.5 Results and diagnostic
+
+Result keys (engineering units, per Section 8): `ls_p_ch`, `ls_p_dis`,
+`ls_b` (net injection), `ls_b_q` (AC/SOCP), `ls_soc`, `ls_cost`,
+`ls_conversion_loss`, `ls_self_discharge`, terminal deviation and cost when
+configured, and the split-operation diagnostic
+
+    ls_split = min(p_ch, p_dis)   (MW, per unit and interval).
+
+The builder reports the raw diagnostic and makes no automatic judgement.
+The engineering tolerance for "material" split operation (Section 5) is set
+in the verification tests: proposed 1e-3 MW, pending owner confirmation.
+
+### 11.6 Scope of the first implementation
+
+In scope: Sections 2-5 and 7-8 as resolved above, with Gates 1, 2, 3, and 5.
+Gate 2 includes the reduction check: with unit efficiencies and zero
+self-discharge, the optimal objective equals the `StorageUnitIdeal`
+objective.
+
+Deferred: the Section 6 fallback and Gate 4, hierarchical-controller
+support, leaf-bound qualification, and non-default numerical-preparation
+policies.

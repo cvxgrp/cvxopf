@@ -92,6 +92,7 @@ from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import (
     StorageUnitIdeal,
 )
+from cvxopf.storage_lossy import StorageUnitLossy
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
 )
@@ -141,6 +142,7 @@ def _parse_dc_case(
     is_multistep: bool = False,
     loads: list[Load] | None = None,
     load_participates_when_empty: bool = False,
+    lossy_storage: list[StorageUnitLossy] | None = None,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data needed for DC OPF.
@@ -214,6 +216,7 @@ def _parse_dc_case(
         load_inputs=load_inputs,
         load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
+        lossy_storage_units=lossy_storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
             None
@@ -295,6 +298,7 @@ def _build_lossy_dc_single(
     nondispatchable: list[NondispatchableUnit] | None = None,
     *,
     hvdc=None,
+    lossy_storage=None,
     generators: list[DispatchableGenerator] | None = None,
     loads: list[Load] | None = None,
 ) -> "OPFBuild":
@@ -321,6 +325,7 @@ def _build_lossy_dc_single(
         generators,
         loads=loads,
         load_participates_when_empty=loads is not None,
+        lossy_storage=lossy_storage,
     )
 
     p_flows = cp.Variable(d["nl"], name="p_flows")
@@ -431,6 +436,7 @@ def _build_lossy_dc_multistep(
     df_nd: pd.DataFrame | None = None,
     *,
     hvdc=None,
+    lossy_storage=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
@@ -473,6 +479,7 @@ def _build_lossy_dc_multistep(
         is_multistep=True,
         loads=loads,
         load_participates_when_empty=load_participates_when_empty,
+        lossy_storage=lossy_storage,
     )
     Pd_series = load_inputs.p_mw @ d["Cload"].T / d["baseMVA"]
 
@@ -606,6 +613,7 @@ def _build_lossy_dc_vectorized(
     df_nd: pd.DataFrame | None = None,
     *,
     hvdc=None,
+    lossy_storage=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
@@ -655,6 +663,7 @@ def _build_lossy_dc_vectorized(
         is_multistep=True,
         loads=loads,
         load_participates_when_empty=load_participates_when_empty,
+        lossy_storage=lossy_storage,
     )
     components: PreparedComponents = d["_components"]
     context = VectorizedContext(

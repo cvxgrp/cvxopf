@@ -436,6 +436,7 @@ def _build_ac_single(
     nondispatchable: list[NondispatchableUnit] | None = None,
     *,
     hvdc=None,
+    lossy_storage=None,
     generators: list[DispatchableGenerator] | None = None,
     loads: list[Load] | None = None,
 ) -> "OPFBuild":
@@ -446,6 +447,7 @@ def _build_ac_single(
         case, options, storage, delta, nondispatchable, hvdc, generators,
         loads=loads,
         load_participates_when_empty=loads is not None,
+        lossy_storage=lossy_storage,
     )
 
     # Create step variables
@@ -588,7 +590,7 @@ def _build_ac_single(
 def _build_ac_vectorized(
     case, df_P, df_Q, T, options, coupling_constraints,
     storage=None, delta=1.0, nondispatchable=None, df_nd=None, *,
-    hvdc=None, df_hvdc_min=None, df_hvdc_max=None, generators=None,
+    hvdc=None, lossy_storage=None, df_hvdc_min=None, df_hvdc_max=None, generators=None,
     loads=None, load_inputs, load_participates_when_empty=False,
     nd_inputs=None, hvdc_inputs=None,
 ) -> "OPFBuild":
@@ -603,7 +605,7 @@ def _build_ac_vectorized(
         case, options, storage, delta, nondispatchable, hvdc, generators,
         horizon_steps=T, nondispatchable_inputs=nd_inputs,
         hvdc_inputs=hvdc_inputs, load_inputs=load_inputs, is_multistep=True,
-        loads=loads, load_participates_when_empty=load_participates_when_empty,
+        loads=loads, lossy_storage=lossy_storage, load_participates_when_empty=load_participates_when_empty,
     )
     nb = d["nb"]
     theta = cp.Variable((nb, T), name="theta")
@@ -736,6 +738,7 @@ def _build_ac_multistep(
     df_nd: pd.DataFrame | None = None,
     *,
     hvdc=None,
+    lossy_storage=None,
     df_hvdc_min=None,
     df_hvdc_max=None,
     generators: list[DispatchableGenerator] | None = None,
@@ -770,6 +773,7 @@ def _build_ac_multistep(
         is_multistep=True,
         loads=loads,
         load_participates_when_empty=load_participates_when_empty,
+        lossy_storage=lossy_storage,
     )
     Pd_series = load_inputs.p_mw @ d["Cload"].T / d["baseMVA"]
     Qd_series = load_inputs.q_mvar @ d["Cload"].T / d["baseMVA"]
