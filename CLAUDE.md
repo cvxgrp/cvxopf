@@ -437,14 +437,16 @@ Passed as `lossy_storage=`, separately from `storage=`. Shares the
 `charge_efficiency` and `discharge_efficiency` in (0, 1] and
 `self_discharge_per_hour` in [0, 1). Model (see
 `plans/milestone-18-lossy-storage.md`, Section 11): nonnegative `ls_p_ch` and
-`ls_p_dis` with relaxed mode constraint `p_ch + p_dis <= S`, net injection
-`p_dis - p_ch`, AC/SOCP circle on net power and `ls_b_q`,
+`ls_p_dis` and net injection `p_dis - p_ch` subject to the ideal operating
+set (AC/SOCP circle with `ls_b_q`, DC `|b| <= S`) and no mode constraint,
 `soc[t+1] = r*soc[t] + delta*(eta_ch*p_ch - p_dis/eta_dis)` with
 `r = (1 - self_discharge_per_hour)**delta`, and throughput rate
 `aging_weight*(p_ch + p_dis)`. Detection is `"n_ls" in build.data`. Results
 add `ls_p_ch`, `ls_p_dis`, `ls_b`, `ls_b_q` (AC/SOCP), `ls_soc`, `ls_cost`,
 `ls_conversion_loss`, `ls_self_discharge`, the split diagnostic `ls_split`,
-and terminal fields when configured. Only the default numerical-preparation
+and terminal fields when configured. `extract_results` raises
+`SimultaneousOperationError` (results attached as `exc.results`) when any
+`ls_split` exceeds `SPLIT_TOLERANCE_MW = 1e-3`. Only the default numerical-preparation
 policy is supported; the relax-round-polish fallback and hierarchical support
 are deferred.
 
@@ -821,7 +823,7 @@ their plans are not imported by this documentation-only addition.
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | ✅ Complete | The capstone controller passes **identity-aligned SoC signposts only** (not other setpoints) from long-horizon `lossy_dc` planning into short AC-OPF windows, executes only residual-checked target-conditioned first actions, supports causal shifted initialization with audited recovery, and retains the complete plan/attempt tree. M17 fixes the validated `lossy_dc`→`ac` workflow; configurable formulations and additional layers are M21. See `plans/milestone-17-hierarchical-dc-ac.md`. |
-| 18 — Convex lossy storage | In progress | First implementation: `StorageUnitLossy` via `lossy_storage=`, proportional self-discharge, relaxed (convex-hull) mode constraint, throughput regularization, and split-operation diagnostic; fallback deferred (plan Section 11). Separate charge/discharge powers, asymmetric efficiency, and storage loss while retaining a convex primary model. Positive throughput regularization plus zero-cost renewable curtailment excludes simultaneous operation under stated assumptions; relax-round-polish remains an explicit fallback. See `plans/milestone-18-lossy-storage.md`. |
+| 18 — Convex lossy storage | In progress | First implementation: `StorageUnitLossy` via `lossy_storage=`, ideal operating set on net power, proportional self-discharge, throughput regularization with no mode constraint, and split-operation diagnostic; fallback deferred (plan Section 11). Separate charge/discharge powers, asymmetric efficiency, and storage loss while retaining a convex primary model. Positive throughput regularization plus zero-cost renewable curtailment excludes simultaneous operation under stated assumptions; relax-round-polish remains an explicit fallback. See `plans/milestone-18-lossy-storage.md`. |
 | 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
 | 20 — AC voltage and reactive-dispatch regularization | 🔲 Future | Characterize whether reactive/voltage bound activity reflects physical support, unpriced nonuniqueness, or local-solver selection. Then add optional, normalized, time-integrated AC operating preferences with exact disabled-policy compatibility and measured economic displacement. No voltage-stability, market-pricing, or global-uniqueness claim. See `plans/milestone-20-ac-voltage-reactive-regularization.md`. |
 | 21 — Configurable and extensible formulation hierarchies | 🔲 Future | Generalize the completed M17 controller behind typed layer adapters and explicit, identity-aligned handoffs while preserving exact `lossy_dc`→`ac` compatibility. Support selectable planning formulations and validate a reference `singlenode_dc`→`socp`→`ac` hierarchy after M11 freezes SOCP relaxation and audit semantics. This remains a closed set of reviewed repository formulations, not an unrestricted plugin framework. See `plans/milestone-21-configurable-hierarchy.md`. |
@@ -1005,8 +1007,8 @@ can monitor the run. Do not edit tracked files while a source-bound run is activ
 - Do not add a second `p ==` or `q ==` constraint after
   `_make_step_constraints` returns — it owns all balance constraints, including
   storage, nondispatchable, and HVDC injection terms
-- Do not change `StorageUnitLossy` semantics (dynamics, relaxed mode
-  constraint, throughput regularization) without updating
+- Do not change `StorageUnitLossy` semantics (dynamics, operating set,
+  throughput regularization) without updating
   `plans/milestone-18-lossy-storage.md`, Section 11
 - Do not enter the HVDC balance terms as `Ch_to - Ch_from` — both terminals
   are signed injections (Convention B) and enter with `+`

@@ -32,7 +32,8 @@ Lossy storage results (all formulations, when ``"n_ls"`` is in build data):
     ls_p_ch, ls_p_dis (MW), ls_b (net injection, MW), ls_b_q (AC/SOCP, MVAr),
     ls_soc (post-step, MWh), ls_cost (integrated throughput cost),
     ls_conversion_loss and ls_self_discharge (MWh per interval), and
-    ls_split = min(ls_p_ch, ls_p_dis) (MW, simultaneous-operation diagnostic);
+    ls_split = min(ls_p_ch, ls_p_dis) (MW, simultaneous-operation diagnostic;
+    extract_results raises SimultaneousOperationError above 1e-3 MW);
     ls_terminal_deviation and ls_terminal_cost when a terminal policy is set.
 
 First-class load results (when ``"nload"`` is present in build data):
@@ -62,6 +63,7 @@ from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
 from cvxopf.storage import _terminal_deviation_values
 from cvxopf.storage_lossy import (
+    _check_simultaneous_operation,
     _conversion_loss_values,
     _self_discharge_values,
     _split_operation_values,
@@ -537,20 +539,26 @@ def extract_results(build: OPFBuild) -> dict[str, Any]:
     ValueError
         If build.formulation is not one of 'ac', 'lossy_dc',
         'singlenode_dc'.
+    SimultaneousOperationError
+        If lossy storage charges and discharges simultaneously above
+        ``SPLIT_TOLERANCE_MW`` (1e-3 MW). The complete results are attached
+        to the exception as ``results``.
     """
     if build.formulation == "socp":
-        return _extract_socp_results(build)
+        results = _extract_socp_results(build)
     elif build.formulation == "ac":
-        return _extract_ac_results(build)
+        results = _extract_ac_results(build)
     elif build.formulation == "lossy_dc":
-        return _extract_dc_results(build)
+        results = _extract_dc_results(build)
     elif build.formulation == "singlenode_dc":
-        return _extract_singlenode_dc_results(build)
+        results = _extract_singlenode_dc_results(build)
     else:
         raise ValueError(
             f"extract_results: unknown formulation '{build.formulation}'. "
             f"Supported: 'ac', 'lossy_dc', 'singlenode_dc'."
         )
+    _check_simultaneous_operation(results)
+    return results
 
 
 def compare_to_reference(

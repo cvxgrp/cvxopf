@@ -1,22 +1,21 @@
 """
 Lossy energy storage model for OPF formulations.
 
-StorageUnitLossy extends the ideal storage model (storage.py) with separate
-charge and discharge powers, charge/discharge efficiencies, and proportional
-self-discharge. The approved model is recorded in
-plans/milestone-18-lossy-storage.md, Section 11.
+StorageUnitLossy is the ideal storage model (storage.py) with three changes:
+charge/discharge efficiencies, proportional self-discharge, and throughput
+regularization on separate charge and discharge powers. The approved model
+is recorded in plans/milestone-18-lossy-storage.md, Section 11.
 
 Per unit and interval, with retention r = (1 - self_discharge_per_hour)**delta:
 
-    p_ch >= 0,  p_dis >= 0,  p_ch + p_dis <= S     (relaxed mode constraint)
+    p_ch >= 0,  p_dis >= 0
     b = p_dis - p_ch                                (net grid injection, MW)
     soc[t+1] = r * soc[t] + delta * (eta_ch * p_ch[t] - p_dis[t] / eta_dis)
 
-The relaxed mode constraint is the projection of the binary-mode bounds
-p_ch <= S*z, p_dis <= S*(1 - z) with z relaxed to [0, 1]; no z variable is
-created. AC and SOCP add the apparent-power circle b^2 + b_q^2 <= S^2. The
-stage-cost rate aging_weight * (p_ch + p_dis) regularizes throughput and
-penalizes simultaneous charging and discharging.
+The operating set on b is the ideal one: b^2 + b_q^2 <= S^2 in AC/SOCP and
+|b| <= S in DC. There is no charge/discharge mode constraint. The stage-cost
+rate aging_weight * (p_ch + p_dis) regularizes throughput and penalizes
+simultaneous charging and discharging.
 
 Constraint, cost, and dynamics helpers accept per-step (ns,) or time-last
 (ns, T) power arrays.
@@ -54,8 +53,8 @@ class StorageUnitLossy:
     bus : int
         Bus ID in external (MATPOWER) numbering.
     apparent_power_rating : float
-        Rating S (MVA), used as both the charge and the discharge rating:
-        p_ch + p_dis <= S. AC/SOCP also enforce b^2 + b_q^2 <= S^2.
+        Rating S (MVA) on net power b = p_dis - p_ch, as for
+        StorageUnitIdeal: AC/SOCP b^2 + b_q^2 <= S^2, DC |b| <= S.
     capacity : float
         Energy capacity (MWh). Must be > 0.
     initial_soc : float
@@ -234,22 +233,25 @@ def operating_constraints(
     soc: cp.Expression,
     b_q: cp.Variable | None = None,
 ) -> list[cp.Constraint]:
-    """Split-power box, relaxed mode constraint, SoC bounds, and AC circle.
+    """Ideal-storage operating set on net power b = p_dis - p_ch.
 
-    ``soc`` is the post-step energy: (ns,) per step or (ns, T) time-last.
-    The DC real-power bound |b| <= S is implied by p_ch + p_dis <= S.
+    AC/SOCP: b^2 + b_q^2 <= S^2; DC: |b| <= S. Plus nonnegative split powers
+    and SoC bounds. ``soc`` is the post-step energy: (ns,) per step or
+    (ns, T) time-last.
     """
     data = _static_data(storage_units)
     rating = _per_unit(data["ls_apparent_power_rating"], p_ch)
+    net = p_dis - p_ch
     constraints = [
         p_ch >= 0,
         p_dis >= 0,
-        p_ch + p_dis <= rating,
         soc >= 0,
         soc <= _per_unit(data["ls_capacity"], soc),
     ]
-    if b_q is not None:
-        constraints.append(cp.square(p_dis - p_ch) + cp.square(b_q) <= rating ** 2)
+    if b_q is None:
+        constraints += [net >= -rating, net <= rating]
+    else:
+        constraints.append(cp.square(net) + cp.square(b_q) <= rating ** 2)
     return constraints
 
 
@@ -358,3 +360,46 @@ def _self_discharge_values(
 def _split_operation_values(p_ch: np.ndarray, p_dis: np.ndarray) -> np.ndarray:
     """Simultaneous-operation diagnostic min(p_ch, p_dis) in MW."""
     return np.minimum(p_ch, p_dis)
+
+
+# ---------------------------------------------------------------------------
+# Simultaneous-operation check
+# ---------------------------------------------------------------------------
+
+# Engineering tolerance for material simultaneous operation (plan Section 5).
+SPLIT_TOLERANCE_MW = 1e-3
+
+
+class SimultaneousOperationError(RuntimeError):
+    """Lossy storage charges and discharges simultaneously above tolerance.
+
+    The complete extracted results are attached as ``results`` so the
+    solution remains available for inspection.
+    """
+
+    def __init__(self, message: str, results: dict):
+        super().__init__(message)
+        self.results = results
+
+
+def _check_simultaneous_operation(results: dict) -> None:
+    """Raise if any unit's min(p_ch, p_dis) exceeds SPLIT_TOLERANCE_MW."""
+    if results.get("ls_split") is None:
+        return
+    split = np.asarray(results["ls_split"], dtype=float)
+    material = split > SPLIT_TOLERANCE_MW
+    if not np.any(material):
+        return
+    index = np.unravel_index(np.argmax(split), split.shape)
+    unit = str(results["ls_device_ids"][index[-1]])
+    where = f"interval {index[0]}" if split.ndim == 2 else "the single step"
+    raise SimultaneousOperationError(
+        f"lossy storage charges and discharges simultaneously in "
+        f"{int(np.sum(material))} unit-interval(s); the largest is unit "
+        f"{unit!r} at {where}, min(p_ch, p_dis) = {split[index]:.6g} MW > "
+        f"{SPLIT_TOLERANCE_MW:g} MW. Throughput regularization excludes this "
+        "only under the assumptions of plans/milestone-18-lossy-storage.md, "
+        "Section 4 (for example, curtailment headroom for surplus energy). "
+        "The extracted results are attached as exc.results.",
+        results,
+    )

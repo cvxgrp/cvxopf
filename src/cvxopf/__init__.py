@@ -64,7 +64,7 @@ from cvxopf.socp_diagnostics import (
     SOCPAuditTolerances, audit_socp_relaxation, recover_socp_voltage,
 )
 from cvxopf.storage import StorageUnitIdeal
-from cvxopf.storage_lossy import StorageUnitLossy
+from cvxopf.storage_lossy import SimultaneousOperationError, StorageUnitLossy
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink, hvdc_from_dcline
 from cvxopf.generator import (
@@ -115,6 +115,7 @@ __all__ = [
     "recover_socp_voltage",
     "StorageUnitIdeal",
     "StorageUnitLossy",
+    "SimultaneousOperationError",
     "NondispatchableUnit",
     "HVDCLink",
     "hvdc_from_dcline",

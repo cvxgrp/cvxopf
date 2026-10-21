@@ -318,23 +318,31 @@ Conversion loss and self-discharge are reported separately (Section 2):
                                   + (1 / eta_dis - 1) * p_dis[t])   (MWh)
     self_discharge[t]  = (1 - r) * soc[t]                          (MWh)
 
-### 11.2 Operating set: relaxed mode constraint
+### 11.2 Operating set: identical to ideal storage on net power
 
-`p_ch >= 0`, `p_dis >= 0`, net injection `b = p_dis - p_ch` (an expression,
-not a variable). The rating `S = apparent_power_rating` is both the charge
-and the discharge rating. The binary-mode bounds of Section 6 with `z`
-relaxed to [0, 1],
+The model is exactly `StorageUnitIdeal` except for charge/discharge
+efficiency, self-discharge, and the throughput regularization (owner
+decision, 2026-10-21). `p_ch >= 0`, `p_dis >= 0`, and net injection
+`b = p_dis - p_ch` (an expression, not a variable) obeys the ideal operating
+set with `S = apparent_power_rating`: AC/SOCP `b^2 + b_q^2 <= S^2`, DC
+`|b| <= S`. SoC bounds `0 <= soc <= capacity` are unchanged.
 
-    p_ch <= S * z,   p_dis <= S * (1 - z),   0 <= z <= 1,
+No charge/discharge mode constraint is imposed: the integer mode constraint
+is dropped, not relaxed. Simultaneous operation is excluded only by the
+throughput regularization, under the Section 4 assumptions.
 
-hold for some `z` exactly when
+Considered and not adopted: the projected relaxed-mode constraint
+`p_ch + p_dis <= S` (the binary-mode bounds of Section 6 with `z` relaxed
+to [0, 1]). It bounds circulation by the physical rating, but together with
+`p_ch >= 0` and the AC/SOCP circle it creates a degenerate active set
+(linearly dependent constraint gradients) whenever discharge reaches the
+rating; CLARABEL then returned `optimal_inaccurate` on case9 SOCP.
 
-    p_ch + p_dis <= S.
-
-This projected (convex-hull) constraint is used directly. No `z` variable
-is created. The DC real-power bound `|b| <= S` is implied and is not added
-separately. AC and SOCP keep the ideal-storage apparent-power circle on
-`(b, b_q)`. SoC bounds `0 <= soc <= capacity` are unchanged.
+Consequence (Gate 3): when the Section 4 assumptions fail, for example a full
+battery facing uncurtailable surplus, the split powers are bounded only by
+the net rating. On case9 single-node with a full 40 MW unit, 30 MW of
+surplus was absorbed with `p_ch` about 207 MW; with the hull constraint the
+same problem was infeasible. The `ls_split` diagnostic flags such solutions.
 
 ### 11.3 Throughput regularization
 
@@ -369,9 +377,12 @@ configured, and the split-operation diagnostic
 
     ls_split = min(p_ch, p_dis)   (MW, per unit and interval).
 
-The builder reports the raw diagnostic and makes no automatic judgement.
-The engineering tolerance for "material" split operation (Section 5) is set
-in the verification tests: proposed 1e-3 MW, pending owner confirmation.
+The engineering tolerance for material split operation (Section 5) is
+`SPLIT_TOLERANCE_MW = 1e-3` (owner, 2026-10-21). `extract_results` raises
+`SimultaneousOperationError` when any `ls_split` value exceeds it, naming
+the largest offending unit and interval. The complete results dict is
+attached to the exception, so the solution is never altered or hidden. No
+second solve or fallback is triggered.
 
 ### 11.6 Scope of the first implementation
 

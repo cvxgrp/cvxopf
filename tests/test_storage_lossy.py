@@ -12,6 +12,7 @@ from cvxopf import (
     NondispatchableUnit,
     NumericalPreparation,
     OPFOptions,
+    SimultaneousOperationError,
     StorageUnitIdeal,
     StorageUnitLossy,
     build_opf,
@@ -21,8 +22,7 @@ from cvxopf import (
 from cvxopf import storage_lossy
 from cvxopf.testcases import case9
 
-# Engineering tolerance for "material" simultaneous charge and discharge.
-SPLIT_ATOL = 1e-3  # MW
+SPLIT_ATOL = storage_lossy.SPLIT_TOLERANCE_MW
 ENERGY_ATOL = 1e-5  # MWh
 OBJ_RTOL = 1e-6
 
@@ -117,15 +117,16 @@ class TestAlgebra:
                           lossy_storage=[_unit(self_discharge_per_hour=0.04)])
         np.testing.assert_allclose(build.data["ls_retention"], [0.96 ** 0.5])
 
-    def test_relaxed_mode_constraint_is_hull_of_charge_and_discharge(self):
+    def test_operating_set_is_ideal_limit_on_net_power(self):
         units = [_unit()]
         p_ch, p_dis, soc = cp.Variable(1), cp.Variable(1), cp.Variable(1)
-        hull = storage_lossy.operating_constraints(units, p_ch, p_dis, soc)[2]
+        constraints = storage_lossy.operating_constraints(units, p_ch, p_dis, soc)
         soc.value = np.array([50.0])
         for charge, discharge, feasible in [(40.0, 0.0, True), (0.0, 40.0, True),
-                                            (20.0, 20.0, True), (25.0, 20.0, False)]:
+                                            (60.0, 30.0, True), (0.0, 41.0, False),
+                                            (45.0, 0.0, False)]:
             p_ch.value, p_dis.value = np.array([charge]), np.array([discharge])
-            assert bool(hull.value()) is feasible
+            assert all(bool(c.value()) for c in constraints) is feasible
 
     def test_exactness_perturbation_preserves_soc_and_reduces_throughput(self):
         units = [_unit()]
@@ -225,16 +226,37 @@ def test_split_operation_without_curtailment_headroom():
     Generator minimums total 30 MW while demand is 28 MW and there is no
     curtailable resource. Pure charging is impossible at capacity, so the
     only feasible way to absorb 2 MW is simultaneous charge and discharge,
-    dissipated as conversion loss. This documents the stated limitation.
+    dissipated as conversion loss. This documents the stated limitation:
+    with no mode constraint, circulation is bounded only by the net rating.
     """
     full = _unit(initial_soc=100.0, self_discharge_per_hour=0.0)
     build = build_opf(case9(), formulation="singlenode_dc", lossy_storage=[full],
                       loads=[Load(bus=5, p_load_mw=28.0, device_id="demand")])
     build.solve()
-    results = extract_results(build)
+    with pytest.raises(SimultaneousOperationError, match="'battery'") as caught:
+        extract_results(build)
+    results = caught.value.results
     assert build.prob.status == "optimal"
     assert results["ls_split"][0] > 1.0
     np.testing.assert_allclose(results["ls_b"], [-2.0], atol=1e-4)
+
+
+class TestSimultaneousOperationCheck:
+    def _results(self, split):
+        return {"ls_split": np.asarray(split), "ls_device_ids": np.array(["a", "b"])}
+
+    def test_at_or_below_tolerance_passes(self):
+        storage_lossy._check_simultaneous_operation(
+            self._results([[0.0, SPLIT_ATOL], [1e-7, 0.0]])
+        )
+        storage_lossy._check_simultaneous_operation({"ls_split": None})
+
+    def test_above_tolerance_raises_with_location_and_results(self):
+        results = self._results([[0.0, 0.0], [0.5, 2e-3]])
+        with pytest.raises(SimultaneousOperationError,
+                           match=r"2 unit-interval.*'a' at interval 1") as caught:
+            storage_lossy._check_simultaneous_operation(results)
+        assert caught.value.results is results
 
 
 # ---------------------------------------------------------------------------
