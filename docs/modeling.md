@@ -1,0 +1,812 @@
+# Modeling guide
+
+[Back to the README](../README.md) · [Examples](../examples/README.md) ·
+[Architecture](../PROJECT_FLOWCHART.md)
+
+This guide preserves the detailed modeling explanations and examples formerly
+in the README. Code blocks with pre-existing objects such as `case`,
+`network_case`, or device/time-series collections are configuration fragments;
+the linked example scripts supply complete runnable inputs. Run scripts from
+the repository root after following the [installation instructions](../README.md#installation).
+
+- [Modeling approach](#modeling-approach)
+- [Formulations and network scope](#formulations)
+- [Hierarchical DC-to-AC control](#hierarchical-dc-to-ac-control)
+- [Formulation examples and SOCP diagnostics](#formulation-examples)
+- [First-class dispatchable generators](#first-class-dispatchable-generators)
+- [Multistep assembly and result layouts](#multi-step-example)
+- [Objective units](#objective-units-and-time-discretization)
+- [Numerical preparation](#opt-in-numerical-preparation-and-ac-objective-assembly)
+- [Loads and shedding](#first-class-loads-and-explicit-load-shedding)
+- [Storage and terminal policies](#battery-storage-example)
+- [Nondispatchable generation](#nondispatchable-generator-example)
+- [HVDC links](#hvdc-transmission-link-example)
+
+## Modeling approach
+
+Many individual capabilities exposed by `cvxopf`, including multi-period OPF
+and intertemporal storage, also appear in other power-system optimization
+packages. The central contribution here is their organization within a
+[disciplined convex programming (DCP)](https://www.cvxpy.org/tutorial/dcp/)
+and [disciplined nonlinear programming
+(DNLP)](https://www.cvxpy.org/tutorial/dnlp/index.html) methodology. Device
+dynamics, costs, and operating sets remain convex wherever the model permits,
+while the nonconvexity of the full AC formulation is confined to the
+network-flow physics.
+
+This separation supports the implemented hierarchical solve structure. A
+globally solvable, long-horizon convex layer determines intertemporal energy
+decisions and passes device states, especially battery state of charge, to a
+short-horizon AC layer. The AC layer verifies and corrects for modeled
+nonlinear network physics without needing to reproduce the approximate
+dispatch trajectory.
+
+Nondispatchable resources are likewise first-class devices rather than generic
+generator boxes: time-varying real-power availability is coupled to a convex
+inverter apparent-power region in AC/SOCP and to separate availability and rating
+bounds in DC. This preserves the converter-capacity limit without adding
+nonconvexity.
+
+Loads follow the same component boundary. MATPOWER bus demand is converted
+automatically, while explicit `Load` objects provide stable identity for
+time-series alignment and optional interruption policies. Shedding is an
+affine extension of the load feasible set with a high linear value-of-lost-load
+cost in the original optimization problem; it is not a lexicographic pass, an
+anonymous balance slack, or a second feasibility-restoration solve.
+
+### Economic decisions from modeled primitives
+
+CVXOPF constructs economic dispatch from explicit physical and economic
+primitives:
+
+- generator cost curves;
+- load and renewable availability;
+- network limits and either physical AC losses or a documented DC loss proxy;
+- storage dynamics, cycling cost, and terminal policy (with ideal efficiency
+  in the current `StorageUnitIdeal` model);
+- load-shedding cost; and
+- the evolving intertemporal system state.
+
+Exogenous electricity-price trajectories are not first-class inputs to the
+current model. Dispatch costs and scarcity consequences are represented
+directly, while marginal values arise endogenously from the optimization. This
+distinction is especially important in black-sky studies: a historical price
+series reflects a different network state, asset fleet, market design, and
+damage condition. Using that scalar signal to stand in for widespread outages,
+physical scarcity, customer consequences, and months of recovery would ask it
+to reconstruct interactions that the model had omitted.
+
+This does not imply that tariffs, contracts, or other explicit economic rules
+can never be modeled. When they are part of the scientific question, they
+should enter transparently as defined costs or constraints rather than serve
+as substitutes for available physical structure.
+
+AC voltage magnitudes and reactive dispatch are currently governed by their
+physical bounds and network equations but are generally not assigned an
+operating preference in the objective. Reactive variables can therefore reach
+a limit because support is physically required, because the economic optimum
+is nonunique in reactive coordinates, or because the nonlinear solver selects
+a particular local solution. A planned characterization and optional
+regularization milestone will distinguish these cases before introducing any
+voltage-reference or reactive-power ridge; see
+[`plans/milestone-20-ac-voltage-reactive-regularization.md`](../plans/milestone-20-ac-voltage-reactive-regularization.md).
+
+The implementation follows the same separation of responsibilities. Public
+build APIs select formulation-owned network physics, while a shared typed
+assembly layer obtains variables, injections, feasible sets, costs, and
+intertemporal contributions from component-owned models. The resulting
+`OPFBuild` provides one boundary for solving and stable result extraction
+across all formulations.
+
+```mermaid
+flowchart LR
+    user["User inputs<br/>case · time series · devices"] --> api["Public build API<br/>validation and formulation selection"]
+
+    api --> physics["Formulation-owned network physics<br/>AC · SOCP · lossy DC · single-node DC"]
+    api --> assembly["Shared typed component assembly"]
+    devices["Component-owned models<br/>generation · storage · loads<br/>nondispatchable · HVDC"] --> assembly
+    assembly --> physics
+
+    physics --> build["OPFBuild<br/>problem · variables · data · expressions"]
+    build --> solve["Formulation-appropriate solve<br/>and stable results"]
+
+    classDef public fill:#e8f1ff,stroke:#2563a6,color:#102a43
+    classDef formulation fill:#fff4dd,stroke:#b7791f,color:#4a2c0a
+    classDef assembly fill:#e8f8ef,stroke:#27864b,color:#123d24
+    classDef component fill:#f2eafe,stroke:#7650a8,color:#321c52
+    classDef output fill:#fdecec,stroke:#b74b4b,color:#551d1d
+
+    class user,api public
+    class physics formulation
+    class assembly assembly
+    class devices component
+    class build,solve output
+```
+
+See the [full software architecture and component lifecycle](../PROJECT_FLOWCHART.md)
+for the as-built assembly sequence, architectural invariants, and the
+Milestone 17 hierarchical controller above that boundary.
+
+## Formulations
+
+| Key | Description | Convex | Solver |
+|---|---|---|---|
+| `"ac"` | Nonlinear AC-OPF with two-terminal apparent-power branch limits via CVXPY DNLP (requires `cvxpy>=1.9.3`) | No | IPOPT |
+| `"socp"` | Sparse voltage-product AC relaxation with shared active/reactive devices and two-terminal branch limits; not automatically AC-realizable | Yes | CLARABEL |
+| `"lossy_dc"` | Lossy DC OPF (Boyd et al.) | Yes | CLARABEL |
+| `"singlenode_dc"` | Single-node "copper-plate" DC dispatch | Yes | CLARABEL |
+
+AC branch-limit enforcement is enabled by default. `rateA == 0` means no
+thermal limit; every positive finite value is enforced at both terminals,
+including large values that MATPOWER may treat as unconstrained sentinels.
+Set `OPFOptions(enforce_branch_limits=False)` for reporting-only terminal
+flows under the former compatibility behavior. Because terminal flows retain
+exact branch coefficients, any positive `sparsity_tol` also requires this
+explicit opt-out.
+
+AC network operating-set scope:
+
+- Implemented: MATPOWER branch status; fixed tap ratios and phase shifts;
+  line charging and bus shunts; voltage-magnitude bounds; nonlinear nodal
+  real/reactive balance; generator real/reactive bounds; and two-terminal
+  apparent-power limits using `rateA`.
+- Not yet implemented: branch angle-difference bounds (`ANGMIN`/`ANGMAX`);
+  selection or contingency use of alternate `rateB`/`rateC` ratings; soft
+  thermal limits; current-magnitude or active-power-only branch limits;
+  time-varying or contingency-dependent ratings; topology switching; and
+  controllable transformer tap or phase-shift decisions.
+
+The fixed electrical data in the branch table still enters the AC equations
+even when its associated operating control is not implemented. See the
+[M4 plan](../plans/milestone-4-branch-limits.md) for the detailed boundary and
+future extension notes.
+
+The `"singlenode_dc"` formulation collapses the whole network to a single
+bus: no branch flows, no transmission limits, no losses, no reactive power —
+just total generation equals total load. It is the classic economic dispatch
+problem, useful as a fast baseline and for large-horizon energy planning.
+
+## Hierarchical DC-to-AC control
+
+`solve_hierarchical_opf()` implements the project's reviewed two-layer
+workflow. The outer `lossy_dc` problem plans the full remaining horizon. Each
+short AC window receives only identity-aligned battery SoC signposts from that
+plan; it does not inherit generator, renewable, HVDC, or battery-power
+setpoints. The controller executes only the first action from an accepted,
+residual-checked, target-conditioned AC solve, advances the realized SoC, and
+repeats.
+
+The default `shifted_with_recovery` initialization first shifts the preceding
+accepted AC prediction. If needed, it follows a deterministic and fully
+retained recovery sequence. `flat_only` remains available for baseline
+reproduction. Hard-equality shifted recovery completed the frozen M17-S3b
+scenario, but that experiment is not a recursive-feasibility guarantee or a
+claim of universal robustness for the nonlinear solver. Quadratic-soft shifted
+recovery is supported by the same API and initialization mechanism, but has
+not yet received a dedicated full-trajectory experiment.
+
+The returned `HierarchicalResult` keeps every outer plan and AC attempt,
+complete IPOPT starting-point evidence for executed AC attempts, executed
+actions, termination state, and exact-once trajectory accounting. This
+auditability is deliberate: a failed solve, target-free initialization solve,
+or unused recovery slot is never presented as executed control.
+
+```python
+result = solve_hierarchical_opf(
+    HierarchicalInputs(
+        case=case,
+        horizon_steps=T,
+        delta=1.0,
+        generators=generators,
+        loads=loads,
+        storage=storage,  # every unit has a unique device_id
+        df_load_p=df_load_p,
+        df_load_q=df_load_q,
+        nondispatchable=renewables,
+        df_nd=df_renewables,
+    ),
+    HierarchicalPolicy(
+        ac_window_steps=5,
+        outer_policy="replan_every_step",
+        inner_terminal_policy="hard_equality",
+        initialization_policy="shifted_with_recovery",
+    ),
+)
+```
+
+The current public controller deliberately fixes `lossy_dc` as the outer layer
+and `ac` as the inner layer. Loads must be nonsheddable, storage IDs are
+mandatory, AC `rateA` limits are enforced through the supplied `OPFOptions`,
+and the supported solvers are CLARABEL outside and IPOPT inside. See
+[`examples/case9_hierarchical_dc_ac.py`](../examples/case9_hierarchical_dc_ac.py)
+for a runnable example and the
+[`M17 plan`](../plans/milestone-17-hierarchical-dc-ac.md) for the exact acceptance,
+failure, and provenance contracts.
+
+References:
+
+- AC OPF: *Disciplined Nonlinear Programming*,
+  [paper](https://stanford.edu/~boyd/papers/dnlp.html) and
+  [power-flow example](https://github.com/cvxgrp/dnlp-examples/blob/main/nlp_examples/power_flow.ipynb).
+- Lossy DC OPF: *Convex Optimization with Smart Grid Examples*,
+  [technical report](https://doi.org/10.2172/3018252).
+
+## Formulation examples
+
+### AC-OPF
+
+```python
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf
+from cvxopf.results import extract_results
+
+build = build_opf(case9(), formulation="ac")
+build.solve()
+results = extract_results(build)
+print(f"Status: {results['status']}")
+if results["Pg"] is not None:
+    print(f"Objective: {results['objective']:.2f}")
+    print(f"Pg (MW):   {results['Pg']}")
+```
+
+Result keys are determined by the built model and remain stable when a solve
+does not return primal values. Check `status` first: unavailable array-valued
+and derived quantities are `None`, while scalar objective and cost quantities
+are `NaN`.
+
+AC results include signed terminal powers `branch_p_from`,
+`branch_q_from`, `branch_p_to`, and `branch_q_to`, plus apparent magnitudes
+`branch_s_from` and `branch_s_to`, all in original MATPOWER branch-table row
+order. The `branch_p_*` fields are MW, `branch_q_*` fields are MVAr, and
+`branch_s_*` fields are MVA. Each is shaped `(nl,)` for a single-step result
+and `(T, nl)` for a multistep result. Real and reactive powers are positive
+when entering a branch from the named terminal; apparent powers are
+nonnegative.
+
+### Sparse voltage-product SOCP relaxation
+
+```python
+from cvxopf import build_opf, extract_results, audit_socp_relaxation, recover_socp_voltage
+from cvxopf.testcases import case9
+
+build = build_opf(case9(), formulation="socp")
+build.solve()                       # CLARABEL, not IPOPT
+results = extract_results(build)    # lightweight; no recovery or audit
+audit = audit_socp_relaxation(build, results)
+recovery = recover_socp_voltage(build, results)
+print(results["status"], audit["feasible"], recovery["ac_feasible"])
+```
+
+SOCP uses squared voltage `w` and sparse edge products `W_re`, `W_im` (p.u.^2)
+with the existing transformer, shunt, charging, status, both-terminal rating,
+and device semantics. Multistep construction is time-vectorized by default;
+explicit stepwise construction remains available. P/Q devices, storage targets,
+HVDC and reactive shedding use the shared component models.
+
+`voltage_product_pairs` lists zero-based internal bus pairs `(i,j)`, `i<j`,
+oriented as `V[i] * conj(V[j])`. Branch mapping arrays retain MATPOWER row
+order. Edge arrays have shape `(npairs,)` or `(T,npairs)`; bus and device arrays
+follow the usual single-step/time-first conventions. `Vm_relaxed = sqrt(w)`
+is not an AC voltage solution, and no `Va_deg` is reported by extraction.
+Both-terminal powers use the same units/signs as AC; `branch_loss_mw` is their
+signed real-power sum. Empty edge/branch sets have empty arrays, not fictitious
+zero flows. Missing nonempty primal arrays remain `None`.
+
+Audit and recovery are separate, non-mutating operations. `SOCPAuditTolerances`
+declares physical and recovery thresholds separately. Audits recompute numeric
+network/device constraints; reports include signed determinant gaps, normalized
+gaps, cone violations, maxima, intervals and worst indices. Diagnostic arrays
+are always time-first, even for one interval. Recovery checks both edge tightness
+and cycle angles, retains the complete device primal, and independently checks
+the resulting AC candidate. It never solves or repairs. Near-zero edge phase,
+missing or nonfinite values produce an unavailable recovery, not fabricated
+voltages. Caller-supplied coupling constraints cannot be independently audited;
+full feasibility is then `None` unless a checked constraint already fails.
+
+`enforce_vset` and `enforce_branch_limits` apply. SOCP requires `sparsity_tol=0`
+even without branch limits. AC initialization/PQ-assembly options are inert.
+No DC loss-cost proxy is added; nondefault `loss_weight` is rejected (the
+default is inert). Solver status, relaxation feasibility and recovered AC
+feasibility are distinct. An SOCP primal objective is a numerical relaxation
+optimum estimate, **not a certified lower bound**. Cross-formulation comparisons
+require matched full-admittance AC physics, all devices/costs and temporal
+policies; no public bound certificate or automatic hierarchy acceptance is
+provided. See the [reference and matched AC/SOCP regression results](../experiments/m11_socp/E1_E2_V2_REPORT.md).
+
+### Lossy DC OPF
+
+```python
+from cvxopf.testcases import case14
+from cvxopf.problem import build_opf
+from cvxopf.results import extract_results
+
+build = build_opf(case14(), formulation="lossy_dc")
+build.solve()
+results = extract_results(build)
+print(f"Objective:  {results['objective']:.2f}")
+print(f"Pg (MW):    {results['Pg']}")
+print(f"Flows (MW): {results['p_flows']}")
+```
+
+### Single-node DC dispatch
+
+Any MATPOWER case works (the branch table is ignored), or use the
+`make_singlenode_case` convenience constructor to build a minimal
+economic-dispatch problem without a full network:
+
+```python
+from cvxopf.testcases import make_singlenode_case
+from cvxopf.problem import build_opf
+from cvxopf.generator import DispatchableGenerator
+from cvxopf.results import extract_results
+
+case = make_singlenode_case(
+    P_load_MW=250.0,
+    generators=[
+        DispatchableGenerator(
+            bus=1, p_max_mw=200.0, cost_coeffs=(0.0, 10.0, 0.05)
+        ),
+        DispatchableGenerator(
+            bus=1, p_max_mw=150.0, cost_coeffs=(0.0, 15.0, 0.08)
+        ),
+    ],
+)
+
+build = build_opf(case, formulation="singlenode_dc")
+build.solve()
+results = extract_results(build)
+print(f"Objective: {results['objective']:.2f}")
+print(f"Pg (MW):   {results['Pg']}")
+```
+
+The `examples/case14_formulation_comparison.py` script solves the IEEE
+14-bus case with AC, lossy DC and copper plate side by side and contrasts their
+dispatch and implied losses.
+
+### First-class dispatchable generators
+
+Pass `DispatchableGenerator` objects to define generator locations, operating
+bounds, and costs directly. Polynomial costs use lowest-power-first
+coefficients and are limited to degree two; piecewise-linear costs use
+explicit `(power_MW, cost)`
+breakpoints. All cost expressions are evaluated by the shared implementation
+in `cost.py`.
+
+```python
+from cvxopf import DispatchableGenerator, build_opf
+
+generators = [
+    DispatchableGenerator(
+        bus=1,
+        p_min_mw=10.0,
+        p_max_mw=250.0,
+        q_min_mvar=-300.0,
+        q_max_mvar=300.0,
+        cost_type="piecewise_linear",
+        cost_points=((0.0, 0.0), (100.0, 2500.0), (250.0, 7250.0)),
+    ),
+]
+
+# network_case needs bus, branch, and baseMVA, but may omit gen/gencost.
+build = build_opf(network_case, formulation="ac", generators=generators)
+```
+
+For backward compatibility, omitting `generators=` converts the case's
+MATPOWER `gen` and `gencost` tables to the same component representation at
+build time. Supplying `generators=` overrides those tables; they may be absent,
+and the input case dict is not mutated.
+
+## Multi-step example
+
+Time-varying load is passed as a DataFrame — one row per time step, one
+column per bus. This is the foundation for resilience studies: feed in
+a multi-day solar and load profile and the optimizer plans dispatch
+across the full horizon in a single solve.
+
+```python
+import numpy as np
+import pandas as pd
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf_multistep
+from cvxopf.results import extract_results
+
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
+
+# Three time steps at 80%, 100%, 120% of base load
+scales  = [0.8, 1.0, 1.2]
+df_P    = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q    = pd.DataFrame(np.outer(scales, Qd_base))
+
+build   = build_opf_multistep(ppc, df_P, df_Q, T=T, formulation="ac")
+build.solve()
+results = extract_results(build)
+print(f"Integrated horizon objective: {results['objective']:.2f}")
+print(f"Pg per step (MW):\n{results['Pg']}")
+```
+
+Time-vectorized assembly is the default for `"ac"`, `"socp"`, `"lossy_dc"`, and
+`"singlenode_dc"`. `build.solve()` selects SCIPY
+canonicalization and CLARABEL for convex formulations; AC uses the same
+DNLP/IPOPT path as stepwise AC, with no CPP/SCIPY backend selection.
+Pass `temporal_assembly="stepwise"` to retain the per-interval graph and variable
+lists. Code that accesses `build.variables` must use the selected layout;
+extracted result shapes are unchanged.
+
+The hierarchical controller defaults to vectorized DC outer and AC inner
+graphs. `outer_temporal_assembly="stepwise"` and
+`inner_temporal_assembly="stepwise"` independently restore either legacy graph.
+Shifted preceding solutions, copied target-free solutions, and seeded recovery
+perturbations work in both representations. The initial SoC boundary is fixed
+from the identity-aligned realized state, and shrinking final windows retain
+chronological state reconstruction. Recovery ordering, acceptance criteria and
+extracted result schemas are unchanged; every native AC attempt retains complete
+IPOPT starting-vector verification, including canonicalization auxiliaries.
+
+AC also defaults to spatial P/Q batching and disables CVXPY's automatic
+density-based sparse derivative dispatch. This compatibility policy applies
+during construction and `build.solve()`, then restores the caller's CVXPY
+threshold, including on errors. It does not disable sparse P/Q variable storage.
+Pass `automatic_sparse_dispatch=True` to either builder to retain the caller's CVXPY
+dispatch setting explicitly. Because CVXPY stores this setting process-wide,
+cvxopf serializes its build/solve entry points; use separate processes for
+concurrent unrelated CVXPY calls. No setting changes merely by importing cvxopf.
+
+The default combines prior DC time-vectorization validation with the completed
+[Case118 AC comparison](../experiments/case118_spacetime_pq_replay/FOUR_WAY_STUDY_REPORT.md).
+It is a practical performance choice, not a universal speed guarantee or a
+claim of identical nonconvex AC operating points.
+
+Vectorized `build.variables` contain time-last CVXPY variables: for example,
+`Pg` has shape `(ng, T)` and storage `soc` has shape `(ns, T+1)`, including the
+initial boundary. Assign initialization through their `.value` attributes.
+`extract_results()` retains time-first arrays, including `Pg: (T, ng)`,
+post-step `soc: (T, ns)`, and single-node `p_net: (T,)`. Single-node assembly
+collapses bus injections while preserving device identity and reporting.
+
+Vectorized AC voltage and angle variables have shape `(nb, T)`, and sparse
+`P_vec`/`Q_vec` have shape `(nnz, T)`. CVXPY's current DNLP derivative engine
+supports at most two variable dimensions. For `sparse_pq=False`, dense `P`/`Q`
+therefore use `(nb*nb, T)`, with bus pair `(i, j)` stored at row `i*nb+j`.
+For example, reshape a solved `P.value` to `(nb, nb, T)` with NumPy's default
+C order. Extracted AC results retain their existing `(T, nb)` and `(T, nl)`
+shapes. Voltage retains its existing leaf bounds; all other AC boxes remain
+explicit constraints.
+
+By default, P/Q flow definitions are vectorized across Ybus entries in both temporal
+representations, for sparse and dense P/Q storage. Stepwise assembly uses two
+defining vector equalities per step; time-vectorized assembly uses two matrix
+equalities over all entries and time steps. Dense off-pattern zeros are also
+constrained in batches.
+
+Set `OPFOptions(vectorize_pq=False)` to build each spatial P/Q entry separately,
+including dense off-pattern zeros. This switch is independent of
+`sparse_pq` (variable storage) and `temporal_assembly` (time representation):
+
+```python
+build = build_opf_multistep(
+    case, df_P, df_Q, T=T,
+    temporal_assembly="vectorized",
+    options=OPFOptions(vectorize_pq=False),
+)
+```
+
+This example retains vectorization across time while disabling it across Ybus
+entries. Use `temporal_assembly="stepwise"` to disable time vectorization too.
+The spatial switch also applies to `build_opf` and dense P/Q storage, and does
+not affect DC formulations. Variable layouts, initializations, network physics,
+branch-terminal constraints, and result schemas stay the same. Neither setting
+guarantees convergence of the nonconvex AC solve.
+
+### Objective units and time discretization
+
+`delta` is the interval duration in hours. cvxopf treats generator, storage
+cycling, HVDC, and lossy-DC regularization terms as stage-cost rates and forms
+
+```text
+objective = delta * sum(stage-cost rates) + horizon-boundary costs.
+```
+
+Thus the reported objective is a total over the modeled interval or horizon,
+normally in currency when the coefficients use currency-based units.
+Terminal storage penalties occur once and are not multiplied by `delta`.
+`build.expressions` retains integrated `generator_cost`, conditional
+`storage_cost` and `hvdc_cost`, and `dc_loss_cost` for lossy DC so the
+objective composition can be audited. This corrects the former unscaled
+per-step sum for `delta != 1`; `delta=1` results are unchanged.
+
+### Opt-in numerical preparation and AC objective assembly
+
+Numerical preparation changes the internal solve representation, not the
+physical model or economic weights. Select it when building, then use
+`build.solve()`; calling `build.prob.solve()` bypasses this supported boundary.
+`NumericalPreparation()` is disabled by default. Supported convex policies
+can remove exactly fixed coordinates and use `canonical_scaling="joint5"`;
+SOCP also supports normalized device limits. Convex formulations retain their
+original economic coordinates and hourly objective assembly. AC supports
+cost coordinates but rejects canonical scaling; unsupported combinations fail
+explicitly. Public `solve_hierarchical_opf()` currently rejects enabled
+preparation rather than silently changing its validated workflow.
+
+For standalone time-vectorized AC, the following selects the prepared
+component-first representation:
+
+```python
+from cvxopf import NumericalPreparation, OPFOptions
+
+options = OPFOptions(numerical_preparation=NumericalPreparation(
+    normalize_device_limits=True,
+    exact_fixed_boxes=True,
+    cost_coordinates=True,
+    objective_assembly="component_first",
+))
+# Pass options to build_opf_multistep(..., formulation="ac",
+#                                     temporal_assembly="vectorized").
+```
+
+The compatibility default, `objective_assembly="hourly"`, aggregates interval
+costs before integration (including when `delta != 1`). `"component_first"`
+integrates component contributions separately and sums priced cycling/shedding
+coordinates directly. It changes summation grouping and the induced canonical
+ordering together; it is independent of `temporal_assembly`.
+
+Initially, `"component_first"` requires standalone, time-vectorized AC with
+`cost_coordinates=True`. Single-step, stepwise, convex and hierarchical uses
+are rejected explicitly. Normalization and exact-fixed removal remain separate
+choices; the complete configuration above was used in the supporting experiment.
+Neither mode switches representations or retries automatically. The public
+physical objective, dispatch units and result schema remain unchanged, and
+`build.preparation_evidence.checks["objective_assembly"]` records the selection.
+`CostAccuracyWarning` remains advisory: it does not reject a returned solution.
+
+The difficult Tracy forced-shedding T=24 case converged with component-first
+assembly in two experimental executions and the production-path qualification
+where hourly assembly timed out. The production solve passed acceptance in
+135.40 seconds and reproduced the earlier physical trajectories exactly;
+see the [qualification report](../experiments/ac_objective_assembly/PRODUCTION_REPORT.md).
+Shorter cases showed no timing advantage. This supports an opt-in choice, not
+a universal speedup or a library default change.
+
+For future supported AC experimental runners, the approved policy is to try the
+complete component-first recovery ladder before the existing hourly ladder,
+stopping at the first independently accepted solution. The runner/protocol must
+explicitly implement that order and budget both phases; `build.solve()` does not
+retry automatically. Existing studies are not changed or resumed. See the
+[numerical preparation design and evidence](../plans/numerical-preparation-api.md)
+for supported combinations, warnings and limitations.
+
+## First-class loads and explicit load shedding
+
+With `loads=None`, MATPOWER `PD` and `QD` columns are converted automatically
+to fixed `Load` devices, so existing case-file workflows remain unchanged.
+Supplying explicit loads gives each demand channel a stable `device_id` and
+allows multistep active and reactive trajectories to be aligned by pandas
+column name rather than by bus-table position. An explicit `loads=[...]`
+argument replaces the entire MATPOWER load fleet; it does not supplement or
+override only the listed buses. Include every load that should participate in
+the model.
+
+```python
+from cvxopf import Load, build_opf, extract_results
+from cvxopf.testcases import case9
+
+ppc = case9()
+
+# This illustrative two-device fleet replaces all MATPOWER PD/QD demand.
+loads = [
+    Load(bus=5, p_load_mw=90.0, q_load_mvar=30.0, device_id="load-5"),
+    Load(
+        bus=7,
+        p_load_mw=100.0,
+        q_load_mvar=35.0,
+        device_id="interruptible-7",
+        shedding_cost_per_mwh=5000.0,
+        max_shed_fraction=0.5,
+    ),
+]
+
+build = build_opf(ppc, formulation="ac", loads=loads)
+build.solve()
+results = extract_results(build)
+print(results["p_load_served"])
+print(results["p_load_shed"])
+print(results["energy_not_served"])
+```
+
+Only loads with a finite positive `shedding_cost_per_mwh` are interruptible.
+The coefficient is normally chosen sufficiently above relevant marginal
+operating costs, but remains explicit because congestion, storage opportunity
+value, terminal policies, and heterogeneous priorities prevent a universal
+automatic choice. `max_generation_marginal_cost(...)` is a convenient
+generator-only diagnostic under its documented convex monotone assumptions;
+it is not a system-wide sufficiency certificate.
+
+One interruption fraction applies to both active and reactive service in AC/SOCP,
+preserving the configured reactive sign and ratio. DC formulations optimize
+active service only while retaining reactive input as metadata. Shedding is an
+interval-average power decision under the piecewise-constant model. Per-load
+and aggregate energy not served are integrated once using `delta`, and the
+linear VOLL contribution is reported as `load_shedding_cost`.
+
+Renewable curtailment deliberately remains zero-cost: it is a metric of
+interest to report, not an objective to distort. Load shedding is separately
+and explicitly penalized as a reliability outcome. See
+[`case9_first_class_loads.py`](../examples/case9_first_class_loads.py),
+[`singlenode_load_shedding_phase_transition.py`](../examples/singlenode_load_shedding_phase_transition.py),
+and [`case9_multistep_load_shedding.py`](../examples/case9_multistep_load_shedding.py).
+
+## Battery storage example
+
+Battery state of charge evolves across time steps, coupling decisions made
+at hour 1 to feasibility at hour 72. This intertemporal coupling is why
+multistep optimization matters for resilience: the optimizer can see that
+conditions worsen on day 3 and hold reserves accordingly rather than
+depleting storage on day 1.
+
+```python
+import numpy as np
+import pandas as pd
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf_multistep, StorageUnitIdeal
+from cvxopf.results import extract_results
+
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
+
+scales = [0.8, 1.0, 1.2]
+df_P   = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q   = pd.DataFrame(np.outer(scales, Qd_base))
+
+unit = StorageUnitIdeal(
+    bus=5,
+    apparent_power_rating=50.0,  # MVA
+    capacity=100.0,              # MWh
+    initial_soc=50.0,            # MWh
+    aging_weight=1e-2,           # objective units/MWh
+    device_id="battery-5",       # stable cross-build identity
+)
+
+build = build_opf_multistep(
+    ppc, df_P, df_Q, T=T, formulation="ac",
+    storage=[unit], delta=1.0,
+)
+build.solve()
+results = extract_results(build)
+print(f"Integrated horizon objective: {results['objective']:.2f}")
+print(f"Storage real power (MW): {results['b']}")
+print(f"State of charge (MWh):   {results['soc']}")
+```
+
+An explicit, unique `device_id` provides stable storage identity across
+independently built problems, which is important for receding-horizon state
+handoffs. If it is omitted, the build publishes a convenience label such as
+`storage_0`; that label is tied to the current fleet ordering and must not be
+used as cross-build identity.
+
+Each storage unit may optionally configure one terminal policy. Hard policies
+use `terminal_constraint="equality"` to fix the final post-step SoC or
+`terminal_constraint="shortfall"` to enforce
+`soc[-1] >= terminal_soc`. Soft alternatives use
+`terminal_cost="linear"` or `"quadratic"` for two-sided deviation, and
+`"shortfall_linear"` or `"shortfall_quadratic"` to penalize only energy below
+the target. A hard constraint and terminal cost are alternatives for a given
+unit. A hard terminal policy makes the problem infeasible when the target
+cannot be reached within the horizon; use a soft terminal cost when a
+controlled violation is preferable.
+
+Linear terminal weights have units of objective units/MWh, and quadratic
+weights have units of objective units/MWh². The terminal term is applied once
+at the horizon boundary and is not scaled by `delta`. Stage-cost rates are
+integrated over time, so a fixed terminal weight retains its meaning when the
+same physical signals are represented at a finer resolution. See
+`examples/case9_storage_terminal.py` for a side-by-side comparison.
+
+## Nondispatchable generator example
+
+Nondispatchable generators (wind turbines, PV arrays, run-of-river hydro)
+produce up to a time-varying available power `R_t` determined by ambient
+conditions. The OPF can curtail freely; there is no cost for generation or
+curtailment. In AC/SOCP, the inverter also provides reactive power support within
+its apparent power rating. In DC, reactive power is absent, but the
+availability and apparent-power rating remain as separate real-power upper
+bounds. Passing a multi-day solar availability profile via `df_nd` lets the
+optimizer account for sustained generation shortfalls across the full
+planning horizon.
+
+```python
+import numpy as np
+import pandas as pd
+from cvxopf.testcases import case9
+from cvxopf.problem import build_opf_multistep, NondispatchableUnit
+from cvxopf.results import extract_results
+
+ppc     = case9()
+T       = 3
+Pd_base = ppc["bus"][:, 2]
+Qd_base = ppc["bus"][:, 3]
+
+scales = [0.8, 1.0, 1.2]
+df_P   = pd.DataFrame(np.outer(scales, Pd_base))
+df_Q   = pd.DataFrame(np.outer(scales, Qd_base))
+
+# Solar unit on bus 5: available output ramps down over three steps,
+# simulating a multi-day irradiance suppression event
+unit  = NondispatchableUnit(
+    bus=5,
+    p_available=100.0,            # MW — fallback for single-step
+    apparent_power_rating=120.0,  # MVA — inverter nameplate
+    device_id="solar_5",          # stable key for external time series
+)
+df_nd = pd.DataFrame({"solar_5": [100.0, 75.0, 50.0]})
+
+build = build_opf_multistep(
+    ppc, df_P, df_Q, T=T, formulation="ac",
+    nondispatchable=[unit], df_nd=df_nd,
+)
+build.solve()
+results = extract_results(build)
+print(f"Integrated horizon objective: {results['objective']:.2f}")
+print(f"ND real power (MW):   {results['p_nd']}")
+print(f"ND reactive (MVAr):   {results['q_nd']}")
+print(f"Curtailment (MW):     {results['curtailment']}")
+```
+
+## HVDC transmission link example
+
+HVDC links are controllable point-to-point power transfers between two buses,
+modelled as signed nodal injections (Convention B: positive = injection into
+the grid) subject to capacity limits. On fixed-direction links the converter
+loss is proportional. With signed grid injections, negative `p_in` sends power
+from the from-bus and gives `p_out = -(1 - loss_frac) * p_in`; positive `p_in`
+receives power at the from-bus and gives
+`p_out = -p_in / (1 - loss_frac)`. Links can be built
+directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
+`hvdc_from_dcline`. The MVP is unity power factor and drops fixed converter
+loss (`loss0`, emitting a `UserWarning`); it applies to AC, SOCP, and lossy
+DC. Single-node dispatch uses an explicit null HVDC model because the two
+network terminals collapse to the same bus.
+
+```python
+from cvxopf.testcases.case9_dcline import case9_dcline
+from cvxopf.problem import build_opf
+from cvxopf.hvdc import hvdc_from_dcline
+from cvxopf.results import extract_results
+
+ppc   = case9_dcline()
+links = hvdc_from_dcline(ppc["dcline"])  # three in-service DC links
+
+build = build_opf(ppc, formulation="ac", hvdc=links)
+build.solve()
+results = extract_results(build)
+print(f"Objective:          {results['objective']:.2f}")
+print(f"HVDC in  (MW):      {results['p_hvdc_in']}")
+print(f"HVDC out (MW):      {results['p_hvdc_out']}")
+print(f"HVDC loss (MW):     {results['hvdc_loss']}")
+```
+
+## Intertemporal storage illustration
+
+Storage is treated as an intertemporal network device, not as a sequence of
+independent power injections. A multi-step solve co-optimizes the complete
+dispatch and state-of-charge trajectories, including power and energy limits
+and configurable terminal constraints or costs. This temporal coupling changes
+both the feasible set and the economics of the OPF: stored energy acquires an
+opportunity value, strongly convex generation costs induce levelization, and
+the controller can preserve energy for future scarcity.
+
+![High-stress intertemporal and greedy battery-control comparison](../experiments/battery_terminal/readme_intertemporal_storage.png)
+
+*High-stress 96-hour comparison with a 500 MWh terminal target. The
+experiment augments the 9-bus test case with nondispatchable generation and a
+single storage device, driven by time-series load and renewable-availability
+inputs supplied through the native `df_P`, `df_Q`, and `df_nd` pandas
+interfaces. The top panel shows the active load together with the utility
+solar, distributed solar, and wind availability supplied to the model. The
+network-constrained optimum anticipates future scarcity and enforces the
+terminal state; the causal greedy controllers are terminal-blind. Their lower
+dispatchable-energy totals are not improvements where they accompany unserved
+load.*
