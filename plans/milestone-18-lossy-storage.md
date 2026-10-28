@@ -298,14 +298,16 @@ Milestone 12 terminal fields, `device_id`) with identical semantics, plus:
 
 - `charge_efficiency` in (0, 1];
 - `discharge_efficiency` in (0, 1];
-- `self_discharge_per_hour` in [0, 1): fraction of stored energy lost per
-  hour.
+- `self_discharge_per_month` in [0, 1): fraction of stored energy lost per
+  month, where a month is `HOURS_PER_MONTH = 730` hours (8760 / 12).
 
 The loss model is proportional self-discharge (Section 2, option 3). The
-parameter is hourly so device physics does not depend on the problem's
-`delta`. Per-interval retention is the constant
+parameter is a fixed-duration monthly rate, matching how battery
+self-discharge is usually specified, so device physics does not depend on
+the problem's `delta` (owner decision, 2026-10-28; previously an hourly
+rate). Per-interval retention is the constant
 
-    r = (1 - self_discharge_per_hour) ** delta
+    r = (1 - self_discharge_per_month) ** (delta / HOURS_PER_MONTH)
 
 computed at preparation, so the transition stays affine:
 

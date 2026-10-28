@@ -37,7 +37,7 @@ def _unit(**fields):
         initial_soc=50.0,
         charge_efficiency=0.95,
         discharge_efficiency=0.9,
-        self_discharge_per_hour=0.01,
+        self_discharge_per_month=0.01,
         device_id="battery",
     )
     base.update(fields)
@@ -75,8 +75,8 @@ class TestValidation:
         ("charge_efficiency", 1.1),
         ("discharge_efficiency", 0.0),
         ("discharge_efficiency", np.nan),
-        ("self_discharge_per_hour", -0.1),
-        ("self_discharge_per_hour", 1.0),
+        ("self_discharge_per_month", -0.1),
+        ("self_discharge_per_month", 1.0),
         ("aging_weight", 0.0),
         ("capacity", -1.0),
     ])
@@ -112,10 +112,11 @@ class TestAlgebra:
         )
         assert all(constraint.is_dcp() for constraint in constraints)
 
-    def test_retention_is_hourly_rate_over_interval(self):
+    def test_retention_is_monthly_rate_over_interval(self):
         build = build_opf(case9(), formulation="singlenode_dc", delta=0.5,
-                          lossy_storage=[_unit(self_discharge_per_hour=0.04)])
-        np.testing.assert_allclose(build.data["ls_retention"], [0.96 ** 0.5])
+                          lossy_storage=[_unit(self_discharge_per_month=0.04)])
+        np.testing.assert_allclose(build.data["ls_retention"],
+                                   [0.96 ** (0.5 / 730.0)])
 
     def test_operating_set_is_ideal_limit_on_net_power(self):
         units = [_unit()]
@@ -178,7 +179,7 @@ def test_stepwise_and_vectorized_agree(formulation):
 @pytest.mark.parametrize("formulation", CONVEX_FORMULATIONS)
 def test_lossless_parameters_reduce_to_ideal_storage(formulation):
     lossless = _unit(charge_efficiency=1.0, discharge_efficiency=1.0,
-                     self_discharge_per_hour=0.0)
+                     self_discharge_per_month=0.0)
     ideal = StorageUnitIdeal(bus=5, apparent_power_rating=40.0, capacity=100.0,
                              initial_soc=50.0, device_id="battery")
     _, lossy_results = _solve_multistep(formulation, SCALES, lossy_storage=[lossless])
@@ -229,7 +230,7 @@ def test_split_operation_without_curtailment_headroom():
     dissipated as conversion loss. This documents the stated limitation:
     with no mode constraint, circulation is bounded only by the net rating.
     """
-    full = _unit(initial_soc=100.0, self_discharge_per_hour=0.0)
+    full = _unit(initial_soc=100.0, self_discharge_per_month=0.0)
     build = build_opf(case9(), formulation="singlenode_dc", lossy_storage=[full],
                       loads=[Load(bus=5, p_load_mw=28.0, device_id="demand")])
     build.solve()

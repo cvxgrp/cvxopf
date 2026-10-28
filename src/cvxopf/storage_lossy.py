@@ -6,7 +6,8 @@ charge/discharge efficiencies, proportional self-discharge, and throughput
 regularization on separate charge and discharge powers. The approved model
 is recorded in plans/milestone-18-lossy-storage.md, Section 11.
 
-Per unit and interval, with retention r = (1 - self_discharge_per_hour)**delta:
+Per unit and interval, with retention
+r = (1 - self_discharge_per_month)**(delta / HOURS_PER_MONTH):
 
     p_ch >= 0,  p_dis >= 0
     b = p_dis - p_ch                                (net grid injection, MW)
@@ -33,6 +34,9 @@ import cvxpy as cp
 
 from cvxopf import storage
 
+# Average month of a 365-day year (8760 / 12), used to convert the monthly
+# self-discharge rate to a per-interval retention.
+HOURS_PER_MONTH = 730.0
 
 # ---------------------------------------------------------------------------
 # Lossy storage unit dataclass
@@ -64,9 +68,10 @@ class StorageUnitLossy:
     discharge_efficiency : float
         Fraction of stored energy withdrawn that reaches the grid,
         0 < eta_dis <= 1.
-    self_discharge_per_hour : float
-        Fraction of stored energy lost per hour, 0 <= value < 1. The
-        per-interval retention is (1 - self_discharge_per_hour) ** delta.
+    self_discharge_per_month : float
+        Fraction of stored energy lost per month of HOURS_PER_MONTH hours,
+        0 <= value < 1. The per-interval retention is
+        (1 - self_discharge_per_month) ** (delta / HOURS_PER_MONTH).
     aging_weight : float
         Weight lambda > 0 on the throughput rate lambda * (p_ch + p_dis), in
         objective units/MWh. Default 1e-2.
@@ -82,7 +87,7 @@ class StorageUnitLossy:
     initial_soc:             float
     charge_efficiency:       float
     discharge_efficiency:    float
-    self_discharge_per_hour: float
+    self_discharge_per_month: float
     aging_weight:            float = 1e-2
     terminal_soc:            float | None = None
     terminal_constraint:     str | None = None
@@ -106,11 +111,11 @@ def _validate_lossy_storage(storage_units: list, ext_bus_ids: set) -> None:
                     f"Lossy storage unit {i}: {name} must satisfy "
                     f"0 < {name} <= 1, got {value}"
                 )
-        if not 0 <= unit.self_discharge_per_hour < 1:
+        if not 0 <= unit.self_discharge_per_month < 1:
             raise ValueError(
-                f"Lossy storage unit {i}: self_discharge_per_hour must satisfy "
-                f"0 <= self_discharge_per_hour < 1, got "
-                f"{unit.self_discharge_per_hour}"
+                f"Lossy storage unit {i}: self_discharge_per_month must satisfy "
+                f"0 <= self_discharge_per_month < 1, got "
+                f"{unit.self_discharge_per_month}"
             )
         if unit.aging_weight <= 0:
             raise ValueError(
@@ -161,7 +166,7 @@ def _static_data(storage_units: list) -> dict:
         "ls_initial_soc": column("initial_soc"),
         "ls_charge_efficiency": column("charge_efficiency"),
         "ls_discharge_efficiency": column("discharge_efficiency"),
-        "ls_self_discharge_per_hour": column("self_discharge_per_hour"),
+        "ls_self_discharge_per_month": column("self_discharge_per_month"),
         "ls_aging_weight": column("aging_weight"),
         "ls_terminal_soc": optional_column("terminal_soc"),
         "ls_terminal_constraint": np.array(
@@ -176,8 +181,8 @@ def _static_data(storage_units: list) -> dict:
 
 def _retention(storage_units: list, delta: float) -> np.ndarray:
     """Fraction of stored energy retained over one interval of delta hours."""
-    leak = _static_data(storage_units)["ls_self_discharge_per_hour"]
-    return (1.0 - leak) ** float(delta)
+    leak = _static_data(storage_units)["ls_self_discharge_per_month"]
+    return (1.0 - leak) ** (float(delta) / HOURS_PER_MONTH)
 
 
 def _prepare_data(

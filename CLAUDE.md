@@ -435,12 +435,12 @@ Passed as `lossy_storage=`, separately from `storage=`. Shares the
 `capacity`, `initial_soc`, terminal policy fields, `device_id`), except that
 `aging_weight` must be strictly positive. Adds required fields
 `charge_efficiency` and `discharge_efficiency` in (0, 1] and
-`self_discharge_per_hour` in [0, 1). Model (see
+`self_discharge_per_month` in [0, 1), with a month of 730 hours. Model (see
 `plans/milestone-18-lossy-storage.md`, Section 11): nonnegative `ls_p_ch` and
 `ls_p_dis` and net injection `p_dis - p_ch` subject to the ideal operating
 set (AC/SOCP circle with `ls_b_q`, DC `|b| <= S`) and no mode constraint,
 `soc[t+1] = r*soc[t] + delta*(eta_ch*p_ch - p_dis/eta_dis)` with
-`r = (1 - self_discharge_per_hour)**delta`, and throughput rate
+`r = (1 - self_discharge_per_month)**(delta/730)`, and throughput rate
 `aging_weight*(p_ch + p_dis)`. Detection is `"n_ls" in build.data`. Results
 add `ls_p_ch`, `ls_p_dis`, `ls_b`, `ls_b_q` (AC/SOCP), `ls_soc`, `ls_cost`,
 `ls_conversion_loss`, `ls_self_discharge`, the split diagnostic `ls_split`,
