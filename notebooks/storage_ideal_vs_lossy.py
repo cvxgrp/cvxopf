@@ -60,10 +60,10 @@ def _(mo):
     Solves the same 24-hour dispatch twice, once with a `StorageUnitIdeal`
     and once with a `StorageUnitLossy`.
 
-    - Load follows one sinusoidal day: `l(t) = 1 + 0.3 sin(2 pi t / 24)`.
-    - Both batteries start half full and must end half full.
+    - Load follows one sinusoidal day
+    - Both batteries start half full and must end half full
     - Both use the same bus, power rating, capacity, and aging weight
-      (0.01 $/MWh of throughput).
+      (0.01 $/MWh of throughput)
     - Every load can be shed at a linear penalty of 100 times the largest
       generator marginal cost
     """)
@@ -86,7 +86,7 @@ def _(case14, case30, case39, case9, mo):
     rating_pct = mo.ui.slider(1, 50, step=1, value=10, debounce=True,
                               show_value=True,
                               label="Power rating (% of system load)")
-    duration_h = mo.ui.slider(1, 4, step=1, value=4, debounce=True,
+    duration_h = mo.ui.slider(1, 4, step=1, value=2, debounce=True,
                               show_value=True,
                               label="Duration (hours at rated power)")
     round_trip = mo.ui.slider(0.70, 1.00, step=0.01, value=0.90, debounce=True,
@@ -136,7 +136,6 @@ def _(
         duration_h,
         round_trip,
         self_discharge_pct,
-        mo.md("AC re-solves are the slowest; DC models update almost instantly."),
     ])
     return
 
@@ -169,6 +168,37 @@ def _(bus_selector, case_selector, nx, plt, ppc):
     _ax.axis("off")
     network_fig.tight_layout()
     network_fig
+    return
+
+
+@app.cell
+def _(Pd_base, T, capacity, np, plt, rating, scales, series):
+    _hours = np.arange(T + 1)
+    _styles = {
+        "ideal": dict(color="tab:blue", linestyle="-", label="Ideal"),
+        "lossy": dict(color="tab:orange", linestyle="--", label="Lossy"),
+    }
+    fig, _axes = plt.subplots(3, 1, figsize=(8, 7), sharex=True)
+    _axes[0].stairs(scales * Pd_base.sum(), _hours, baseline=None, color="0.4")
+    _axes[0].set_ylabel("System load (MW)")
+    for _kind, (_b, _soc, _) in series.items():
+        _axes[1].stairs(_b, _hours, **_styles[_kind])
+        _axes[2].plot(_hours, np.concatenate([[capacity / 2], _soc]),
+                      **_styles[_kind])
+    _axes[1].axhline(0.0, color="0.7", linewidth=0.8)
+    for _limit, _text, _va in ((rating, "max discharge", "bottom"),
+                               (-rating, "max charge", "top")):
+        _axes[1].axhline(_limit, color="0.3", linestyle="--", linewidth=1.0)
+    _axes[1].set_ylim(-1.25 * rating, 1.25 * rating)
+    _axes[1].set_ylabel("Battery net power (MW)\n(+ discharge)")
+    _axes[2].set_ylabel("State of charge (MWh)")
+    _axes[2].set_xlabel("Hour")
+    _axes[2].set_xticks(range(0, T + 1, 4))
+    _axes[1].legend()
+    for _ax in _axes:
+        _ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig
     return
 
 
@@ -258,7 +288,7 @@ def _(
         mo.callout(mo.md(f"Solve did not reach optimality: `{_failed}`"),
                    kind="danger"),
     )
-    return T, capacity, results, scales, shedding_cost, split_message
+    return T, capacity, rating, results, scales, shedding_cost, split_message
 
 
 @app.cell
@@ -325,66 +355,33 @@ def _(mo, np, results, series, shedding_cost, split_message):
 
 
 @app.cell
-def _(Pd_base, T, capacity, np, plt, scales, series):
-    _hours = np.arange(T + 1)
-    _styles = {
-        "ideal": dict(color="tab:blue", linestyle="-", label="Ideal"),
-        "lossy": dict(color="tab:orange", linestyle="--", label="Lossy"),
-    }
-    fig, _axes = plt.subplots(3, 1, figsize=(8, 7), sharex=True)
-    _axes[0].stairs(scales * Pd_base.sum(), _hours, baseline=None, color="0.4")
-    _axes[0].set_ylabel("System load (MW)")
-    for _kind, (_b, _soc, _) in series.items():
-        _axes[1].stairs(_b, _hours, **_styles[_kind])
-        _axes[2].plot(_hours, np.concatenate([[capacity / 2], _soc]),
-                      **_styles[_kind])
-    _axes[1].axhline(0.0, color="0.7", linewidth=0.8)
-    _axes[1].set_ylabel("Battery net power (MW)\n(+ discharge)")
-    _axes[2].set_ylabel("State of charge (MWh)")
-    _axes[2].set_xlabel("Hour")
-    _axes[2].set_xticks(range(0, T + 1, 4))
-    _axes[1].legend()
-    for _ax in _axes:
-        _ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig
-    return
-
-
-@app.cell
-def _(T, mo, np, plt, ppc, results):
+def _(T, np, plt, ppc, results):
     _bus_ids = ppc["bus"][:, 0].astype(int)
+    _nb = len(_bus_ids)
     _shed = {
         _kind: np.maximum(np.asarray(results[_kind]["p_load_shed"], dtype=float), 0.0)
         for _kind in ("ideal", "lossy")
     }
-    _rows = np.flatnonzero(
-        np.maximum(_shed["ideal"].max(axis=0), _shed["lossy"].max(axis=0)) > 1e-3
+    # A floor of 1 MW keeps the color scale valid when nothing is shed.
+    _vmax = max(_shed["ideal"].max(), _shed["lossy"].max(), 1.0)
+    _fig, _axes = plt.subplots(
+        1, 2, figsize=(9, 1.5 + 0.18 * _nb), sharey=True, constrained_layout=True,
     )
-    if _rows.size == 0:
-        _output = mo.md("**Energy not served by bus:** no load was shed at any "
-                        "bus in either run.")
-    else:
-        _vmax = max(_shed[_kind][:, _rows].max() for _kind in _shed)
-        _fig, _axes = plt.subplots(
-            2, 1, figsize=(8, 1.2 + 0.6 * len(_rows)), sharex=True,
-            constrained_layout=True,
+    for _ax, _kind in zip(_axes, ("ideal", "lossy")):
+        _image = _ax.imshow(
+            _shed[_kind].T, aspect="auto", cmap="plasma",
+            vmin=0.0, vmax=_vmax, interpolation="nearest",
+            extent=(0, T, _nb, 0),
         )
-        for _ax, _kind in zip(_axes, ("ideal", "lossy")):
-            _image = _ax.imshow(
-                _shed[_kind][:, _rows].T, aspect="auto", cmap="plasma",
-                vmin=0.0, vmax=_vmax, interpolation="nearest",
-                extent=(0, T, len(_rows), 0),
-            )
-            _ax.set_yticks(np.arange(len(_rows)) + 0.5,
-                           [str(bus) for bus in _bus_ids[_rows]])
-            _ax.set_ylabel(f"{_kind.capitalize()}\nbus")
-        _axes[0].set_title("Energy not served by bus")
-        _axes[1].set_xlabel("Hour")
-        _axes[1].set_xticks(range(0, T + 1, 4))
-        _fig.colorbar(_image, ax=_axes, label="MWh per hour")
-        _output = _fig
-    _output
+        _ax.set_title(_kind.capitalize())
+        _ax.set_xlabel("Hour")
+        _ax.set_xticks(range(0, T + 1, 4))
+    _axes[0].set_yticks(np.arange(_nb) + 0.5, [str(bus) for bus in _bus_ids],
+                        fontsize=7)
+    _axes[0].set_ylabel("Bus")
+    _fig.suptitle("Energy not served by bus")
+    _fig.colorbar(_image, ax=_axes, label="MWh per hour")
+    _fig
     return
 
 
