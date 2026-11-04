@@ -81,9 +81,9 @@ def _network_block(d, options, horizon=None, suffix=""):
     return variables, expressions, constraints, state
 
 
-def _prepare(case, options, storage, delta, nondispatchable, *, T, multistep, lossy_storage=None,
+def _prepare(case, options, storage, delta, nondispatchable, *, T, multistep,
              hvdc, generators, loads, load_inputs=None, load_participates_when_empty=False,
-             nd_inputs=None, hvdc_inputs=None):
+             nd_inputs=None, hvdc_inputs=None, lossy_storage=None):
     d = prepare_admittance_case(
         case, options, storage, delta, nondispatchable, hvdc, generators,
         horizon_steps=T, is_multistep=multistep, loads=loads, load_inputs=load_inputs,
@@ -127,7 +127,8 @@ def _metadata(d, options, delta, T, multistep, coupling_constraints):
 
 def _build_socp_vectorized(
     case, df_P, df_Q, T, options, coupling_constraints, storage=None, delta=1.0,
-    nondispatchable=None, df_nd=None, *, hvdc=None, lossy_storage=None, df_hvdc_min=None, df_hvdc_max=None,
+    nondispatchable=None, df_nd=None, *, hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
+    lossy_storage=None,
     generators=None, loads=None, load_inputs, load_participates_when_empty=False,
     nd_inputs=None, hvdc_inputs=None,
 ):
@@ -135,7 +136,8 @@ def _build_socp_vectorized(
 
     d = _prepare(case, options, storage, delta, nondispatchable, T=T, multistep=True,
                  hvdc=hvdc, generators=generators, loads=loads, load_inputs=load_inputs,
-                 load_participates_when_empty=load_participates_when_empty, lossy_storage=lossy_storage,
+                 load_participates_when_empty=load_participates_when_empty,
+                 lossy_storage=lossy_storage,
                  nd_inputs=nd_inputs, hvdc_inputs=hvdc_inputs)
     variables, network, constraints, state = _network_block(d, options, T)
     context = VectorizedContext("socp", T, delta, d["baseMVA"], d["_component_ext_to_int"], state, numerical_preparation=options.numerical_preparation)
@@ -217,22 +219,25 @@ def _build_steps(d, options, delta, T, multistep, coupling_constraints):
 
 
 def _build_socp_single(case, options, storage=None, delta=1.0, nondispatchable=None,
-                       *, hvdc=None, lossy_storage=None, generators=None, loads=None):
+                       *, hvdc=None, generators=None, loads=None, lossy_storage=None):
     d = _prepare(case, options, storage, delta, nondispatchable, T=1, multistep=False,
                  hvdc=hvdc, generators=generators, loads=loads,
-                 load_participates_when_empty=loads is not None, lossy_storage=lossy_storage)
+                 load_participates_when_empty=loads is not None,
+                 lossy_storage=lossy_storage)
     return _build_steps(d, options, delta, 1, False, [])
 
 
 def _build_socp_multistep(
     case, df_P, df_Q, T, options, coupling_constraints, storage=None, delta=1.0,
-    nondispatchable=None, df_nd=None, *, hvdc=None, lossy_storage=None, df_hvdc_min=None, df_hvdc_max=None,
+    nondispatchable=None, df_nd=None, *, hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
+    lossy_storage=None,
     generators=None, loads=None, load_inputs, load_participates_when_empty=False,
 ):
     # Frames already normalized/aligned by problem.py; no second alignment.
     d = _prepare(case, options, storage, delta, nondispatchable, T=T, multistep=True,
                  hvdc=hvdc, generators=generators, loads=loads, load_inputs=load_inputs,
-                 load_participates_when_empty=load_participates_when_empty, lossy_storage=lossy_storage,
+                 load_participates_when_empty=load_participates_when_empty,
+                 lossy_storage=lossy_storage,
                  nd_inputs=None if df_nd is None else NondispatchableInputs(df_nd.to_numpy(dtype=float)),
                  hvdc_inputs=None if not hvdc else HVDCInputs(
                      df_hvdc_min.to_numpy(dtype=float), df_hvdc_max.to_numpy(dtype=float)))

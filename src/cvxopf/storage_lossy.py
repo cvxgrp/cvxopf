@@ -146,42 +146,37 @@ def _device_identity(storage_units: list) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(resolved, dtype=object), np.asarray(explicit, dtype=bool)
 
 
+def _parameter_values(storage_units: list, name: str, like=None) -> np.ndarray:
+    """Gather a numeric field, broadcasting over time for (ns, T) expressions.
+
+    NumPy converts unset optional numeric fields (None) to NaN.
+    """
+    values = np.array([getattr(unit, name) for unit in storage_units], dtype=float)
+    return values if like is None or like.ndim == 1 else values[:, np.newaxis]
+
+
 def _static_data(storage_units: list) -> dict:
     """Vectorize static lossy-storage fields into numpy arrays."""
-    def column(name: str) -> np.ndarray:
-        return np.array([getattr(unit, name) for unit in storage_units], dtype=float)
-
-    def optional_column(name: str) -> np.ndarray:
-        return np.array(
-            [
-                np.nan if getattr(unit, name) is None else getattr(unit, name)
-                for unit in storage_units
-            ],
-            dtype=float,
-        )
-
+    numeric_fields = (
+        "apparent_power_rating", "capacity", "initial_soc",
+        "charge_efficiency", "discharge_efficiency", "self_discharge_per_month",
+        "aging_weight", "terminal_soc", "terminal_weight",
+    )
     return {
-        "ls_apparent_power_rating": column("apparent_power_rating"),
-        "ls_capacity": column("capacity"),
-        "ls_initial_soc": column("initial_soc"),
-        "ls_charge_efficiency": column("charge_efficiency"),
-        "ls_discharge_efficiency": column("discharge_efficiency"),
-        "ls_self_discharge_per_month": column("self_discharge_per_month"),
-        "ls_aging_weight": column("aging_weight"),
-        "ls_terminal_soc": optional_column("terminal_soc"),
+        **{f"ls_{name}": _parameter_values(storage_units, name)
+           for name in numeric_fields},
         "ls_terminal_constraint": np.array(
             [unit.terminal_constraint for unit in storage_units], dtype=object
         ),
         "ls_terminal_cost": np.array(
             [unit.terminal_cost for unit in storage_units], dtype=object
         ),
-        "ls_terminal_weight": optional_column("terminal_weight"),
     }
 
 
 def _retention(storage_units: list, delta: float) -> np.ndarray:
     """Fraction of stored energy retained over one interval of delta hours."""
-    leak = _static_data(storage_units)["ls_self_discharge_per_month"]
+    leak = _parameter_values(storage_units, "self_discharge_per_month")
     return (1.0 - leak) ** (float(delta) / HOURS_PER_MONTH)
 
 
@@ -213,11 +208,6 @@ def _prepare_data(
 # Injections, operating set, dynamics, and cost
 # ---------------------------------------------------------------------------
 
-def _per_unit(values: np.ndarray, like) -> np.ndarray:
-    """Align per-unit parameters with (ns,) or time-last (ns, T) arrays."""
-    return values if like.ndim == 1 else values[:, np.newaxis]
-
-
 def injections(
     p_ch: cp.Variable,
     p_dis: cp.Variable,
@@ -244,14 +234,13 @@ def operating_constraints(
     and SoC bounds. ``soc`` is the post-step energy: (ns,) per step or
     (ns, T) time-last.
     """
-    data = _static_data(storage_units)
-    rating = _per_unit(data["ls_apparent_power_rating"], p_ch)
+    rating = _parameter_values(storage_units, "apparent_power_rating", p_ch)
     net = p_dis - p_ch
     constraints = [
         p_ch >= 0,
         p_dis >= 0,
         soc >= 0,
-        soc <= _per_unit(data["ls_capacity"], soc),
+        soc <= _parameter_values(storage_units, "capacity", soc),
     ]
     if b_q is None:
         constraints += [net >= -rating, net <= rating]
@@ -267,9 +256,8 @@ def _stored_energy_change(
     delta: float,
 ) -> cp.Expression:
     """Energy added to storage over each interval by charging and discharging."""
-    data = _static_data(storage_units)
-    eta_ch = _per_unit(data["ls_charge_efficiency"], p_ch)
-    eta_dis = _per_unit(data["ls_discharge_efficiency"], p_dis)
+    eta_ch = _parameter_values(storage_units, "charge_efficiency", p_ch)
+    eta_dis = _parameter_values(storage_units, "discharge_efficiency", p_dis)
     return float(delta) * (
         cp.multiply(eta_ch, p_ch) - cp.multiply(1.0 / eta_dis, p_dis)
     )
@@ -284,7 +272,7 @@ def coupling_constraints(
 ) -> list[cp.Constraint]:
     """Stepwise lossy SoC dynamics and terminal boundaries."""
     retention = _retention(storage_units, delta)
-    previous = _static_data(storage_units)["ls_initial_soc"]
+    previous = _parameter_values(storage_units, "initial_soc")
     constraints = []
     for p_ch, p_dis, soc in zip(p_ch_list, p_dis_list, soc_list):
         constraints.append(
@@ -307,7 +295,7 @@ def vectorized_coupling_constraints(
     """Time-last lossy recurrence over (ns, T + 1) SoC boundaries."""
     retention = _retention(storage_units, delta)[:, np.newaxis]
     constraints = [
-        soc[:, 0] == _static_data(storage_units)["ls_initial_soc"],
+        soc[:, 0] == _parameter_values(storage_units, "initial_soc"),
         soc[:, 1:]
         == cp.multiply(retention, soc[:, :-1])
         + _stored_energy_change(storage_units, p_ch, p_dis, delta),
@@ -322,7 +310,7 @@ def throughput_cost_rate(
     p_dis: cp.Variable,
 ) -> cp.Expression:
     """Throughput regularization rate: scalar per step, or (T,) time-last."""
-    weights = _per_unit(_static_data(storage_units)["ls_aging_weight"], p_ch)
+    weights = _parameter_values(storage_units, "aging_weight", p_ch)
     return cp.sum(cp.multiply(weights, p_ch + p_dis), axis=0)
 
 

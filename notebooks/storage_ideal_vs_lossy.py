@@ -186,8 +186,7 @@ def _(Pd_base, T, capacity, np, plt, rating, scales, series):
         _axes[2].plot(_hours, np.concatenate([[capacity / 2], _soc]),
                       **_styles[_kind])
     _axes[1].axhline(0.0, color="0.7", linewidth=0.8)
-    for _limit, _text, _va in ((rating, "max discharge", "bottom"),
-                               (-rating, "max charge", "top")):
+    for _limit in (rating, -rating):
         _axes[1].axhline(_limit, color="0.3", linestyle="--", linewidth=1.0)
     _axes[1].set_ylim(-1.25 * rating, 1.25 * rating)
     _axes[1].set_ylabel("Battery net power (MW)\n(+ discharge)")
@@ -299,26 +298,23 @@ def _(np, results):
         if kind == "lossy":
             b, soc = r["ls_b"][:, 0], r["ls_soc"][:, 0]
             charged, discharged = np.sum(r["ls_p_ch"]), np.sum(r["ls_p_dis"])
-            metrics = {
-                "Objective ($)": r["objective"],
-                "Battery cost ($)": r["ls_cost"],
-                "Energy charged (MWh)": charged,
-                "Energy discharged (MWh)": discharged,
-                "Conversion loss (MWh)": np.sum(r["ls_conversion_loss"]),
-                "Self-discharge (MWh)": np.sum(r["ls_self_discharge"]),
-                "Energy not served (MWh)": r["energy_not_served"],
-            }
+            cost = r["ls_cost"]
+            conversion_loss = np.sum(r["ls_conversion_loss"])
+            self_discharge = np.sum(r["ls_self_discharge"])
         else:
             b, soc = r["b"][:, 0], r["soc"][:, 0]
-            metrics = {
-                "Objective ($)": r["objective"],
-                "Battery cost ($)": r["storage_cost"],
-                "Energy charged (MWh)": np.sum(np.maximum(-b, 0)),
-                "Energy discharged (MWh)": np.sum(np.maximum(b, 0)),
-                "Conversion loss (MWh)": 0.0,
-                "Self-discharge (MWh)": 0.0,
-                "Energy not served (MWh)": r["energy_not_served"],
-            }
+            charged, discharged = np.sum(np.maximum(-b, 0)), np.sum(np.maximum(b, 0))
+            cost = r["storage_cost"]
+            conversion_loss = self_discharge = 0.0
+        metrics = {
+            "Objective ($)": r["objective"],
+            "Battery cost ($)": cost,
+            "Energy charged (MWh)": charged,
+            "Energy discharged (MWh)": discharged,
+            "Conversion loss (MWh)": conversion_loss,
+            "Self-discharge (MWh)": self_discharge,
+            "Energy not served (MWh)": r["energy_not_served"],
+        }
         return b, soc, metrics
 
     series = {kind: battery_series(kind) for kind in ("ideal", "lossy")}
@@ -382,11 +378,6 @@ def _(T, np, plt, ppc, results):
     _fig.suptitle("Energy not served by bus")
     _fig.colorbar(_image, ax=_axes, label="MWh per hour")
     _fig
-    return
-
-
-@app.cell
-def _():
     return
 
 

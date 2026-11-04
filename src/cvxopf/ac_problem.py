@@ -590,7 +590,8 @@ def _build_ac_single(
 def _build_ac_vectorized(
     case, df_P, df_Q, T, options, coupling_constraints,
     storage=None, delta=1.0, nondispatchable=None, df_nd=None, *,
-    hvdc=None, lossy_storage=None, df_hvdc_min=None, df_hvdc_max=None, generators=None,
+    hvdc=None, df_hvdc_min=None, df_hvdc_max=None, generators=None,
+    lossy_storage=None,
     loads=None, load_inputs, load_participates_when_empty=False,
     nd_inputs=None, hvdc_inputs=None,
 ) -> "OPFBuild":
@@ -605,7 +606,8 @@ def _build_ac_vectorized(
         case, options, storage, delta, nondispatchable, hvdc, generators,
         horizon_steps=T, nondispatchable_inputs=nd_inputs,
         hvdc_inputs=hvdc_inputs, load_inputs=load_inputs, is_multistep=True,
-        loads=loads, lossy_storage=lossy_storage, load_participates_when_empty=load_participates_when_empty,
+        loads=loads, load_participates_when_empty=load_participates_when_empty,
+        lossy_storage=lossy_storage,
     )
     nb = d["nb"]
     theta = cp.Variable((nb, T), name="theta")
