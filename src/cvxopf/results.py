@@ -28,6 +28,14 @@ Storage terminal-policy results (all formulations, when configured):
     storage_terminal_deviation (signed, MWh; negative means shortfall)
     storage_terminal_cost (scalar, soft terminal policies only)
 
+Lossy storage results (all formulations, when ``"n_ls"`` is in build data):
+    ls_p_ch, ls_p_dis (MW), ls_b (net injection, MW), ls_b_q (AC/SOCP, MVAr),
+    ls_soc (post-step, MWh), ls_cost (integrated throughput cost),
+    ls_conversion_loss and ls_self_discharge (MWh per interval), and
+    ls_split = min(ls_p_ch, ls_p_dis) (MW, simultaneous-operation diagnostic;
+    extract_results raises SimultaneousOperationError above 1e-3 MW);
+    ls_terminal_deviation and ls_terminal_cost when a terminal policy is set.
+
 First-class load results (when ``"nload"`` is present in build data):
     p_load, q_load, p_load_served (MW/MVAr device arrays)
     q_load_served (AC only)
@@ -54,6 +62,12 @@ from cvxopf.hvdc import _loss_values
 from cvxopf.nondispatchable import _curtailment_values
 from cvxopf.problem import OPFBuild
 from cvxopf.storage import _terminal_deviation_values
+from cvxopf.storage_lossy import (
+    _check_simultaneous_operation,
+    _conversion_loss_values,
+    _self_discharge_values,
+    _split_operation_values,
+)
 
 
 def _solved_expression_value(build: OPFBuild, name: str) -> float:
@@ -188,6 +202,24 @@ def _initialize_results(build: OPFBuild) -> dict[str, Any]:
         if "storage_terminal_cost" in build.expressions:
             results["storage_terminal_cost"] = float("nan")
 
+    if "n_ls" in build.data:
+        results["ls_device_ids"] = np.asarray(
+            build.data["ls_device_ids"], dtype=object
+        ).copy()
+        results["ls_device_id_is_explicit"] = np.asarray(
+            build.data["ls_device_id_is_explicit"], dtype=bool
+        ).copy()
+        for key in ("ls_p_ch", "ls_p_dis", "ls_b", "ls_soc",
+                    "ls_conversion_loss", "ls_self_discharge", "ls_split"):
+            results[key] = None
+        if "ls_b_q" in build.variables:
+            results["ls_b_q"] = None
+        results["ls_cost"] = float("nan")
+        if np.any(np.isfinite(build.data["ls_terminal_soc"])):
+            results["ls_terminal_deviation"] = None
+        if "ls_terminal_cost" in build.expressions:
+            results["ls_terminal_cost"] = float("nan")
+
     if "nnd" in build.data:
         results["p_nd"] = None
         if "q_nd" in build.variables:
@@ -265,6 +297,45 @@ def _add_storage_results(results: dict[str, Any], build: OPFBuild) -> None:
         )
 
 
+def _add_lossy_storage_results(results: dict[str, Any], build: OPFBuild) -> None:
+    """Add lossy-storage variables, device-owned losses, and diagnostics."""
+    if "n_ls" not in build.data:
+        return
+    data = build.data
+    if "ls_b_q" in build.variables:
+        results["ls_b_q"] = _variable_values(build, "ls_b_q")
+    results["ls_cost"] = _solved_expression_value(build, "ls_cost")
+    if "ls_terminal_cost" in build.expressions:
+        results["ls_terminal_cost"] = _solved_expression_value(
+            build, "ls_terminal_cost"
+        )
+    p_ch = _variable_values(build, "ls_p_ch")
+    p_dis = _variable_values(build, "ls_p_dis")
+    soc = _variable_values(build, "ls_soc")
+    if p_ch is None or p_dis is None or soc is None:
+        return
+    results["ls_p_ch"] = p_ch
+    results["ls_p_dis"] = p_dis
+    results["ls_soc"] = soc
+    results["ls_b"] = p_dis - p_ch
+    results["ls_conversion_loss"] = _conversion_loss_values(
+        p_ch,
+        p_dis,
+        data["ls_charge_efficiency"],
+        data["ls_discharge_efficiency"],
+        data["ls_delta"],
+    )
+    results["ls_self_discharge"] = _self_discharge_values(
+        data["ls_initial_soc"], soc, data["ls_retention"]
+    )
+    results["ls_split"] = _split_operation_values(p_ch, p_dis)
+    if "ls_terminal_deviation" in results:
+        terminal_soc = soc[-1] if "T" in data else soc
+        results["ls_terminal_deviation"] = _terminal_deviation_values(
+            data["ls_terminal_soc"], terminal_soc
+        )
+
+
 def _add_nd_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add ND variables and device-owned curtailment values."""
     if "nnd" not in build.data:
@@ -328,6 +399,7 @@ def _add_load_results(results: dict[str, Any], build: OPFBuild) -> None:
 def _add_device_results(results: dict[str, Any], build: OPFBuild) -> None:
     """Add every optional device's reported values."""
     _add_storage_results(results, build)
+    _add_lossy_storage_results(results, build)
     _add_nd_results(results, build)
     _add_hvdc_results(results, build)
     _add_load_results(results, build)
@@ -467,20 +539,26 @@ def extract_results(build: OPFBuild) -> dict[str, Any]:
     ValueError
         If build.formulation is not one of 'ac', 'lossy_dc',
         'singlenode_dc'.
+    SimultaneousOperationError
+        If lossy storage charges and discharges simultaneously above
+        ``SPLIT_TOLERANCE_MW`` (1e-3 MW). The complete results are attached
+        to the exception as ``results``.
     """
     if build.formulation == "socp":
-        return _extract_socp_results(build)
+        results = _extract_socp_results(build)
     elif build.formulation == "ac":
-        return _extract_ac_results(build)
+        results = _extract_ac_results(build)
     elif build.formulation == "lossy_dc":
-        return _extract_dc_results(build)
+        results = _extract_dc_results(build)
     elif build.formulation == "singlenode_dc":
-        return _extract_singlenode_dc_results(build)
+        results = _extract_singlenode_dc_results(build)
     else:
         raise ValueError(
             f"extract_results: unknown formulation '{build.formulation}'. "
             f"Supported: 'ac', 'lossy_dc', 'singlenode_dc'."
         )
+    _check_simultaneous_operation(results)
+    return results
 
 
 def compare_to_reference(

@@ -40,8 +40,8 @@ class StorageUnitIdeal:
 
     The operating set is a circle in real-reactive power space (AC) or
     a symmetric real power bound (DC). Charge and discharge efficiency
-    are assumed to be 1.0. For lossy storage, see StorageUnitLossy
-    (future milestone).
+    are assumed to be 1.0. For lossy storage, see StorageUnitLossy in
+    storage_lossy.py.
 
     The time step duration delta is a property of the problem's time
     discretisation, not of the storage device. Pass it via the delta=

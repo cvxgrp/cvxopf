@@ -32,6 +32,7 @@ import cvxpy as cp
 
 # Import storage and nondispatchable types for public API
 from cvxopf.storage import StorageUnitIdeal
+from cvxopf.storage_lossy import StorageUnitLossy
 from cvxopf.nondispatchable import (
     NondispatchableUnit,
     _parse_nd_timeseries,
@@ -189,6 +190,10 @@ class OPFBuild:
         When storage is present:
             b (real power, MW), b_q (reactive power, MVAr, AC only),
             soc (state of charge, MWh)
+        When lossy storage is present:
+            ls_p_ch, ls_p_dis (charge/discharge power, MW, nonnegative),
+            ls_b_q (reactive power, MVAr, AC/SOCP only),
+            ls_soc (state of charge, MWh)
         When one or more loads are sheddable:
             load_shed_fraction (dimensionless interruption fractions)
 
@@ -219,6 +224,9 @@ class OPFBuild:
                  storage_aging_weight,
                  storage_terminal_soc, storage_terminal_constraint,
                  storage_terminal_cost, storage_terminal_weight
+        When lossy storage is present: n_ls, Cls, ls_bus, ls_device_ids,
+                 ls_device_id_is_explicit, ls_delta, ls_retention, and
+                 per-unit ls_* parameter arrays mirroring the device fields
         Imported first-class loads always add: nload, nsheddable, Cload,
                  load_device_ids, load_bus_external, load_bus_internal,
                  load_has_reactive, load_is_sheddable,
@@ -531,6 +539,7 @@ def build_opf(
     formulation: str = "ac",
     options: OPFOptions | None = None,
     storage: list[StorageUnitIdeal] | None = None,
+    lossy_storage: list[StorageUnitLossy] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     hvdc: list[HVDCLink] | None = None,
@@ -575,6 +584,10 @@ def build_opf(
     storage : list[StorageUnitIdeal] | None, optional
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance.
+    lossy_storage : list[StorageUnitLossy] | None, optional
+        Lossy storage units with separate charge/discharge powers,
+        efficiencies, and self-discharge. If None, none are modelled.
+        Supported only with the default numerical-preparation policy.
     delta : float, optional
         Time step duration in hours (default 1.0). Integrates every stage-cost
         rate over the interval, is passed to every component's temporal
@@ -627,6 +640,7 @@ def build_opf(
             delta,
             nondispatchable,
             hvdc=hvdc,
+            lossy_storage=lossy_storage,
             generators=generators,
             loads=loads,
         ),
@@ -645,6 +659,7 @@ def build_opf_multistep(
     options: OPFOptions | None = None,
     coupling_constraints: list[cp.Constraint] | None = None,
     storage: list[StorageUnitIdeal] | None = None,
+    lossy_storage: list[StorageUnitLossy] | None = None,
     delta: float = 1.0,
     nondispatchable: list[NondispatchableUnit] | None = None,
     df_nd: pd.DataFrame | None = None,
@@ -714,6 +729,11 @@ def build_opf_multistep(
         List of energy storage units. If None, no storage is modelled.
         Each unit is a StorageUnitIdeal dataclass instance. Storage SoC
         dynamics are automatically added as coupling constraints.
+    lossy_storage : list[StorageUnitLossy] | None, optional
+        Lossy storage units with separate charge/discharge powers,
+        efficiencies, and self-discharge; SoC dynamics are added
+        automatically. Supported only with the default
+        numerical-preparation policy.
     delta : float, optional
         Time step duration in hours (default 1.0). Integrates every stage-cost
         rate over each interval, is passed to every component's temporal
@@ -931,6 +951,7 @@ def build_opf_multistep(
             nondispatchable,
             df_nd,
             hvdc=hvdc,
+            lossy_storage=lossy_storage,
             df_hvdc_min=df_hvdc_min,
             df_hvdc_max=df_hvdc_max,
             generators=generators,

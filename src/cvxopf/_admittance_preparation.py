@@ -19,6 +19,7 @@ from cvxopf._component_adapters import (
 )
 from cvxopf.load import Load, loads_from_matpower
 from cvxopf.storage import StorageUnitIdeal
+from cvxopf.storage_lossy import StorageUnitLossy
 from cvxopf.nondispatchable import NondispatchableUnit
 from cvxopf.hvdc import HVDCLink
 
@@ -105,6 +106,7 @@ def prepare_admittance_case(
     load_participates_when_empty: bool = False,
     nondispatchable_inputs: NondispatchableInputs | None = None,
     formulation: Formulation = "ac",
+    lossy_storage: list[StorageUnitLossy] | None = None,
 ) -> dict:
     """
     Validate, reindex, and extract all numpy data from a case dict.
@@ -199,6 +201,7 @@ def prepare_admittance_case(
         load_inputs=load_inputs,
         load_participates_when_empty=load_participates_when_empty,
         storage_units=storage or (),
+        lossy_storage_units=lossy_storage or (),
         nondispatchable_units=nondispatchable or (),
         nondispatchable_inputs=(
             None
