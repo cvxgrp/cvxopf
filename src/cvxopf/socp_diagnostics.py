@@ -14,6 +14,7 @@ import numpy as np
 from cvxopf.generator import voltage_setpoints
 from cvxopf.network import make_branch_admittance, make_ybus_matpower, VMIN, VMAX
 from cvxopf.results import extract_results
+from cvxopf.storage_lossy import HOURS_PER_MONTH
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,35 @@ def _device_audit(build, results, inputs, tol):
         residuals["storage_terminal"]["worst"]["interval"] = T - 1
         injection += (b + 1j * bq) @ a["Cs"].T
 
+    lossy = units.get("lossy_storage", ())
+    if lossy:
+        charge, discharge, bq, soc = (
+            get(key, len(lossy)) for key in ("ls_p_ch", "ls_p_dis", "ls_b_q", "ls_soc")
+        )
+        b = discharge - charge
+        check("lossy_storage_charge", -charge)
+        check("lossy_storage_discharge", -discharge)
+        check("lossy_storage_capability", np.hypot(b, bq) - a["ls_apparent_power_rating"], "MVA")
+        box("lossy_storage_energy", soc, 0, a["ls_capacity"], "MWh", tol.energy)
+        previous = np.vstack([a["ls_initial_soc"], soc[:-1]])
+        delta = build.data["delta"]
+        # Reconstruct from the frozen physical parameters, not reported losses
+        # or the builder's retention/dynamics expressions.
+        retention = (1 - a["ls_self_discharge_per_month"]) ** (delta / HOURS_PER_MONTH)
+        expected = retention * previous + delta * (
+            a["ls_charge_efficiency"] * charge - discharge / a["ls_discharge_efficiency"]
+        )
+        check("lossy_storage_transition", abs(soc - expected), "MWh", tol.energy)
+        target_violation = np.zeros((1, len(lossy)))
+        for k, unit in enumerate(lossy):
+            if unit.terminal_constraint == "equality":
+                target_violation[0, k] = abs(soc[-1, k] - unit.terminal_soc)
+            elif unit.terminal_constraint == "shortfall":
+                target_violation[0, k] = max(unit.terminal_soc - soc[-1, k], 0)
+        check("lossy_storage_terminal", target_violation, "MWh", tol.energy)
+        residuals["lossy_storage_terminal"]["worst"]["interval"] = T - 1
+        injection += (b + 1j * bq) @ a["Cls"].T
+
     nd = units.get("nondispatchable", ())
     if nd:
         pnd, qnd = get("p_nd", len(nd)), get("q_nd", len(nd))
@@ -257,7 +287,8 @@ def recover_socp_voltage(build, results=None, *, tolerances=None):
     """Recover a deterministic forest candidate and independently audit AC.
 
     Returns public-shape candidate voltages and the unchanged public-shape device
-    primal in ``candidate``. Exact product recovery and AC feasibility are
+    primal in ``candidate``. Lossy-storage net power is derived from the
+    audited split powers. Exact product recovery and AC feasibility are
     separate outcomes. There is no power-flow adjustment or optimization.
     """
     inputs, results = _inputs(build, results)
@@ -303,8 +334,14 @@ def recover_socp_voltage(build, results=None, *, tolerances=None):
     products = _summary(product_error, "p.u.^2", tol.product, pairs.tolist())
     tight = audit["edge_gaps"]["relative_summary"]["passed"]
     ac = _audit(build, results, inputs, tol, voltage)
-    device_keys = ("Pg", "Qg", "b", "b_q", "soc", "p_nd", "q_nd", "p_hvdc_in", "p_hvdc_out", "load_shed_fraction")
+    device_keys = ("Pg", "Qg", "b", "b_q", "soc", "ls_p_ch", "ls_p_dis", "ls_b_q", "ls_soc",
+                   "p_nd", "q_nd", "p_hvdc_in", "p_hvdc_out", "load_shed_fraction")
     candidate = {key: np.asarray(results[key]).copy() for key in device_keys if results.get(key) is not None}
+    if inputs["units"].get("lossy_storage"):
+        candidate["ls_b"] = (
+            np.asarray(candidate["ls_p_dis"], dtype=float)
+            - np.asarray(candidate["ls_p_ch"], dtype=float)
+        )
     # Voltage shape follows the public single/multistep convention as well.
     candidate.update(Vm=np.sqrt(w) if "T" in build.data else np.sqrt(w)[0],
                      Va_deg=np.rad2deg(theta) if "T" in build.data else np.rad2deg(theta)[0])

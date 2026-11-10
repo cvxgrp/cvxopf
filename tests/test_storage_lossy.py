@@ -15,6 +15,7 @@ from cvxopf import (
     SimultaneousOperationError,
     StorageUnitIdeal,
     StorageUnitLossy,
+    audit_socp_relaxation,
     build_opf,
     build_opf_multistep,
     extract_results,
@@ -27,6 +28,7 @@ ENERGY_ATOL = 1e-5  # MWh
 OBJ_RTOL = 1e-6
 
 CONVEX_FORMULATIONS = ["lossy_dc", "singlenode_dc", "socp"]
+ALL_FORMULATIONS = [*CONVEX_FORMULATIONS, "ac"]
 
 
 def _unit(**fields):
@@ -57,7 +59,7 @@ def _solve_multistep(formulation, scales, *, temporal_assembly="vectorized",
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         build = build_opf_multistep(
-            case9(), df_P, df_Q if formulation == "socp" else None,
+            case9(), df_P, df_Q if formulation in {"ac", "socp"} else None,
             T=len(scales), formulation=formulation, delta=delta,
             temporal_assembly=temporal_assembly, **devices,
         )
@@ -176,7 +178,7 @@ def test_stepwise_and_vectorized_agree(formulation):
     np.testing.assert_allclose(stepwise["ls_soc"], vectorized["ls_soc"], atol=1e-4)
 
 
-@pytest.mark.parametrize("formulation", CONVEX_FORMULATIONS)
+@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
 def test_lossless_parameters_reduce_to_ideal_storage(formulation):
     lossless = _unit(charge_efficiency=1.0, discharge_efficiency=1.0,
                      self_discharge_per_month=0.0)
@@ -189,7 +191,7 @@ def test_lossless_parameters_reduce_to_ideal_storage(formulation):
     np.testing.assert_allclose(lossy_results["ls_b"], ideal_results["b"], atol=1e-3)
 
 
-@pytest.mark.parametrize("formulation", CONVEX_FORMULATIONS)
+@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
 def test_no_split_operation_with_zero_cost_curtailment(formulation):
     renewable = NondispatchableUnit(bus=7, p_available=0.0,
                                     apparent_power_rating=300.0, device_id="wind")
@@ -215,6 +217,106 @@ def test_terminal_policies_compose():
     assert "ls_terminal_cost" in build.expressions
     expected = 5.0 * max(0.0, -results["ls_terminal_deviation"][0])
     np.testing.assert_allclose(results["ls_terminal_cost"], expected, atol=1e-4)
+
+
+@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
+@pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
+def test_heterogeneous_fleet_with_renewables(formulation, assembly):
+    """Solved energy, capability, identity and terminal checks (Gates 2/5)."""
+    units = [
+        _unit(bus=6, capacity=65, initial_soc=20, apparent_power_rating=25,
+              charge_efficiency=0.83, discharge_efficiency=0.91,
+              self_discharge_per_month=0.04, aging_weight=0.03,
+              terminal_soc=30, terminal_cost="shortfall_linear", terminal_weight=5,
+              device_id="zeta"),
+        _unit(terminal_soc=70, terminal_constraint="equality", device_id="alpha"),
+    ]
+    renewable = NondispatchableUnit(bus=7, p_available=0,
+                                    apparent_power_rating=300, device_id="wind")
+    available = np.array([280., 250., 20., 0.])
+    delta = 0.5
+    build, results = _solve_multistep(
+        formulation, SCALES, temporal_assembly=assembly, delta=delta,
+        lossy_storage=units, nondispatchable=[renewable],
+        df_nd=pd.DataFrame({"wind": available}),
+    )
+    assert build.prob.status == "optimal"
+    np.testing.assert_array_equal(results["ls_device_ids"], ["zeta", "alpha"])
+    charge, discharge, soc = (results[key] for key in ("ls_p_ch", "ls_p_dis", "ls_soc"))
+    assert charge.shape == discharge.shape == soc.shape == (4, 2)
+    assert charge.min() >= -1e-5 and discharge.min() >= -1e-5
+    previous = np.array([u.initial_soc for u in units])
+    conversion, leakage = [], []
+    for t in range(4):
+        retention = np.array([(1-u.self_discharge_per_month)**(delta/730) for u in units])
+        loss = delta * np.array([
+            (1-u.charge_efficiency)*charge[t, k]
+            + (1/u.discharge_efficiency-1)*discharge[t, k]
+            for k, u in enumerate(units)
+        ])
+        self_discharge = (1-retention)*previous
+        expected = previous + delta*(charge[t]-discharge[t]) - loss - self_discharge
+        np.testing.assert_allclose(soc[t], expected, atol=ENERGY_ATOL)
+        conversion.append(loss)
+        leakage.append(self_discharge)
+        previous = soc[t]
+    np.testing.assert_allclose(results["ls_conversion_loss"], conversion, atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["ls_self_discharge"], leakage, atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["ls_b"], discharge-charge, atol=1e-7)
+    assert np.all(soc >= -ENERGY_ATOL)
+    assert np.all(soc <= np.array([u.capacity for u in units]) + ENERGY_ATOL)
+    capability = abs(results["ls_b"])
+    if formulation in {"ac", "socp"}:
+        capability = np.hypot(results["ls_b"], results["ls_b_q"])
+    assert np.all(capability <= np.array([u.apparent_power_rating for u in units]) + 1e-5)
+    np.testing.assert_allclose(soc[-1, 1], 70, atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["ls_terminal_deviation"], soc[-1]-[30, 70], atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["ls_terminal_cost"], 5*max(30-soc[-1, 0], 0), atol=1e-4)
+    expected_cost = delta * np.sum((charge+discharge)*[u.aging_weight for u in units])
+    np.testing.assert_allclose(results["ls_cost"], expected_cost, atol=1e-5)
+    assert np.max(results["ls_split"]) <= SPLIT_ATOL
+    assert results["curtailment"].max() > 1
+    np.testing.assert_allclose(results["curtailment"][:, 0], available-results["p_nd"][:, 0], atol=1e-5)
+    # Both renewable-rich and renewable-poor intervals participate in storage use.
+    assert charge[:2].max() > 1 and discharge[2:].max() > 1
+    if formulation == "socp":
+        audit = audit_socp_relaxation(build, results)
+        assert audit["complete"] and audit["feasible"], audit["residuals"]
+
+
+@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
+@pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
+def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly):
+    ideal = StorageUnitIdeal(bus=5, apparent_power_rating=40, capacity=100,
+                             initial_soc=50, terminal_soc=45,
+                             terminal_constraint="equality", device_id="ideal")
+    lossy = _unit(bus=6, initial_soc=35, terminal_soc=40,
+                  terminal_constraint="equality", device_id="lossy")
+    delta = 0.5
+    build, results = _solve_multistep(
+        formulation, SCALES, temporal_assembly=assembly, delta=delta,
+        storage=[ideal], lossy_storage=[lossy],
+    )
+    assert build.prob.status == "optimal"
+    np.testing.assert_array_equal(results["storage_device_ids"], ["ideal"])
+    np.testing.assert_array_equal(results["ls_device_ids"], ["lossy"])
+    for key in ("b", "soc", "ls_b", "ls_soc", "ls_p_ch", "ls_p_dis"):
+        assert results[key].shape == (4, 1)
+    previous_ideal = np.vstack([[50.], results["soc"][:-1]])
+    previous_lossy = np.vstack([[35.], results["ls_soc"][:-1]])
+    np.testing.assert_allclose(results["soc"], previous_ideal-delta*results["b"], atol=ENERGY_ATOL)
+    expected = (1-lossy.self_discharge_per_month)**(delta/730)*previous_lossy + delta*(
+        lossy.charge_efficiency*results["ls_p_ch"]-results["ls_p_dis"]/lossy.discharge_efficiency
+    )
+    np.testing.assert_allclose(results["ls_soc"], expected, atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["soc"][-1], [45.], atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["ls_soc"][-1], [40.], atol=ENERGY_ATOL)
+    np.testing.assert_allclose(results["storage_cost"], delta*ideal.aging_weight*np.abs(results["b"]).sum(), atol=1e-5)
+    np.testing.assert_allclose(results["ls_cost"], delta*lossy.aging_weight*(results["ls_p_ch"]+results["ls_p_dis"]).sum(), atol=1e-5)
+    assert results["ls_split"].max() <= SPLIT_ATOL
+    if formulation == "socp":
+        audit = audit_socp_relaxation(build, results)
+        assert audit["complete"] and audit["feasible"], audit["residuals"]
 
 
 # ---------------------------------------------------------------------------
@@ -297,3 +399,15 @@ def test_ac_single_step_solves_without_split_operation():
     assert np.max(results["ls_split"]) <= SPLIT_ATOL
     apparent = results["ls_b"] ** 2 + results["ls_b_q"] ** 2
     assert np.all(apparent <= 40.0 ** 2 + 1e-4)
+
+
+def test_solved_socp_lossy_injection_is_included_in_public_audit():
+    """Regression for the omitted roughly 40 MW Case9 injection."""
+    build = build_opf(case9(), formulation="socp", lossy_storage=[_unit()])
+    build.solve()
+    results = extract_results(build)
+    assert build.prob.status == "optimal" and results["ls_b"][0] > 1
+    report = audit_socp_relaxation(build)
+    assert report["available"] and report["complete"] and report["feasible"]
+    for key in ("p_balance", "q_balance", "lossy_storage_transition"):
+        assert report["residuals"][key]["passed"]

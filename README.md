@@ -55,7 +55,7 @@ certified global optima.
 Shared components cover:
 
 - Dispatchable generators with polynomial or piecewise-linear costs.
-- Lossless batteries with real/reactive inverter limits, energy dynamics
+- Lossless and lossy batteries with real/reactive inverter limits, energy dynamics
   across time, cycling cost and optional final-energy constraints or penalties.
 - Nondispatchable generation, such as wind and solar, with time-varying
   availability and the option to curtail output.
@@ -284,8 +284,9 @@ scope and reference test-data generation.
 ## Status and direction
 
 CVXOPF implements four network formulations, shared device models,
-multistep optimization and energy-signpost DC-to-AC control. Planned extensions
-include lossy storage, configurable formulation hierarchies, phase-angle DC
+multistep optimization and energy-signpost DC-to-AC control. Standalone builds
+also support [lossy batteries](docs/modeling.md#lossy-batteries).
+Planned extensions include configurable formulation hierarchies, phase-angle DC
 power flow and unit commitment. See the
 [roadmap](docs/development.md#roadmap) for development status and implementation
 history.

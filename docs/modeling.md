@@ -19,6 +19,7 @@ the repository root after following the [installation instructions](../README.md
 - [Numerical preparation](#opt-in-numerical-preparation-and-ac-objective-assembly)
 - [Loads and shedding](#first-class-loads-and-explicit-load-shedding)
 - [Storage and terminal policies](#battery-storage-example)
+- [Lossy batteries](#lossy-batteries)
 - [Nondispatchable generation](#nondispatchable-generator-example)
 - [HVDC links](#hvdc-transmission-link-example)
 
@@ -63,7 +64,8 @@ primitives:
 - load and renewable availability;
 - network limits and either physical AC losses or a documented DC loss proxy;
 - storage dynamics, cycling cost, and terminal policy (with ideal efficiency
-  in the current `StorageUnitIdeal` model);
+  in `StorageUnitIdeal`, or conversion and self-discharge losses in
+  `StorageUnitLossy`);
 - load-shedding cost; and
 - the evolving intertemporal system state.
 
@@ -704,6 +706,63 @@ at the horizon boundary and is not scaled by `delta`. Stage-cost rates are
 integrated over time, so a fixed terminal weight retains its meaning when the
 same physical signals are represented at a finer resolution. See
 `examples/case9_storage_terminal.py` for a side-by-side comparison.
+
+## Lossy batteries
+
+Run `uv run examples/case9_storage_efficiency_96h.py` for a printed four-day
+comparison of ideal, lithium-ion-like and deliberately inefficient batteries.
+See the [script and generated output](../examples/README.md#case9_storage_efficiency_96hpy).
+For its input, SoC, and charge/discharge figure, run with `uv run --extra notebook`
+and add `--plot` (interactive) or `--save-plot battery.png` (headless export).
+Plotting reuses the printed results without additional solves.
+
+Use `StorageUnitLossy` with the separate `lossy_storage=` argument on
+`build_opf` or `build_opf_multistep`. It can coexist with ideal batteries
+passed through `storage=`. Both use the same power/energy units and terminal
+policy fields described above. Lossy batteries additionally require:
+
+- `charge_efficiency` and `discharge_efficiency`, each in (0, 1];
+- `self_discharge_per_month` in [0, 1), with a fixed 730-hour month; and
+- a strictly positive `aging_weight`, defaulting to 0.01 cost units/MWh.
+
+For interval duration `delta`, the retained fraction of initial interval
+energy is `r = (1 - self_discharge_per_month)**(delta/730)`. Nonnegative
+charging and discharging powers give net grid injection `p_dis - p_ch` and
+the energy transition
+
+```text
+soc_next = r*soc_previous + delta*(charge_efficiency*p_ch - p_dis/discharge_efficiency)
+```
+
+The inverter rating constrains **net** active power, together with reactive
+power in AC/SOCP. It does not separately cap each split power or impose a
+charge/discharge mode constraint. Cycling cost is
+`delta * aging_weight * sum(p_ch + p_dis)` over the horizon. Conversion and
+self-discharge losses are reported separately in MWh per interval.
+
+Results use distinct names: `ls_p_ch`, `ls_p_dis`, `ls_b` (net injection),
+`ls_b_q` (AC/SOCP), `ls_soc`, `ls_cost`, `ls_conversion_loss`,
+`ls_self_discharge` and `ls_split`, plus device IDs and configured terminal
+fields. Array layouts follow the same single-step/time-first conventions as
+ideal storage. SOCP auditing and voltage recovery independently check lossy
+injections, split-power nonnegativity, net inverter capability, energy bounds,
+energy recurrence and hard terminal constraints. Soft terminal targets are
+costs, not feasibility constraints.
+
+`ls_split = min(p_ch, p_dis)` measures simultaneous charging and discharging.
+If any value exceeds 0.001 MW, `extract_results` raises
+`SimultaneousOperationError`; the unchanged full result dictionary is
+available as `exc.results`. Positive throughput cost rules out circulation
+when a feasible reduction can be absorbed by zero-cost renewable curtailment,
+but that argument does not guarantee its absence in a constrained network.
+The error reports the issue without changing the solution or launching a
+second solve.
+
+Only the default, disabled numerical-preparation policy is supported.
+Automatic relax–round–polish and hierarchical-controller integration are
+not implemented. The [approved model and verification plan](../plans/milestone-18-lossy-storage.md#11-first-implementation-decisions-owner-2026-10-21)
+records the first implementation's scope; milestone qualification remains
+in progress.
 
 ## Nondispatchable generator example
 

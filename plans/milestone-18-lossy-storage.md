@@ -1,6 +1,6 @@
 # Milestone 18 — Convex lossy storage
 
-**Status:** planned
+**Status:** in progress — first implementation present; qualification not yet closed
 
 **Depends on:** Milestone 5 (ideal storage), Milestone 12 (terminal SoC),
 Milestone 16 (component ownership)
@@ -211,6 +211,11 @@ across formulation builders.
 
 ## 8. Result contract
 
+For the first implementation, Section 11 defers the fallback-invocation and
+primary-versus-polished flags along with the fallback itself. The remaining
+fields below apply to the primary solve; no fallback framework or flags are
+required for that implementation.
+
 Retain, at minimum:
 
 - charge power;
@@ -395,4 +400,5 @@ objective.
 
 Deferred: the Section 6 fallback and Gate 4, hierarchical-controller
 support, leaf-bound qualification, and non-default numerical-preparation
-policies.
+policies. The fallback-invocation and primary-versus-polished result flags
+from Section 8 are deferred with the fallback.

@@ -284,6 +284,7 @@ experiments/dnlp_vs_pypower/*.synctex.gz
 
 # Local agent skills and configuration
 .agents/
+.claude/
 skills-lock.json
 
 # Unrelated local material; experiment data belongs in its own ignored results/.

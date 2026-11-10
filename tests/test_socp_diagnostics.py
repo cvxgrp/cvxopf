@@ -4,12 +4,13 @@ from copy import deepcopy
 
 import cvxpy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 from cvxopf import (
     build_opf, build_opf_multistep, extract_results, OPFOptions, SOCPAuditTolerances,
     audit_socp_relaxation, recover_socp_voltage, StorageUnitIdeal,
-    NondispatchableUnit, HVDCLink, Load,
+    NondispatchableUnit, HVDCLink, Load, StorageUnitLossy,
 )
 from cvxopf.network import make_ybus_matpower, reindex_case_to_consecutive
 from cvxopf.testcases import case9
@@ -201,3 +202,129 @@ def test_tolerances_validated(value):
 def test_wrong_formulation_rejected():
     with pytest.raises(ValueError, match="formulation='socp'"):
         audit_socp_relaxation(build_opf(case9(), formulation="lossy_dc"))
+
+
+def lossy_point(assembly):
+    """Two heterogeneous batteries at a known rank-one, flat-voltage point.
+
+    Signed loads counteract the independently prescribed storage injections.
+    The device equations and network balance are known without optimization.
+    """
+    delta = 0.5
+    count = 1 if assembly == "single" else 3
+    charge = np.array([[1., 0.], [0., 1.5], [0.5, 0.]])[:count]
+    discharge = np.array([[0., 2.], [2., 0.], [0., 1.]])[:count]
+    reactive = np.array([[0.3, -0.2], [-0.4, 0.5], [0.2, 0.1]])[:count]
+    units = [
+        StorageUnitLossy(1, 10, 20, 12, 0.8, 0.9, 0.1, device_id="a"),
+        StorageUnitLossy(3, 9, 30, 10, 0.95, 0.85, 0.02, device_id="b"),
+    ]
+    soc = []
+    previous = np.array([12., 10.])
+    for ch, dis in zip(charge, discharge, strict=True):
+        previous = np.array([
+            (1 - u.self_discharge_per_month)**(delta / 730) * previous[k]
+            + delta * (u.charge_efficiency * ch[k] - dis[k] / u.discharge_efficiency)
+            for k, u in enumerate(units)
+        ])
+        soc.append(previous)
+    soc = np.array(soc)
+    units[0].terminal_soc = soc[-1, 0]
+    units[0].terminal_constraint = "equality"
+    units[1].terminal_soc = soc[-1, 1] - 0.1
+    units[1].terminal_constraint = "shortfall"
+    loads = [Load(bus=u.bus, p_load_mw=discharge[0, k] - charge[0, k],
+                  q_load_mvar=reactive[0, k],
+                  device_id=u.device_id) for k, u in enumerate(units)]
+    if assembly == "single":
+        build = build_opf(triangle(), formulation="socp", delta=delta,
+                          loads=loads, lossy_storage=units)
+    else:
+        build = build_opf_multistep(
+            triangle(), formulation="socp", delta=delta, T=count,
+            loads=loads, lossy_storage=units, temporal_assembly=assembly,
+            df_load_p=pd.DataFrame(discharge - charge, columns=["a", "b"]),
+            df_load_q=pd.DataFrame(reactive, columns=["a", "b"]),
+        )
+    result = lift(build, np.ones(3))
+    if assembly != "single":
+        for key in ("w", "W_re", "W_im", "Pg", "Qg"):
+            result[key] = np.tile(result[key], (count, 1))
+    for key, value in dict(ls_p_ch=charge, ls_p_dis=discharge, ls_b_q=reactive,
+                           ls_soc=soc, ls_b=discharge-charge).items():
+        result[key] = value[0] if assembly == "single" else value
+    return build, result
+
+
+@pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
+def test_lossy_storage_audit_and_recovery_preserve_primal(assembly, monkeypatch):
+    build, result = lossy_point(assembly)
+    original = deepcopy(result)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("diagnostics must not solve or read modeled constraint residuals")
+
+    monkeypatch.setattr(cp.Problem, "solve", forbidden)
+    for constraint in build.prob.constraints:
+        monkeypatch.setattr(constraint, "violation", forbidden)
+    # Published derived diagnostics are not inputs to independent physics.
+    result["ls_self_discharge"] = result["ls_conversion_loss"] = np.array([999.])
+    audit = audit_socp_relaxation(build, result)
+    assert audit["available"] and audit["complete"] and audit["feasible"]
+    assert audit["residuals"]["lossy_storage_transition"]["maximum"] < 1e-12
+    recovery = recover_socp_voltage(build, result)
+    assert recovery["exact_product_recovery"] and recovery["ac_feasible"]
+    for key in ("ls_p_ch", "ls_p_dis", "ls_soc", "ls_b_q", "ls_b"):
+        np.testing.assert_array_equal(recovery["candidate"][key], original[key])
+        np.testing.assert_array_equal(result[key], original[key])
+        assert not np.shares_memory(recovery["candidate"][key], result[key])
+
+
+@pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
+def test_recovered_lossy_net_power_ignores_conflicting_derived_input(assembly):
+    build, result = lossy_point(assembly)
+    expected = result["ls_p_dis"] - result["ls_p_ch"]
+    conflicting = np.full_like(expected, 100.0)
+    result["ls_b"] = conflicting.copy()
+
+    recovery = recover_socp_voltage(build, result)
+
+    assert recovery["ac_feasible"]
+    np.testing.assert_array_equal(recovery["candidate"]["ls_b"], expected)
+    np.testing.assert_array_equal(result["ls_b"], conflicting)
+
+
+@pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
+@pytest.mark.parametrize("key,unit,value,residual", [
+    ("ls_p_ch", 0, -1., "lossy_storage_charge"),
+    ("ls_p_dis", 1, -1., "lossy_storage_discharge"),
+    ("ls_b_q", 0, 11., "lossy_storage_capability"),
+    ("ls_soc", 1, 31., "lossy_storage_energy"),
+    ("ls_soc", 0, 11., "lossy_storage_transition"),
+    ("ls_soc", 0, 11., "lossy_storage_terminal"),
+    ("ls_soc", 1, 1., "lossy_storage_terminal"),
+])
+def test_lossy_storage_violations_reject_relaxation_and_recovered_ac(
+    assembly, key, unit, value, residual,
+):
+    build, result = lossy_point(assembly)
+    result[key].reshape(-1, 2)[-1, unit] = value
+    audit = audit_socp_relaxation(build, result)
+    assert audit["available"] and audit["complete"] and not audit["feasible"]
+    check = audit["residuals"][residual]
+    assert not check["passed"] and check["worst"]["index"] == unit
+    assert check["worst"]["interval"] == build.data.get("T", 1) - 1
+    recovery = recover_socp_voltage(build, result)
+    assert not recovery["ac_feasible"]
+    assert not recovery["ac_audit"]["residuals"][residual]["passed"]
+
+
+@pytest.mark.parametrize("key", ["ls_p_ch", "ls_p_dis", "ls_soc", "ls_b_q"])
+@pytest.mark.parametrize("invalid", [None, np.array([1.]), np.array([np.nan, 0.])])
+def test_lossy_storage_missing_or_invalid_primal_is_unavailable(key, invalid):
+    build, result = lossy_point("single")
+    result[key] = invalid
+    audit = audit_socp_relaxation(build, result)
+    assert not audit["available"] and audit["feasible"] is None
+    assert key in audit["reason"]
+    assert recover_socp_voltage(build, result)["candidate"] is None

@@ -113,6 +113,7 @@ src/cvxopf/           Core package
   data.py             Input validation and time-series handling
   results.py          Result extraction and comparison utilities
   storage.py          Storage component: data, injections, constraints, cost
+  storage_lossy.py    Lossy storage: split powers, efficiencies and self-discharge
   nondispatchable.py  ND component: data, injections, and constraints
   hvdc.py             HVDC component and MATPOWER dcline conversion
   load.py             Fixed and explicitly sheddable load component
@@ -188,7 +189,11 @@ plans/                Milestone plans and implementation records
   coupling assembly. Preserve M17 defaults and individual realized states;
   distinguish objective equivalence from nonunique trajectory identity (see
   [plan](../plans/milestone-25-hierarchy-model-pairs-and-aggregate-signposts.md)).
-- [ ] Convex lossy storage with asymmetric efficiency, explicit storage loss, and a relax-round-polish fallback (see `plans/milestone-18-lossy-storage.md`)
+- [ ] Convex lossy storage: first implementation present, with qualification in
+  progress. Asymmetric efficiency, monthly self-discharge, terminal policies
+  and split-operation reporting are implemented; relax–round–polish and
+  hierarchical support are deferred (see
+  [approved scope](../plans/milestone-18-lossy-storage.md#11-first-implementation-decisions-owner-2026-10-21)).
 - [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently
   large linear value-of-lost-load cost, and energy-not-served reporting (see
