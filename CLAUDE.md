@@ -97,8 +97,8 @@ https://www.incontrolpodcast.com/1632769/episodes/12444508-ep10-stephen-boyd-lin
 
 `src/cvxopf/` contains the public build and hierarchical APIs, formulation
 builders, shared typed component assembly, result extraction, and one module
-per grid component (`generator.py`, `storage.py`, `nondispatchable.py`,
-`hvdc.py`, and `load.py`). `testcases/` holds MATPOWER cases (case9–case118,
+per grid component (`generator.py`, `storage.py`, `storage_lossy.py`,
+`nondispatchable.py`, `hvdc.py`, and `load.py`). `testcases/` holds MATPOWER cases (case9–case118,
 including PWL and dcline variants). `tests/`, `examples/`, `experiments/`,
 `notebooks/`, `plans/`, and `scripts/` are top-level. Use `rg --files` for the
 current inventory; do not treat this summary as an exhaustive file list.
@@ -357,13 +357,13 @@ capability explicitly on every component adapter.
 
 ```python
 build_opf(case, *, formulation="ac", options=None,
-          storage=None, delta=1.0,
+          storage=None, lossy_storage=None, delta=1.0,
           nondispatchable=None, hvdc=None, generators=None,
           loads=None, automatic_sparse_dispatch=False) -> OPFBuild
 
 build_opf_multistep(case, df_P=None, df_Q=None, *, T, formulation="ac",
                     options=None, coupling_constraints=None,
-                    storage=None, delta=1.0,
+                    storage=None, lossy_storage=None, delta=1.0,
                     nondispatchable=None, df_nd=None,
                     hvdc=None, df_hvdc_min=None, df_hvdc_max=None,
                     generators=None, loads=None,
@@ -407,8 +407,8 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 | Field | Type | Description |
 |---|---|---|
 | `prob` | `cp.Problem` | The CVXPY problem |
-| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`); SOCP uses `w`, `W_re`, `W_im`. Storage adds `b`, `b_q` (AC/SOCP), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. Nondispatchable units add `p_nd`, `q_nd` (AC/SOCP) in the same layouts. All storage keys are absent when `storage=None`; all ND keys are absent when `nondispatchable=None`. |
-| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
+| `variables` | dict | Named CVXPY variables. AC keys depend on `sparse_pq` (`P_vec`/`Q_vec` or `P`/`Q`); SOCP uses `w`, `W_re`, `W_im`. Storage adds `b`, `b_q` (AC/SOCP), `soc` as `cp.Variable (ns,)` single-step, time-last arrays by default multistep (`soc` includes the initial boundary), or lists in explicit stepwise mode. Nondispatchable units add `p_nd`, `q_nd` (AC/SOCP) in the same layouts. All storage keys are absent when `storage=None`; all ND keys are absent when `nondispatchable=None`. Lossy storage adds `ls_p_ch`, `ls_p_dis`, `ls_b_q` (AC/SOCP), and `ls_soc` in the same layouts, absent when `lossy_storage=None`. |
+| `data` | dict | Pre-computed numpy arrays and metadata. When storage is present, adds `ns`, `Cs`, `storage_bus`, `storage_apparent_power_rating`, `storage_capacity`, `storage_initial_soc`, `storage_device_ids`, `storage_device_id_is_explicit`, `storage_aging_weight`, `storage_delta`. When nondispatchable is present, adds `nnd`, `Cnd`, `nd_bus`, `nd_apparent_power_rating`, and either `nd_p_available` (single-step) or `nd_available` (multistep). `storage_bus` and `nd_bus` always use formulation-internal indexing; singlenode therefore uses collapsed bus `0`. Detection: `"ns" in build.data` for storage; `"n_ls" in build.data` for lossy storage; `"nnd" in build.data` for nondispatchable. Empty component lists are normally absent; explicit `loads=[]` is the deliberate exception and publishes a complete zero-load schema. |
 | `formulation` | str | `"ac"`, `"socp"`, `"lossy_dc"`, or `"singlenode_dc"` |
 | `is_convex` | bool | Drives solver defaults in `solve()` |
 | `numerical_preparation` | `NumericalPreparation` | Immutable build-time policy snapshot; changing options requires rebuilding |
@@ -427,6 +427,28 @@ of all stage-cost rates by `delta`. Terminal costs are not time-scaled.
 
 `delta` (hours per time step) is **not** a field on `StorageUnitIdeal`. It is a
 global problem parameter passed to `build_opf` / `build_opf_multistep` (default 1.0).
+
+### `StorageUnitLossy` fields
+
+Passed as `lossy_storage=`, separately from `storage=`. Shares the
+`StorageUnitIdeal` fields and semantics (`bus`, `apparent_power_rating`,
+`capacity`, `initial_soc`, terminal policy fields, `device_id`), except that
+`aging_weight` must be strictly positive. Adds required fields
+`charge_efficiency` and `discharge_efficiency` in (0, 1] and
+`self_discharge_per_month` in [0, 1), with a month of 730 hours. Model (see
+`plans/milestone-18-lossy-storage.md`, Section 11): nonnegative `ls_p_ch` and
+`ls_p_dis` and net injection `p_dis - p_ch` subject to the ideal operating
+set (AC/SOCP circle with `ls_b_q`, DC `|b| <= S`) and no mode constraint,
+`soc[t+1] = r*soc[t] + delta*(eta_ch*p_ch - p_dis/eta_dis)` with
+`r = (1 - self_discharge_per_month)**(delta/730)`, and throughput rate
+`aging_weight*(p_ch + p_dis)`. Detection is `"n_ls" in build.data`. Results
+add `ls_p_ch`, `ls_p_dis`, `ls_b`, `ls_b_q` (AC/SOCP), `ls_soc`, `ls_cost`,
+`ls_conversion_loss`, `ls_self_discharge`, the split diagnostic `ls_split`,
+and terminal fields when configured. `extract_results` raises
+`SimultaneousOperationError` (results attached as `exc.results`) when any
+`ls_split` exceeds `SPLIT_TOLERANCE_MW = 1e-3`. Only the default numerical-preparation
+policy is supported; the relax-round-polish fallback and hierarchical support
+are deferred.
 
 ### `NondispatchableUnit` fields
 
@@ -491,6 +513,7 @@ generator.py  →  cost.py                (authoritative polynomial/PWL expressi
 hierarchical.py → problem.py            (reviewed outer/inner build API)
 results.py    →  problem.py             (OPFBuild type boundary)
 storage.py    →  cvxpy, numpy           (no other cvxopf imports)
+storage_lossy.py -> storage.py, cvxpy, numpy
 nondispatchable.py → data.py, cvxpy, numpy
 hvdc.py       →  data.py, cvxpy, numpy
 load.py       →  cvxpy, numpy
@@ -800,7 +823,7 @@ their plans are not imported by this documentation-only addition.
 | 15 — Full lossy HVDC (sign-switching converter losses) | 🔲 Future | charge/discharge-style split of `p_in`; adds fixed converter loss (`LOSS0`); enables losses in `free` and zero-straddling `band` steps; reactive-power support proposed. See `plans/milestone-15-full-lossy-hvdc.md`. |
 | 16 — Unify grid component model patterns | ✅ Complete | Generators, storage, nondispatchable units, and HVDC share formulation-specific injection and operating-set APIs, temporal coupling slots, and device-owned cost boundaries. Includes first-class `DispatchableGenerator`, MATPOWER fallback, stable identity for external ND/HVDC tables, and collapsed singlenode reuse. See `plans/milestone-16-unify-components.md` and `memories/M16-in-flight-record.md`. |
 | 17 — Hierarchical DC→AC receding-horizon dispatch | ✅ Complete | The capstone controller passes **identity-aligned SoC signposts only** (not other setpoints) from long-horizon `lossy_dc` planning into short AC-OPF windows, executes only residual-checked target-conditioned first actions, supports causal shifted initialization with audited recovery, and retains the complete plan/attempt tree. M17 fixes the validated `lossy_dc`→`ac` workflow; configurable formulations and additional layers are M21. See `plans/milestone-17-hierarchical-dc-ac.md`. |
-| 18 — Convex lossy storage | 🔲 Future | Separate charge/discharge powers, asymmetric efficiency, and storage loss while retaining a convex primary model. Positive throughput regularization plus zero-cost renewable curtailment excludes simultaneous operation under stated assumptions; relax-round-polish remains an explicit fallback. See `plans/milestone-18-lossy-storage.md`. |
+| 18 — Convex lossy storage | In progress | First implementation present; qualification not yet closed. `StorageUnitLossy` via `lossy_storage=` uses the ideal operating set on net power, asymmetric efficiencies, monthly proportional self-discharge, positive throughput cost and a split-operation diagnostic. Public SOCP audit/recovery includes lossy-device physics. Relax–round–polish and its result flags, hierarchy integration, leaf qualification and nondefault numerical preparation are deferred under plan Section 11. See `plans/milestone-18-lossy-storage.md`. |
 | 19 — First-class loads and explicit load shedding | ✅ Complete | Fixed active/reactive withdrawals use the shared device architecture, with MATPOWER conversion and identity-aligned explicit time series; configured loads add an affine served-fraction feasible set, proportional reactive relief, a sufficiently large linear value-of-lost-load cost, and conditional served/shed/ENS results in the same single solve. Controlled phase-transition, adequacy, AC/DC congestion, and multistep storage/renewable/terminal behavior are scientifically verified. No lexicographic or feasibility-restoration solve. See `plans/milestone-19-load-shedding.md`. |
 | 20 — AC voltage and reactive-dispatch regularization | 🔲 Future | Characterize whether reactive/voltage bound activity reflects physical support, unpriced nonuniqueness, or local-solver selection. Then add optional, normalized, time-integrated AC operating preferences with exact disabled-policy compatibility and measured economic displacement. No voltage-stability, market-pricing, or global-uniqueness claim. See `plans/milestone-20-ac-voltage-reactive-regularization.md`. |
 | 21 — Configurable and extensible formulation hierarchies | 🔲 Future | Generalize the completed M17 controller behind typed layer adapters and explicit, identity-aligned handoffs while preserving exact `lossy_dc`→`ac` compatibility. Support selectable planning formulations and validate a reference `singlenode_dc`→`socp`→`ac` hierarchy after M11 freezes SOCP relaxation and audit semantics. This remains a closed set of reviewed repository formulations, not an unrestricted plugin framework. See `plans/milestone-21-configurable-hierarchy.md`. |
@@ -984,9 +1007,9 @@ can monitor the run. Do not edit tracked files while a source-bound run is activ
 - Do not add a second `p ==` or `q ==` constraint after
   `_make_step_constraints` returns — it owns all balance constraints, including
   storage, nondispatchable, and HVDC injection terms
-- Do not implement `StorageUnitLossy` without a separate plan — separate
-  charge/discharge variables require structural changes to
-  `_make_step_constraints`
+- Do not change `StorageUnitLossy` semantics (dynamics, operating set,
+  throughput regularization) without updating
+  `plans/milestone-18-lossy-storage.md`, Section 11
 - Do not enter the HVDC balance terms as `Ch_to - Ch_from` — both terminals
   are signed injections (Convention B) and enter with `+`
 - Do not put `cp.abs` (or any non-affine atom) in the HVDC `p_out` loss

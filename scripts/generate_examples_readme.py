@@ -6,7 +6,7 @@ and any expected output (from a comment block or running the script), and
 generates a README.md for the examples subfolder.
 
 Usage:
-    uv run scripts/generate_examples_readme.py
+    uv run --extra notebook scripts/generate_examples_readme.py
 
 Run from the project root directory.
 """
@@ -15,6 +15,7 @@ import ast
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -23,6 +24,11 @@ PROJECT_ROOT = Path(__file__).parent.parent
 EXAMPLES_DIR = PROJECT_ROOT / "examples"
 README_PATH = EXAMPLES_DIR / "README.md"
 TIMEOUT = 60  # seconds per script
+
+# Opt-in examples implement --save-plot and plot their existing solve results.
+EXAMPLE_FIGURES = {
+    "case9_storage_efficiency_96h.py": "assets/case9_storage_efficiency_96h.png",
+}
 
 # Ordered semantic manifest. Classification is deliberately explicit: many
 # examples span formulations or horizons, so their primary teaching purpose
@@ -51,6 +57,7 @@ EXAMPLE_GROUPS = {
         "case9_storage_ac_24h.py",
         "case9_storage_dc_24h.py",
         "case9_storage_terminal.py",
+        "case9_storage_efficiency_96h.py",
     ],
     "Nondispatchable Generation": [
         "case9_multistep_nondispatchable_ac.py",
@@ -124,11 +131,25 @@ def extract_docstring(filepath: Path) -> str:
         return "_Could not parse file._"
 
 
-def run_script(filepath: Path) -> str:
+def run_script(filepath: Path, *, figure_path: Path | None = None) -> str:
     """Run a script and capture its stdout output."""
+    if figure_path is not None:
+        # A failed run must never publish an old figure as newly generated output.
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory) / figure_path.name
+            output = _run_script(filepath, ["--save-plot", str(temporary)])
+            if not temporary.is_file() or output.startswith("_Script") or output.startswith("_Could not"):
+                raise RuntimeError(f"Figure generation failed for {filepath.name}: {output}")
+            figure_path.parent.mkdir(parents=True, exist_ok=True)
+            figure_path.write_bytes(temporary.read_bytes())
+            return output
+    return _run_script(filepath, [])
+
+
+def _run_script(filepath: Path, arguments: list[str]) -> str:
     try:
         result = subprocess.run(
-            [sys.executable, str(filepath)],
+            [sys.executable, str(filepath), *arguments],
             capture_output=True,
             text=True,
             timeout=TIMEOUT,
@@ -174,7 +195,8 @@ def generate_readme(examples_dir: Path, readme_path: Path) -> None:
         for script in scripts:
             print(f"Processing {script.name}  [{group}]")
             docstring = extract_docstring(script)
-            output = run_script(script)
+            figure = EXAMPLE_FIGURES.get(script.name)
+            output = run_script(script, figure_path=examples_dir / figure if figure else None)
             entries.append((script, docstring, output))
         sections.append((group, entries))
 
@@ -217,6 +239,12 @@ def generate_readme(examples_dir: Path, readme_path: Path) -> None:
             lines.append(output)
             lines.append("```")
             lines.append("")
+            if script.name in EXAMPLE_FIGURES:
+                lines.append(
+                    f"![Inputs, stored energy, and charge/discharge trajectories]"
+                    f"({EXAMPLE_FIGURES[script.name]})"
+                )
+                lines.append("")
         lines.append("---")
         lines.append("")
 

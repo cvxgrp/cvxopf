@@ -1243,6 +1243,7 @@ def test_common_registry_has_one_order_for_every_formulation():
             "generator",
             "load",
             "storage",
+            "lossy_storage",
             "nondispatchable",
             "hvdc",
         )
