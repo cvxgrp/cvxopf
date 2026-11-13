@@ -189,11 +189,14 @@ plans/                Milestone plans and implementation records
   coupling assembly. Preserve M17 defaults and individual realized states;
   distinguish objective equivalence from nonunique trajectory identity (see
   [plan](../plans/milestone-25-hierarchy-model-pairs-and-aggregate-signposts.md)).
-- [ ] Convex lossy storage: first implementation present, with qualification in
-  progress. Asymmetric efficiency, monthly self-discharge, terminal policies
-  and split-operation reporting are implemented; relax–round–polish and
-  hierarchical support are deferred (see
-  [approved scope](../plans/milestone-18-lossy-storage.md#11-first-implementation-decisions-owner-2026-10-21)).
+- [x] Convex lossy storage (M18 first implementation, owner accepted 2026-11-12):
+  asymmetric efficiency, monthly self-discharge, terminal policies,
+  split-operation reporting and public SOCP audit/recovery are qualified within
+  the [approved scope](../plans/milestone-18-lossy-storage.md#12-first-implementation-qualification--2026-11-12).
+- [ ] Lossy-storage follow-ups: relax–round–polish and its result flags,
+  hierarchical support, nondefault numerical preparation and leaf-bound
+  qualification remain in the explicit
+  [follow-up backlog](../plans/milestone-18-lossy-storage.md#13-deferred-follow-up-backlog).
 - [x] First-class loads and explicit load shedding: identity-aligned
   active/reactive demand, optional single-solve interruption with a sufficiently
   large linear value-of-lost-load cost, and energy-not-served reporting (see

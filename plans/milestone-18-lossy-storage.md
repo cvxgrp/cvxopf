@@ -1,6 +1,8 @@
 # Milestone 18 — Convex lossy storage
 
-**Status:** in progress — first implementation present; qualification not yet closed
+**Status:** complete — first implementation, owner accepted 2026-11-12.
+This closes the approved Section 11 scope, not the deferred extensions.
+See the qualification record in Section 12 and follow-up backlog in Section 13.
 
 **Depends on:** Milestone 5 (ideal storage), Milestone 12 (terminal SoC),
 Milestone 16 (component ownership)
@@ -402,3 +404,91 @@ Deferred: the Section 6 fallback and Gate 4, hierarchical-controller
 support, leaf-bound qualification, and non-default numerical-preparation
 policies. The fallback-invocation and primary-versus-polished result flags
 from Section 8 are deferred with the fallback.
+
+## 12. First-implementation qualification — 2026-11-12
+
+Reviewed on `m18-closeout` against implementation commit `43e39ca69` (PR #29),
+using scientific correctness and public-tool/API review standards. This record
+qualifies the Section 11 scope, not the deferred fallback or a universal
+charge/discharge exactness theorem. No production model changes were needed
+for this closeout pass.
+
+### Gate evidence
+
+| Gate | Disposition | Reproducible evidence |
+|---|---|---|
+| 1 — Algebra and convexity | Satisfied for the approved model | `tests/test_storage_lossy.py::TestValidation` and `TestAlgebra`: parameter rejection, per-device DCP checks, monthly retention, net-power operating set, and transition-preserving throughput perturbation. Solved accounting and heterogeneous-fleet tests independently reconstruct conversion loss, leakage, recurrence, and time-integrated cost at non-unit delta. Shared storage validation and public delta validation remain authoritative. |
+| 2 — Primary exactness behavior | Satisfied for the tested scenarios, conditional on Section 4 | `test_no_split_operation_with_zero_cost_curtailment`, `test_heterogeneous_fleet_with_renewables`, and `test_lossless_parameters_reduce_to_ideal_storage` cover AC, SOCP, lossy DC, and single-node DC. The heterogeneous tests cover both temporal assemblies, renewable-rich/poor intervals, unequal efficiencies and losses, device identities, hard/soft terminal policies, and capability/energy limits. Lossless reduction checks objective agreement on matched fixtures, not global AC optimality. |
+| 3 — Limitations | Satisfied by the Section 11.2 owner-selected counterexample | `test_split_operation_without_curtailment_headroom`: Case9 generator minimums total 30 MW, demand is 28 MW, and a full battery with no self-discharge must dissipate surplus through split operation. The model solves but extraction rejects material simultaneous operation and retains the results. This is the adopted missing-headroom limitation, not a newly claimed positive-curtailment-cost or congested-network experiment. |
+| 4 — Fallback | Deferred | No rounding, mode helper, polishing solve, or automatic repair is implemented or qualified. |
+| 5 — Compatibility | Satisfied in the related regression suite | `test_solved_mixed_ideal_and_lossy_fleet`, lossless reduction, terminal-policy, absent-device, and unsolved-schema checks; existing ideal-storage, result, and shared-assembly tests. Physics remains device-owned; both temporal assembly paths use shared terminal helpers and cost integration. |
+
+Additional SOCP coverage in `tests/test_socp_diagnostics.py` independently
+checks lossy injections, capability, recurrence, and terminal constraints
+from explicit primal arrays. The analytic fixtures prohibit optimization and
+modeled constraint-residual calls, exercise single/stepwise/vectorized layouts,
+and reject perturbed or unusable primals. Recovery preserves the supplied
+device trajectories; relaxation feasibility does not by itself certify
+complementarity or reconstructible AC voltages.
+
+The documented four-day example (`examples/case9_storage_efficiency_96h.py`)
+compares ideal, Li-ion-like, and deliberately inefficient batteries using
+explicitly synthetic data. Its optional figures reuse the printed solve
+results. It is a teaching example, not technology calibration or additional
+proof of general exactness.
+
+### Verification
+
+Executed on 2026-11-12:
+
+```bash
+uv run --extra dev --extra notebook pytest \
+  tests/test_storage_lossy.py tests/test_storage.py \
+  tests/test_socp_diagnostics.py tests/test_component_assembly.py \
+  tests/test_results.py tests/test_storage_efficiency_example.py -q
+```
+
+Result: **539 passed, 5 warnings**. The local invocation used the existing
+environment with `--offline --no-sync` and writable temporary cache paths.
+Warnings were the existing mixed-OpenMP import warning and four non-DPP
+load-model warnings. This was the related regression suite, not a fresh
+full-repository test run. No experimental study was launched.
+
+### Interpretation and remaining decisions
+
+- Strictly positive throughput weight is required, but solver tolerances can
+  still permit material split operation. Every public result extraction checks
+  `min(p_ch, p_dis)` against 0.001 MW; an `optimal` status alone is insufficient.
+- The feasible-direction argument requires preserving device capability and
+  network feasibility as well as finding sufficient zero-cost curtailment.
+  Renewable availability somewhere in the network is not a blanket guarantee.
+- Net-power limits do not independently bound the two split powers. A rejected
+  solution can contain circulation above nameplate; it is not a valid exclusive
+  charge/discharge schedule and is never silently repaired.
+- Existing ideal-storage behavior is retained. No hierarchy, nondefault
+  numerical preparation, leaf-bound migration, or fallback is authorized by
+  this qualification record.
+- The owner accepted closeout of M18's first implementation on 2026-11-12.
+  Section 13 carries the deferred work forward explicitly; none is implied
+  complete by this closeout.
+
+## 13. Deferred follow-up backlog
+
+These remain unimplemented/unqualified extensions, not blockers for the
+accepted first implementation. Each requires a separately approved scope
+before implementation; closeout does not authorize starting them.
+
+- [ ] **Relax–round–polish fallback:** resolve the open decisions in Section 6,
+  implement fixed-mode polishing and failure behavior, add the deferred
+  fallback/result flags from Section 8, and satisfy Gate 4. Preserve the current
+  diagnostic-only extraction behavior unless an explicit policy opts in.
+- [ ] **Hierarchical-controller integration:** qualify lossy dynamics,
+  identity-aligned state transfer, causal starts/recovery, and split-operation
+  handling in the controller. Standalone support does not imply controller
+  support.
+- [ ] **Nondefault numerical preparation:** qualify prepared lossy-device
+  constraints, objectives, and physical-result restoration before lifting the
+  current unsupported-policy guard.
+- [ ] **Leaf-bound qualification:** evaluate representation changes against
+  the current explicit-constraint baseline before adopting them. This is a
+  numerical representation study, not permission to change the operating set.

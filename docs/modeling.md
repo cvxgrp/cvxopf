@@ -761,8 +761,11 @@ second solve.
 Only the default, disabled numerical-preparation policy is supported.
 Automatic relax–round–polish and hierarchical-controller integration are
 not implemented. The [approved model and verification plan](../plans/milestone-18-lossy-storage.md#11-first-implementation-decisions-owner-2026-10-21)
-records the first implementation's scope; milestone qualification remains
-in progress.
+records the first implementation's scope, qualified and owner-accepted on
+2026-11-12. The [follow-up backlog](../plans/milestone-18-lossy-storage.md#13-deferred-follow-up-backlog)
+retains relax–round–polish and its result flags, hierarchy integration,
+nondefault numerical preparation and leaf-bound qualification. M18 closeout
+does not imply those extensions are available.
 
 ## Nondispatchable generator example
 
