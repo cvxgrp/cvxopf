@@ -1360,12 +1360,11 @@ def _lossy_storage_metadata(
     return dict(prepared)
 
 
-def _require_disabled_preparation(context: StepContext | VectorizedContext) -> None:
-    """Lossy storage is qualified only under the default disabled policy."""
-    if context.numerical_preparation.enabled:
+def _require_lossy_base_preparation(context: StepContext | VectorizedContext) -> None:
+    """Reject cost coordinates until affine throughput ownership is supported."""
+    if context.numerical_preparation.cost_coordinates:
         raise ValueError(
-            "lossy storage supports only the default (disabled) "
-            "numerical-preparation policy"
+            "lossy storage does not yet support cost coordinates"
         )
 
 
@@ -1379,7 +1378,7 @@ def _lossy_storage_variable_specs(
     prepared: Mapping[str, object],
     context: StepContext,
 ) -> tuple[VariableSpec, ...]:
-    _require_disabled_preparation(context)
+    _require_lossy_base_preparation(context)
     shape = (cast(int, prepared["n_ls"]),)
     names = (*_lossy_storage_variable_names(context.formulation), "ls_soc")
     return tuple(VariableSpec(name, shape) for name in names)
@@ -1406,6 +1405,7 @@ def _lossy_storage_operating_constraints(
     return OperatingSetContribution(tuple(storage_lossy.operating_constraints(
         list(units), variables["ls_p_ch"], variables["ls_p_dis"],
         variables["ls_soc"], variables.get("ls_b_q"),
+        **_capability_options(context),
     )))
 
 
@@ -1457,7 +1457,7 @@ def _lossy_storage_vectorized_variable_specs(
     prepared: Mapping[str, object],
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
-    _require_disabled_preparation(context)
+    _require_lossy_base_preparation(context)
     n_ls = cast(int, prepared["n_ls"])
     return (
         *(HorizonVariableSpec(name, (n_ls,))
@@ -1483,7 +1483,8 @@ def _lossy_storage_vectorized_assembly(
             p_ch, p_dis, b_q, _array(prepared, "Cls")
         )),
         operating_constraints=tuple(storage_lossy.operating_constraints(
-            list(units), p_ch, p_dis, soc[:, 1:], b_q
+            list(units), p_ch, p_dis, soc[:, 1:], b_q,
+            **_capability_options(context),
         )),
         stage_cost_rate=storage_lossy.throughput_cost_rate(list(units), p_ch, p_dis),
         horizon=_lossy_storage_horizon_contribution(units, constraints, soc[:, -1]),

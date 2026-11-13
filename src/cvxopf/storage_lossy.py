@@ -227,6 +227,9 @@ def operating_constraints(
     p_dis: cp.Variable,
     soc: cp.Expression,
     b_q: cp.Variable | None = None,
+    *,
+    normalize_limits: bool = False,
+    use_soc: bool = False,
 ) -> list[cp.Constraint]:
     """Ideal-storage operating set on net power b = p_dis - p_ch.
 
@@ -244,6 +247,10 @@ def operating_constraints(
     ]
     if b_q is None:
         constraints += [net >= -rating, net <= rating]
+    elif normalize_limits:
+        constraints.extend(storage._normalized_capability_constraints(
+            net, b_q, rating, use_soc
+        ))
     else:
         constraints.append(cp.square(net) + cp.square(b_q) <= rating ** 2)
     return constraints

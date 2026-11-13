@@ -758,13 +758,19 @@ but that argument does not guarantee its absence in a constrained network.
 The error reports the issue without changing the solution or launching a
 second solve.
 
-Only the default, disabled numerical-preparation policy is supported.
+Standalone lossy-storage builds support `exact_fixed_boxes=True` in all four
+formulations, `normalize_device_limits=True` in AC/SOCP, and
+`canonical_scaling="joint5"` in convex formulations. These options reuse the
+[numerical-preparation machinery](#opt-in-numerical-preparation-and-ac-objective-assembly)
+without changing battery physics or the split-operation check. AC cost
+coordinates (and hence component-first objective assembly) remain unsupported
+for lossy storage pending the [cost-coordinate extension](../plans/lossy-storage-numerical-preparation.md#4-ac-cost-coordinate-design).
 Automatic relax–round–polish and hierarchical-controller integration are
 not implemented. The [approved model and verification plan](../plans/milestone-18-lossy-storage.md#11-first-implementation-decisions-owner-2026-10-21)
 records the first implementation's scope, qualified and owner-accepted on
 2026-11-12. The [follow-up backlog](../plans/milestone-18-lossy-storage.md#13-deferred-follow-up-backlog)
 retains relax–round–polish and its result flags, hierarchy integration,
-nondefault numerical preparation and leaf-bound qualification. M18 closeout
+the remaining numerical-preparation extensions and leaf-bound qualification. M18 closeout
 does not imply those extensions are available.
 
 ## Nondispatchable generator example

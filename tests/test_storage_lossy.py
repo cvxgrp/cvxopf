@@ -31,6 +31,14 @@ CONVEX_FORMULATIONS = ["lossy_dc", "singlenode_dc", "socp"]
 ALL_FORMULATIONS = [*CONVEX_FORMULATIONS, "ac"]
 
 
+def _base_preparation(formulation, enabled):
+    return NumericalPreparation(
+        normalize_device_limits=enabled and formulation in {"ac", "socp"},
+        exact_fixed_boxes=enabled,
+        canonical_scaling="joint5" if enabled and formulation != "ac" else "none",
+    )
+
+
 def _unit(**fields):
     base = dict(
         bus=5,
@@ -67,6 +75,45 @@ def _solve_multistep(formulation, scales, *, temporal_assembly="vectorized",
     return build, extract_results(build)
 
 
+@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
+@pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
+@pytest.mark.parametrize("fleet", ["absent", "empty", "lossy", "mixed"])
+def test_explicit_disabled_policy_preserves_default_graph_and_schema(
+    monkeypatch, formulation, assembly, fleet
+):
+    devices = {}
+    if fleet != "absent":
+        devices["lossy_storage"] = [] if fleet == "empty" else [_unit()]
+    if fleet == "mixed":
+        devices["storage"] = [StorageUnitIdeal(bus=5, apparent_power_rating=10,
+                                              capacity=40, initial_soc=20)]
+    builds = []
+    for options in ({}, {"options": OPFOptions(numerical_preparation=NumericalPreparation())}):
+        if assembly == "single":
+            builds.append(build_opf(case9(), formulation=formulation, **devices, **options))
+        else:
+            df_P, df_Q = _load_frames([1.])
+            builds.append(build_opf_multistep(
+                case9(), df_P, df_Q, T=1, formulation=formulation,
+                temporal_assembly=assembly, **devices, **options
+            ))
+    left, right = builds
+    assert [(v.name(), v.shape, repr(v.attributes)) for v in left.prob.variables()] == [
+        (v.name(), v.shape, repr(v.attributes)) for v in right.prob.variables()
+    ]
+    assert str(left.prob.objective) == str(right.prob.objective)
+    assert [str(c) for c in left.prob.constraints] == [str(c) for c in right.prob.constraints]
+    assert extract_results(left).keys() == extract_results(right).keys()
+    calls = []
+    monkeypatch.setattr(cp.Problem, "solve", lambda prob, **kw: calls.append(kw))
+    for build in builds:
+        ids = tuple(id(v) for v in build.prob.variables())
+        build.solve()
+        assert not build._exact_boxes and build.preparation_evidence is None
+        assert tuple(id(v) for v in build.prob.variables()) == ids
+    assert calls[0] == calls[1]
+
+
 # ---------------------------------------------------------------------------
 # Gate 1: validation, algebra, and convexity
 # ---------------------------------------------------------------------------
@@ -87,13 +134,19 @@ class TestValidation:
             build_opf(case9(), formulation="singlenode_dc",
                       lossy_storage=[_unit(**{field: value})])
 
-    def test_nondefault_numerical_preparation_rejected(self):
+    @pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
+    def test_cost_coordinates_remain_rejected(self, assembly):
         options = OPFOptions(
-            numerical_preparation=NumericalPreparation(normalize_device_limits=True)
+            numerical_preparation=NumericalPreparation(cost_coordinates=True)
         )
-        with pytest.raises(ValueError, match="numerical-preparation"):
-            build_opf(case9(), formulation="socp", lossy_storage=[_unit()],
-                      options=options)
+        with pytest.raises(ValueError, match="lossy storage.*cost coordinates"):
+            if assembly == "single":
+                build_opf(case9(), formulation="ac", lossy_storage=[_unit()], options=options)
+            else:
+                df_P, df_Q = _load_frames([1., 1.])
+                build_opf_multistep(case9(), df_P, df_Q, T=2, formulation="ac",
+                                   temporal_assembly=assembly, lossy_storage=[_unit()],
+                                   options=options)
 
 
 class TestAlgebra:
@@ -221,7 +274,8 @@ def test_terminal_policies_compose():
 
 @pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
 @pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
-def test_heterogeneous_fleet_with_renewables(formulation, assembly):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_heterogeneous_fleet_with_renewables(formulation, assembly, prepared):
     """Solved energy, capability, identity and terminal checks (Gates 2/5)."""
     units = [
         _unit(bus=6, capacity=65, initial_soc=20, apparent_power_rating=25,
@@ -235,10 +289,12 @@ def test_heterogeneous_fleet_with_renewables(formulation, assembly):
                                     apparent_power_rating=300, device_id="wind")
     available = np.array([280., 250., 20., 0.])
     delta = 0.5
+    devices = dict(lossy_storage=units, nondispatchable=[renewable],
+                   df_nd=pd.DataFrame({"wind": available}))
     build, results = _solve_multistep(
         formulation, SCALES, temporal_assembly=assembly, delta=delta,
-        lossy_storage=units, nondispatchable=[renewable],
-        df_nd=pd.DataFrame({"wind": available}),
+        options=OPFOptions(numerical_preparation=_base_preparation(formulation, prepared)),
+        **devices,
     )
     assert build.prob.status == "optimal"
     np.testing.assert_array_equal(results["ls_device_ids"], ["zeta", "alpha"])
@@ -274,6 +330,24 @@ def test_heterogeneous_fleet_with_renewables(formulation, assembly):
     np.testing.assert_allclose(results["ls_terminal_cost"], 5*max(30-soc[-1, 0], 0), atol=1e-4)
     expected_cost = delta * np.sum((charge+discharge)*[u.aging_weight for u in units])
     np.testing.assert_allclose(results["ls_cost"], expected_cost, atol=1e-5)
+    # Case9 uses quadratic generation costs; reconstruct in physical MW,
+    # integrating stage rates once, with the terminal cost outside the integral.
+    coefficients = case9()["gencost"][:, 4:7]
+    generation = np.sum(coefficients[:, 0]*results["Pg"]**2
+                        + coefficients[:, 1]*results["Pg"] + coefficients[:, 2])
+    network_cost = (delta*build.data["loss_weight"]*np.sum(
+                        build.data["r"]*(results["p_flows"]/case9()["baseMVA"])**2
+                    )
+                    if formulation == "lossy_dc" else 0.)
+    assert results["objective"] == pytest.approx(
+        delta*generation + expected_cost + results["ls_terminal_cost"] + network_cost,
+        abs=1e-5,
+    )
+    if prepared:
+        baseline, _ = _solve_multistep(
+            formulation, SCALES, temporal_assembly=assembly, delta=delta, **devices
+        )
+        assert results["objective"] == pytest.approx(baseline.prob.value, rel=OBJ_RTOL)
     assert np.max(results["ls_split"]) <= SPLIT_ATOL
     assert results["curtailment"].max() > 1
     np.testing.assert_allclose(results["curtailment"][:, 0], available-results["p_nd"][:, 0], atol=1e-5)
@@ -286,7 +360,8 @@ def test_heterogeneous_fleet_with_renewables(formulation, assembly):
 
 @pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
 @pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
-def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly, prepared):
     ideal = StorageUnitIdeal(bus=5, apparent_power_rating=40, capacity=100,
                              initial_soc=50, terminal_soc=45,
                              terminal_constraint="equality", device_id="ideal")
@@ -296,6 +371,7 @@ def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly):
     build, results = _solve_multistep(
         formulation, SCALES, temporal_assembly=assembly, delta=delta,
         storage=[ideal], lossy_storage=[lossy],
+        options=OPFOptions(numerical_preparation=_base_preparation(formulation, prepared)),
     )
     assert build.prob.status == "optimal"
     np.testing.assert_array_equal(results["storage_device_ids"], ["ideal"])
@@ -323,7 +399,8 @@ def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly):
 # Gate 3: limitation of the relaxation
 # ---------------------------------------------------------------------------
 
-def test_split_operation_without_curtailment_headroom():
+@pytest.mark.parametrize("prepared", [False, True])
+def test_split_operation_without_curtailment_headroom(prepared):
     """A full battery must absorb uncurtailable surplus by split operation.
 
     Generator minimums total 30 MW while demand is 28 MW and there is no
@@ -334,6 +411,7 @@ def test_split_operation_without_curtailment_headroom():
     """
     full = _unit(initial_soc=100.0, self_discharge_per_month=0.0)
     build = build_opf(case9(), formulation="singlenode_dc", lossy_storage=[full],
+                      options=OPFOptions(numerical_preparation=_base_preparation("singlenode_dc", prepared)),
                       loads=[Load(bus=5, p_load_mw=28.0, device_id="demand")])
     build.solve()
     with pytest.raises(SimultaneousOperationError, match="'battery'") as caught:

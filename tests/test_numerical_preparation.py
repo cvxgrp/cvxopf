@@ -15,9 +15,10 @@ from cvxopf import (
     gen_from_matpower,
     NondispatchableUnit,
     StorageUnitIdeal,
+    StorageUnitLossy,
     Load,
 )
-from cvxopf import nondispatchable, storage
+from cvxopf import nondispatchable, storage, storage_lossy
 from cvxopf._numerical_preparation import (
     emit_exact_box,
 )
@@ -32,6 +33,12 @@ from cvxopf.testcases import case9
 
 FORMULATIONS = ("ac", "socp", "lossy_dc", "singlenode_dc")
 ASSEMBLIES = ("single", "stepwise", "vectorized")
+
+
+def _lossy_unit(rating=10.):
+    return StorageUnitLossy(bus=5, apparent_power_rating=rating, capacity=40.,
+                            initial_soc=20., charge_efficiency=.95,
+                            discharge_efficiency=.9, self_discharge_per_month=.01)
 
 
 @pytest.mark.parametrize("name", ["normalize_device_limits", "exact_fixed_boxes"])
@@ -127,13 +134,14 @@ def _fleet():
     return case, generators, nd, batteries
 
 
-def _build(formulation, assembly, policy):
+def _build(formulation, assembly, policy, lossy_storage=None):
     case, generators, nd, batteries = _fleet()
     kwargs = dict(
         formulation=formulation,
         generators=generators,
         nondispatchable=nd,
         storage=batteries,
+        lossy_storage=lossy_storage,
         loads=[Load(bus=5, p_load_mw=10, q_load_mvar=2, device_id="load")],
         options=OPFOptions(numerical_preparation=policy),
     )
@@ -151,11 +159,12 @@ def _build(formulation, assembly, policy):
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)
 @pytest.mark.parametrize("assembly", ASSEMBLIES)
+@pytest.mark.parametrize("lossy", [False, True])
 def test_exact_bindings_follow_original_variables_units_and_order(
-    formulation, assembly
+    formulation, assembly, lossy
 ):
     policy = NumericalPreparation(exact_fixed_boxes=True)
-    build = _build(formulation, assembly, policy)
+    build = _build(formulation, assembly, policy, [_lossy_unit()] if lossy else None)
     variables = {variable.id: variable for variable in build.prob.variables()}
     constraints = {constraint.id: constraint for constraint in build.prob.constraints}
     assert build.numerical_preparation == policy
@@ -222,10 +231,12 @@ def test_options_are_build_time_snapshot_and_prepared_solve_uses_local_bridge(
 
 @pytest.mark.parametrize("formulation", FORMULATIONS)
 @pytest.mark.parametrize("assembly", ASSEMBLIES)
+@pytest.mark.parametrize("lossy", [False, True])
 def test_disabled_path_has_no_bindings_and_calls_existing_solver(
-    monkeypatch, formulation, assembly
+    monkeypatch, formulation, assembly, lossy
 ):
-    build = _build(formulation, assembly, NumericalPreparation())
+    build = _build(formulation, assembly, NumericalPreparation(),
+                   [_lossy_unit()] if lossy else None)
     assert not build._exact_boxes
     calls = []
     monkeypatch.setattr(
@@ -397,6 +408,56 @@ def test_normalized_soc_has_no_norm_epigraph(module, shape):
     assert data["dims"].soc == [3] * p.size
     assert data["dims"].nonneg == 0
     assert data["dims"].zero == 0
+
+
+@pytest.mark.parametrize("use_soc", [False, True])
+@pytest.mark.parametrize("shape", [(2,), (2, 1), (2, 3)])
+def test_lossy_normalized_net_region_and_direct_cones(shape, use_soc):
+    units = [_lossy_unit(s) for s in (10., 1000.)]
+    charge, discharge, reactive, soc = (cp.Variable(shape) for _ in range(4))
+    original = storage_lossy.operating_constraints(units, charge, discharge, soc, reactive)
+    prepared = storage_lossy.operating_constraints(
+        units, charge, discharge, soc, reactive, normalize_limits=True, use_soc=use_soc
+    )
+    assert all(c.is_dcp() for c in prepared)
+    radii = np.array([10., 1000.]).reshape((2,) + (1,) * (len(shape)-1))
+    soc.value = np.full(shape, 20.)
+    # Large simultaneous split powers must remain feasible when their NET is
+    # within rating: no per-split limit or charge-plus-discharge hull is added.
+    for sign in (-1, 1):
+        for q, feasible in ((.8, True), (.9, False)):
+            charge.value = np.broadcast_to(2*radii, shape)
+            discharge.value = np.broadcast_to((2 + sign*.6)*radii, shape)
+            reactive.value = np.broadcast_to(q*radii, shape)
+            for constraints in (original, prepared):
+                assert all(np.max(c.violation()) < 1e-8 for c in constraints) == feasible
+    if use_soc:
+        cone = prepared[-1]
+        assert isinstance(cone, cp.constraints.second_order.SOC)
+        data, _, _ = cp.Problem(cp.Minimize(0), [cone]).get_problem_data(cp.CLARABEL)
+        assert data["A"].shape == (3*charge.size, 3*charge.size)
+        assert data["dims"].soc == [3]*charge.size
+        assert data["dims"].nonneg == data["dims"].zero == 0
+
+
+@pytest.mark.parametrize("formulation", ["ac", "socp"])
+@pytest.mark.parametrize("assembly", ASSEMBLIES)
+@pytest.mark.parametrize("enabled", [False, True])
+def test_lossy_adapter_forwards_only_enabled_capability_options(
+    monkeypatch, formulation, assembly, enabled
+):
+    original, calls = storage_lossy.operating_constraints, []
+
+    def capture(*args, **kwargs):
+        calls.append(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(storage_lossy, "operating_constraints", capture)
+    _build(formulation, assembly, NumericalPreparation(normalize_device_limits=enabled),
+           [_lossy_unit()])
+    assert calls and all(options == (
+        {"normalize_limits": True, "use_soc": formulation == "socp"} if enabled else {}
+    ) for options in calls)
 
 
 @pytest.mark.parametrize(
