@@ -488,7 +488,10 @@ before implementation; closeout does not authorize starting them.
   support.
 - [ ] **Nondefault numerical preparation:** qualify prepared lossy-device
   constraints, objectives, and physical-result restoration before lifting the
-  current unsupported-policy guard.
+  current unsupported-policy guard. The proposed
+  [standalone integration design](lossy-storage-numerical-preparation.md)
+  identifies shared helpers, complete-rate cost-coordinate ownership and
+  equivalence gates; it is planning only, not implemented support.
 - [ ] **Leaf-bound qualification:** evaluate representation changes against
   the current explicit-constraint baseline before adopting them. This is a
   numerical representation study, not permission to change the operating set.
