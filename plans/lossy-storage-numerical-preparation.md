@@ -1,12 +1,18 @@
 # Lossy storage: numerical-preparation extension
 
-**Status:** proposed design, 2026-11-12. Planning only; no implementation or
-numerical execution authorized by this document.
+**Status:** implemented and regression-qualified,
+2026-11-13. Owner acceptance of this follow-up is pending. The original design
+was planning-only; implementation and this qualification were separately
+authorized by the owner. No new experiment study is authorized here.
 
-**Baseline inspected:** `main` at `b6edcc72c`, after owner closeout of M18's
+**Design baseline:** `main` at `b6edcc72c`, after owner closeout of M18's
 first implementation. This is the numerical-preparation follow-up in
 [M18 Section 13](milestone-18-lossy-storage.md#13-deferred-follow-up-backlog),
 not a reopening of its accepted device physics.
+
+Base preparation was committed at `e942222f1`; the cost-coordinate extension
+was committed at `b07eaf299`. Section 7 records qualification of that combined
+implementation and the final documentation/test additions.
 
 ## 1. Purpose and scope
 
@@ -38,7 +44,7 @@ bounds (including a charge-plus-discharge hull), leaf-bound migration, new
 solvers, new preparation-policy fields, tolerance tuning, defaults changes,
 new long-running experiments, or modifications to historical study artifacts.
 
-## 2. Supported combinations to qualify
+## 2. Supported combinations
 
 Keep the current formulation/assembly matrix. Support means standalone
 single-step, explicit stepwise multistep and vectorized multistep unless noted.
@@ -72,7 +78,7 @@ Paths in this table are under `src/cvxopf/`.
 | `storage_lossy.py` | Remains the authority for operating constraints, injections, recurrence, throughput rate, loss reporting and complementarity diagnostics. Add optional normalization arguments to `operating_constraints`; leave its disabled branch structurally unchanged. |
 | `storage.py::_normalized_capability_constraints` | Already accepts `cp.Expression`; call it with `p_dis-p_ch`, `b_q`, ratings and the SOC/smooth selector. Broadcast existing native device ratings for time-last arrays; do not duplicate disk equations or move all device models. |
 | `_component_adapters.py::_capability_options` | Forward existing preparation flags to the lossy operating hook in both step and vectorized assembly. Existing result ownership/name remains `ls_cost`. |
-| `_component_adapters.py::_lossy_storage_*` | Add typed cost-coordinate ownership for AC and remove/refine `_require_disabled_preparation` only as the corresponding capabilities become qualified. All formulation builders remain generic. |
+| `_component_adapters.py::_lossy_storage_*` | Declare complete-rate cost-coordinate ownership for AC; the temporary preparation guards are removed. All formulation builders remain generic. |
 | `_component_adapter.py`, `_component_assembly.py` | Retain typed stage/horizon contributions, `collect_cost_terms`, and complete `ObjectiveCostContribution` coverage. Make only the generic cost-contract changes described below; no named lossy-device orchestration. |
 | `_numerical_preparation.py` | Reuse policy validation, `ExactBoxBinding`, `resolve_fixed_map`, `PreparationEvidence`, `prepared_options` and `clear_prepared_result`. Keep exact Pg/ND selection and all unsupported modes unchanged. |
 | `_convex_preparation.py` | Reuse `substitute`, `joint_scales`, `scaled_data`, `restore` and `solve_prepared_convex`. There should be no lossy-specific branches in canonical scaling or dual reconstruction. |
@@ -83,13 +89,13 @@ Paths in this table are under `src/cvxopf/`.
 
 ## 4. AC cost-coordinate design
 
-### Current limitation
+### Limitation at the design baseline
 
-`CostCoordinateTerm` currently has one variable, one weight expression and one
-rate. `ObjectiveCostContribution` requires that one declared term own the whole
-stage rate. Ideal cycling uses an absolute-value cost and shedding uses a
-linear cost. Lossy throughput has **two** independent nonnegative variables
-but **one** complete stage rate.
+At the baseline, `CostCoordinateTerm` had one variable, one weight expression
+and one rate. `ObjectiveCostContribution` required that one declared term own
+the whole stage rate. Ideal cycling uses an absolute-value cost and shedding
+uses a linear cost. Lossy throughput has **two** independent nonnegative
+variables but **one** complete stage rate.
 
 Do not attach two current terms to the same full rate: the replacement map
 would overwrite that rate and component-first coverage would reject it. Do not
@@ -97,13 +103,13 @@ classify charge/discharge as shedding, apply `abs` to them, or scale net power
 instead. Those choices either misdescribe the cost, introduce unnecessary
 epigraphs, or fail to preserve independent charge/discharge coordinates.
 
-### Proposed narrow typed extension
+### Implemented narrow typed extension
 
-Evolve the existing private contract, rather than retaining a parallel legacy
-and lossy-specific mechanism:
+The implementation evolves the existing private contract, without a parallel
+legacy or lossy-specific solver mechanism:
 
 - A small immutable **coordinate leaf** owns its builder variable, weight
-  expression and closed mathematical kind: existing `cycling` (absolute),
+  expression, physical subtotal and closed mathematical kind: `cycling` (absolute),
   existing `shedding` (affine), or new `linear_cycling` (affine throughput).
 - The existing **`CostCoordinateTerm` becomes the complete-rate owner**:
   original `rate`, interval-reduction axis, and an ordered tuple of leaves.
@@ -206,20 +212,20 @@ automatic proof that the transformation changed the problem. `optimal_inaccurate
 and solver failure are retained distinctly; do not count them as unqualified
 equivalence successes merely because extraction returned arrays.
 
-## 6. Implementation sequence for later authorization
+## 6. Implementation sequence and checkpoints
 
-1. **Base preparation support.** Reuse normalized capability constraints and
+1. **Base preparation support (`e942222f1`).** Reuse normalized capability constraints and
    existing fixed/scaling bridges; cover start-boundary completion. Replace
    the blanket lossy guard with a narrow temporary rejection of lossy AC cost
    coordinates until step 2 is complete. Do not silently leave lossy throughput
    untransformed when that option is requested. Review this bounded slice.
-2. **Complete-rate coordinate contract.** Implement the generic multi-leaf
+2. **Complete-rate coordinate contract (`b07eaf299`).** Implement the generic multi-leaf
    ownership described in Section 4, migrating existing one-leaf declarations
    without representation drift. Add lossy AC declarations, component-first
    composition, restoration/accounting and failure tests. Review before removing
    the remaining temporary guard. No interim public fields or compatibility
    scaffolding should remain after this slice.
-3. **Qualification and documentation.** Run targeted suites and the complete
+3. **Qualification and documentation (Section 7).** Run targeted suites and the complete
    regression suite, inspect independent physical/accounting results, then
    update the support matrix, modeling guide and M18 backlog. A bounded
    numerical performance study, if useful, requires a separate protocol and
@@ -228,4 +234,85 @@ equivalence successes merely because extraction returned arrays.
 Completion means the supported matrix is implemented, equivalent under the
 stated checks, and documented; existing paths remain compatible and deferred
 work remains deferred. Owner review/commit comes after clean verification.
-This plan authorizes neither those implementation steps nor any solves today.
+The original design did not authorize execution. The owner separately
+authorized each implementation slice and this final qualification; future
+experiment studies still require their own approval.
+
+## 7. Final qualification — 2026-11-13
+
+This is regression qualification of standalone library behavior, not a new
+Tracy study, timing comparison or controller qualification. Production source
+is the committed implementation at `b07eaf299`; this final slice adds focused
+tests and reconciles documentation only. Historical raw results and the M18
+first-implementation acceptance record are unchanged.
+
+### Evidence against the gates
+
+| Gate | Executable evidence and checks |
+|---|---|
+| Disabled compatibility | `test_explicit_disabled_policy_preserves_default_graph_and_schema` in [test_storage_lossy.py](../tests/test_storage_lossy.py) covers absent, empty, lossy-only and mixed fleets across all four formulations and three assemblies. [test_ac_objective_options.py](../tests/test_ac_objective_options.py) retains the no-lossy historical canonical layout/start comparisons. |
+| Capability equivalence | `test_lossy_normalized_net_region_and_direct_cones` in [test_numerical_preparation.py](../tests/test_numerical_preparation.py) compares heterogeneous original/normalized capability regions for `(2,)`, `(2,1)` and `(2,3)` arrays, including large split powers with feasible net power. Direct SOCs introduce no norm epigraph. |
+| Cost algebra | [test_cost_coordinates.py](../tests/test_cost_coordinates.py) checks complete ownership, separate leaf maps, original/transformed objectives and constraints, graph identities and absence of affine-throughput abs auxiliaries. [test_ac_objective_options.py](../tests/test_ac_objective_options.py) includes generation constants/PWL, mixed storage, shedding, HVDC and terminal terms at non-unit durations. |
+| Charge plus discharge, not net power | `test_throughput_penalizes_both_powers_when_net_power_is_zero` in [test_storage_lossy.py](../tests/test_storage_lossy.py) independently reconstructs a strictly positive cost at zero net power for heterogeneous prices, three array layouts and durations 0.25/2 hours. This is algebra at prescribed points, not a claim those points solve the dynamics. |
+| Exact boxes, scaling and starts | [test_preparation_bridges.py](../tests/test_preparation_bridges.py) and [test_cost_coordinates.py](../tests/test_cost_coordinates.py) cover allowed fixed/near-fixed Pg/ND selection, identity maps, retained coupling, primal/dual reconstruction, separate explicit split/reactive starts, heterogeneous nonzero initial energy and complete physical-to-cost-to-reduced native start maps, including T=1. |
+| Matched physical solutions | `test_heterogeneous_fleet_with_renewables` and `test_solved_mixed_ideal_and_lossy_fleet` in [test_storage_lossy.py](../tests/test_storage_lossy.py) check independent energy/loss recurrence, net capability, terminal policies and integrated costs. AC balance is reconstructed from voltages/Ybus and device inputs, not modeled residuals; restored prepared SOCP results pass the public audit. |
+| SOCP audit/recovery | [test_socp_diagnostics.py](../tests/test_socp_diagnostics.py) checks known rank-one lossy-device points in all three assemblies under disabled and prepared policies. The audit/recovery preserves source arrays and reconstructs physical quantities while solving and modeled residual reads are forbidden. These controls complement, rather than replace, the solved SOCP restoration checks. |
+| Objectives and lossless reduction | Matched convex objectives use `OBJ_RTOL=1e-6`. Physical generation, throughput, terminal and lossy-DC network-penalty terms are reconstructed independently. Lossless parameters reduce to ideal-storage costs, including prepared AC hourly/component-first. AC matches are local-solution comparisons, not global-optimum or general trajectory-identity certificates. |
+| Failures and diagnostics | Native exceptions, failure statuses, nonfinite/missing primals and failed second solves clear stale physical arrays. Parameter changes rebuild maps. Injected ideal epigraph slack still warns with lossy prices 0.03 and 1e6; unexplained affine accounting error is not explained as ideal slack. Warnings-as-errors retain restored results. |
+| Unsupported paths and split operation | Convex cost coordinates, AC joint scaling, DC normalization, unsupported component-first layouts/solver options and prepared hierarchy remain rejected. Original DC and controlled AC full-battery examples still raise `SimultaneousOperationError` with the unmodified physical result dictionary; no fallback solve is launched. |
+
+Engineering tolerances remain the existing ones: `ENERGY_ATOL=1e-5` MWh,
+`BALANCE_ATOL=1e-4` MVA for independently reconstructed AC nodal balance,
+capability checks in MVA/MW at `1e-5`, and the `1e-3` MW split threshold.
+Pointwise coordinate/objective algebra is checked at floating-point precision;
+no solver tolerance or default was changed for qualification.
+
+The controlled AC circulation counterexample removes line charging, limits
+generator reactive support and fixes battery reactive power using a user
+constraint. Ordinary AC Case9 is not interchangeable with the single-node DC
+counterexample: reactive circulation can absorb surplus as network losses.
+That distinction is a fixture/modeling lesson, not evidence of infeasibility
+or a reason to change production constraints.
+
+### Reproduction and recorded verification
+
+Run from the repository root in the locked development environment:
+
+```bash
+uv run --extra dev pytest -q tests/test_numerical_preparation.py tests/test_preparation_bridges.py tests/test_storage_lossy.py tests/test_cost_coordinates.py tests/test_ac_objective_options.py tests/test_ac_objective_assembly.py tests/test_socp_diagnostics.py
+uv run --extra dev --extra notebook pytest -q
+uv run --extra dev ruff check .
+uv run --extra dev mypy
+git diff --check
+```
+
+The local runs additionally used `UV_CACHE_DIR=/private/tmp/cvxopf-uv-cache`,
+`--offline --no-sync` on `uv run`, and `--tb=short --disable-warnings` on
+pytest. Runtime versions were Python 3.11.15, CVXPY 1.9.3, NumPy 2.4.6, SciPy 1.17.1,
+CLARABEL 0.11.1 and cyipopt 1.7.0.
+
+Recorded results:
+
+- Committed baseline before this slice: **4,665 tests and 6 subtests passed**.
+- Final seven-file focused suite above: **594 passed**, with 175 warnings.
+- Final full suite: **4,674 tests and 6 subtests passed**, with 376 warnings.
+  The nine added cases are six zero-net throughput checks and three prepared
+  SOCP audit/recovery controls. Production code is unchanged.
+- Ruff, configured mypy (seven source files), and `git diff --check` pass.
+- Newly added local Markdown links and heading targets resolve.
+
+### Scope of the conclusion
+
+The supported matrix and bounded regression checks establish physical-model
+equivalence and restoration behavior for the implemented standalone paths.
+The throughput penalty remains `delta * sum(lambda * (p_ch + p_dis))`;
+the inverter rating still applies to net power. The lossy-only cost expression
+is intentionally regrouped into affine subtotals. Identical floating-point
+iterates/trajectories, universal numerical improvement and global optimality
+are not promised.
+
+Numerical preparation does not enforce charge/discharge exclusivity. There is
+no hull, mode constraint, rounding, polishing, automatic retry or controller
+integration in this extension. Leaf-bound qualification, performance studies,
+hierarchy and relax–round–polish remain separately scoped work. A clean review
+of this follow-up does not replace final owner acceptance.

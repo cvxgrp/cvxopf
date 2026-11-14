@@ -474,9 +474,10 @@ full-repository test run. No experimental study was launched.
 
 ## 13. Deferred follow-up backlog
 
-These remain unimplemented/unqualified extensions, not blockers for the
-accepted first implementation. Each requires a separately approved scope
-before implementation; closeout does not authorize starting them.
+This tracks follow-ups to the accepted first implementation. Sections 11–12
+retain the historical scope and 2026-11-12 acceptance record, including the
+then-disabled preparation restriction. Completed follow-ups are recorded below;
+unchecked items remain unimplemented/unqualified and require their own scope.
 
 - [ ] **Relax–round–polish fallback:** resolve the open decisions in Section 6,
   implement fixed-mode polishing and failure behavior, add the deferred
@@ -486,12 +487,12 @@ before implementation; closeout does not authorize starting them.
   identity-aligned state transfer, causal starts/recovery, and split-operation
   handling in the controller. Standalone support does not imply controller
   support.
-- [ ] **Nondefault numerical preparation:** qualify prepared lossy-device
-  constraints, objectives, and physical-result restoration before lifting the
-  current unsupported-policy guard. The proposed
-  [standalone integration design](lossy-storage-numerical-preparation.md)
-  identifies shared helpers, complete-rate cost-coordinate ownership and
-  equivalence gates; it is planning only, not implemented support.
+- [x] **Standalone numerical preparation:** base support and the AC
+  cost-coordinate extension are implemented in `e942222f1` and `b07eaf299`.
+  The [final qualification record](lossy-storage-numerical-preparation.md#7-final-qualification--2026-11-13)
+  covers the supported formulation/assembly matrix, separate affine throughput
+  costs and physical-result restoration. Final owner acceptance of this
+  follow-up is pending; this is not hierarchy or leaf-bound qualification.
 - [ ] **Leaf-bound qualification:** evaluate representation changes against
   the current explicit-constraint baseline before adopting them. This is a
   numerical representation study, not permission to change the operating set.

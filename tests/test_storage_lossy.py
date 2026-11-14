@@ -177,6 +177,23 @@ class TestValidation:
 
 
 class TestAlgebra:
+    @pytest.mark.parametrize("shape", [(2,), (2, 1), (2, 3)])
+    @pytest.mark.parametrize("delta", [.25, 2.])
+    def test_throughput_penalizes_both_powers_when_net_power_is_zero(self, shape, delta):
+        units = [_unit(aging_weight=.03),
+                 _unit(bus=6, device_id="second", aging_weight=.2,
+                       charge_efficiency=.8, discharge_efficiency=.85)]
+        p_ch, p_dis = cp.Variable(shape), cp.Variable(shape)
+        values = np.array([3., 7.]).reshape((2,) + (1,)*(len(shape)-1))
+        p_ch.value = np.broadcast_to(values, shape).copy()
+        p_dis.value = p_ch.value.copy()
+        price = np.array([u.aging_weight for u in units]).reshape(values.shape)
+        expected = delta*np.sum(price*(p_ch.value+p_dis.value))
+        rate = storage_lossy.throughput_cost_rate(units, p_ch, p_dis)
+        np.testing.assert_array_equal((p_dis-p_ch).value, np.zeros(shape))
+        assert expected > 0.
+        assert delta*float(np.sum(rate.value)) == pytest.approx(expected, rel=1e-12)
+
     @pytest.mark.parametrize("shape", [(2,), (2, 3)])
     def test_device_terms_are_dcp(self, shape):
         units = [_unit(), _unit(bus=6, device_id="b2")]

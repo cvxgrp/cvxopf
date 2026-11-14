@@ -285,10 +285,10 @@ scope and reference test-data generation.
 
 CVXOPF implements four network formulations, shared device models,
 multistep optimization and energy-signpost DC-to-AC control. Standalone builds
-also support [lossy batteries](docs/modeling.md#lossy-batteries).
-M18's first implementation is complete; fallback polishing, hierarchical
-lossy-storage support and further numerical representation qualification remain
-in its [follow-up backlog](plans/milestone-18-lossy-storage.md#13-deferred-follow-up-backlog).
+also support [lossy batteries](docs/modeling.md#lossy-batteries) with opt-in
+numerical preparation, including AC cost coordinates. Fallback polishing,
+hierarchical lossy-storage support and leaf-bound qualification remain
+in the [follow-up backlog](plans/milestone-18-lossy-storage.md#13-deferred-follow-up-backlog).
 Planned extensions include configurable formulation hierarchies, phase-angle DC
 power flow and unit commitment. See the
 [roadmap](docs/development.md#roadmap) for development status and implementation

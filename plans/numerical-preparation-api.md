@@ -58,6 +58,21 @@ summation sensitivity. It does not close M11, enable prepared hierarchy, build
 the requested docs site, or authorize further solves. Those are separate tasks,
 not blockers to closing this representation/qualification detour.
 
+## Lossy-storage extension — 2026-11-13
+
+Standalone lossy storage now uses these same preparation bridges. AC cost
+coordinates map charge and discharge separately under one complete affine
+throughput-cost owner; hourly and vectorized component-first assembly integrate
+that cost once. The physical cost remains proportional to `p_ch + p_dis`, not
+net power. Affine throughput has no cycling epigraph and does not enlarge the
+ideal-storage cycling warning threshold.
+
+See the [supported matrix](../docs/modeling.md#numerical-preparation-for-lossy-batteries)
+and [final qualification record](lossy-storage-numerical-preparation.md#7-final-qualification--2026-11-13).
+The earlier study dispositions below remain historical evidence; no study is
+re-run, no default changes, and hierarchy/polishing/leaf-bound work remains
+separate. Owner acceptance of this follow-up is pending.
+
 ## Approved AC cost-coordinate extraction
 
 The standalone production policy now includes opt-in ``cost_coordinates=False``.
