@@ -66,7 +66,7 @@ def row_binding(name):
     return dict(name=name, input_sha256=identity, inputs=serializable(json_value(spec)),
         policies={k:asdict(b.numerical_preparation) for k,b in (("ac",ac),("socp",socp))},
         physical_start=start, ac_layout=layout, ac_x0=data["x0"].tolist(), ac_map=coordinate(mapping),
-        ac_cost_scales=[dict(kind=b.term.kind, shape=list(b.leaf.shape), scale=b.scale.tolist()) for b in bindings],
+        ac_cost_scales=[dict(kind=b.coordinate.kind, shape=list(b.leaf.shape), scale=b.scale.tolist()) for b in bindings],
         socp_map=coordinate(cm), socp_variable_scale=D.tolist(), socp_row_scale=R.tolist(),
         socp_objective_offset=offset, socp_canonical_sha256=digest(dict(
             A=conic["A"].toarray(), P=conic["P"].toarray(), b=conic["b"], c=conic["c"],
@@ -92,7 +92,7 @@ def restore_ac(build, row, evidence, published):
     maps = evidence["checks"].get("cost_coordinate_maps", [])
     assert len(maps) == len(bindings)
     for old, binding in zip(maps, bindings, strict=True):
-        assert old["kind"] == binding.term.kind and old["scale"] == binding.scale.tolist()
+        assert old["kind"] == binding.coordinate.kind and old["scale"] == binding.scale.tolist()
         assert old["physical_start"] == binding.physical_start.tolist()
         original_slice = next((s,a,b) for identity,s,a,b in evidence["start_layout"] if identity == old["solver_variable_id"])
         offset = inverse[-1].var_offsets[binding.leaf.id]
@@ -104,7 +104,7 @@ def restore_ac(build, row, evidence, published):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     result = serializable(extract_results(build))
     publication_check(result, published)

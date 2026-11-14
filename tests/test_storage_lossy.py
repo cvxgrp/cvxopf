@@ -1,6 +1,7 @@
 """Tests for lossy storage (plans/milestone-18-lossy-storage.md, Section 11)."""
 
 import warnings
+from dataclasses import replace
 
 import cvxpy as cp
 import numpy as np
@@ -19,23 +20,33 @@ from cvxopf import (
     build_opf,
     build_opf_multistep,
     extract_results,
+    gen_from_matpower,
 )
 from cvxopf import storage_lossy
 from cvxopf.testcases import case9
+from cvxopf.network import make_ybus_matpower, reindex_case_to_consecutive
 
 SPLIT_ATOL = storage_lossy.SPLIT_TOLERANCE_MW
 ENERGY_ATOL = 1e-5  # MWh
 OBJ_RTOL = 1e-6
+BALANCE_ATOL = 1e-4  # MVA, reconstructed from voltage and original device inputs
 
 CONVEX_FORMULATIONS = ["lossy_dc", "singlenode_dc", "socp"]
 ALL_FORMULATIONS = [*CONVEX_FORMULATIONS, "ac"]
+FLEET_PREPARATIONS = [
+    (f, a, p) for f in ALL_FORMULATIONS for a in ("stepwise", "vectorized") for p in (False, True)
+] + [("ac", a, "cost") for a in ("stepwise", "vectorized")] + [
+    ("ac", "vectorized", "component_first")
+]
 
 
 def _base_preparation(formulation, enabled):
     return NumericalPreparation(
-        normalize_device_limits=enabled and formulation in {"ac", "socp"},
-        exact_fixed_boxes=enabled,
+        normalize_device_limits=bool(enabled) and formulation in {"ac", "socp"},
+        exact_fixed_boxes=bool(enabled),
         canonical_scaling="joint5" if enabled and formulation != "ac" else "none",
+        cost_coordinates=enabled in ("cost", "component_first"),
+        objective_assembly="component_first" if enabled == "component_first" else "hourly",
     )
 
 
@@ -59,6 +70,21 @@ def _load_frames(scales):
     df_P = pd.DataFrame(np.outer(scales, ppc["bus"][:, 2]))
     df_Q = pd.DataFrame(np.outer(scales, ppc["bus"][:, 3]))
     return df_P, df_Q
+
+
+def _check_ac_balance(results, scales, lossy, *, ideal=(), renewable=()):
+    """Independent complex nodal balance; never read model residuals."""
+    case, _ = reindex_case_to_consecutive(case9())
+    voltage = results["Vm"]*np.exp(1j*np.deg2rad(results["Va_deg"]))
+    network = case["baseMVA"]*voltage*np.conj(voltage @ make_ybus_matpower(case).T)
+    injection = -np.asarray(scales)[:, None]*(case["bus"][:, 2]+1j*case["bus"][:, 3])
+    for k, gen in enumerate(case["gen"]):
+        injection[:, int(gen[0])] += results["Pg"][:, k]+1j*results["Qg"][:, k]
+    for units, p_key, q_key in ((lossy, "ls_b", "ls_b_q"), (ideal, "b", "b_q"),
+                                (renewable, "p_nd", "q_nd")):
+        for k, unit in enumerate(units):
+            injection[:, unit.bus-1] += results[p_key][:, k]+1j*results[q_key][:, k]
+    np.testing.assert_allclose(network, injection, rtol=0., atol=BALANCE_ATOL)
 
 
 def _solve_multistep(formulation, scales, *, temporal_assembly="vectorized",
@@ -134,17 +160,18 @@ class TestValidation:
             build_opf(case9(), formulation="singlenode_dc",
                       lossy_storage=[_unit(**{field: value})])
 
+    @pytest.mark.parametrize("formulation", CONVEX_FORMULATIONS)
     @pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
-    def test_cost_coordinates_remain_rejected(self, assembly):
+    def test_convex_cost_coordinates_remain_rejected(self, assembly, formulation):
         options = OPFOptions(
             numerical_preparation=NumericalPreparation(cost_coordinates=True)
         )
-        with pytest.raises(ValueError, match="lossy storage.*cost coordinates"):
+        with pytest.raises(ValueError, match="AC only"):
             if assembly == "single":
-                build_opf(case9(), formulation="ac", lossy_storage=[_unit()], options=options)
+                build_opf(case9(), formulation=formulation, lossy_storage=[_unit()], options=options)
             else:
                 df_P, df_Q = _load_frames([1., 1.])
-                build_opf_multistep(case9(), df_P, df_Q, T=2, formulation="ac",
+                build_opf_multistep(case9(), df_P, df_Q, T=2, formulation=formulation,
                                    temporal_assembly=assembly, lossy_storage=[_unit()],
                                    options=options)
 
@@ -231,17 +258,21 @@ def test_stepwise_and_vectorized_agree(formulation):
     np.testing.assert_allclose(stepwise["ls_soc"], vectorized["ls_soc"], atol=1e-4)
 
 
-@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
-def test_lossless_parameters_reduce_to_ideal_storage(formulation):
+@pytest.mark.parametrize("formulation,prepared", [(f, False) for f in ALL_FORMULATIONS]
+                         + [("ac", "cost"), ("ac", "component_first")])
+def test_lossless_parameters_reduce_to_ideal_storage(formulation, prepared):
     lossless = _unit(charge_efficiency=1.0, discharge_efficiency=1.0,
                      self_discharge_per_month=0.0)
     ideal = StorageUnitIdeal(bus=5, apparent_power_rating=40.0, capacity=100.0,
                              initial_soc=50.0, device_id="battery")
-    _, lossy_results = _solve_multistep(formulation, SCALES, lossy_storage=[lossless])
-    _, ideal_results = _solve_multistep(formulation, SCALES, storage=[ideal])
+    options = OPFOptions(numerical_preparation=_base_preparation(formulation, prepared))
+    _, lossy_results = _solve_multistep(formulation, SCALES, lossy_storage=[lossless], options=options)
+    _, ideal_results = _solve_multistep(formulation, SCALES, storage=[ideal], options=options)
+    assert lossy_results["status"] == ideal_results["status"] == "optimal"
     np.testing.assert_allclose(lossy_results["objective"], ideal_results["objective"],
                                rtol=OBJ_RTOL)
-    np.testing.assert_allclose(lossy_results["ls_b"], ideal_results["b"], atol=1e-3)
+    if not prepared:
+        np.testing.assert_allclose(lossy_results["ls_b"], ideal_results["b"], atol=1e-3)
 
 
 @pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
@@ -272,9 +303,7 @@ def test_terminal_policies_compose():
     np.testing.assert_allclose(results["ls_terminal_cost"], expected, atol=1e-4)
 
 
-@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
-@pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
-@pytest.mark.parametrize("prepared", [False, True])
+@pytest.mark.parametrize("formulation,assembly,prepared", FLEET_PREPARATIONS)
 def test_heterogeneous_fleet_with_renewables(formulation, assembly, prepared):
     """Solved energy, capability, identity and terminal checks (Gates 2/5)."""
     units = [
@@ -353,14 +382,14 @@ def test_heterogeneous_fleet_with_renewables(formulation, assembly, prepared):
     np.testing.assert_allclose(results["curtailment"][:, 0], available-results["p_nd"][:, 0], atol=1e-5)
     # Both renewable-rich and renewable-poor intervals participate in storage use.
     assert charge[:2].max() > 1 and discharge[2:].max() > 1
+    if formulation == "ac":
+        _check_ac_balance(results, SCALES, units, renewable=[renewable])
     if formulation == "socp":
         audit = audit_socp_relaxation(build, results)
         assert audit["complete"] and audit["feasible"], audit["residuals"]
 
 
-@pytest.mark.parametrize("formulation", ALL_FORMULATIONS)
-@pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
-@pytest.mark.parametrize("prepared", [False, True])
+@pytest.mark.parametrize("formulation,assembly,prepared", FLEET_PREPARATIONS)
 def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly, prepared):
     ideal = StorageUnitIdeal(bus=5, apparent_power_rating=40, capacity=100,
                              initial_soc=50, terminal_soc=45,
@@ -390,6 +419,8 @@ def test_solved_mixed_ideal_and_lossy_fleet(formulation, assembly, prepared):
     np.testing.assert_allclose(results["storage_cost"], delta*ideal.aging_weight*np.abs(results["b"]).sum(), atol=1e-5)
     np.testing.assert_allclose(results["ls_cost"], delta*lossy.aging_weight*(results["ls_p_ch"]+results["ls_p_dis"]).sum(), atol=1e-5)
     assert results["ls_split"].max() <= SPLIT_ATOL
+    if formulation == "ac":
+        _check_ac_balance(results, SCALES, [lossy], ideal=[ideal])
     if formulation == "socp":
         audit = audit_socp_relaxation(build, results)
         assert audit["complete"] and audit["feasible"], audit["residuals"]
@@ -420,6 +451,41 @@ def test_split_operation_without_curtailment_headroom(prepared):
     assert build.prob.status == "optimal"
     assert results["ls_split"][0] > 1.0
     np.testing.assert_allclose(results["ls_b"], [-2.0], atol=1e-4)
+
+
+@pytest.mark.parametrize("assembly,component_first", [("single", False), ("stepwise", False),
+                                                      ("vectorized", False), ("vectorized", True)])
+def test_cost_coordinates_retain_split_operation_exception(assembly, component_first):
+    # Unlike DC, ordinary AC can burn surplus in reactive network circulation.
+    # This controlled fixture removes line charging and limits reactive support
+    # so that the full battery really must dissipate the uncurtailable surplus.
+    case = case9()
+    case["branch"][:, 4] = 0.
+    generators = [replace(g, q_min_mvar=0., q_max_mvar=1.)
+                  for g in gen_from_matpower(case["gen"], case["gencost"])]
+    full = _unit(initial_soc=100., self_discharge_per_month=0.)
+    policy = NumericalPreparation(normalize_device_limits=True, exact_fixed_boxes=True,
+        cost_coordinates=True, objective_assembly="component_first" if component_first else "hourly")
+    kwargs = dict(formulation="ac", lossy_storage=[full], generators=generators,
+        loads=[Load(bus=5, p_load_mw=28., device_id="demand")],
+        options=OPFOptions(numerical_preparation=policy))
+    build = (build_opf(case, **kwargs) if assembly == "single" else
+             build_opf_multistep(case, T=1, temporal_assembly=assembly, **kwargs))
+    reactive = build.variables["ls_b_q"]
+    reactive = reactive if isinstance(reactive, list) else [reactive]
+    build.prob = cp.Problem(build.prob.objective,
+                           [*build.prob.constraints, *(q == 0. for q in reactive)])
+    build.solve()
+    assert build.prob.status == "optimal"
+    with pytest.raises(SimultaneousOperationError) as caught:
+        extract_results(build)
+    result = caught.value.results
+    assert build.prob.status == "optimal"
+    assert result["ls_split"].max() > SPLIT_ATOL
+    np.testing.assert_allclose(result["ls_b"], result["ls_p_dis"]-result["ls_p_ch"])
+    expected = (result["ls_p_ch"]+result["ls_p_dis"]).sum()*full.aging_weight
+    assert result["ls_cost"] == pytest.approx(expected)
+    assert build.preparation_evidence.checks["cost_accounting"]["linear_throughput_physical_cost"] == pytest.approx(expected)
 
 
 class TestSimultaneousOperationCheck:

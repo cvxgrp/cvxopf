@@ -318,7 +318,10 @@ def throughput_cost_rate(
 ) -> cp.Expression:
     """Throughput regularization rate: scalar per step, or (T,) time-last."""
     weights = _parameter_values(storage_units, "aging_weight", p_ch)
-    return cp.sum(cp.multiply(weights, p_ch + p_dis), axis=0)
+    # Keep the two affine subtotals explicit so the coordinate declaration
+    # can own the complete rate by identity, without overlapping substitutions.
+    return (cp.sum(cp.multiply(weights, p_ch), axis=0)
+            + cp.sum(cp.multiply(weights, p_dis), axis=0))
 
 
 # ---------------------------------------------------------------------------

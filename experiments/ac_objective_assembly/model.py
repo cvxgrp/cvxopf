@@ -39,7 +39,7 @@ class ComponentFirstObjective(cp.Minimize):
     """Fixture-only grouping at the existing production substitution boundary."""
 
     def __init__(self, build):
-        terms = build._cost_coordinate_terms
+        terms = tuple(leaf for term in build._cost_coordinate_terms for leaf in term.leaves)
         if (build.formulation != "ac" or build.temporal_assembly != "vectorized"
                 or build._cost_coordinate_delta != 1.
                 or {k for k in build.expressions if k.endswith("_cost")} !=
@@ -93,7 +93,7 @@ def canonical(build):
 
 def layout(solver_build, bindings, auxiliary, data, inverse):
     """Stable labels for physical leaves and the identity-traced cycling auxiliary."""
-    names = {binding.leaf.id: binding.term.kind + "_coordinate" for binding in bindings}
+    names = {binding.leaf.id: binding.coordinate.kind + "_coordinate" for binding in bindings}
     originals = {v.id for v in solver_build.prob.variables()}
     other = 0
     rows = []
@@ -142,14 +142,14 @@ def assess(arm, native, evidence, published, *, production_option=False):
         offset = inverse[-1].var_offsets[v.id]
         v.save_value(full[offset:offset+v.size].reshape(v.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value / binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     result = serializable(extract_results(build))
     publication = audit.publication_check(result, published)
     named = {k: float(v.value) for k, v in build.expressions.items() if k.endswith("_cost")}
     common, _ = physical_audit(build, result, kwargs, named)
-    cycling = next(b for b in bindings if b.term.kind == "cycling")
-    shedding = next(b for b in bindings if b.term.kind == "shedding")
+    cycling = next(b for b in bindings if b.coordinate.kind == "cycling")
+    shedding = next(b for b in bindings if b.coordinate.kind == "shedding")
     slack = auxiliary.value - abs(cycling.leaf.value)
     economics = audit.economic_checks(native, common["costs"], slack,
                                      abs(rebuilt-native["obj_val"]), float(np.sum(shedding.leaf.value)))

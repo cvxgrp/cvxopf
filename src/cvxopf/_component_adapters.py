@@ -7,7 +7,7 @@ without duplicating their physics, feasible sets, or cost models.
 
 from __future__ import annotations
 
-from cvxopf._cost_coordinates import CostCoordinateTerm
+from cvxopf._cost_coordinates import CostCoordinateLeaf, CostCoordinateTerm
 
 from dataclasses import dataclass
 from typing import Literal, Mapping, Sequence, cast
@@ -346,7 +346,7 @@ def _load_cost_coordinates(
     parameters = cast(load._PreparedLoadParameters, prepared["_load_parameters"])
     weights = cp.multiply(_array(prepared, "load_shedding_cost_per_mwh")[indices],
                           parameters.p_eligible_mw[context.step, indices])
-    return (CostCoordinateTerm(fraction, weights, rate, "shedding"),)
+    return (CostCoordinateTerm(rate, (CostCoordinateLeaf(fraction, weights, rate, "shedding"),)),)
 
 
 def _load_step_expressions(
@@ -515,9 +515,9 @@ def _load_vectorized_assembly(
         operating_constraints=constraints,
         stage_cost_rate=stage_cost_rate,
         cost_coordinates=(() if fraction is None or context.formulation != "ac" else
-                          (CostCoordinateTerm(fraction,
+                          (CostCoordinateTerm(stage_cost_rate, (CostCoordinateLeaf(fraction,
                            cp.Constant(costs[:, np.newaxis] * eligible_values[indices]),
-                           stage_cost_rate, "shedding", 0),)),
+                           stage_cost_rate, "shedding"),), 0),)),
         expressions=expressions,
         horizon=horizon,
     )
@@ -1195,8 +1195,9 @@ def _storage_cost_coordinates(
     prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
     context: StepContext, rate: cp.Expression,
 ) -> tuple[CostCoordinateTerm, ...]:
-    return (CostCoordinateTerm(variables["b"], cp.Constant(_array(prepared, "storage_aging_weight")),
-                               rate, "cycling"),)
+    return (CostCoordinateTerm(rate, (CostCoordinateLeaf(
+        variables["b"], cp.Constant(_array(prepared, "storage_aging_weight")), rate, "cycling"
+    ),)),)
 
 
 def _storage_horizon(
@@ -1294,9 +1295,9 @@ def _storage_vectorized_assembly(
         operating_constraints=operating,
         stage_cost_rate=stage_cost_rate,
         cost_coordinates=(() if context.formulation != "ac" else
-                          (CostCoordinateTerm(power,
+                          (CostCoordinateTerm(stage_cost_rate, (CostCoordinateLeaf(power,
                            cp.Constant(_array(prepared, "storage_aging_weight")[:, np.newaxis]),
-                           stage_cost_rate, "cycling", 0),)),
+                           stage_cost_rate, "cycling"),), 0),)),
         horizon=HorizonContribution(
             constraints=tuple(constraints),
             terminal_cost=terminal_cost,
@@ -1360,14 +1361,6 @@ def _lossy_storage_metadata(
     return dict(prepared)
 
 
-def _require_lossy_base_preparation(context: StepContext | VectorizedContext) -> None:
-    """Reject cost coordinates until affine throughput ownership is supported."""
-    if context.numerical_preparation.cost_coordinates:
-        raise ValueError(
-            "lossy storage does not yet support cost coordinates"
-        )
-
-
 def _lossy_storage_variable_names(formulation: Formulation) -> tuple[str, ...]:
     reactive = ("ls_b_q",) if supports_reactive_power(formulation) else ()
     return ("ls_p_ch", "ls_p_dis", *reactive)
@@ -1378,7 +1371,6 @@ def _lossy_storage_variable_specs(
     prepared: Mapping[str, object],
     context: StepContext,
 ) -> tuple[VariableSpec, ...]:
-    _require_lossy_base_preparation(context)
     shape = (cast(int, prepared["n_ls"]),)
     names = (*_lossy_storage_variable_names(context.formulation), "ls_soc")
     return tuple(VariableSpec(name, shape) for name in names)
@@ -1420,6 +1412,21 @@ def _lossy_storage_step_cost(
     )
 
 
+def _lossy_storage_cost_coordinates(
+    prepared: Mapping[str, object], variables: Mapping[str, cp.Variable],
+    context: StepContext | VectorizedContext, rate: cp.Expression,
+) -> tuple[CostCoordinateTerm, ...]:
+    if context.formulation != "ac":
+        return ()
+    vectorized = isinstance(context, VectorizedContext)
+    weights = _array(prepared, "ls_aging_weight")
+    price = cp.Constant(weights[:, np.newaxis] if vectorized else weights)
+    return (CostCoordinateTerm(rate, tuple(
+        CostCoordinateLeaf(variables[name], price, subtotal, "linear_cycling")
+        for name, subtotal in zip(("ls_p_ch", "ls_p_dis"), rate.args, strict=True)
+    ), 0 if vectorized else None),)
+
+
 def _lossy_storage_horizon_contribution(
     units: Sequence[StorageUnitLossy],
     constraints: Sequence[cp.Constraint],
@@ -1457,7 +1464,6 @@ def _lossy_storage_vectorized_variable_specs(
     prepared: Mapping[str, object],
     context: VectorizedContext,
 ) -> tuple[HorizonVariableSpec, ...]:
-    _require_lossy_base_preparation(context)
     n_ls = cast(int, prepared["n_ls"])
     return (
         *(HorizonVariableSpec(name, (n_ls,))
@@ -1478,6 +1484,7 @@ def _lossy_storage_vectorized_assembly(
     constraints = storage_lossy.vectorized_coupling_constraints(
         list(units), p_ch, p_dis, soc, context.delta
     )
+    rate = storage_lossy.throughput_cost_rate(list(units), p_ch, p_dis)
     return VectorizedModelContribution(
         injection=InjectionContribution(*storage_lossy.injections(
             p_ch, p_dis, b_q, _array(prepared, "Cls")
@@ -1486,7 +1493,8 @@ def _lossy_storage_vectorized_assembly(
             list(units), p_ch, p_dis, soc[:, 1:], b_q,
             **_capability_options(context),
         )),
-        stage_cost_rate=storage_lossy.throughput_cost_rate(list(units), p_ch, p_dis),
+        stage_cost_rate=rate,
+        cost_coordinates=_lossy_storage_cost_coordinates(prepared, variables, context, rate),
         horizon=_lossy_storage_horizon_contribution(units, constraints, soc[:, -1]),
     )
 
@@ -1497,6 +1505,7 @@ LOSSY_STORAGE_ACTIVE = FormulationAdapter[StorageUnitLossy](
     injections=_lossy_storage_injections,
     operating_constraints=_lossy_storage_operating_constraints,
     step_cost=_lossy_storage_step_cost,
+    cost_coordinates=_lossy_storage_cost_coordinates,
     horizon=_lossy_storage_horizon,
     vectorized_variable_specs=_lossy_storage_vectorized_variable_specs,
     vectorized_assembly=_lossy_storage_vectorized_assembly,

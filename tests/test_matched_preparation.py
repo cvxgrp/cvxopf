@@ -61,7 +61,7 @@ def analytic_record(treatment, *, excess=.01, delta=1.):
                           for v in data["problem"].variables()],
             variable_scale=np.ones(mapping.free.size).tolist(), row_scale=np.ones(mapping.kept.size).tolist(),
             checks=dict(objective_assembly="component_first", cost_coordinate_maps=[
-                dict(kind=b.term.kind, scale=b.scale.tolist(), physical_start=b.physical_start.tolist()) for b in bindings]))
+                dict(kind=b.coordinate.kind, scale=b.scale.tolist(), physical_start=b.physical_start.tolist()) for b in bindings]))
     record = dict(start=start, native=native, preparation=preparation,
                   handoff=dict(complete_x0=start["complete_x0"], layout=start["layout"]), exception=None)
     restored, slack, error = a.restore_ac(build_opf_multistep(**kwargs), record)

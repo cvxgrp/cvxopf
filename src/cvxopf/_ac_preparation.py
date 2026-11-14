@@ -301,7 +301,7 @@ def solve_prepared_ac(build: Any, kwargs: dict[str, Any]) -> None:
             if solver_build is not build:
                 clear_prepared_result(build, clear_variables=False)
             for binding in bindings:
-                binding.term.variable.save_value(None)
+                binding.coordinate.variable.save_value(None)
         run = _solve_ac_with_verified_x0(solver_build, None,
                 solver_options=dict(options, verbose=verbose), smooth_reduction=reduction)
         build._preparation_evidence = solver_build.preparation_evidence

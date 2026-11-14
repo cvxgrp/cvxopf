@@ -56,7 +56,7 @@ def construct(trial, data, prepared):
     row = dict(row, trial=trial, diagnostic_objective='constant_zero',
                raw_start_sha256=transfer.object_hash(raw),
                assigned_start_sha256=transfer.object_hash(assigned),
-               coordinate_maps=serializable([dict(kind=b.term.kind, shape=b.leaf.shape,
+               coordinate_maps=serializable([dict(kind=b.coordinate.kind, shape=b.leaf.shape,
                                                  scale=b.scale) for b in bindings]))
     return physical, solver, bindings, kwargs, schedule, raw, assigned, serializable(row)
 
@@ -145,7 +145,7 @@ def assess(view, evidence, captured):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order='F'))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     # The economic Problem stays unsolved. This scalar is accounting, not a
     # solver objective, and status does not assert economic optimality.
     if physical.prob.status is not None:

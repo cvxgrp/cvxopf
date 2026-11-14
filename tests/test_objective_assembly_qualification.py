@@ -101,7 +101,7 @@ def test_ac_restoration_and_accounting_replay(portable, monkeypatch, assembly):
     adjusted[mapping.fixed] = mapping.values
     value, _ = canonical_objective(data, inverse, adjusted)
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     view.solver.prob._status, view.solver.prob._value = cp.OPTIMAL, float(view.physical.prob.objective.value)
     published = serializable(extract_results(view.solver))
     native = serializable(dict(status=0, obj_val=value, x=adjusted[mapping.free]))

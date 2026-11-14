@@ -105,7 +105,7 @@ def assess(arm, native, evidence, published):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value / binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     result = serializable(extract_results(build))
     publication = publication_check(result, published)
@@ -114,8 +114,8 @@ def assess(arm, native, evidence, published):
     costs = common["costs"]
     weights = (np.ones(auxiliary.shape) if bindings else
                kwargs["delta"] * np.asarray(build.data["storage_aging_weight"])[:, None])
-    cycling = next((binding for binding in bindings if binding.term.kind == "cycling"), None)
-    shedding_binding = next((binding for binding in bindings if binding.term.kind == "shedding"), None)
+    cycling = next((binding for binding in bindings if binding.coordinate.kind == "cycling"), None)
+    shedding_binding = next((binding for binding in bindings if binding.coordinate.kind == "shedding"), None)
     battery = cycling.leaf.value if cycling is not None else build.variables["b"].value
     slack = weights * (auxiliary.value - abs(battery))
     shedding = (float(np.sum(shedding_binding.leaf.value)) if shedding_binding is not None else

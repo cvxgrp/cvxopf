@@ -10,7 +10,7 @@ import pytest
 from cvxopf import (NumericalPreparation, OPFOptions, OPFBuild, StorageUnitIdeal,
                     HVDCLink, build_opf, build_opf_multistep, extract_results,
                     gen_from_matpower, CostAccuracyWarning)
-from cvxopf._cost_coordinates import (CostCoordinateTerm, ObjectiveCostContribution,
+from cvxopf._cost_coordinates import (CostCoordinateLeaf, CostCoordinateTerm, ObjectiveCostContribution,
                                      transform_cost_coordinates)
 from cvxopf._numerical_preparation import reject_hierarchical_preparation
 from cvxopf.testcases import case9, case14, case57
@@ -103,7 +103,9 @@ def test_production_matches_successful_experimental_representation():
 
 @pytest.mark.parametrize("delta", [.25, 1., 2.])
 @pytest.mark.parametrize("pwl", [False, True])
-def test_complete_costs_integrated_once_with_hvdc_and_terminal(delta, pwl):
+@pytest.mark.parametrize("lossy", [False, True])
+def test_complete_costs_integrated_once_with_hvdc_and_terminal(delta, pwl, lossy):
+    from tests.test_preparation_bridges import _lossy_units
     case = case9_pwl() if pwl else case9()
     generators = gen_from_matpower(case["gen"], case["gencost"])
     if not pwl:
@@ -113,6 +115,7 @@ def test_complete_costs_integrated_once_with_hvdc_and_terminal(delta, pwl):
                StorageUnitIdeal(6, 10., 40., 20., aging_weight=0.)]
     loads = [replace(load, shedding_cost_per_mwh=5000.) for load in loads_from_matpower(case["bus"])]
     build = build_opf_multistep(case, T=2, loads=loads, generators=generators, storage=storage,
+            lossy_storage=_lossy_units() if lossy else None,
             hvdc=[HVDCLink(5, 7, -5., 0., cost_coeffs=(3., .1, .01))], delta=delta,
             options=OPFOptions(numerical_preparation=POLICY))
     for value in (.1, .3):
@@ -136,15 +139,15 @@ def test_parameter_weights_cross_zero_and_maps_rebuild_without_priced_zero_epigr
     w = cp.Parameter((2, 1), nonneg=True, value=np.array([[.01], [.03]]))
     v = cp.Parameter((2, 1), nonneg=True, value=np.array([[1000.], [2000.]]))
     rates = [cp.sum(cp.multiply(w, cp.abs(b)), axis=0), cp.sum(cp.multiply(v, shed), axis=0)]
-    terms = (CostCoordinateTerm(b, w, rates[0], "cycling", 0),
-             CostCoordinateTerm(shed, v, rates[1], "shedding", 0))
+    terms = (CostCoordinateTerm(rates[0], (CostCoordinateLeaf(b, w, rates[0], "cycling"),), 0),
+             CostCoordinateTerm(rates[1], (CostCoordinateLeaf(shed, v, rates[1], "shedding"),), 0))
     delta = .25
     objective = delta * cp.sum(rates[0] + rates[1])
     build = OPFBuild(cp.Problem(cp.Minimize(objective), [b + shed <= 10]), {}, {}, "ac", False,
         temporal_assembly="vectorized", _numerical_preparation=POLICY, _cost_coordinate_delta=delta,
         _cost_coordinate_terms=terms, _objective_cost_expression=objective,
         _objective_cost_contributions=tuple(ObjectiveCostContribution(
-            term.kind, term.rate, delta * cp.sum(term.rate), None, (term,)) for term in terms))
+            term.leaves[0].kind, term.rate, delta * cp.sum(term.rate), None, (term,)) for term in terms))
     for weights in ([[.01], [.03]], [[0.], [.03]], [[0.], [0.]], [[.02], [.03]]):
         w.value = np.asarray(weights)
         v.value = np.asarray(weights) * 1000.
@@ -183,8 +186,8 @@ def test_repeated_public_solves_resnapshot_parameters_crossing_zero():
     v = cp.Parameter((2, 1), nonneg=True, value=np.array([[1000.], [2000.]]))
     generator_rate = cp.sum(cp.square(g), axis=0)
     rates = (cp.sum(cp.multiply(w, cp.abs(b)), axis=0), cp.sum(cp.multiply(v, shed), axis=0))
-    terms = (CostCoordinateTerm(b, w, rates[0], "cycling", 0),
-             CostCoordinateTerm(shed, v, rates[1], "shedding", 0))
+    terms = (CostCoordinateTerm(rates[0], (CostCoordinateLeaf(b, w, rates[0], "cycling"),), 0),
+             CostCoordinateTerm(rates[1], (CostCoordinateLeaf(shed, v, rates[1], "shedding"),), 0))
     delta = .25
     objective = delta * cp.sum(generator_rate + rates[0] + rates[1])
     graph = cp.Problem(cp.Minimize(objective), [b + shed + g == 5, b >= -1, b <= 1,
@@ -193,7 +196,7 @@ def test_repeated_public_solves_resnapshot_parameters_crossing_zero():
         _numerical_preparation=POLICY, _cost_coordinate_delta=delta, _cost_coordinate_terms=terms,
         _objective_cost_expression=objective, _objective_cost_contributions=(
             ObjectiveCostContribution("generation", generator_rate, delta * cp.sum(generator_rate), None),
-            *(ObjectiveCostContribution(term.kind, term.rate, delta * cp.sum(term.rate), None, (term,))
+            *(ObjectiveCostContribution(term.leaves[0].kind, term.rate, delta * cp.sum(term.rate), None, (term,))
               for term in terms)))
     parameters = tuple(id(p) for p in graph.parameters())
     for weights in ([[.01], [.03]], [[0.], [.03]], [[0.], [0.]], [[.02], [.03]]):
@@ -205,7 +208,8 @@ def test_repeated_public_solves_resnapshot_parameters_crossing_zero():
         assert graph.status == "optimal"
         assert build.prob is graph and tuple(id(p) for p in graph.parameters()) == parameters
         for term, record in zip(terms, build.preparation_evidence.checks["cost_coordinate_maps"], strict=True):
-            expected = np.broadcast_to(delta * term.weights.value, term.variable.shape)
+            leaf = term.leaves[0]
+            expected = np.broadcast_to(delta * leaf.weights.value, leaf.variable.shape)
             np.testing.assert_array_equal(record["scale"], np.where(expected > 0, expected, 1.))
         assert build.preparation_evidence.checks["objective_assembly"] == "component_first"
         assert not build.preparation_evidence.checks["cost_accounting"]["accounting_warning"]

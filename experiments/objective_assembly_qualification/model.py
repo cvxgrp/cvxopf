@@ -148,14 +148,14 @@ def assess_ac(arm, native, evidence, published):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(view.physical.prob.objective.value)
     result = serializable(extract_results(build))
     publication = ac_audit.publication_check(result, published)
     named = {k: float(v.value) for k, v in build.expressions.items() if k.endswith("_cost")}
     common, _ = physical_audit(build, result, kwargs, named)
-    cycling = next(b for b in bindings if b.term.kind == "cycling")
-    shedding = next(b for b in bindings if b.term.kind == "shedding")
+    cycling = next(b for b in bindings if b.coordinate.kind == "cycling")
+    shedding = next(b for b in bindings if b.coordinate.kind == "shedding")
     economics = ac_audit.economic_checks(native, common["costs"], auxiliary.value-abs(cycling.leaf.value),
         abs(rebuilt-native["obj_val"]), float(np.sum(shedding.leaf.value)))
     structure = transformation_check(call, kwargs, evidence, dict(complete_x0=evidence["assigned_x0"],

@@ -178,7 +178,7 @@ def test_analytic_ac_native_restoration_and_mapping_corruption(assembly):
         start_layout=layout, assigned_x0=data["x0"], adjusted_x0=np.where(
             np.isin(np.arange(mapping.full_size), mapping.fixed), full, data["x0"]),
         reduced_x0=data["x0"][mapping.free], variable_scale=np.ones(mapping.free.size), row_scale=np.ones(mapping.kept.size),
-        checks=dict(objective_assembly=assembly, cost_coordinate_maps=[dict(kind=b.term.kind,
+        checks=dict(objective_assembly=assembly, cost_coordinate_maps=[dict(kind=b.coordinate.kind,
             solver_variable_id=b.leaf.id, scale=b.scale, physical_start=b.physical_start) for b in bindings])))
     start = dict(assigned_start=serializable(assigned))
     captured = model.prepared_start(build, 0)

@@ -159,7 +159,7 @@ def test_canonical_pin_survives_cost_coordinate_transformation():
     build, _, _, _ = m.transfer_build(kwargs(), source)
     captured = e3_prepared.prepared_start(build, 1)
     _, solver, bindings, _, _, _, _ = ac_canonical(build)
-    cycling = next(binding for binding in bindings if binding.term.kind == "cycling")
+    cycling = next(binding for binding in bindings if binding.coordinate.kind == "cycling")
     cycling.leaf.save_value(cycling.scale * source.T)
     assert np.max(solver.prob.constraints[-1].violation()) == 0.0
     cycling.leaf.save_value(cycling.scale * (source.T + 0.1))
@@ -187,7 +187,7 @@ def test_successful_native_replay_restores_pins_and_detects_tampering(monkeypatc
                 objective_assembly="component_first",
                 cost_coordinate_maps=[
                     dict(
-                        kind=b.term.kind,
+                        kind=b.coordinate.kind,
                         scale=b.scale,
                         physical_start=b.physical_start,
                         solver_variable_id=b.leaf.id,

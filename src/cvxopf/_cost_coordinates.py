@@ -2,7 +2,7 @@
 
 Component adapters declare the exact stage-rate expression and its linear or
 absolute-value weights. The solve-local transformation uses ``y = delta*w*x``
-where the weight is positive, and identity coordinates where it is zero. It
+where the weight is positive, and identity coordinates where it is zero.
 In the default hourly mode it replaces only the declared cost subtree.
 Opt-in component-first assembly rebuilds the solve-local objective from typed,
 complete contributions, in qualified order. Generator, HVDC, terminal and
@@ -48,20 +48,50 @@ class _CyclingAbsolute(cp.abs):
 
 
 @dataclass(frozen=True)
-class CostCoordinateTerm:
-    """Component-owned stage cost and coordinate map, before time integration."""
+class CostCoordinateLeaf:
+    """One physical coordinate and its component-owned cost subtotal."""
 
     variable: cp.Variable
     weights: cp.Expression
     rate: cp.Expression
-    kind: Literal["cycling", "shedding"]
-    interval_axis: int | None = None
+    kind: Literal["cycling", "shedding", "linear_cycling"]
 
     def __post_init__(self) -> None:
-        if self.kind not in ("cycling", "shedding"):
+        if self.kind not in ("cycling", "shedding", "linear_cycling"):
             raise ValueError("unsupported cost-coordinate kind")
         if not self.weights.is_constant() or not self.rate.is_convex():
             raise ValueError("cost weights must be constant and rates DCP-convex")
+        if self.kind != "cycling" and not self.rate.is_affine():
+            raise ValueError("linear cost-coordinate rates must be affine")
+        if {v.id for v in self.rate.variables()} != {self.variable.id}:
+            raise ValueError("cost subtotal must own exactly its declared variable")
+
+
+@dataclass(frozen=True)
+class CostCoordinateTerm:
+    """One complete stage rate, constructed from its ordered leaf subtotals.
+
+    Identity coverage, rather than a numerical sample, prevents partial or
+    overlapping declarations. One-leaf contributions keep their existing graph;
+    multi-leaf contributions explicitly sum the same owned subtotal objects.
+    """
+
+    rate: cp.Expression
+    leaves: tuple[CostCoordinateLeaf, ...]
+    interval_axis: int | None = None
+
+    def __post_init__(self) -> None:
+        from cvxpy.atoms.affine.add_expr import AddExpression
+
+        object.__setattr__(self, "leaves", tuple(self.leaves))
+        if not self.leaves or len({leaf.variable.id for leaf in self.leaves}) != len(self.leaves):
+            raise ValueError("cost-coordinate leaves require unique variable ownership")
+        parts = (self.rate,) if len(self.leaves) == 1 else (
+            tuple(self.rate.args) if isinstance(self.rate, AddExpression) else ()
+        )
+        if ([id(part) for part in parts] != [id(leaf.rate) for leaf in self.leaves]
+                or any(leaf.rate.shape != self.rate.shape for leaf in self.leaves)):
+            raise ValueError("cost coordinates require complete declared subtotal coverage")
 
 
 @dataclass(frozen=True)
@@ -69,6 +99,7 @@ class CoordinateBinding:
     """One solve-local physical/solver pair and its exact declared rate."""
 
     term: CostCoordinateTerm
+    coordinate: CostCoordinateLeaf
     leaf: cp.Variable
     scale: np.ndarray
     rate: cp.Expression
@@ -119,21 +150,23 @@ def component_first_objective(build: OPFBuild, substitutions: Mapping[int, cp.Ex
         raise ValueError("objective no longer matches its typed component assembly")
     if not contributions:
         raise ValueError("component-first objective requires typed component cost contributions")
-    declared = [term for contribution in contributions for term in contribution.coordinates]
-    if [id(term) for term in declared] != [id(binding.term) for binding in bindings]:
+    declared = [(id(term), id(leaf)) for contribution in contributions
+                for term in contribution.coordinates for leaf in term.leaves]
+    if declared != [(id(binding.term), id(binding.coordinate)) for binding in bindings]:
         raise ValueError("component-first coordinate contribution coverage differs")
     parts = [contribution.integrated_stage.tree_copy(substitutions)
              for contribution in contributions
              if contribution.integrated_stage is not None and not contribution.coordinates]
-    for kind in ("cycling", "shedding"):
+    for kinds in (("cycling", "linear_cycling"), ("shedding",)):
         for binding in bindings:
-            if binding.term.kind != kind:
+            coordinate = binding.coordinate
+            if coordinate.kind not in kinds:
                 continue
-            if kind == "cycling":
+            if coordinate.kind == "cycling":
                 if binding.absolute is not None:
                     parts.append(cp.sum(binding.absolute))
             else:
-                active = np.broadcast_to(np.asarray(binding.term.weights.value) > 0, binding.leaf.shape)
+                active = np.broadcast_to(np.asarray(coordinate.weights.value) > 0, binding.leaf.shape)
                 parts.append(cp.sum(binding.leaf) if active.all()
                              else cp.sum(cp.multiply(active.astype(float), binding.leaf)))
     parts.extend(contribution.terminal.tree_copy(substitutions)
@@ -153,48 +186,63 @@ def collect_cost_terms(
                  for term in contribution.cost_coordinates)
 
 
+def _coordinate_binding(term: CostCoordinateTerm, coordinate: CostCoordinateLeaf,
+                        index: int, delta: float) -> CoordinateBinding:
+    """Snapshot and map one leaf; rate ownership remains with its term."""
+    weights = np.broadcast_to(np.asarray(coordinate.weights.value, float), coordinate.variable.shape)
+    if not np.isfinite(weights).all() or np.any(weights < 0):
+        raise ValueError("cost-coordinate weights must be finite and nonnegative")
+    if coordinate.kind == "linear_cycling" and np.any(weights <= 0):
+        raise ValueError("linear throughput weights must be strictly positive")
+    scale = np.where(weights > 0, delta * weights, 1.)
+    if not np.isfinite(scale).all() or np.any(scale <= 0):
+        raise ValueError("invalid cost-coordinate scale")
+    leaf = cp.Variable(coordinate.variable.shape, name=f"cost_coordinate_{index}")
+    leaf.save_value(np.asarray(coordinate.variable.value) * scale)
+    active = weights > 0
+    absolute = None
+    if coordinate.kind == "cycling":
+        # Only positive-weight entries have an epigraph. Reassemble by time
+        # for vectorized rates, retaining zero-weight physical coordinates.
+        value = _CyclingAbsolute(leaf, index)
+        if active.all():
+            absolute = value
+            weighted = cp.multiply(weights / scale, absolute)
+        else:
+            from scipy import sparse
+            indices = np.flatnonzero(active.ravel(order="F"))
+            if indices.size:
+                absolute = _CyclingAbsolute(cp.reshape(leaf, (leaf.size,), order="F")[indices], index)
+                scatter = sparse.csc_matrix((np.ones(indices.size), (indices, np.arange(indices.size))),
+                                            shape=(leaf.size, indices.size))
+                value = cp.reshape(scatter @ absolute, leaf.shape, order="F")
+                weighted = cp.multiply(weights / scale, value)
+            else:
+                weighted = 0. * leaf
+    else:
+        weighted = cp.multiply(coordinate.weights / scale, leaf)
+    rate = cp.sum(weighted, axis=term.interval_axis)
+    return CoordinateBinding(term, coordinate, leaf, scale.copy(), rate, absolute,
+                             np.asarray(coordinate.variable.value).copy())
+
+
 def transform_cost_coordinates(build: OPFBuild) -> tuple[OPFBuild, tuple[CoordinateBinding, ...]]:
     """Construct an ephemeral solve graph; leave the owner's graph unchanged."""
+    terms = build._cost_coordinate_terms
+    variables = [leaf.variable.id for term in terms for leaf in term.leaves]
+    if (len(set(variables)) != len(variables)
+            or len({id(term.rate) for term in terms}) != len(terms)):
+        raise ValueError("overlapping cost-coordinate ownership")
     substitutions: dict[int, cp.Expression] = {}
     bindings = []
-    for index, term in enumerate(build._cost_coordinate_terms):
-        weights = np.broadcast_to(np.asarray(term.weights.value, float), term.variable.shape)
-        if not np.isfinite(weights).all() or np.any(weights < 0):
-            raise ValueError("cost-coordinate weights must be finite and nonnegative")
-        scale = np.where(weights > 0, build._cost_coordinate_delta * weights, 1.)
-        if not np.isfinite(scale).all() or np.any(scale <= 0):
-            raise ValueError("invalid cost-coordinate scale")
-        leaf = cp.Variable(term.variable.shape, name=f"cost_coordinate_{index}")
-        leaf.save_value(np.asarray(term.variable.value) * scale)
-        physical = cp.multiply(1. / scale, leaf)
-        substitutions[id(term.variable)] = physical
-        active = weights > 0
-        absolute = None
-        if term.kind == "cycling":
-            # Only positive-weight entries have an epigraph. Reassemble by time
-            # for vectorized rates, retaining zero-weight physical coordinates.
-            value = _CyclingAbsolute(leaf, index)
-            if active.all():
-                absolute = value
-                weighted = cp.multiply(weights / scale, absolute)
-            else:
-                # Scatter active absolute values back to the original layout.
-                from scipy import sparse
-                indices = np.flatnonzero(active.ravel(order="F"))
-                if indices.size:
-                    absolute = _CyclingAbsolute(cp.reshape(leaf, (leaf.size,), order="F")[indices], index)
-                    scatter = sparse.csc_matrix((np.ones(indices.size), (indices, np.arange(indices.size))),
-                                                shape=(leaf.size, indices.size))
-                    value = cp.reshape(scatter @ absolute, leaf.shape, order="F")
-                    weighted = cp.multiply(weights / scale, value)
-                else:
-                    weighted = 0. * leaf
-        else:
-            weighted = cp.multiply(term.weights / scale, leaf)
-        rate = cp.sum(weighted, axis=term.interval_axis)
-        substitutions[id(term.rate)] = rate
-        bindings.append(CoordinateBinding(term, leaf, scale.copy(), rate, absolute,
-                                          np.asarray(term.variable.value).copy()))
+    for term in terms:
+        rates = []
+        for coordinate in term.leaves:
+            binding = _coordinate_binding(term, coordinate, len(bindings), build._cost_coordinate_delta)
+            substitutions[id(coordinate.variable)] = cp.multiply(1. / binding.scale, binding.leaf)
+            bindings.append(binding)
+            rates.append(binding.rate)
+        substitutions[id(term.rate)] = sum(rates[1:], start=rates[0])
     component_first = build.numerical_preparation.objective_assembly == "component_first"
     if not bindings and not component_first:
         return build, ()
@@ -204,7 +252,7 @@ def transform_cost_coordinates(build: OPFBuild) -> tuple[OPFBuild, tuple[Coordin
                          [constraint.tree_copy(substitutions) for constraint in build.prob.constraints])
     if {c.id for c in problem.constraints} != {c.id for c in build.prob.constraints}:
         raise RuntimeError("cost-coordinate transformation changed constraint identity")
-    replaced = {binding.term.variable.id for binding in bindings}
+    replaced = {binding.coordinate.variable.id for binding in bindings}
     if replaced & {variable.id for variable in problem.variables()}:
         raise RuntimeError("cost-coordinate substitution left a physical leaf in the solve graph")
     return replace(build, prob=problem), tuple(bindings)
@@ -240,7 +288,7 @@ def retain_coordinate_maps(build: OPFBuild, bindings: tuple[CoordinateBinding, .
     """Retain start/scaling provenance even when the native solve failed."""
     evidence = build.preparation_evidence
     if evidence is not None and bindings:
-        maps = tuple(dict(kind=binding.term.kind, physical_variable_id=binding.term.variable.id,
+        maps = tuple(dict(kind=binding.coordinate.kind, physical_variable_id=binding.coordinate.variable.id,
                           solver_variable_id=binding.leaf.id, scale=binding.scale,
                           physical_start=binding.physical_start)
                      for binding in bindings)
@@ -254,7 +302,7 @@ def restore_cost_coordinates(build: OPFBuild, solver_build: OPFBuild,
         value = binding.leaf.value
         if value is None or not np.isfinite(value).all():
             raise ValueError("unavailable cost-coordinate primal")
-        binding.term.variable.save_value(np.asarray(value) / binding.scale)
+        binding.coordinate.variable.save_value(np.asarray(value) / binding.scale)
     # IPOPT publishes primal/status/objective, not constraint duals. Preserve
     # the stock result contract without asking it to invert another graph.
     build.prob._status = solver_build.prob.status
@@ -267,8 +315,8 @@ def restore_cost_coordinates(build: OPFBuild, solver_build: OPFBuild,
     build.prob._solver_stats = solver_build.prob.solver_stats
     physical = float(build.prob.objective.value)
     native = float(build.preparation_evidence.native["obj_val"])
-    cycling = sum(build._cost_coordinate_delta * float(np.sum(binding.term.rate.value))
-                  for binding in bindings if binding.term.kind == "cycling")
+    cycling = sum(build._cost_coordinate_delta * float(np.sum(binding.coordinate.rate.value))
+                  for binding in bindings if binding.coordinate.kind == "cycling")
     slack = []
     full = build.preparation_evidence.coordinates.expand(build.preparation_evidence.native["x"])
     layout = {item[0]: (item[2], item[3]) for item in build.preparation_evidence.start_layout}
@@ -290,6 +338,15 @@ def restore_cost_coordinates(build: OPFBuild, solver_build: OPFBuild,
                   cycling_warning=slack_l1 > limit,
                   unexplained_objective_difference=unexplained, objective_limit=total_limit,
                   accounting_warning=abs(unexplained) > total_limit)
+    linear = [binding for binding in bindings if binding.coordinate.kind == "linear_cycling"]
+    if linear:
+        record.update(
+            linear_throughput_physical_cost=sum(
+                build._cost_coordinate_delta * float(np.sum(binding.coordinate.rate.value))
+                for binding in linear
+            ),
+            linear_throughput_epigraph_excess=0.,
+        )
     if not all(np.isfinite(value) for value in record.values()):
         raise ValueError("nonfinite cost-coordinate accounting")
     evidence = build.preparation_evidence
