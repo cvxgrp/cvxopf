@@ -38,6 +38,7 @@ EXAMPLE_GROUPS = {
     "Formulation Comparisons": [
         "case14_ac_vs_dc.py",
         "case14_formulation_comparison.py",
+        "wecc240_single_step.py",
     ],
     "Multistep Problems": [
         "case9_multistep_flat_load.py",
