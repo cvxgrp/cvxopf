@@ -4,7 +4,10 @@
 **Script:** `_ex12_cplus_solve.py` → `results/ex12_cplus.txt`
 **Probes:** `_ex12_probe_locate.py` (constraint locator), `_ex12_probe_cost.py`
 and `_ex12_probe_c4.py` (readout validation)
-**Status:** SOLID. QED fires.
+**Status:** superseded. The historical C+ point injected +2 MW at bus 7,
+outside the documented PYPOWER range of −10 to −2 MW. The old feasibility
+and solver-advantage claims are withdrawn; the original record follows.
+See the [repair plan](../../plans/dcline-import-and-case9-comparison.md).
 
 ## Result
 

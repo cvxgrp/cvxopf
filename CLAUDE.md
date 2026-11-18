@@ -260,6 +260,16 @@ regularization. See
   (`cost_coeffs`, `cp.square`/`cp.abs`); zero-cost when `cost_coeffs` is zero.
 - HVDC terms absent when `hvdc=None`
 
+The `hvdc_from_dcline` importer negates external MW sent (`PF`) to get
+the native from-bus injection. Forward boxes become `[-PMAX, -PMIN]`;
+lossless reverse and two-way boxes use the same mapping because `PT = PF`.
+Reject reverse/two-way imports with losses and signed costs that cannot be
+represented by the native magnitude polynomial. Report omitted fixed loss,
+terminal reactive settings and converter voltage setpoints by source row.
+Native `HVDCLink` inputs and reported injection signs are unchanged. The
+[dcline repair plan](plans/dcline-import-and-case9-comparison.md) supersedes
+the old Case9 HVDC cost-gap interpretation; it is not a current solver ranking.
+
 | Formulation | Result keys |
 |---|---|
 | AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`, `branch_p_from`, `branch_q_from`, `branch_p_to`, `branch_q_to`, `branch_s_from`, `branch_s_to`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |

@@ -838,18 +838,41 @@ print(f"Curtailment (MW):     {results['curtailment']}")
 
 ## HVDC transmission link example
 
-HVDC links transfer controllable amounts of power between two buses, subject
-to capacity limits. Powers are signed nodal injections: positive means power
-entering the grid at that bus. On fixed-direction links the converter loss is
-proportional. Negative `p_in` sends power
-from the from-bus and gives `p_out = -(1 - loss_frac) * p_in`; positive `p_in`
-receives power at the from-bus and gives
-`p_out = -p_in / (1 - loss_frac)`. Links can be built
-directly as `HVDCLink` objects or imported from a MATPOWER `dcline` table via
-`hvdc_from_dcline`. The current model uses unity power factor and ignores fixed
-converter loss (`loss0`, emitting a `UserWarning`). It applies to AC, SOCP and
-lossy DC. HVDC has no effect in single-node dispatch because both terminals
-belong to the same aggregated bus.
+HVDC links transfer power between two named buses. The native results
+`p_hvdc_in` and `p_hvdc_out` are **from- and to-bus injections in MW**.
+Positive supplies the bus; negative draws power from it. For a fixed-direction
+link with loss fraction `loss_frac`, forward flow gives
+`p_out = -(1 - loss_frac) * p_in`; reverse flow gives
+`p_out = -p_in / (1 - loss_frac)`. Reported loss is `-(p_in + p_out)`.
+Native bounds, including time-series overrides, constrain the from-bus
+injection. A native box spanning both directions uses lossless coupling.
+
+Give `hvdc_from_dcline` the original MATPOWER/PYPOWER table. In that table,
+positive `PF` means MW **sent** from the from bus, so `p_in = -PF`. For
+forward-only rows the bounds become `[-PMAX, -PMIN]`. For example, sending
+10 MW from bus 5 to bus 9 with 5% loss gives injections of **−10 MW at bus
+5** and **+9.5 MW at bus 9**, for a 0.5 MW loss. The table's `PF` and
+`PT` values do not pin the dispatch. If you previously negated the table
+bounds by hand to compensate for the importer, remove that workaround.
+Directly constructed `HVDCLink` objects are unchanged.
+
+Lossless reverse and two-way rows are also supported: PYPOWER applies negative
+limits to `PT`, which equals `PF` when lossless. Reverse and two-way rows
+with nonzero losses are rejected because PYPOWER's signed loss law does not
+match the native passive model. Optional `dclinecost` rows must be
+`MODEL=2` polynomials of degree at most two in signed `PF`, and must agree
+with the native magnitude cost on the allowed interval. For example, a
+two-way link cannot use a nonzero signed linear coefficient. A zero-pinned
+row uses the forward cost convention and retains its coefficients, even if
+the link is reopened later. Time-series overrides use the imported native
+magnitude cost in either direction.
+
+The import assumes unity power factor and does not model fixed converter
+loss (`LOSS0`), reactive power or converter voltage control. Import warnings
+identify the affected rows and omitted terms. For instance, at 10 MW sent
+on Case9's 30 → 4 link, the native import delivers 9.9 MW rather than the
+table model's 8.9 MW. The link model applies to AC, SOCP and lossy DC, and
+has no effect in single-node dispatch.
 
 ```python
 from cvxopf.testcases.case9_dcline import case9_dcline
@@ -864,8 +887,8 @@ build = build_opf(ppc, formulation="ac", hvdc=links)
 build.solve()
 results = extract_results(build)
 print(f"Objective:          {results['objective']:.2f}")
-print(f"HVDC in  (MW):      {results['p_hvdc_in']}")
-print(f"HVDC out (MW):      {results['p_hvdc_out']}")
+print(f"From-bus injection (MW): {results['p_hvdc_in']}")
+print(f"To-bus injection   (MW): {results['p_hvdc_out']}")
 print(f"HVDC loss (MW):     {results['hvdc_loss']}")
 ```
 

@@ -14,7 +14,7 @@ problem and initialization. Their file requirements differ.
 
 | Example | Availability and additional requirements |
 |---|---|
-| [DNLP versus Pypower](dnlp_vs_pypower/README.md) | Toy problem and reference results are tracked; new solves require the documented software and native solvers. |
+| [DNLP versus Pypower](dnlp_vs_pypower/README.md) | Historical nine-bus comparison; the HVDC conclusions are superseded. Reference results are retained. |
 | [Battery terminal policies](battery_terminal/README.md) | Requires the owner-provided, ignored `battery_terminal/data/9q9wtp_gen_and_load.csv`. |
 | [M17 hierarchical battery resilience](hierarchical_battery_resilience/README.md) | Prepared Tracy-derived scenario inputs are tracked. Running that frozen scenario does not require the original raw CSV; reproducing historical comparisons also requires the referenced local result archives. |
 | [Case118 annual hierarchy](case118_annual_hierarchy/RESULT_LOCATIONS.md) | Network source and deterministic synthetic-profile generation are tracked. This annual scenario is **not Tracy-derived**. Historical analysis and downstream replays require retained outer plans, signposts, and execution records. |

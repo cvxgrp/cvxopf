@@ -310,3 +310,24 @@ parity or a failed callback stops the study before any benchmark solve.
   suite pass, and an independent reader can reproduce the signed transfers
   and paired verdicts from the retained inputs and outputs. Full M15 converter
   support, broad AC formulation changes, and other studies are outside scope.
+
+## 6. Historical claim inventory
+
+The importer checkpoint marks the old comparison README, report and demo,
+and the EX12 report and handoff, as superseded. It leaves reference inputs,
+outputs and solver artifacts untouched. Other tracked sources carrying the
+old interpretation, for owner disposition:
+
+- [Milestone 7](milestone-7-hvdc.md) (historical closeout, Gate 6b and capstone)
+  and the [full lossy HVDC plan](milestone-15-full-lossy-hvdc.md) (historical
+  motivation).
+- [Repository research notes](../memories/MEMORY.md), especially the
+  [case9 gap](../memories/case9-dcline-optima-gap.md),
+  [DNLP tractability](../memories/dnlp-canonicalization-tractability-thesis.md)
+  and [HVDC status](../memories/milestone-7-hvdc-status.md) entries.
+- The remaining [cross-evaluation probes](../experiments/dcline_crosseval/)
+  describe the earlier models and must not be read as a matched rerun.
+
+No other manuscript or presentation carrying the specific headline claim was
+identified in the tracked source search. Copies distributed outside the
+repository were not checked and need separate owner disposition.
