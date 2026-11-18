@@ -5,22 +5,38 @@
 work; it does not authorize implementation, numerical execution, or changes
 to historical records.
 
-**The scientific question is conditional:** when CVXOPF/IPOPT and PYPOWER/PIPS
-solve the *same physical and economic problem*, do they return comparably
-feasible dispatches and costs? Establishing the premise is the first result.
-A different numerical answer is neither required nor, by itself, evidence
-about the solver. Here “DC line” means a controllable HVDC device in an **AC**
-network, not a DC approximation to the network.
+**CVXOPF allows power to flow either way; the nine-bus case allows only one
+direction on each link.** Our “from” and “to” labels name the two ends of an
+HVDC line in the AC network. The power bounds determine whether the link can
+send power forward, in reverse, or both ways. When the bounds allow both ways,
+the current native model treats the link as lossless.
 
-## 1. What failed, and what remains valid
+The [case file](../src/cvxopf/testcases/case9_dcline.py) specifies three
+in-service links: **30 → 4 (1–10 MW), 7 → 9 (2–10 MW), and 5 → 9 (0–10 MW)**.
+It prescribes the allowed direction and range, not a fixed dispatch. The
+optimizer chooses how much to send within each range.
 
-In the [case definition](../src/cvxopf/testcases/case9_dcline.py), the lossless
-link from bus 7 to bus 9 must send 2–10 MW. The [PYPOWER fixture
-builder](../scripts/generate_pypower_fixtures.py) makes its from-terminal
-generator withdraw 2–10 MW at bus 7. The [CVXOPF importer](../src/cvxopf/hvdc.py)
-copied those same positive bounds onto the *injection* at bus 7. The two
-physical ranges are disjoint. Even the sign of an endpoint with **no loss at
-all** was different.
+**The importer reversed all three directions.** Take the lossless 7 → 9 link.
+In [PYPOWER](../scripts/generate_pypower_fixtures.py), bus 7 sends 2–10 MW and
+bus 9 receives it. In CVXOPF, positive terminal power means the link supplies
+the bus. By copying the positive bounds directly, the
+[importer](../src/cvxopf/hvdc.py) made bus 7 *receive* 2–10 MW from bus 9.
+The fix is to translate the case bounds at import, keeping CVXOPF's
+production/consumption convention unchanged.
+
+**The historical model also turned a loss into a gain.** On the 5% loss link
+between buses 5 and 9, the [archived CVXOPF dispatch](../experiments/dcline_crosseval/results/cstar_full.json)
+had bus 9 supply **9.5 MW** and bus 5 receive **10 MW**. The modeled line
+created **0.5 MW**: it delivered more power than it drew. A physical transfer
+in that same reverse direction with 10 MW sent would deliver only 9.5 MW to
+bus 5. The old cost comparison therefore cannot tell us whether reversing
+the links would save money.
+
+## 1. Why the comparison must be repeated
+
+The two solvers were given different physical problems. Before comparing
+dispatch or cost again, we must establish that they enforce the same
+constraints and price the same dispatch identically.
 
 The [historical feasibility check](../experiments/dcline_crosseval/_ex12_cplus_solve.py)
 reused the CVXOPF injection convention, box, and fixed-loss equation to
@@ -29,15 +45,18 @@ at bus 7, outside PYPOWER's permitted range by at least 4 MW. Separately, the
 earlier archived CVXOPF point (`C*`, not the fixed-loss `C+`) had
 angle(9) − angle(4) = −3.773°, below the case's −2° limit; PYPOWER's point
 sat at −2.000°. Removing a thermal rating does not remove an angle limit.
-The later native passive-loss correction (`0c774b70d`) did not repair the
-importer, and the [demo](../experiments/dnlp_vs_pypower/demo.py) replaces the
-native coupling with the historical experimental equation.
+The later fix (`0c774b70d`) corrected the native link's loss equation, but
+not the importer's direction. The [demo](../experiments/dnlp_vs_pypower/demo.py)
+bypasses that fix by replacing the native coupling with the historical equation.
 
 **Disposition:** preserve the existing artifacts as historical evidence.
 Neither the smooth-cost (~1%) nor mixed piecewise-linear-cost (~14%) HVDC gap
-establishes a solver advantage. The standard no-HVDC controls are unaffected
-by this defect. Do not treat the cost of the full, unmodified PYPOWER fixture
-as a reference for a comparison with different limits or converter controls.
+establishes a solver advantage. Withdraw the routing-versus-loss explanation
+as well: the [demo's loss calculation](../experiments/dnlp_vs_pypower/demo.py)
+counted the 5–9 link's 0.5 MW **gain** as a 0.5 MW **loss**. The standard
+no-HVDC controls are unaffected by these defects. Do not treat the cost of the
+full, unmodified PYPOWER fixture as a reference for a comparison with
+different limits or converter controls.
 
 ## 2. Fix the boundary, not CVXOPF's sign convention
 
@@ -52,10 +71,16 @@ the two injections.
 
 **Translate the external record once, at import.** In PYPOWER's `dcline`
 table, `PF` and `PT` are signed *along the declared from-to direction*.
-In MW the reference law and coordinate map are
+The link and converters together withdraw `PF` from the from bus and supply
+`PT` to the to bus, net of all losses. The reference law in MW is
 
     PT = (1 − LOSS1) PF − LOSS0
-    p_in = −PF,    p_out = PT,    loss = PF − PT = −(p_in + p_out).
+    total physical loss = PF − PT.
+
+The native CVXOPF link models proportional loss only. Its from injection is
+`p_in = −PF`; its to injection `p_out` is **gross** of any fixed converter
+withdrawal. With zero fixed loss, `p_out = PT`. With a separate fixed
+withdrawal in the matched study, `PT = p_out − LOSS0`.
 
 For a forward-only row, the from-injection box is therefore
 `[−PMAX, −PMIN]`. For example, sending 10 MW with 5% proportional loss
@@ -143,8 +168,16 @@ This is a named, matched variant, not an unmodified stock-case solve.
 | Branch angle differences | Keep the two complete [PYPOWER angle rows](https://github.com/rwl/PYPOWER/blob/master/pypower/makeAang.py) on **unwrapped radians**: `−2π ≤ θ₁ − θ₄ ≤ 2.48π/180` and `−2π/180 ≤ θ₉ − θ₄ ≤ 2π` (external bus IDs). Once a row is selected, its opposite ±360° endpoint is finite too. Add study-local CVXOPF constraints, leaving production defaults unchanged. Before solving, align angle columns by bus ID and compare both assemblies to these two expected rows: +1 at from, −1 at to, zero elsewhere, **both** lower and upper bounds. Dropping either opposite endpoint must fail the check. |
 | Generator capability | The source defines sloped upper and lower P–Q limits for generators at buses 2 and 30. Enumerate the active [PYPOWER capability rows](https://github.com/rwl/PYPOWER/blob/master/pypower/makeApq.py) as built; impose equivalent study-local rows in CVXOPF using the same MW/MVAr units. Check limits at both defining points and a violating point. Separate P and Q boxes are insufficient. |
 | Converter terms | Same terminal IDs, effective bounds, no link cost, zero terminal Q and no converter voltage control on either side. Preserve any coincident real generator's own Q capability. Match the post-transform effective zero-endpoint bound (the fixture adapter applies a `−1e−6` MW from-dummy maximum on the 5 → 9 link); identify it separately from the user-facing case limit. |
-| Fixed loss | Preserve the source's 1 MW fixed loss on 30 → 4. In the CVXOPF **experiment only**, replace its proportional equality with `p_out = −(1−LOSS1) p_in − LOSS0`, in MW, exactly once. Check the two endpoint examples above. No double counting, no offset in p.u. on an MW variable, and no change to the public warning or production physics. |
+| Fixed loss | Keep the production HVDC proportional-loss equation intact on **all three links**. On the CVXOPF side only, add one fixed, non-sheddable 1 MW real-power withdrawal (0 MVAr) at bus 4 when 30 → 4 is in service. It is absent from no-link cells. PYPOWER already includes this loss in its coupling: add no load there. Attribute the withdrawal to its converter, not to ordinary customer demand. |
 | Cost and time | Same real-generator rows, row order and one-hour interval. Evaluate each polynomial and each PWL segment/kink in MW, including constants, endpoints and epigraph projection. Verify the summed cost on identical dispatches before comparing costs at different dispatches. |
+
+**Pre-solve load check.** [Explicit loads replace the entire MATPOWER load fleet](../docs/modeling.md#first-class-loads-and-explicit-load-shedding).
+For CVXOPF link-enabled cells, pass `loads=[*loads_from_matpower(case["bus"]), converter]`, never `loads=[converter]` alone.
+Before solving each cell, check assembled ordinary demand by external bus: 90 MW / 30 MVAr at bus 5,
+100 MW / 35 MVAr at bus 7, and 125 MW / 50 MVAr at bus 9, zero elsewhere.
+That totals **315 MW / 115 MVAr in every cell**. Only CVXOPF link-enabled cells have the separate
+**1 MW / 0 MVAr at bus 4**, bringing their total explicit demand to 316 MW / 115 MVAr.
+PYPOWER accounts for that withdrawal in the link equation, not as an extra load.
 
 **Proof that the thermal ratings are redundant.** For an in-service branch
 with terminals $f,t$, let $u_f,u_t$ be their voltage-magnitude upper bounds
@@ -198,24 +231,37 @@ redundant. An unexplained difference stops the study.
 ## 4. Qualify the cross-check before trusting a new answer
 
 1. Define an interchange record in engineering units: external IDs; voltage
-   magnitudes and angles; real-generator P and Q; **both** signed terminal
-   injections and external PF/PT; units and reference angle. Keep the two
-   native solutions as well. Project physical coordinates, not solver
-   auxiliaries; reconstruct required target lifts/epigraphs from them.
-2. Implement two independent target evaluators. Given a CVXOPF point, inject
-   it into **PYPOWER's actual built model** (from/to dummy Pg are `p_in` and
-   `p_out`, not their negatives); evaluate native boxes, linear/nonlinear
-   rows and cost without optimizing or allowing slack generation to move.
-   Conversely evaluate the mapped PYPOWER point on the **CVXOPF model's own
-   constraints and objective**. Also check each point in its source model.
-   Confirm the named bus injections and physical loss from raw external rows,
-   independently of the importer, with a hand-calculated oracle. Retain the
-   worst signed residual, units, and offending ID for each constraint family.
+   magnitudes and angles; real-generator P and Q; units and reference angle.
+   For each link keep the native signed injections, the fixed converter
+   withdrawal, the two **net** bus injections, and external PF/PT as distinct
+   fields. Keep both native solutions. Reconstruct target lifts/epigraphs
+   from physical coordinates rather than copying solver auxiliaries.
+2. Check each dispatch in its source model and in the **other implementation's
+   actual built model**, without re-solving or letting slack generation move.
+   CVXOPF → PYPOWER: set from/to dummy Pg to `(p_in, p_out − LOSS0)`.
+   PYPOWER → CVXOPF: assign native `(p_in, p_out) = (−PF, PT + LOSS0)`;
+   leave the fixed withdrawal already in the CVXOPF build in place. Evaluate
+   the target's boxes, linear/nonlinear rows and cost. Retain the worst signed
+   residual, units and offending ID for each constraint family.
+
+   Audit **each link before summing losses**. From the external case row and
+   net terminal readings, check that MW drawn minus MW delivered (`PF − PT`
+   on these forward links) agrees with both `LOSS1 × PF + LOSS0` and the
+   native proportional loss `−(p_in + p_out)` plus the fixed withdrawal.
+   Require nonnegative physical loss within the frozen MW tolerance. Check
+   the named bus balances independently: use either gross delivery minus the
+   withdrawal or net delivery, never both net delivery and a second withdrawal.
+   Before any solve, verify both mappings on 30 → 4 at 10 MW sent (9.9 MW
+   gross, 8.9 MW net, 1.1 MW lost) and at 1 MW sent (0.99 MW gross,
+   **−0.01 MW net**, 1.01 MW lost).
 3. Prove the checks can fail. Feed them reversed terminal signs on 7 → 9,
-   a reversed fixed-loss offset, a violated 9 → 4 angle floor, a violated
-   generator P–Q face, and a changed cost coefficient. Each must fail for
-   the intended reason. Replay archived coordinates where retained: `P*`
-   is a positive control for its historical PYPOWER target; `C*` under the
+   a reversed or double-counted converter withdrawal, a violated 9 → 4 angle
+   floor, a violated generator P–Q face, and a changed cost coefficient. Each must fail for
+   the intended reason. For the archived 5–9 link, the loss check alone must
+   reject 9.5 MW drawn and 10 MW delivered (physical loss = −0.5 MW),
+   independently of the direction check. A report that calls the archived
+   gain a positive loss must also fail. Replay archived coordinates where
+   retained: `P*` is a positive control for its historical PYPOWER target; `C*` under the
    historical forward-flow reading produces a **23 MW** bus-9 discrepancy
    and fails the angle floor. The retained `C+` from-injection alone disproves
    its PYPOWER box claim; do not fabricate a missing full-precision vector.
@@ -243,11 +289,13 @@ parity or a failed callback stops the study before any benchmark solve.
   retries or cross-starts. Retain the clean commit, versions, input/settings
   hashes, native primals, objectives, component costs, residuals and logs in
   a new run directory. A failure remains a result. Additional diagnostics
-  require a separate decision.
+  require a separate decision. Testing deliberately reversed link directions
+  is a different scientific question and is not part of these eight solves.
 - Report the four source/target feasibility evaluations per cell and both
   objective evaluations at each accepted point, then compare costs, dispatch,
-  physical line directions and losses. If parity or cross-feasibility fails,
-  report the offending constraint and **no solver ranking**. If both pass
+  physical line directions and losses. If parity, cross-feasibility or any
+  per-link loss audit fails, report the offending row and residual: **no solver
+  ranking, aggregate loss breakdown, or routing explanation**. If all pass
   and costs agree within the declared threshold, say so even if routing
   differs. A materially cheaper cross-feasible point supports a better
   observed feasible value to the stated tolerances; it does not prove global
