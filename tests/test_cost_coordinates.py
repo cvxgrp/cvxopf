@@ -142,6 +142,71 @@ def test_complete_rate_contract_rejects_partial_and_overlapping_ownership():
         transform_cost_coordinates(build)
 
 
+class TestCostCoordinateGuards:
+    @pytest.fixture(autouse=True)
+    def forbid_solves(self, monkeypatch):
+        def forbidden(*args, **kwargs):
+            pytest.fail("cost-coordinate validation must not invoke a solver")
+
+        monkeypatch.setattr(OPFBuild, "solve", forbidden)
+        monkeypatch.setattr(cp.Problem, "solve", forbidden)
+
+    @pytest.mark.parametrize("invalid, message", [
+        ("kind", "unsupported cost-coordinate kind"),
+        ("variable_weights", "cost weights must be constant and rates DCP-convex"),
+        ("concave_rate", "cost weights must be constant and rates DCP-convex"),
+        ("nonlinear_shedding", "linear cost-coordinate rates must be affine"),
+        ("nonlinear_cycling", "linear cost-coordinate rates must be affine"),
+        ("foreign_variable", "cost subtotal must own exactly its declared variable"),
+        ("extra_variable", "cost subtotal must own exactly its declared variable"),
+    ])
+    def test_leaf_rejects_invalid_declarations(self, invalid, message):
+        power, other = cp.Variable(2), cp.Variable(2)
+        weights = cp.Constant([.01, .03])
+        rate = cp.sum(power)
+        kind = "linear_cycling"
+        if invalid == "kind":
+            kind = "unsupported"
+        elif invalid == "variable_weights":
+            weights = cp.Variable(2)
+        elif invalid == "concave_rate":
+            rate = -cp.sum_squares(power)
+        elif invalid in ("nonlinear_shedding", "nonlinear_cycling"):
+            kind = "shedding" if invalid == "nonlinear_shedding" else "linear_cycling"
+            rate = cp.sum_squares(power)
+        elif invalid == "foreign_variable":
+            rate = cp.sum(other)
+        else:
+            rate = cp.sum(power + other)
+
+        with pytest.raises(ValueError, match=message):
+            CostCoordinateLeaf(power, weights, rate, kind)
+
+    @pytest.mark.parametrize("weight, delta, message", [
+        pytest.param(-.01, .25, "weights must be finite and nonnegative", id="negative-weight"),
+        pytest.param(np.nan, .25, "weights must be finite and nonnegative", id="nan-weight"),
+        pytest.param(np.inf, .25, "weights must be finite and nonnegative", id="infinite-weight"),
+        pytest.param(0., .25, "throughput weights must be strictly positive", id="zero-throughput-weight"),
+        pytest.param(1e-300, 1e-300, "invalid cost-coordinate scale", id="scale-underflow"),
+        pytest.param(1e300, 1e300, "invalid cost-coordinate scale", id="scale-overflow"),
+    ])
+    def test_transform_rejects_invalid_weights_and_scales(self, weight, delta, message):
+        power = cp.Variable(2, value=[1., 2.])
+        weights = cp.Constant([weight, .03])
+        rate = cp.sum(cp.multiply(weights, power))
+        term = CostCoordinateTerm(rate, (
+            CostCoordinateLeaf(power, weights, rate, "linear_cycling"),
+        ))
+        build = OPFBuild(cp.Problem(cp.Minimize(delta * rate), []), {"power": power}, {},
+                         "ac", False, _cost_coordinate_terms=(term,), _cost_coordinate_delta=delta)
+        original_start = power.value.copy()
+        # Finite, positive inputs can still overflow or underflow when multiplied.
+        with np.errstate(over="ignore", under="ignore"):
+            with pytest.raises(ValueError, match=message):
+                transform_cost_coordinates(build)
+        np.testing.assert_array_equal(power.value, original_start)
+
+
 def make_build(assembly, components="both", zero=False, pwl=False, lossy=False, T=2, lossy_price=None):
     case = case9_pwl() if pwl else case9()
     kwargs = dict(options=OPFOptions(numerical_preparation=POLICY), delta=.5)
