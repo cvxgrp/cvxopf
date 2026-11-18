@@ -1,7 +1,7 @@
 # Lossy storage: numerical-preparation extension
 
-**Status:** implemented and regression-qualified,
-2026-11-13. Owner acceptance of this follow-up is pending. The original design
+**Status:** complete — implemented, regression-qualified and owner accepted
+2026-11-13. The original design
 was planning-only; implementation and this qualification were separately
 authorized by the owner. No new experiment study is authorized here.
 
@@ -12,7 +12,9 @@ not a reopening of its accepted device physics.
 
 Base preparation was committed at `e942222f1`; the cost-coordinate extension
 was committed at `b07eaf299`. Section 7 records qualification of that combined
-implementation and the final documentation/test additions.
+implementation and the final documentation/test additions, committed in
+`df418bc5e`. [M18's final closeout](milestone-18-lossy-storage.md#14-final-closeout--2026-11-13)
+records the owner's acceptance and the remaining deferred work.
 
 ## 1. Purpose and scope
 
@@ -314,5 +316,6 @@ are not promised.
 Numerical preparation does not enforce charge/discharge exclusivity. There is
 no hull, mode constraint, rounding, polishing, automatic retry or controller
 integration in this extension. Leaf-bound qualification, performance studies,
-hierarchy and relax–round–polish remain separately scoped work. A clean review
-of this follow-up does not replace final owner acceptance.
+hierarchy and relax–round–polish remain separately scoped work. The owner
+accepted the qualified standalone follow-up on 2026-11-13, as recorded in
+[M18's final closeout](milestone-18-lossy-storage.md#14-final-closeout--2026-11-13).

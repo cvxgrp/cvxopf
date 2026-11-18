@@ -71,7 +71,8 @@ See the [supported matrix](../docs/modeling.md#numerical-preparation-for-lossy-b
 and [final qualification record](lossy-storage-numerical-preparation.md#7-final-qualification--2026-11-13).
 The earlier study dispositions below remain historical evidence; no study is
 re-run, no default changes, and hierarchy/polishing/leaf-bound work remains
-separate. Owner acceptance of this follow-up is pending.
+separate. The owner accepted the standalone follow-up on 2026-11-13; see
+[M18's final closeout](milestone-18-lossy-storage.md#14-final-closeout--2026-11-13).
 
 ## Approved AC cost-coordinate extraction
 
