@@ -227,6 +227,9 @@ def operating_constraints(
     p_dis: cp.Variable,
     soc: cp.Expression,
     b_q: cp.Variable | None = None,
+    *,
+    normalize_limits: bool = False,
+    use_soc: bool = False,
 ) -> list[cp.Constraint]:
     """Ideal-storage operating set on net power b = p_dis - p_ch.
 
@@ -244,6 +247,10 @@ def operating_constraints(
     ]
     if b_q is None:
         constraints += [net >= -rating, net <= rating]
+    elif normalize_limits:
+        constraints.extend(storage._normalized_capability_constraints(
+            net, b_q, rating, use_soc
+        ))
     else:
         constraints.append(cp.square(net) + cp.square(b_q) <= rating ** 2)
     return constraints
@@ -311,7 +318,10 @@ def throughput_cost_rate(
 ) -> cp.Expression:
     """Throughput regularization rate: scalar per step, or (T,) time-last."""
     weights = _parameter_values(storage_units, "aging_weight", p_ch)
-    return cp.sum(cp.multiply(weights, p_ch + p_dis), axis=0)
+    # Keep the two affine subtotals explicit so the coordinate declaration
+    # can own the complete rate by identity, without overlapping substitutions.
+    return (cp.sum(cp.multiply(weights, p_ch), axis=0)
+            + cp.sum(cp.multiply(weights, p_dis), axis=0))
 
 
 # ---------------------------------------------------------------------------

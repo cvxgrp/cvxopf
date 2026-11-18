@@ -1,8 +1,9 @@
 # Milestone 18 — Convex lossy storage
 
-**Status:** complete — first implementation, owner accepted 2026-11-12.
-This closes the approved Section 11 scope, not the deferred extensions.
-See the qualification record in Section 12 and follow-up backlog in Section 13.
+**Status:** complete — first implementation accepted 2026-11-12; standalone
+numerical-preparation follow-up accepted 2026-11-13. The final closeout is
+recorded in Section 14. Sections 11–12 preserve the original decisions and
+qualification; Section 13 keeps the remaining extensions separate.
 
 **Depends on:** Milestone 5 (ideal storage), Milestone 12 (terminal SoC),
 Milestone 16 (component ownership)
@@ -474,9 +475,10 @@ full-repository test run. No experimental study was launched.
 
 ## 13. Deferred follow-up backlog
 
-These remain unimplemented/unqualified extensions, not blockers for the
-accepted first implementation. Each requires a separately approved scope
-before implementation; closeout does not authorize starting them.
+This tracks follow-ups to the accepted first implementation. Sections 11–12
+retain the historical scope and 2026-11-12 acceptance record, including the
+then-disabled preparation restriction. Completed follow-ups are recorded below;
+unchecked items remain unimplemented/unqualified and require their own scope.
 
 - [ ] **Relax–round–polish fallback:** resolve the open decisions in Section 6,
   implement fixed-mode polishing and failure behavior, add the deferred
@@ -486,9 +488,40 @@ before implementation; closeout does not authorize starting them.
   identity-aligned state transfer, causal starts/recovery, and split-operation
   handling in the controller. Standalone support does not imply controller
   support.
-- [ ] **Nondefault numerical preparation:** qualify prepared lossy-device
-  constraints, objectives, and physical-result restoration before lifting the
-  current unsupported-policy guard.
+- [x] **Standalone numerical preparation:** base support and the AC
+  cost-coordinate extension are implemented in `e942222f1` and `b07eaf299`.
+  The [final qualification record](lossy-storage-numerical-preparation.md#7-final-qualification--2026-11-13)
+  covers the supported formulation/assembly matrix, separate affine throughput
+  costs and physical-result restoration. The owner accepted this follow-up on
+  2026-11-13; this is not hierarchy or leaf-bound qualification.
 - [ ] **Leaf-bound qualification:** evaluate representation changes against
   the current explicit-constraint baseline before adopting them. This is a
   numerical representation study, not permission to change the operating set.
+
+## 14. Final closeout — 2026-11-13
+
+The owner requested final closure after committing the standalone
+numerical-preparation qualification and documentation in `df418bc5e`.
+M18 is complete for the agreed scope: the Section 11 device model, its public
+SOCP audit/recovery workflow, and the separately approved standalone
+numerical-preparation follow-up.
+
+Implementation commits are `43e39ca69` (first implementation), `e942222f1`
+(base preparation) and `b07eaf299` (AC cost coordinates). The follow-up's
+[qualification record](lossy-storage-numerical-preparation.md#7-final-qualification--2026-11-13)
+records 4,674 passing tests and six subtests and the formulation/assembly
+support matrix. The implementation and qualification passed the build–review
+loop with `cvxopf-review` before commit. These are the existing recorded
+checks, not new runs performed for this closeout.
+
+The physical model is unchanged: inverter limits apply to net power;
+conversion and self-discharge losses are separate; the cycling penalty prices
+charge plus discharge, not net power. Material simultaneous operation still
+raises `SimultaneousOperationError` with the original results attached.
+
+Gate 4 and its fallback/result flags, hierarchical integration, leaf-bound
+qualification and new performance studies remain deferred. They are not
+requirements for this agreed closeout, nor are they implied implemented.
+Sections 11–12 and historical study outcomes remain unchanged. This closeout
+does not claim universal exclusive operation, improved runtime or global AC
+optimality, and authorizes no new solves or studies.

@@ -316,11 +316,15 @@ def _identity_error(
 
 def _complete_start(build: OPFBuild) -> dict[str, np.ndarray]:
     _set_nlp_initial_point(build.prob)
-    if build.temporal_assembly == "vectorized" and "soc" in build.variables:
-        soc = build.variables["soc"]
-        value = np.asarray(soc.value, dtype=float).copy()
-        value[:, 0] = build.data["storage_initial_soc"]
-        soc.value = value
+    if build.temporal_assembly == "vectorized":
+        for name, initial_key in (
+            ("soc", "storage_initial_soc"), ("ls_soc", "ls_initial_soc")
+        ):
+            if name in build.variables:
+                soc = build.variables[name]
+                value = np.asarray(soc.value, dtype=float).copy()
+                value[:, 0] = build.data[initial_key]
+                soc.value = value
     result: dict[str, np.ndarray] = {}
     for name, variable in _variables_by_name(build).items():
         if variable.value is None:

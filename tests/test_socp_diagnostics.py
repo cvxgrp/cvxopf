@@ -10,7 +10,7 @@ import pytest
 from cvxopf import (
     build_opf, build_opf_multistep, extract_results, OPFOptions, SOCPAuditTolerances,
     audit_socp_relaxation, recover_socp_voltage, StorageUnitIdeal,
-    NondispatchableUnit, HVDCLink, Load, StorageUnitLossy,
+    NondispatchableUnit, HVDCLink, Load, StorageUnitLossy, NumericalPreparation,
 )
 from cvxopf.network import make_ybus_matpower, reindex_case_to_consecutive
 from cvxopf.testcases import case9
@@ -204,7 +204,7 @@ def test_wrong_formulation_rejected():
         audit_socp_relaxation(build_opf(case9(), formulation="lossy_dc"))
 
 
-def lossy_point(assembly):
+def lossy_point(assembly, prepared=False):
     """Two heterogeneous batteries at a known rank-one, flat-voltage point.
 
     Signed loads counteract the independently prescribed storage injections.
@@ -236,13 +236,17 @@ def lossy_point(assembly):
     loads = [Load(bus=u.bus, p_load_mw=discharge[0, k] - charge[0, k],
                   q_load_mvar=reactive[0, k],
                   device_id=u.device_id) for k, u in enumerate(units)]
+    options = OPFOptions(numerical_preparation=NumericalPreparation(
+        normalize_device_limits=prepared, exact_fixed_boxes=prepared,
+        canonical_scaling="joint5" if prepared else "none",
+    ))
     if assembly == "single":
         build = build_opf(triangle(), formulation="socp", delta=delta,
-                          loads=loads, lossy_storage=units)
+                          loads=loads, lossy_storage=units, options=options)
     else:
         build = build_opf_multistep(
             triangle(), formulation="socp", delta=delta, T=count,
-            loads=loads, lossy_storage=units, temporal_assembly=assembly,
+            loads=loads, lossy_storage=units, temporal_assembly=assembly, options=options,
             df_load_p=pd.DataFrame(discharge - charge, columns=["a", "b"]),
             df_load_q=pd.DataFrame(reactive, columns=["a", "b"]),
         )
@@ -257,14 +261,16 @@ def lossy_point(assembly):
 
 
 @pytest.mark.parametrize("assembly", ["single", "stepwise", "vectorized"])
-def test_lossy_storage_audit_and_recovery_preserve_primal(assembly, monkeypatch):
-    build, result = lossy_point(assembly)
+@pytest.mark.parametrize("prepared", [False, True])
+def test_lossy_storage_audit_and_recovery_preserve_primal(assembly, monkeypatch, prepared):
+    build, result = lossy_point(assembly, prepared=prepared)
     original = deepcopy(result)
 
     def forbidden(*args, **kwargs):
         pytest.fail("diagnostics must not solve or read modeled constraint residuals")
 
     monkeypatch.setattr(cp.Problem, "solve", forbidden)
+    monkeypatch.setattr(type(build), "solve", forbidden)
     for constraint in build.prob.constraints:
         monkeypatch.setattr(constraint, "violation", forbidden)
     # Published derived diagnostics are not inputs to independent physics.

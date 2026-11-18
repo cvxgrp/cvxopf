@@ -189,7 +189,7 @@ class BaselineCycling(Dnlp2Smooth):
     """Track only declared storage abs atoms; preserve stock DNLP mathematics."""
     def __init__(self, build):
         super().__init__()
-        self.terms = {term.variable.id: term for term in build._cost_coordinate_terms
+        self.terms = {term.variable.id: term for owner in build._cost_coordinate_terms for term in owner.leaves
                       if term.kind == "cycling" and np.any(np.asarray(term.weights.value) > 0)}
         self.cycling_auxiliaries = []
 
@@ -231,7 +231,7 @@ def ac_start(build, assigned, *, graph=None):
                 for v in data["problem"].variables()],
         coordinates=dict(full_size=mapping.full_size, row_count=mapping.row_count,
                          fixed=mapping.fixed, values=mapping.values, dropped=mapping.dropped),
-        cost_maps=[dict(kind=b.term.kind, shape=list(b.leaf.shape), scale=b.scale,
+        cost_maps=[dict(kind=b.coordinate.kind, shape=list(b.leaf.shape), scale=b.scale,
                         physical_start=b.physical_start) for b in bindings]))
 
 

@@ -58,7 +58,7 @@ def test_canonical_replay_restores_public_variables_without_solve(portable, monk
         offset = inverse[-1].var_offsets[var.id]
         var.save_value(full[offset:offset+var.size].reshape(var.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value / binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     result = serializable(extract_results(build))
     native = dict(status=0, obj_val=value, x=full[mapping.free])
@@ -197,7 +197,7 @@ def test_public_worker_archive_and_status_round_trip(portable, monkeypatch, tmp_
             offset = inverse[-1].var_offsets[variable.id]
             variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
         for binding in bindings:
-            binding.term.variable.save_value(binding.leaf.value / binding.scale)
+            binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
         build.prob._status, build.prob._value = cp.OPTIMAL, float(solver_build.prob.objective.value)
         build._preparation_evidence = PreparationEvidence(
             coordinates=mapping, native=dict(status=0, obj_val=value, x=full[mapping.free]),

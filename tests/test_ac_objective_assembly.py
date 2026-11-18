@@ -69,7 +69,7 @@ def test_component_first_reproduces_historical_cost_graph_and_layout(portable, p
     solver, bindings, auxiliary, data, inverse = m.canonical(candidate)
     _, _, view, _, _, _ = qualified.construct(qualified.arms()[-1])
     hdata, hinverse = historical.canonical_data(view.solver)
-    hb = [SimpleNamespace(leaf=view.leaves[name], term=SimpleNamespace(kind=kind))
+    hb = [SimpleNamespace(leaf=view.leaves[name], coordinate=SimpleNamespace(kind=kind))
           for name, kind in (("b", "cycling"), ("load_shed_fraction", "shedding"))]
     original_ids = {v.id for v in view.solver.prob.variables()}
     haux = next(v for v in hdata["problem"].variables()
@@ -96,7 +96,7 @@ def test_adapter_rejects_unsupported_costs_and_nonunit_weights(portable):
     objective = m.ComponentFirstObjective(build)
     substitutions = {}
     for term in build._cost_coordinate_terms:
-        leaf = cp.Variable(term.variable.shape)
+        leaf = cp.Variable(term.leaves[0].variable.shape)
         substitutions[id(term.rate)] = cp.sum(cp.multiply(np.full(leaf.shape, 2.), leaf), axis=0)
     with pytest.raises(ValueError, match="unit cost-valued"):
         objective.tree_copy(substitutions)
@@ -191,7 +191,7 @@ def test_audit_restores_this_assembly_and_rejects_changed_start(monkeypatch, por
     adjusted[mapping.fixed] = mapping.values
     value, _ = canonical_objective(data, inverse, adjusted)
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value / binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(sb.prob.objective.value)
     published = serializable(extract_results(build))
     native = dict(status=0, obj_val=value, x=adjusted[mapping.free])
@@ -294,9 +294,9 @@ def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, por
         full = adjusted.copy()
         for binding in bindings:
             offset = inverse[-1].var_offsets[binding.leaf.id]
-            physical = np.full(binding.leaf.shape, .9 if binding.term.kind == "shedding" else .123456789)
+            physical = np.full(binding.leaf.shape, .9 if binding.coordinate.kind == "shedding" else .123456789)
             full[offset:offset+binding.leaf.size] = (physical*binding.scale).ravel(order="F")
-            if binding.term.kind == "cycling":
+            if binding.coordinate.kind == "cycling":
                 aux_offset = inverse[-1].var_offsets[auxiliary.id]
                 full[aux_offset:aux_offset+auxiliary.size] = abs(physical*binding.scale).ravel(order="F")
         value, _ = canonical_objective(data, inverse, full)
@@ -304,7 +304,7 @@ def test_both_assemblies_worker_and_status_round_trip(monkeypatch, tmp_path, por
             offset = inverse[-1].var_offsets[variable.id]
             variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
         for binding in bindings:
-            binding.term.variable.save_value(binding.leaf.value / binding.scale)
+            binding.coordinate.variable.save_value(binding.leaf.value / binding.scale)
         build.prob._status, build.prob._value = cp.OPTIMAL, float(sb.prob.objective.value)
         build._preparation_evidence = PreparationEvidence(mapping,
             dict(status=0, obj_val=value, x=full[mapping.free]), dict(restoration_available=True,

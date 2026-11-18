@@ -42,7 +42,7 @@ def test_zero_objective_retains_coordinates_pins_and_physics():
     assert oracle.objective(d['x0'])==0
     np.testing.assert_array_equal(oracle.gradient(d['x0']),np.zeros_like(d['x0']))
     for binding in bindings:
-        np.testing.assert_array_equal(binding.leaf.value/binding.scale,binding.term.variable.value)
+        np.testing.assert_array_equal(binding.leaf.value/binding.scale,binding.coordinate.variable.value)
 
 
 def test_actual_handoff_reconstruction_and_rejected_point_is_not_accepted(monkeypatch):

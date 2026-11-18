@@ -159,7 +159,7 @@ def prepared_start(build, iteration):
         coordinates={f.name: getattr(mapping, f.name) for f in fields(mapping) if not f.name.startswith("_")},
         layout=[[list(v.shape), inverse[-1].var_offsets[v.id], inverse[-1].var_offsets[v.id]+v.size]
                 for v in data["problem"].variables()],
-        cost_maps=[dict(kind=b.term.kind, shape=list(b.leaf.shape), scale=b.scale, physical_start=b.physical_start)
+        cost_maps=[dict(kind=b.coordinate.kind, shape=list(b.leaf.shape), scale=b.scale, physical_start=b.physical_start)
                    for b in bindings]))
 
 
@@ -201,7 +201,7 @@ def restore_ac(build, evidence, start, captured):
     maps = evidence["checks"].get("cost_coordinate_maps", [])
     if len(maps) != len(bindings):
         raise ValueError("missing AC cost-coordinate maps")
-    expected_cost_maps = serializable([dict(kind=b.term.kind, shape=list(b.leaf.shape),
+    expected_cost_maps = serializable([dict(kind=b.coordinate.kind, shape=list(b.leaf.shape),
         scale=b.scale, physical_start=b.physical_start) for b in bindings])
     if captured["cost_maps"] != expected_cost_maps:
         raise ValueError("prospective cost maps differ from fresh preparation")
@@ -209,7 +209,7 @@ def restore_ac(build, evidence, start, captured):
         retained = next((s, a, b) for identity, s, a, b in evidence["start_layout"]
                         if identity == old["solver_variable_id"])
         offset = inverse[-1].var_offsets[binding.leaf.id]
-        if (old["kind"] != binding.term.kind or old["scale"] != binding.scale.tolist() or
+        if (old["kind"] != binding.coordinate.kind or old["scale"] != binding.scale.tolist() or
                 old["physical_start"] != binding.physical_start.tolist() or
                 retained != (list(binding.leaf.shape), offset, offset+binding.leaf.size)):
             raise ValueError("AC cost-coordinate inverse differs")
@@ -226,7 +226,7 @@ def restore_ac(build, evidence, start, captured):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     slack = []
     for binding, auxiliary in reduction.cycling_auxiliaries:

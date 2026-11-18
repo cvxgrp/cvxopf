@@ -73,15 +73,15 @@ def synthetic_ac(name, slack=0.):
         start = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[start:start+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     build.prob._status, build.prob._value = cp.OPTIMAL, float(build.prob.objective.value)
     published = r.serializable(extract_results(build))
     native = dict(status=0, obj_val=value, x=full[mapping.free].tolist())
     layout = tuple((v.id, v.shape, inverse[-1].var_offsets[v.id], inverse[-1].var_offsets[v.id]+v.size)
                    for v in data["problem"].variables())
     checks = dict(restoration_available=True, objective_assembly=build.numerical_preparation.objective_assembly,
-        cost_coordinate_maps=[dict(kind=b.term.kind, solver_variable_id=b.leaf.id,
-                                  physical_variable_id=b.term.variable.id,
+        cost_coordinate_maps=[dict(kind=b.coordinate.kind, solver_variable_id=b.leaf.id,
+                                  physical_variable_id=b.coordinate.variable.id,
                                   scale=b.scale, physical_start=b.physical_start) for b in bindings])
     adjusted = assigned.copy()
     adjusted[mapping.fixed] = mapping.values

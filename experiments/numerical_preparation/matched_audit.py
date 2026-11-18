@@ -32,7 +32,7 @@ def restore_ac(build, record):
                 evidence["checks"]["objective_assembly"] != build.numerical_preparation.objective_assembly):
             raise ValueError("prepared layout/scales/assembly differ")
         maps = evidence["checks"].get("cost_coordinate_maps", [])
-        expected = [dict(kind=b.term.kind, shape=list(b.leaf.shape), scale=b.scale.tolist(),
+        expected = [dict(kind=b.coordinate.kind, shape=list(b.leaf.shape), scale=b.scale.tolist(),
                          physical_start=b.physical_start.tolist()) for b in bindings]
         actual = [dict(kind=m["kind"], shape=start["cost_maps"][i]["shape"],
                        scale=m["scale"], physical_start=m["physical_start"])
@@ -54,7 +54,7 @@ def restore_ac(build, record):
         offset = inverse[-1].var_offsets[variable.id]
         variable.save_value(full[offset:offset+variable.size].reshape(variable.shape, order="F"))
     for binding in bindings:
-        binding.term.variable.save_value(binding.leaf.value/binding.scale)
+        binding.coordinate.variable.save_value(binding.leaf.value/binding.scale)
     slack = []
     for owner, auxiliary in reduction.cycling_auxiliaries:
         offset = inverse[-1].var_offsets[auxiliary.id]
