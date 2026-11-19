@@ -18,6 +18,11 @@ Pypower to be installed in the main package environment.
 Usage
 -----
     uv run scripts/generate_pypower_fixtures.py
+    uv run scripts/generate_pypower_fixtures.py --matched-case9-from \
+        experiments/case9_matched_comparison/outputs/benchmark_001
+
+The second command extracts only the matched Case9 fixture from retained
+evidence. It does not solve or rewrite any of the standard fixtures.
 
 Requirements
 ------------
@@ -96,8 +101,12 @@ The separate case9 DC-line Ybus fixture contains ``case``, ``solver``,
 ``quantity``, ``bus_ids``, ``Ybus_real``, and ``Ybus_imag``.
 """
 
+import argparse
+import hashlib
 import json
+import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
@@ -132,6 +141,8 @@ from pypower.t.t_case9_dcline import t_case9_dcline
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
+MATCHED_CASE9_BINDING = "1169dfca957a13b07a9637426daef829e072b4a09c59c0af267686b4205b1338"
+MATCHED_CASE9_FIXTURE = "case9_matched_dcline_pypower_reference.json"
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +564,171 @@ def _run_dcline_ybus(case_fn, case_name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Extract the reviewed, matched Case9 references without solving
+# ---------------------------------------------------------------------------
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _json_record(path: Path, sha256: str | None = None) -> tuple[dict, str]:
+    data = path.read_bytes()
+    digest = _sha256(data)
+    if sha256 is not None and digest != sha256:
+        raise ValueError(f"hash mismatch: {path}")
+    return json.loads(data), digest
+
+
+def _referenced_json(directory: Path, ref: dict) -> dict:
+    path = (directory / ref["path"]).resolve()
+    if not path.is_relative_to(directory.resolve()):
+        raise ValueError(f"record outside attempt directory: {path}")
+    return _json_record(path, ref["sha256"])[0]
+
+
+def _verify_matched_sources(binding: dict) -> None:
+    # Verify the recorded Git blobs, not the current checkout. This generator
+    # was itself an execution dependency and is intentionally being updated.
+    for path, digest in binding["sources"].items():
+        blob = subprocess.check_output(
+            ["git", "show", f"{binding['commit']}:{path}"], cwd=REPO_ROOT,
+        )
+        if _sha256(blob) != digest:
+            raise ValueError(f"benchmark source hash mismatch at {binding['commit']}: {path}")
+
+
+def _matched_native_point(case: dict, start: dict, native: dict) -> tuple[dict, list]:
+    """Independently decode the archived PIPS vector in external order."""
+    from experiments.case9_matched_comparison.contract import (
+        coordinates, require, selected_links, solution_point,
+    )
+
+    x = np.asarray(native["x"], dtype=float)
+    require(x.shape == np.shape(start["x0"]) and np.isfinite(x).all(), "invalid retained PIPS vector")
+    layout = start["variable_blocks"]
+
+    def block(name):
+        return x[layout["i1"][name]:layout["iN"][name]]
+
+    external = case["bus"][:, 0].astype(int).tolist()
+    internal = start["bus_ids_internal_order"]
+    require(sorted(internal) == sorted(external), "invalid retained PIPS bus mapping")
+    positions = [internal.index(bus) for bus in external]
+    columns = start["internal_columns_for_source_gen_rows"]
+    ng, nd = len(case["gen"]), len(selected_links(case))
+    require(sorted(columns) == list(range(ng + 2 * nd)), "invalid retained PIPS generator mapping")
+    pg = case["baseMVA"] * block("Pg")[columns]
+    qg = case["baseMVA"] * block("Qg")[columns]
+    point = solution_point(
+        case, block("Va")[positions], block("Vm")[positions], pg[:ng], qg[:ng],
+        ((pg[ng + k], pg[ng + nd + k] + dc[15])
+         for k, dc in enumerate(selected_links(case).values())),
+    )
+    coordinates(case, point)
+    return point, qg[ng:].tolist()
+
+
+def _extract_matched_case9(run: Path) -> dict:
+    # The standalone uv script runs with scripts/ on sys.path. Reuse only the
+    # dependency-light interchange and acceptance code; do not import CVXOPF.
+    sys.path.insert(0, str(REPO_ROOT))
+    from experiments.case9_matched_comparison.benchmark_audit import assess
+    from experiments.case9_matched_comparison.contract import (
+        CELLS, PYPINS, close, decode_case, require, validate_cell,
+    )
+
+    binding, digest = _json_record(run / "binding.json", MATCHED_CASE9_BINDING)
+    authority, authority_sha = _json_record(run / "authority.json")
+    require(authority == {"binding_sha256": digest, "execution_authorized": True}, "invalid launch authority")
+    outcome, outcome_sha = _json_record(run / "outcome.json")
+    require(outcome["outcome"] == "matrix_complete", "benchmark is not complete")
+    versions = binding["environment"]["pypower"]["dependencies"]
+    require(versions == PYPINS == {name: version(name) for name in PYPINS}, "unexpected PYPOWER versions")
+    _verify_matched_sources(binding)
+
+    requests = {}
+    for path in sorted((run / "attempts").glob("*/request.json")):
+        request, request_sha = _json_record(path)
+        arm = (request["cell"], request["solver"])
+        require(arm not in requests and request["binding_sha256"] == digest,
+                f"duplicate or unbound benchmark attempt: {path}")
+        requests[arm] = (path.parent, request, request_sha)
+    require(set(requests) == set(map(tuple, binding["arms"])), "benchmark attempt matrix differs from binding")
+
+    references = {}
+    for cell in CELLS:
+        directory, request, request_sha = requests[cell, "pypower"]
+        protocol = _referenced_json(run, request["protocol"])
+        require(protocol == {"protocol": {"poll_seconds": binding["settings"]["poll_seconds"]}}
+                and request["wall_seconds"] == binding["settings"]["wall_seconds_per_worker"],
+                f"unexpected supervision policy for {cell}")
+        record, audit_sha = _json_record(directory / "audit.json")
+        supervision = _referenced_json(directory, record["supervision"])
+        require(record["supervision"]["path"] == "supervision.json"
+                and supervision["classification"] == "exited" and supervision["returncode"] == 0,
+                f"unaccepted supervision for {cell}")
+        raw = _referenced_json(directory, record["return"])
+        require(record["return"]["path"] == "return.json"
+                and (raw["cell"], raw["solver"], raw["binding_sha256"]) == (cell, "pypower", digest)
+                and set(raw["native_artifacts"]) == {"native_start.json", "native_return.json"},
+                f"unexpected native return identity for {cell}")
+        start, _ = _json_record(directory / "native_start.json", raw["native_artifacts"]["native_start.json"])
+        native, _ = _json_record(directory / "native_return.json", raw["native_artifacts"]["native_return.json"])
+        require(start["options"] == binding["settings"]["pypower"]
+                and raw["native_success"] is True and native["eflag"] is True and raw["objective"] == native["f"],
+                f"unexpected PIPS options, exit, or objective for {cell}")
+        cell_record = binding["cells"][cell]
+        case = decode_case(cell_record["case"])
+        validate_cell(cell, case)
+        point, dummy_q = _matched_native_point(case, start, native)
+        require(point == raw["point"] and dummy_q == raw["dummy_q_mvar"],
+                f"physical coordinates do not match the retained native vector for {cell}")
+        evaluations = {}
+        for side, evidence in record["targets"].items():
+            audit_input = _referenced_json(directory, evidence["request"])
+            evaluation = _referenced_json(directory, evidence["result"])
+            require(audit_input == {"cell": cell_record, "point": point}
+                    and evaluation["solver"] == side
+                    and evaluation["request_sha256"] == evidence["request"]["sha256"],
+                    f"mismatched target audit for {cell} ({side})")
+            evaluations[side] = evaluation["evaluation"]
+        assessed = assess(case, raw, evaluations)
+        verdict = record["verdict"].copy()
+        # The supervisor and standalone generator use different NumPy builds.
+        # Compare recomputed costs to roundoff; all recorded evidence is exact.
+        for key in ("common_objective", "generator_costs"):
+            close(assessed.pop(key), verdict.pop(key), f"accepted {cell} {key}", atol=1e-9)
+        require(assessed["accepted"] and assessed == verdict, f"unaccepted dispatch for {cell}")
+        references[cell] = {
+            "generator_bus_ids": case["gen"][:, 0].astype(int).tolist(),
+            "objective": native["f"],
+            "point": point,
+            "evidence": {
+                "attempt": directory.name, "request_sha256": request_sha, "audit_sha256": audit_sha,
+                "return_sha256": record["return"]["sha256"], "supervision_sha256": record["supervision"]["sha256"],
+                "native_artifacts_sha256": raw["native_artifacts"], "target_audits": record["targets"],
+            },
+        }
+    return {
+        "schema": 1,
+        "case": "case9_matched_dcline",
+        "units": {"active_power": "MW", "reactive_power": "MVAr", "voltage": "p.u.",
+                  "angle": "radians", "duration_hours": 1, "objective": "cost units over one hour"},
+        "benchmark": {
+            "run": "benchmark_001", "commit": binding["commit"], "binding_sha256": digest,
+            "authority_sha256": authority_sha, "outcome_sha256": outcome_sha,
+            "settings": binding["settings"], "settings_sha256": binding["settings_sha256"],
+            "solver": "PYPOWER/PIPS", "versions": versions, "threads": binding["threads"],
+            "rss_limit_mib": binding["rss_limit_mib"], "arms": binding["arms"],
+            "source_sha256": binding["sources"], "preflight_binding": binding["preflight_binding"],
+            "preflight_receipts": binding["preflight_receipts"],
+        },
+        "references": references,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Write fixture
 # ---------------------------------------------------------------------------
 
@@ -570,6 +746,14 @@ def _write_fixture(data: dict, path: Path) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate PYPOWER regression fixtures.")
+    parser.add_argument("--matched-case9-from", type=Path, metavar="BENCHMARK_001",
+                        help="verify and extract only the matched Case9 fixture without solving")
+    args = parser.parse_args()
+    if args.matched_case9_from is not None:
+        _write_fixture(_extract_matched_case9(args.matched_case9_from), FIXTURES / MATCHED_CASE9_FIXTURE)
+        return 0
+
     print(f"numpy version : {np.__version__}")
     print(f"Fixture output: {FIXTURES.relative_to(REPO_ROOT)}")
     print()

@@ -260,6 +260,16 @@ regularization. See
   (`cost_coeffs`, `cp.square`/`cp.abs`); zero-cost when `cost_coeffs` is zero.
 - HVDC terms absent when `hvdc=None`
 
+The `hvdc_from_dcline` importer negates external MW sent (`PF`) to get
+the native from-bus injection. Forward boxes become `[-PMAX, -PMIN]`;
+lossless reverse and two-way boxes use the same mapping because `PT = PF`.
+Reject reverse/two-way imports with losses and signed costs that cannot be
+represented by the native magnitude polynomial. Report omitted fixed loss,
+terminal reactive settings and converter voltage setpoints by source row.
+Native `HVDCLink` inputs and reported injection signs are unchanged. The
+[dcline repair plan](plans/dcline-import-and-case9-comparison.md) supersedes
+the old Case9 HVDC cost-gap interpretation; it is not a current solver ranking.
+
 | Formulation | Result keys |
 |---|---|
 | AC | `status`, `objective`, `Pg`, `Qg`, `Vm`, `Va_deg`, `p_net`, `q_net`, `branch_p_from`, `branch_q_from`, `branch_p_to`, `branch_q_to`, `branch_s_from`, `branch_s_to`; plus `p_hvdc_in`, `p_hvdc_out`, `hvdc_loss` (derived, `= -(p_hvdc_in + p_hvdc_out)`, always >= 0) when `hvdc` is not None |
@@ -910,7 +920,24 @@ The NumPy pin is required because PYPOWER uses `numpy.in1d`, which was removed
 in NumPy 2.3. Do not run this script with the main package
 environment.
 
-Regenerate fixtures only if:
+The matched Case9 fixture is separate from the standard DC-line and Ybus
+fixtures. To regenerate only that fixture from the retained, audited
+`benchmark_001` run, use:
+
+```bash
+uv run --script scripts/generate_pypower_fixtures.py --matched-case9-from \
+  experiments/case9_matched_comparison/outputs/benchmark_001
+```
+
+With the pinned PYPOWER environment already installed, the same command
+can use its Python interpreter instead of `uv run --script`. This path
+does not run an optimizer. It checks the frozen binding, the recorded Git
+source blobs, and the four PYPOWER returns and audit chains before writing
+`tests/fixtures/case9_matched_dcline_pypower_reference.json`. CI reads only
+that static fixture for the matched tests; it does not need the retained run
+or a PYPOWER installation.
+
+Regenerate the standard solver-generated fixtures only if:
 
 - A new test case is added to the package
 - A suspected bug in an existing fixture needs to be ruled out

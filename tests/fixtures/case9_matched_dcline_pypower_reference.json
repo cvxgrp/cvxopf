@@ -1,0 +1,605 @@
+{
+  "schema": 1,
+  "case": "case9_matched_dcline",
+  "units": {
+    "active_power": "MW",
+    "reactive_power": "MVAr",
+    "voltage": "p.u.",
+    "angle": "radians",
+    "duration_hours": 1,
+    "objective": "cost units over one hour"
+  },
+  "benchmark": {
+    "run": "benchmark_001",
+    "commit": "58db1e65ca3d5c59b63812c735db93d52148ad7f",
+    "binding_sha256": "1169dfca957a13b07a9637426daef829e072b4a09c59c0af267686b4205b1338",
+    "authority_sha256": "ded99f1da069e6759b338aebe5230dc24d8b5bba1823c99f9630952b2f2d2275",
+    "outcome_sha256": "bc95122ed4494cd6da24c801f5283ff24c15b033e381f3813127f2af706545cb",
+    "settings": {
+      "cvxopf": {
+        "acceptable_iter": 0,
+        "bound_relax_factor": 0.0,
+        "constr_viol_tol": 1e-08,
+        "derivative_test": "none",
+        "hessian_approximation": "exact",
+        "least_square_init_duals": "no",
+        "max_iter": 3000,
+        "mu_strategy": "adaptive",
+        "print_level": 5,
+        "sb": "yes",
+        "tol": 1e-07
+      },
+      "material_cost_threshold": 1.0,
+      "poll_seconds": 0.25,
+      "pypower": {
+        "comptol": 1e-06,
+        "cost_mult": 0.0001,
+        "costtol": 1e-06,
+        "feastol": 1e-08,
+        "gradtol": 1e-06,
+        "max_it": 150,
+        "max_red": 20,
+        "step_control": false,
+        "verbose": 2
+      },
+      "wall_seconds_per_worker": 300
+    },
+    "settings_sha256": "a0b3473d1d941f3408bef2b6fd2f533f4ab7c418f6fbb9c5ea0395c1925afd6f",
+    "solver": "PYPOWER/PIPS",
+    "versions": {
+      "PYPOWER": "5.1.19",
+      "numpy": "2.2.6",
+      "scipy": "1.18.0"
+    },
+    "threads": 1,
+    "rss_limit_mib": 16384,
+    "arms": [
+      [
+        "smooth_no_links",
+        "cvxopf"
+      ],
+      [
+        "smooth_no_links",
+        "pypower"
+      ],
+      [
+        "smooth_links",
+        "pypower"
+      ],
+      [
+        "smooth_links",
+        "cvxopf"
+      ],
+      [
+        "pwl_no_links",
+        "pypower"
+      ],
+      [
+        "pwl_no_links",
+        "cvxopf"
+      ],
+      [
+        "pwl_links",
+        "cvxopf"
+      ],
+      [
+        "pwl_links",
+        "pypower"
+      ]
+    ],
+    "source_sha256": {
+      "experiments/case118_annual_hierarchy/run_s4.py": "2829fef08f8be3fe53182d4ee14584e9e2e6cafa6684a917499e097cb780d670",
+      "experiments/case118_annual_hierarchy/streaming_schema.py": "d030c8bf299d7562aa8270b0448d2ca35a99e0669273b5a0670c0425ed2e6911",
+      "experiments/case118_tracy_2021/e3.py": "04bbb389208312ce1112ba5dda2a3655d967587891e3992aa803e44f6e7a1053",
+      "experiments/case118_tracy_2021/prepare.py": "1a95d30422dcd59bdc54b0de10e1d7786279c092f992c970d1070bfaf65791b8",
+      "experiments/case118_tracy_2021/run_e3.py": "a59cbd509c9f501e248075921c14d6fe78accd4dde30b4f085e44009d3347108",
+      "experiments/case118_tracy_2021/stage_d.py": "a6d03e1f76758975ef058ecff9e9b5f8594f65111daea94be249697a43bbdc61",
+      "experiments/case9_matched_comparison/BENCHMARK.md": "c80a665d29786185940e0c4d9417a2f4b9628a4a5ffdfab638bd3176e988f129",
+      "experiments/case9_matched_comparison/BENCHMARK_SETTINGS.json": "a0b3473d1d941f3408bef2b6fd2f533f4ab7c418f6fbb9c5ea0395c1925afd6f",
+      "experiments/case9_matched_comparison/PROTOCOL.md": "7e503c66b5da7b11c03c7bfaf911f50f95cc93cabf324e7d29c209e36e18bef7",
+      "experiments/case9_matched_comparison/__init__.py": "0cec64eba1d71df3f182a630888e351e18f55b9fc7b233a3f6cedb5ca0945372",
+      "experiments/case9_matched_comparison/benchmark.py": "af786755f1725196587e870faeef898826739213b78400245b83459bfb2e891a",
+      "experiments/case9_matched_comparison/benchmark_audit.py": "19c91320a8546d63545f9c7750dc38a34d5fd973f9891c8bdae1ca8115916f55",
+      "experiments/case9_matched_comparison/benchmark_worker.py": "e444b5f7f151edf837f55951e36d86ace561b4648310f4119c4304e8eb9674ab",
+      "experiments/case9_matched_comparison/contract.py": "a103befcb03e201b959ac8e622c484160d956174d38467fe2e3d0e7986524ec1",
+      "experiments/case9_matched_comparison/cvx_side.py": "f2787cd270cbcf813bba792313991d98641e7e1b8f39f379e2c62358ad0ef504",
+      "experiments/case9_matched_comparison/preflight.py": "40b57b2d44fc875bc463d5937fdb18fb0edca34cf5fecc35a3c0d81efed52d92",
+      "experiments/case9_matched_comparison/pypower_side.py": "4c3318cb82d346937bc4decab7bd5dfe4e7a9077828667a585601f72cb05dbda",
+      "experiments/dcline_crosseval/results/cstar_full.json": "2101a3168b2c58d8ca0ece0ddbff44b342d62c4f592fdb81434c20430642b7dc",
+      "experiments/dcline_crosseval/results/ex12_cplus.txt": "326e914d00a77e111ceaedb9a16b6cdafc7ac3be13710488dc4475fe4cd8291d",
+      "experiments/dcline_crosseval/results/pstar_full.json": "e17c874eef806dee95919713c75beaab8f8030852697049b8ff1e438bd174d35",
+      "scripts/generate_pypower_fixtures.py": "948e40ade11bf6f0084834c2150dcdf8dd4342ef96cd3fb0ea2df06582a0cb39",
+      "src/cvxopf/_ac_start_mapping.py": "a19d592f99f36700fa90623b53bb25b33e09ac3f5edb8c38196e1a153a7919fa",
+      "src/cvxopf/_admittance_preparation.py": "ff1e6bde5148920cfd8fe23b42da30bcbe689627ccf030c87c54b2bcee676058",
+      "src/cvxopf/_component_adapter.py": "20be058528928a8255c2a4f63af3677b2ef8a43a44077ee6269fabe1d3225346",
+      "src/cvxopf/_component_adapters.py": "825d47c63a4bb65ef7632c4a9009d629d075dd36bd87697a74eab771aa2f75b7",
+      "src/cvxopf/_component_assembly.py": "d01e2dedd03aef6d25d0b9882943072687a6f1e16818a1bd1c15fc0dcda4d586",
+      "src/cvxopf/_cost_coordinates.py": "f411f9936fdde21dbe188a423482e3109d959112d8481396c15fd2a5d05a2e05",
+      "src/cvxopf/_cvxpy_dispatch.py": "c52ee16536bb3bd196990df9b7ee5120c2c48df1a33620fbc0f1ab171e2de938",
+      "src/cvxopf/_numerical_preparation.py": "b369aa05f4ec16a65b93208eef99172601bc5410da284880d32b8cecf87a5813",
+      "src/cvxopf/_temporal_assembly.py": "d9dad4eb4ea4f74416e2b55648e0a467e8f1e5f6c4fb53183e5ddbc9dde1f6ec",
+      "src/cvxopf/ac_problem.py": "4e89bf0b0bdba7ce4bf45c73a1b0c64ad2684b336b8d092945e2c052f27c9987",
+      "src/cvxopf/cost.py": "e04af872a912590cfbf0512639c274a1d8659c3cbcb2830db0bbc3537568a24f",
+      "src/cvxopf/data.py": "2ae582cc3e4da066a60a87aa53e7f51a0d5b831af6fb6d655ba1cc755b20fbd4",
+      "src/cvxopf/generator.py": "db471972300aeee8769af06987479fb8ab2c1935822adf200a76c15ecc6977f9",
+      "src/cvxopf/hvdc.py": "96dbbfb5a074f2b3fd17b85d2a6f3b8b8f425d0541bf646ccd038e4734e86775",
+      "src/cvxopf/load.py": "8a4250e48f2d55ae1e17e48c07d71143512baf13a23be34feca32f70c78b94e7",
+      "src/cvxopf/network.py": "0ad685f5b172c0060742497cb4f11a46537cb54c9dfc8b56575cff4823166338",
+      "src/cvxopf/problem.py": "831d2fa8464e0c6bb6f6faf985bd5b05533231ef9e18df1af1216dab47a3059c",
+      "src/cvxopf/testcases/case9.py": "e9caaead9f13c262cbc6075e77e00117463220ceace5ca4f2b421c28a7194a68",
+      "src/cvxopf/testcases/case9_dcline.py": "2ade63e529e0274fe800d58faf649529074f242dfdf3d8762b499e9ce368ad20"
+    },
+    "preflight_binding": {
+      "path": "experiments/case9_matched_comparison/outputs/benchmark_preflight_001/binding.json",
+      "sha256": "c5ca0058d9bf9619c4ce4d34d0363457242cfed23dbe2f1467e84ce3f7c79239"
+    },
+    "preflight_receipts": {
+      "pwl_links": {
+        "path": "experiments/case9_matched_comparison/outputs/benchmark_preflight_001/pwl_links/passed.json",
+        "sha256": "563fcb68f169a68d66355b47ab76d5edf9827f93d9e5acefa07e1e96e2612a15"
+      },
+      "pwl_no_links": {
+        "path": "experiments/case9_matched_comparison/outputs/benchmark_preflight_001/pwl_no_links/passed.json",
+        "sha256": "0c940c2050adda0b9c18d00ce22b5865207e9c85688982bf16bd6eeb756721f6"
+      },
+      "smooth_links": {
+        "path": "experiments/case9_matched_comparison/outputs/benchmark_preflight_001/smooth_links/passed.json",
+        "sha256": "66cc15613c2c1e5b43326241016868eaa392ae5ec086e7ae634c776e54032678"
+      },
+      "smooth_no_links": {
+        "path": "experiments/case9_matched_comparison/outputs/benchmark_preflight_001/smooth_no_links/passed.json",
+        "sha256": "6d28c835c4a29f33803996e5a5852cfffba72b735c34e2cd897a2b04eb6cdf59"
+      }
+    }
+  },
+  "references": {
+    "smooth_no_links": {
+      "generator_bus_ids": [
+        1,
+        2,
+        30
+      ],
+      "objective": 5345.29086821457,
+      "point": {
+        "bus_ids": [
+          1,
+          2,
+          30,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "gen_rows": [
+          0,
+          1,
+          2
+        ],
+        "angle_rad": [
+          0.0,
+          0.10092815070096281,
+          0.04091184843813675,
+          -0.043092182208619635,
+          -0.07261821734676481,
+          0.0020329866873152903,
+          -0.019936494384828966,
+          0.02356004205342654,
+          -0.0779987659224677
+        ],
+        "voltage_pu": [
+          1.099999980501988,
+          1.0981977196962776,
+          1.0842793102930197,
+          1.0939771781757845,
+          1.0837994641857593,
+          1.098121216163867,
+          1.0886260290710899,
+          1.0999996844861557,
+          1.0712956620908485
+        ],
+        "pg_mw": [
+          90.00000340062675,
+          149.3900615299972,
+          78.97651443580952
+        ],
+        "qg_mvar": [
+          13.441327640077336,
+          2.6156358591824866,
+          -24.0763094391182
+        ],
+        "links": []
+      },
+      "evidence": {
+        "attempt": "9dd11d294fdb474385f50ebd46d929cf",
+        "request_sha256": "9ec7e35a0f24029475f99645c4c481e6e21c066697a77048ae2c546f62404cd7",
+        "audit_sha256": "8ed2326322455c1a923a2a08c04ed084226e15ac29902653a27387e235144c93",
+        "return_sha256": "b6ce955740915e3d475f245dc6e7efb087da2b5646ee88684c1a98c259c9f528",
+        "supervision_sha256": "c4a14ea4873c298aadfeb7d8799d017ad64383370d7b517f23eb00eea6e8bf97",
+        "native_artifacts_sha256": {
+          "native_return.json": "6a459caa309b3add1eff6b2500709bcd87d4c629e1442704668713832337348d",
+          "native_start.json": "d0b1a6560b2368a1df299df7fb05e496af38ee62700be37ab182fe7195a62c2c"
+        },
+        "target_audits": {
+          "cvxopf": {
+            "request": {
+              "path": "audit_attempts/cvxopf/37bf26bae157438b8f4742b49bb6278b/request.json",
+              "sha256": "10248bfd7d24af9b3966c1a1d2a2c1c35b2172a1b4922bd235ef1f230ffdc815"
+            },
+            "result": {
+              "path": "audit_attempts/cvxopf/37bf26bae157438b8f4742b49bb6278b/result.json",
+              "sha256": "f04b21bbb09b6d0853302a6e17972f371da852f141fff3e95848e45b1d31e16a"
+            }
+          },
+          "pypower": {
+            "request": {
+              "path": "audit_attempts/pypower/cb8482026aad417aa79e8aaec6bb7700/request.json",
+              "sha256": "10248bfd7d24af9b3966c1a1d2a2c1c35b2172a1b4922bd235ef1f230ffdc815"
+            },
+            "result": {
+              "path": "audit_attempts/pypower/cb8482026aad417aa79e8aaec6bb7700/result.json",
+              "sha256": "b083bab05aea94b4133a5359bddb5300fcabce6b9407d256c147af2057aa85f9"
+            }
+          }
+        }
+      }
+    },
+    "smooth_links": {
+      "generator_bus_ids": [
+        1,
+        2,
+        30
+      ],
+      "objective": 5314.2758369636595,
+      "point": {
+        "bus_ids": [
+          1,
+          2,
+          30,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "gen_rows": [
+          0,
+          1,
+          2
+        ],
+        "angle_rad": [
+          0.0,
+          0.07941298296166303,
+          0.04718130898279665,
+          -0.043049540358198,
+          -0.0725914821479336,
+          0.001679471724977443,
+          -0.03186539603508981,
+          0.009335801569050658,
+          -0.07795605288167609
+        ],
+        "voltage_pu": [
+          1.0999992883216676,
+          1.0972507066462158,
+          1.0868745485051428,
+          1.0950627606189625,
+          1.085230176772496,
+          1.0999993163137847,
+          1.088873914707744,
+          1.0999993523413316,
+          1.0736580006580905
+        ],
+        "pg_mw": [
+          90.00016343884576,
+          135.21952106260358,
+          93.80968860386444
+        ],
+        "qg_mvar": [
+          11.364922650508118,
+          -0.08568454445859636,
+          -22.231288537686556
+        ],
+        "links": [
+          {
+            "row": 0,
+            "from_bus": 30,
+            "to_bus": 4,
+            "native_from_mw": -1.008558579814534,
+            "native_to_mw": 0.9984729940163887,
+            "fixed_withdrawal_mw": 1.0,
+            "net_from_mw": -1.008558579814534,
+            "net_to_mw": -0.0015270059836113292,
+            "pf_mw": 1.008558579814534,
+            "pt_mw": -0.0015270059836113292,
+            "physical_loss_mw": 1.0100855857981452
+          },
+          {
+            "row": 1,
+            "from_bus": 7,
+            "to_bus": 9,
+            "native_from_mw": -9.99993395926186,
+            "native_to_mw": 9.99993395926186,
+            "fixed_withdrawal_mw": 0.0,
+            "net_from_mw": -9.99993395926186,
+            "net_to_mw": 9.99993395926186,
+            "pf_mw": 9.99993395926186,
+            "pt_mw": 9.99993395926186,
+            "physical_loss_mw": 0.0
+          },
+          {
+            "row": 3,
+            "from_bus": 5,
+            "to_bus": 9,
+            "native_from_mw": -0.00010315666840063656,
+            "native_to_mw": 9.799883498060471e-05,
+            "fixed_withdrawal_mw": 0.0,
+            "net_from_mw": -0.00010315666840063656,
+            "net_to_mw": 9.799883498060471e-05,
+            "pf_mw": 0.00010315666840063656,
+            "pt_mw": 9.799883498060471e-05,
+            "physical_loss_mw": 5.157833420031845e-06
+          }
+        ]
+      },
+      "evidence": {
+        "attempt": "c234852c0ea14094a1d273d5f8e42121",
+        "request_sha256": "38d1153adaa8d35e4aeb6cbb3431d00e0cfa467353d9d4352474bc884a34969c",
+        "audit_sha256": "1158da5e9d11a10b9bcd20ff7d96d70380470c579c95af2f1cc2bf4fe5232ef0",
+        "return_sha256": "2b05f4b3d7b8b34318d63a1fdda6e65384a279581bd9b9da5d287d2c73f6ed41",
+        "supervision_sha256": "fd2ce2dd5b99a13259b27708571cd15876ffc923705ceeb1e1dc321ca013b0f8",
+        "native_artifacts_sha256": {
+          "native_return.json": "4df63e628548fa105d3b735e46c1db35637387bdccad85361264048de3bb0e35",
+          "native_start.json": "31856e4bdf2c1b628490e727eb315d613b88c3beef07ae338df3cefda1dea598"
+        },
+        "target_audits": {
+          "cvxopf": {
+            "request": {
+              "path": "audit_attempts/cvxopf/0a9f9ade57a741d2b936e84fff904186/request.json",
+              "sha256": "6af4498ab4567a5832e51a82b95f20a44450271550b1747d6d43a0be342b8cbc"
+            },
+            "result": {
+              "path": "audit_attempts/cvxopf/0a9f9ade57a741d2b936e84fff904186/result.json",
+              "sha256": "2bef6146186f6dce19c9592de1ed3bacd31ead026597d506112ec0642f2e71c9"
+            }
+          },
+          "pypower": {
+            "request": {
+              "path": "audit_attempts/pypower/80196dc41fce4c948f5f01d736d11ca4/request.json",
+              "sha256": "6af4498ab4567a5832e51a82b95f20a44450271550b1747d6d43a0be342b8cbc"
+            },
+            "result": {
+              "path": "audit_attempts/pypower/80196dc41fce4c948f5f01d736d11ca4/result.json",
+              "sha256": "5fb5a467300425f4018a93d2870d81fd1e023ae8f0135f3c29c496b221caaf84"
+            }
+          }
+        }
+      }
+    },
+    "pwl_no_links": {
+      "generator_bus_ids": [
+        1,
+        2,
+        30
+      ],
+      "objective": 6621.737928987821,
+      "point": {
+        "bus_ids": [
+          1,
+          2,
+          30,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "gen_rows": [
+          0,
+          1,
+          2
+        ],
+        "angle_rad": [
+          0.0,
+          0.10092817167405005,
+          0.040911946319818926,
+          -0.043092183717175804,
+          -0.07261821111226494,
+          0.002033052395148844,
+          -0.019936464700666907,
+          0.02356006269538822,
+          -0.07799876779533335
+        ],
+        "voltage_pu": [
+          1.0999999857904652,
+          1.0981977146896846,
+          1.0842788967647579,
+          1.0939771182531766,
+          1.0837993135384998,
+          1.0981209185301015,
+          1.0886258522681629,
+          1.0999996013553892,
+          1.0712955898421352
+        ],
+        "pg_mw": [
+          90.00000205227813,
+          149.39005020437685,
+          78.97652823304767
+        ],
+        "qg_mvar": [
+          13.441452269212775,
+          2.615772717050052,
+          -24.076512574807527
+        ],
+        "links": []
+      },
+      "evidence": {
+        "attempt": "145da9616d35466db12c3a98a541140a",
+        "request_sha256": "168ab9f469847c3dcd1f7eff63d3eaa4729e05bf3dc0d204672b1a238626b5d8",
+        "audit_sha256": "362c3884d8feae97a3e25d167c38658bb44482f32a020cb47b19436c60ff4997",
+        "return_sha256": "3b4223c1d51faceb1f0a7ec4b0e4c773291ca9d3193d80e0aa69faa23a8c7aa5",
+        "supervision_sha256": "36d53d498a9b09d6cd9824884c97dc3803f1352c470c5f3b5ef0847ecf84d23e",
+        "native_artifacts_sha256": {
+          "native_return.json": "bcd7c30af345230ad1c292fb92e58a93ba7b4332cefaf07315d984d27483cf6f",
+          "native_start.json": "43936f0ad810f43b3b901b5c1791906809942e8dc06a951e4563085054dbb16b"
+        },
+        "target_audits": {
+          "cvxopf": {
+            "request": {
+              "path": "audit_attempts/cvxopf/7503edc83496401aa004f3d76a442095/request.json",
+              "sha256": "2f756657eb562715c53afbf9b2af8681cbef2c2bbe186cb7183c1d07ee97709a"
+            },
+            "result": {
+              "path": "audit_attempts/cvxopf/7503edc83496401aa004f3d76a442095/result.json",
+              "sha256": "a73ffbe5e27574bee7d5086a869a514ed8843ce67886d55433c1f89c584a775a"
+            }
+          },
+          "pypower": {
+            "request": {
+              "path": "audit_attempts/pypower/23d060b6ea9b49ac9cc7c3e87cc58670/request.json",
+              "sha256": "2f756657eb562715c53afbf9b2af8681cbef2c2bbe186cb7183c1d07ee97709a"
+            },
+            "result": {
+              "path": "audit_attempts/pypower/23d060b6ea9b49ac9cc7c3e87cc58670/result.json",
+              "sha256": "6a6aaf3234beea9d7298b7029ff15ae9bdfb98a90dc09b375992230f414a1bd2"
+            }
+          }
+        }
+      }
+    },
+    "pwl_links": {
+      "generator_bus_ids": [
+        1,
+        2,
+        30
+      ],
+      "objective": 6249.865996095148,
+      "point": {
+        "bus_ids": [
+          1,
+          2,
+          30,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "gen_rows": [
+          0,
+          1,
+          2
+        ],
+        "angle_rad": [
+          0.0,
+          0.05099958458994692,
+          0.07673194580770624,
+          -0.043053917750239167,
+          -0.0724738850426244,
+          0.01665958047520256,
+          -0.03341057949570482,
+          -0.004001622287576126,
+          -0.07796050174962589
+        ],
+        "voltage_pu": [
+          1.099999982918461,
+          1.097136600052635,
+          1.08683353082857,
+          1.0949488391186555,
+          1.083354565864544,
+          1.0999996869990585,
+          1.0887683641263939,
+          1.0999073563291801,
+          1.074992679084493
+        ],
+        "pg_mw": [
+          90.00000220183946,
+          106.1426737223974,
+          123.48177834288232
+        ],
+        "qg_mvar": [
+          11.584007088278923,
+          -1.9441133367349528,
+          -20.738813778742987
+        ],
+        "links": [
+          {
+            "row": 0,
+            "from_bus": 30,
+            "to_bus": 4,
+            "native_from_mw": -1.0000038348278597,
+            "native_to_mw": 0.9900037964795811,
+            "fixed_withdrawal_mw": 1.0,
+            "net_from_mw": -1.0000038348278597,
+            "net_to_mw": -0.009996203520418856,
+            "pf_mw": 1.0000038348278597,
+            "pt_mw": -0.009996203520418856,
+            "physical_loss_mw": 1.0100000383482786
+          },
+          {
+            "row": 1,
+            "from_bus": 7,
+            "to_bus": 9,
+            "native_from_mw": -9.99999600810734,
+            "native_to_mw": 9.99999600810734,
+            "fixed_withdrawal_mw": 0.0,
+            "net_from_mw": -9.99999600810734,
+            "net_to_mw": 9.99999600810734,
+            "pf_mw": 9.99999600810734,
+            "pt_mw": 9.99999600810734,
+            "physical_loss_mw": 0.0
+          },
+          {
+            "row": 3,
+            "from_bus": 5,
+            "to_bus": 9,
+            "native_from_mw": -9.999997950520372,
+            "native_to_mw": 9.499998052994354,
+            "fixed_withdrawal_mw": 0.0,
+            "net_from_mw": -9.999997950520372,
+            "net_to_mw": 9.499998052994354,
+            "pf_mw": 9.999997950520372,
+            "pt_mw": 9.499998052994354,
+            "physical_loss_mw": 0.4999998975260187
+          }
+        ]
+      },
+      "evidence": {
+        "attempt": "aff35238e9034943b272980db3c62634",
+        "request_sha256": "112d4d795d480a73fac92cd75760105847babeee80f47f4e40599b19b9391aac",
+        "audit_sha256": "5a3cedc00d8f7d9c72ab78af1fcf01885c38bfb8bee0b5369e2fd8ea9666e906",
+        "return_sha256": "385199c74ab9fbe02b664c16f010b0607a0d2a1601c0d30b7dcb22dd3e0ec724",
+        "supervision_sha256": "d53ec8cfc43f4ab0aa605cab57121d3e52768eb3def8ab4dba80d91ba46b1788",
+        "native_artifacts_sha256": {
+          "native_return.json": "9103fa380837869d1d78eabc68a69a98450f43b75568fcaabb87df1a19846088",
+          "native_start.json": "d12b9570c26e225b9d6a97bf68def285615804d436f326f115b3b11fb0870b15"
+        },
+        "target_audits": {
+          "cvxopf": {
+            "request": {
+              "path": "audit_attempts/cvxopf/47f73fee730b4c19872eae3de8363d8c/request.json",
+              "sha256": "d2ace8164da00a70b844b30d9591abee575bd3fabedfda42051840e2082dc914"
+            },
+            "result": {
+              "path": "audit_attempts/cvxopf/47f73fee730b4c19872eae3de8363d8c/result.json",
+              "sha256": "119f75aeb7b766ff7d162475372157afc6e799e534e0b231e2ad28ebead54f7d"
+            }
+          },
+          "pypower": {
+            "request": {
+              "path": "audit_attempts/pypower/bcdd0b816e3b48688cbf792aeabdf3d0/request.json",
+              "sha256": "d2ace8164da00a70b844b30d9591abee575bd3fabedfda42051840e2082dc914"
+            },
+            "result": {
+              "path": "audit_attempts/pypower/bcdd0b816e3b48688cbf792aeabdf3d0/result.json",
+              "sha256": "64752b145b3ea3a6611dc508000438936cbdd6bfa38a3b718ea5afe39fa33ac4"
+            }
+          }
+        }
+      }
+    }
+  }
+}

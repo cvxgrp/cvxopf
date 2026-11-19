@@ -21,6 +21,13 @@ Pypower on AC optimal power flow}
 \begin{document}
 \maketitle
 
+\noindent\textbf{Historical report: the HVDC comparison is superseded.}
+The two models used different link directions and physical limits, and a
+historical lossy link created power. The reported HVDC cost gaps and
+routing-versus-loss explanation do not establish a solver advantage.
+The no-HVDC controls are unaffected by these defects. See
+\path{plans/dcline-import-and-case9-comparison.md} in the repository.
+
 \section{Summary}
 
 We compared two methods for solving the same AC optimal power flow (AC-OPF)

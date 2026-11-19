@@ -1,5 +1,8 @@
 """DNLP vs Pypower on AC optimal power flow: the "proof by code".
 
+Historical exhibit only. The HVDC verdict is superseded; the entry point
+stops before any solve. See plans/dcline-import-and-case9-comparison.md.
+
 7/20/2020
 Bennet Meyers
 
@@ -123,7 +126,7 @@ def _solve(build):
     return extract_results(build)
 
 
-def main():
+def _historical_main():
     ref = json.loads((_here / "reference_pypower.json").read_text())
 
     # --- solve all four cvxopf variants live ---
@@ -317,6 +320,13 @@ def _loss_split(build, result):
             np.sum(np.asarray(result["p_hvdc_in"]) + np.asarray(result["p_hvdc_out"]))
         )
     return ac_loss, dc_loss
+
+
+def main():
+    raise SystemExit(
+        "Superseded HVDC comparison; no solves run. "
+        "See plans/dcline-import-and-case9-comparison.md."
+    )
 
 
 if __name__ == "__main__":
