@@ -920,7 +920,24 @@ The NumPy pin is required because PYPOWER uses `numpy.in1d`, which was removed
 in NumPy 2.3. Do not run this script with the main package
 environment.
 
-Regenerate fixtures only if:
+The matched Case9 fixture is separate from the standard DC-line and Ybus
+fixtures. To regenerate only that fixture from the retained, audited
+`benchmark_001` run, use:
+
+```bash
+uv run --script scripts/generate_pypower_fixtures.py --matched-case9-from \
+  experiments/case9_matched_comparison/outputs/benchmark_001
+```
+
+With the pinned PYPOWER environment already installed, the same command
+can use its Python interpreter instead of `uv run --script`. This path
+does not run an optimizer. It checks the frozen binding, the recorded Git
+source blobs, and the four PYPOWER returns and audit chains before writing
+`tests/fixtures/case9_matched_dcline_pypower_reference.json`. CI reads only
+that static fixture for the matched tests; it does not need the retained run
+or a PYPOWER installation.
+
+Regenerate the standard solver-generated fixtures only if:
 
 - A new test case is added to the package
 - A suspected bug in an existing fixture needs to be ruled out
