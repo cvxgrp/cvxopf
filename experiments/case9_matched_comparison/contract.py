@@ -83,14 +83,20 @@ def native_bounds(row, dc):
 
 def link_point(row, dc, sent_mw):
     """Native gross and external net terminal coordinates, kept separately."""
-    gross = (1 - dc[16]) * sent_mw
+    return link_from_native(row, dc, -sent_mw, (1 - dc[16]) * sent_mw)
+
+
+def link_from_native(row, dc, p_from, p_to):
+    """Record actual terminal values without repairing solver residuals."""
+    fixed = float(dc[15])
+    sent, gross = float(-p_from), float(p_to)
     return {
         "row": row, "from_bus": int(dc[0]), "to_bus": int(dc[1]),
-        "native_from_mw": -sent_mw, "native_to_mw": gross,
-        "fixed_withdrawal_mw": dc[15],
-        "net_from_mw": -sent_mw, "net_to_mw": gross - dc[15],
-        "pf_mw": sent_mw, "pt_mw": gross - dc[15],
-        "physical_loss_mw": sent_mw - (gross - dc[15]),
+        "native_from_mw": -sent, "native_to_mw": gross,
+        "fixed_withdrawal_mw": fixed,
+        "net_from_mw": -sent, "net_to_mw": gross - fixed,
+        "pf_mw": sent, "pt_mw": gross - fixed,
+        "physical_loss_mw": sent - (gross - fixed),
     }
 
 
@@ -216,17 +222,35 @@ def point_suite(case):
     return points
 
 
-def coordinates(case, point):
+def coordinates(case, point, *, check_link_physics=True):
     """Validate identities and provide engineering-unit arrays."""
     close(point["bus_ids"], case["bus"][:, 0], "point bus identity")
     close(point["gen_rows"], np.arange(len(case["gen"])), "point generator identity")
     links = selected_links(case)
     require(list(links) == [link["row"] for link in point["links"]], "point link row identity")
     for (row, dc), link in zip(links.items(), point["links"], strict=True):
-        audit_link(row, dc, link)
-    return tuple(np.asarray(point[key], dtype=float) for key in (
+        if check_link_physics:
+            audit_link(row, dc, link)
+    result = tuple(np.asarray(point[key], dtype=float) for key in (
         "angle_rad", "voltage_pu", "pg_mw", "qg_mvar",
     ))
+    require([a.shape for a in result] == [(len(case["bus"]),)] * 2 + [(len(case["gen"]),)] * 2
+            and all(np.isfinite(a).all() for a in result), "invalid physical-coordinate vectors")
+    return result
+
+
+def solution_point(case, theta, vm, pg, qg, terminals):
+    """Interchange record for an actual native primal, with no slack adjustment."""
+    return {
+        "bus_ids": case["bus"][:, 0].astype(int).tolist(),
+        "gen_rows": list(range(len(case["gen"]))),
+        "angle_rad": np.asarray(theta).ravel().tolist(),
+        "voltage_pu": np.asarray(vm).ravel().tolist(),
+        "pg_mw": np.asarray(pg).ravel().tolist(),
+        "qg_mvar": np.asarray(qg).ravel().tolist(),
+        "links": [link_from_native(row, dc, *pq)
+                  for (row, dc), pq in zip(selected_links(case).items(), terminals, strict=True)],
+    }
 
 
 def worst(values, identities, units):

@@ -131,7 +131,7 @@ class PypModel:
                  | ({"dcline"} if nd else set())), "unexpected active PYP linear row family")
 
         def capture(f, x, A, lower, upper, xmin, xmax, gh, hess, opt):
-            self.f, self.gh, self.x0 = f, gh, x.copy()
+            self.f, self.gh, self.hess, self.x0 = f, gh, hess, x.copy()
             self.callbacks = verify_callbacks(f, x, A, lower, upper, xmin, xmax, gh, hess, opt,
                                               self.nb, len(ratings))
             raise ProbeComplete
@@ -216,8 +216,8 @@ class PypModel:
                 costs, full_pg[self.ppc["order"]["gen"]["e2i"]], strict=True) if cost[0] == 1]
         return x
 
-    def evaluate(self, point):
-        theta, vm, pg, qg = coordinates(self.case, point)
+    def evaluate(self, point, *, numerical=False):
+        theta, vm, pg, qg = coordinates(self.case, point, check_link_physics=not numerical)
         x = self.dispatch(theta, vm, pg, qg,
                           [(link["net_from_mw"], link["net_to_mw"]) for link in point["links"]])
         h, g, _, _ = self.gh(x)
@@ -232,10 +232,12 @@ class PypModel:
         floors = self.check_pwl_floors(x) if "y" in self.var_order else []
         if self.links:
             rows = self.indices(self.ll, "dcline")
-            close(self.base * (ax - self.lower)[rows], np.zeros(len(self.links)),
-                  "PYP converter rows on mapped point")
-        require(np.max(h) < 0 or np.any(vm > self.case["bus"][:, 11]),
-                "PYP supposedly redundant MVA row restricts an in-voltage-box point")
+            if not numerical:
+                close(self.base * (ax - self.lower)[rows], np.zeros(len(self.links)),
+                      "PYP converter rows on mapped point")
+        if not numerical:
+            require(np.max(h) < 0 or np.any(vm > self.case["bus"][:, 11]),
+                    "PYP supposedly redundant MVA row restricts an in-voltage-box point")
         va_cols, vm_cols = (self.cols(key)[self.bus_cols] for key in ("Va", "Vm"))
         pg_cols, qg_cols = (self.cols(key)[self.gen_cols] for key in ("Pg", "Qg"))
         gen_buses = self.case["gen"][:, 0].astype(int).tolist()
@@ -264,6 +266,12 @@ class PypModel:
             report["worst"][key] = worst(
                 self.base * box_excess(self.xmin[real], self.xmax[real], x[real]), gen_buses, units,
             )
+        rating = np.tile(self.ppc["branch"][:, 5], 2)
+        flow = np.sqrt(np.maximum(0., self.base**2 * h + rating**2))
+        report["worst"]["thermal_box"] = worst(
+            np.maximum(0., flow - rating),
+            [f"{row}:{side}" for side in ("from", "to") for row in self.branch_rows], "MVA",
+        )
         if self.links:
             nd = len(self.links)
             from_cols = pg_cols[self.ng:self.ng + nd]
@@ -282,6 +290,13 @@ class PypModel:
         return report
 
     def check_pwl_floors(self, x):
+        floors = self.pwl_floors(x)
+        for column, row in zip(self.cols("y"), floors, strict=True):
+            cost_close(row["minimum_cost"], x[column],
+                       f"PYP minimum PWL cost for generator row {row['gen_row']}")
+        return floors
+
+    def pwl_floors(self, x):
         """Recover the minimum feasible y for each generator from actual rows."""
         y = self.cols("y")
         rows = self.indices(self.ll, "ycon")
@@ -298,13 +313,12 @@ class PypModel:
         rest = self.A[rows, :] @ x - coeff @ x[y]
         internal_gens = np.flatnonzero(self.ppc["gencost"][:, 0] == 1)
         result = []
-        for k, (column, internal_gen) in enumerate(zip(y, internal_gens, strict=True)):
+        for k, (_, internal_gen) in enumerate(zip(y, internal_gens, strict=True)):
             participating = coeff[:, k] < 0
             require(participating.any(), "missing PYP ycon rows for a PWL generator")
             floor = float(max((self.upper[rows][participating] - rest[participating])
                               / coeff[participating, k]))
             external_row = int(self.ppc["order"]["gen"]["e2i"][internal_gen])
-            cost_close(floor, x[column], f"PYP minimum PWL cost for generator row {external_row}")
             result.append({"gen_row": external_row, "minimum_cost": floor})
         return result
 

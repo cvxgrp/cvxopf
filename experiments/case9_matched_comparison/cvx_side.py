@@ -170,9 +170,9 @@ class CvxModel:
             p_out.save_value(previous[1])
         return probes
 
-    def evaluate(self, point):
+    def evaluate(self, point, *, numerical=False):
         core, angle_rows, face_rows = self._final_rows()
-        theta, vm, pg, qg = coordinates(self.case, point)
+        theta, vm, pg, qg = coordinates(self.case, point, check_link_physics=not numerical)
         base = self.case["baseMVA"]
         v = vm * np.exp(1j * theta)
         pair = v[:, None] * (self.ybus * v[None, :]).conj()
@@ -211,7 +211,8 @@ class CvxModel:
             close(np.vstack(rows[15:17]), np.vstack([
                 bounds[:, 0] - lifted["p_hvdc_in"], lifted["p_hvdc_in"] - bounds[:, 1],
             ]), "CVXOPF link box rows")
-            close(rows[17], np.zeros(len(link_data)), "CVXOPF link proportional rows")
+            if not numerical:
+                close(rows[17], np.zeros(len(link_data)), "CVXOPF link proportional rows")
         angles = np.array([row.expr.value for row in angle_rows])
         faces = [float(row.expr.value) for row in face_rows]
         vmin, vmax = self.variables["v"].bounds
@@ -233,6 +234,7 @@ class CvxModel:
                 "angle_box": worst(np.maximum(0, np.rad2deg(angles)),
                                    [f"{row}:{side}" for row, *_ in ANGLES
                                     for side in ("lower", "upper")], "degrees"),
+                "reference_angle": worst(np.rad2deg(rows[0]), [1], "degrees"),
                 "generator_p_box": worst(base * np.maximum(0, np.maximum(rows[11], rows[12])),
                                          gen_buses, "MW"),
                 "generator_q_box": worst(base * np.maximum(0, np.maximum(rows[13], rows[14])),

@@ -31,7 +31,8 @@ written only to the experiment's locally ignored `outputs/` directory.
 Status checks their publication hashes without importing PYPOWER or
 redoing the model checks. Attempts are serial, with a 30-second deadline
 for each isolated callback probe. The harness has no solve or benchmark
-launch command.
+launch command. See the separate [benchmark runner guide](BENCHMARK.md)
+for binding and launching the eight solves after approval.
 
 To run the interruption and publication tests, point
 `CASE9_PINNED_PYPOWER_PYTHON` at the same interpreter and run:
