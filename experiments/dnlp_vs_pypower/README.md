@@ -1,9 +1,19 @@
 # DNLP vs Pypower on AC optimal power flow — proof by code
 
-This folder contains a written report (`REPORT.tex`, LaTeX source) and a runnable demo
-(`demo.py`) that reproduces every headline number in it.
+> **Superseded HVDC comparison.** The old runs did not solve the same
+> physical problem. The importer reversed the DC-link bounds, the historical
+> 5 → 9 transfer created 0.5 MW, and the cross-check did not establish parity
+> with PYPOWER's limits. Neither the reported cost gaps nor the routing-versus-loss
+> explanation establishes a solver advantage. The no-HVDC controls are not
+> affected by these defects. See the
+> [corrected four-case benchmark results](../case9_matched_comparison/REPORT.md)
+> and the [repair plan](../../plans/dcline-import-and-case9-comparison.md).
 
-## The claim
+This folder contains a written report (`REPORT.tex`, LaTeX source) and a demo
+(`demo.py`) retained as historical evidence. The demo now stops before solving
+so it cannot emit the superseded verdict against the corrected importer.
+
+## Historical claim (withdrawn for HVDC)
 
 On the 9-bus AC-OPF, two methods for solving the *same* problem are compared:
 
@@ -16,7 +26,7 @@ Two features are toggled on and off (piecewise-linear generator costs; HVDC
 lines), giving four variants. Each feature alone: the two methods (mostly) agree.
 Both together: the standard method returns a solution ~14% more expensive, and
 the DNLP solution is verifiably feasible in the standard method's own problem.
-## Run it
+## Historical procedure (do not run as a current comparison)
 
 From the repository root, in the main cvxopf environment:
 
@@ -33,7 +43,7 @@ and (4) the generator marginal-cost slopes that show why.
 ## Files
 
 - `REPORT.tex` — the written report (setup, observations, conclusions). Compile with `pdflatex REPORT.tex`.
-- `demo.py` — the exhibit (main environment). Run this.
+- `demo.py` — the archived exhibit; normal execution stops before any solve.
 - `reference_pypower.json` — the committed Pypower reference solutions.
 - `generate_pypower_reference.py` — regenerates `reference_pypower.json` in an
   isolated Pypower sandbox. **Not needed to run the demo.** The two no-DC cells

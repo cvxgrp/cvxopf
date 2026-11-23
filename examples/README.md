@@ -1262,115 +1262,27 @@ final storage SoC: 20.0 MWh
 
 ## HVDC Transmission
 
-### `case9_hvdc_ac.py`
+<a name="case9_hvdc_acpy"></a>
+<a name="case9_hvdc_dcpy"></a>
 
-AC-OPF with HVDC transmission links on case9_dcline (single step).
+### `case9_hvdc_ac.py` and `case9_hvdc_dc.py`
 
-Demonstrates the HVDC MVP (Milestone 7) in the full AC formulation:
-  - HVDC links imported from a MATPOWER ``dcline`` table via
-    ``hvdc_from_dcline`` (the realistic entry point)
-  - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
-    (to-bus), Convention B (positive = injection into the grid)
-  - Direction-specific proportional loss selected from the ``p_in`` box
+Solve the same nine-bus case with three in-service HVDC links, using AC or
+lossy DC power flow:
 
-case9_dcline has three in-service DC links:
-  link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
-  link 1:  bus  7 -> bus  9, box [2, 10] MW, lossless
-  link 2:  bus  5 -> bus  9, box [0, 10] MW, 5% loss
-
-Note: a UserWarning is emitted at import time because link 0 carries a
-nonzero MATPOWER ``loss0`` (fixed converter loss), which the MVP drops.
-Full fixed-loss modelling is deferred to Milestone 15.
-
-Usage:
-    uv run examples/case9_hvdc_ac.py
-
-#### Expected Output
-
-```
-Importing HVDC links from the dcline table...
-(UserWarning expected: link 0 has a nonzero loss0, dropped by the MVP)
-
-Warning: hvdc_from_dcline: one or more active dcline rows have loss0 != 0. Fixed converter loss (LOSS0) is not modelled in the MVP; the imported model will not match Pypower exactly. Full fixed-loss modelling is deferred to Milestone 15.
-
-Status:     optimal
-Objective:  6457.3035 $
-
-Link    from->to   p_in (MW)   p_out (MW)   loss (MW)   loss %
---------------------------------------------------------------
-   0       30->4      1.0000      -1.0101      0.0101     1.00
-   1        7->9     10.0000     -10.0000     -0.0000     0.00
-   2        5->9      0.0000      -0.0000      0.0000     5.00
-
-Generator dispatch Pg (MW): [ 90.   , 130.566,  98.177]
-
-Direction-specific loss-law verification:
-  link 0: p_out=-1.0101  expected=-1.0101  residual=2.22e-16
-  link 1: p_out=-10.0000  expected=-10.0000  residual=0.00e+00
-  link 2: p_out=-0.0000  expected=-0.0000  residual=5.17e-26
-
-HVDC loss non-negative (all links): True
+```bash
+uv run examples/case9_hvdc_ac.py
+uv run examples/case9_hvdc_dc.py
 ```
 
-### `case9_hvdc_dc.py`
-
-Lossy DC OPF with HVDC transmission links on case9_dcline (single step).
-
-Demonstrates the HVDC MVP (Milestone 7) in the convex lossy DC formulation:
-  - HVDC links imported from a MATPOWER ``dcline`` table via
-    ``hvdc_from_dcline`` (the realistic entry point)
-  - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
-    (to-bus), Convention B (positive = injection into the grid)
-  - Direction-specific proportional loss selected from the ``p_in`` box
-
-case9_dcline has three in-service DC links:
-  link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
-  link 1:  bus  7 -> bus  9, box [2, 10] MW, lossless
-  link 2:  bus  5 -> bus  9, box [0, 10] MW, 5% loss
-
-Unlike the AC example, the DC formulation has no reactive power and no bus
-voltages, so results carry no ``Qg``/``Vm``/``Va_deg`` (only ``Pg``,
-``p_flows``, ``p_net``, plus the HVDC keys). The HVDC model itself is
-identical to AC (signed injections, proportional loss).
-
-Note: a UserWarning is emitted at import time because link 0 carries a
-nonzero MATPOWER ``loss0`` (fixed converter loss), which the MVP drops.
-Full fixed-loss modelling is deferred to Milestone 15.
-
-Usage:
-    uv run examples/case9_hvdc_dc.py
-
-#### Expected Output
-
-```
-Importing HVDC links from the dcline table...
-(UserWarning expected: link 0 has a nonzero loss0, dropped by the MVP)
-
-Warning: hvdc_from_dcline: one or more active dcline rows have loss0 != 0. Fixed converter loss (LOSS0) is not modelled in the MVP; the imported model will not match Pypower exactly. Full fixed-loss modelling is deferred to Milestone 15.
-
-Status:     optimal
-Objective:  5547.1235 $
-
-Link    from->to   p_in (MW)   p_out (MW)   loss (MW)   loss %
---------------------------------------------------------------
-   0       30->4      1.0000      -1.0101      0.0101     1.00
-   1        7->9      9.9973      -9.9973     -0.0000     0.00
-   2        5->9      0.0000      -0.0000      0.0000     5.00
-
-Generator dispatch Pg (MW): [ 90.  ,  36.01, 189.  ]
-
-Direction-specific loss-law verification:
-  link 0: p_out=-1.0101  expected=-1.0101  residual=2.22e-16
-  link 1: p_out=-9.9973  expected=-9.9973  residual=0.00e+00
-  link 2: p_out=-0.0000  expected=-0.0000  residual=4.78e-18
-
-HVDC loss non-negative (all links): True
-
-DC results carry no reactive power / voltage keys:
-  'Qg' in results:     False
-  'Vm' in results:     False
-  'Va_deg' in results: False
-```
+Both examples show the signed bus injections, proportional losses and
+generator dispatch. The imported limits allow 1–10 MW sent on 30 → 4,
+2–10 MW on 7 → 9 and 0–10 MW on 5 → 9. For example, sending 10 MW on
+5 → 9 gives **−10 MW** at the from bus and **+9.5 MW** at the to bus.
+This is a sign and loss check, not a prediction of optimized dispatch.
+The importer warns that it omits fixed converter loss, reactive settings and
+converter voltage setpoints. See the [HVDC guide](../docs/modeling.md#hvdc-transmission-link-example).
+The lossy DC example does not report reactive power or bus voltages.
 
 ---
 

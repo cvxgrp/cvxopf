@@ -38,7 +38,7 @@ from cvxopf.hvdc import (
 )
 from cvxopf.testcases.case9_dcline import case9_dcline
 from cvxopf.testcases.case9 import case9
-from cvxopf.problem import build_opf, build_opf_multistep
+from cvxopf.problem import OPFBuild, build_opf, build_opf_multistep
 from cvxopf.results import extract_results
 from cvxopf.testcases import make_singlenode_case
 
@@ -246,39 +246,79 @@ class TestHVDCFromDcline:
         return ppc["dcline"], ppc["dclinecost"]
 
     def test_inactive_row_skipped(self):
-        # case9_dcline has 4 rows; row index 2 has status=0 (verify below)
         dcline, dclinecost = self._case_tables()
-        links = hvdc_from_dcline(dcline, dclinecost)
-        # 4 rows minus 1 inactive = 3 links
-        assert len(links) == 3
+        dcline[2, 2] = -1  # PYPOWER treats nonpositive status as inactive.
+        dclinecost[2, 0] = 1  # The inactive link's unsupported cost is ignored.
+        with pytest.warns(UserWarning):
+            links = hvdc_from_dcline(dcline, dclinecost)
+        assert [(link.from_bus, link.to_bus) for link in links] == [(30, 4), (7, 9), (5, 9)]
+        assert links[2].cost_coeffs == (0., 7.3, 0.)
 
-    def test_loss0_warning_emitted(self):
-        # row 0 of t_case9_dcline has loss0=1 (nonzero)
-        dcline, dclinecost = self._case_tables()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            hvdc_from_dcline(dcline, dclinecost)
-        msgs = [str(x.message) for x in w if issubclass(x.category, UserWarning)]
-        assert any("loss0" in m.lower() or "fixed converter" in m.lower() for m in msgs)
-
-    def test_no_warning_when_loss0_zero(self):
-        # Build a minimal table with no loss0
-        dcline = np.array(
-            [[1, 2, 1, 10.0, 9.0, 0, 0, 1, 1, 0, 20, 0, 0, 0, 0, 0.0, 0.0]]
-        )
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+    @pytest.mark.parametrize("status", [np.nan, np.inf, -np.inf])
+    def test_nonfinite_status_fails_at_original_row(self, status):
+        dcline, _ = self._case_tables()
+        dcline[3, 2] = status
+        with pytest.raises(ValueError, match="dcline row 3: status must be finite"):
             hvdc_from_dcline(dcline)
+
+    def test_warning_identifies_omitted_converter_features_by_row(self):
+        dcline, dclinecost = self._case_tables()
+        with pytest.warns(UserWarning, match="omitted unsupported converter terms") as caught:
+            hvdc_from_dcline(dcline, dclinecost)
+        message = str(caught[0].message)
+        assert "row 0 (30 -> 4): fixed converter loss (LOSS0=1 MW), reactive power" in message
+        assert "row 1 (7 -> 9): converter voltage setpoints" in message
+        assert "row 3 (5 -> 9): reactive power" in message
+        assert "row 2" not in message
+
+    @staticmethod
+    def _line(p_min=0., p_max=20., loss0=0., loss1=0.):
+        # PF and PT are deliberately unrelated to these OPF bounds.
+        return np.array([[1, 2, 1, 123, 456, 0, 0, 0, 0,
+                          p_min, p_max, 0, 0, 0, 0, loss0, loss1]], dtype=float)
+
+    def test_no_warning_without_omitted_converter_terms(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            hvdc_from_dcline(self._line())
         assert not any(issubclass(x.category, UserWarning) for x in w)
 
-    def test_pmin_pmax_mapped(self):
+    def test_case9_forward_from_injection_bounds(self):
         dcline, dclinecost = self._case_tables()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
+        with pytest.warns(UserWarning):
             links = hvdc_from_dcline(dcline, dclinecost)
-        for lnk in links:
-            assert lnk.p_min_mw <= lnk.p_max_mw
-            assert lnk.p_max_mw > 0
+        assert [
+            (link.from_bus, link.to_bus, link.p_min_mw, link.p_max_mw)
+            for link in links
+        ] == [(30, 4, -10, -1), (7, 9, -10, -2), (5, 9, -10, 0)]
+
+    @pytest.mark.parametrize(("limits", "loss1", "native"), [
+        ((0, 0), .05, (0, 0)),
+        ((3, 3), .05, (-3, -3)),
+        ((-3, -3), 0., (3, 3)),
+        ((-5, -2), 0., (2, 5)),
+        ((-5, 0), 0., (0, 5)),
+        ((-5, 2), 0., (-2, 5)),
+    ])
+    def test_other_representable_bounds(self, limits, loss1, native):
+        (link,) = hvdc_from_dcline(self._line(*limits, loss1=loss1))
+        assert (link.p_min_mw, link.p_max_mw) == native
+
+    @pytest.mark.parametrize("p_max", [-1, 0, 3])
+    @pytest.mark.parametrize(("loss0", "loss1"), [(1., 0.), (0., .05)])
+    def test_rejects_reverse_and_two_way_loss(self, p_max, loss0, loss1):
+        with pytest.raises(ValueError, match=r"row 0 \(1 -> 2\): .*nonzero losses"):
+            hvdc_from_dcline(self._line(-5, p_max, loss0=loss0, loss1=loss1))
+
+    @pytest.mark.parametrize(("kwargs", "reason"), [
+        ({"p_min": 6, "p_max": 5}, "PMIN <= PMAX"),
+        ({"p_max": np.inf}, "PMIN <= PMAX"),
+        ({"loss0": -1}, "LOSS0 >= 0"),
+        ({"loss1": 1}, "LOSS1 < 1"),
+    ])
+    def test_reports_invalid_bounds_and_losses_at_import(self, kwargs, reason):
+        with pytest.raises(ValueError, match=rf"row 0 \(1 -> 2\): .*{reason}"):
+            hvdc_from_dcline(self._line(**kwargs))
 
     def test_loss_percent_from_loss1(self):
         # row 0: loss1=0.01 -> loss_percent=1.0 (row is active, loss0=1 -> warning)
@@ -289,42 +329,135 @@ class TestHVDCFromDcline:
         # row 0 is active, loss1=0.01
         assert links[0].loss_percent == pytest.approx(1.0)
 
-    def test_quadratic_dclinecost_reversal(self):
-        # Synthetic quadratic row: [2, 0, 0, 3, 5.0, 3.0, 1.0]
-        # highest-first coeffs: [5.0, 3.0, 1.0] -> lowest-first: (1.0, 3.0, 5.0)
-        # c2=5.0 (quadratic), c1=3.0 (linear), c0=1.0 (constant)
-        # Distinct nonzero values ensure a swap fails the assertion.
-        dcline = np.array(
-            [[1, 2, 1, 10.0, 9.0, 0, 0, 1, 1, 0, 20, 0, 0, 0, 0, 0.0, 0.01]]
-        )
-        cost_row = np.array([[2, 0, 0, 3, 5.0, 3.0, 1.0]])
-        links = hvdc_from_dcline(dcline, cost_row)
-        assert len(links) == 1
-        assert links[0].cost_coeffs == pytest.approx((1.0, 3.0, 5.0))
+    @pytest.mark.parametrize(("limits", "pf", "coeffs", "expected"), [
+        ((1, 10), 4, [7], 7),
+        ((1, 10), 4, [3, 1], 13),
+        ((1, 10), 4, [5, 3, 1], 93),
+        ((-10, -1), -4, [5, -3, 1], 93),
+        ((-10, 10), -4, [5, 0, 1], 81),
+        ((-10, 10), 4, [5, 0, 1], 81),
+        ((0, 0), 0, [5, 3, 1], 1),
+    ])
+    def test_imported_cost_matches_signed_pf(self, limits, pf, coeffs, expected):
+        row = np.array([[2, 0, 0, len(coeffs), *coeffs]])
+        links = hvdc_from_dcline(self._line(*limits), row)
+        p_in = cp.Variable(1, value=[-pf])
+        rate = hvdc_cost_expr(links, p_in)
+        assert rate.is_dcp()
+        assert rate.value == pytest.approx(expected)
 
-    def test_linear_dclinecost_n2_padding(self):
-        # Linear row: [2, 0, 0, 2, 7.3, 0.0] -> (c0=0.0, c1=7.3, c2=0.0)
-        dcline = np.array(
-            [[1, 2, 1, 10.0, 9.0, 0, 0, 1, 1, 0, 20, 0, 0, 0, 0, 0.0, 0.05]]
-        )
-        cost_row = np.array([[2, 0, 0, 2, 7.3, 0.0]])
-        links = hvdc_from_dcline(dcline, cost_row)
-        assert links[0].cost_coeffs == pytest.approx((0.0, 7.3, 0.0))
+    @pytest.mark.parametrize("assembly", ["stepwise", "vectorized"])
+    @pytest.mark.parametrize(("linear", "expected"), [(0., 10.), (3., 16.)])
+    def test_zero_pinned_tariff_survives_multistep_override(self, monkeypatch, assembly, linear, expected):
+        def forbid_solve(*args, **kwargs):
+            pytest.fail("imported tariff accounting must not solve")
 
-    def test_degree_gt3_raises(self):
+        monkeypatch.setattr(OPFBuild, "solve", forbid_solve)
+        monkeypatch.setattr(cp.Problem, "solve", forbid_solve)
+        cost = np.array([[2, 0, 0, 3, 2, linear, 1]])
+        (link,) = hvdc_from_dcline(self._line(0, 0), cost)
+        link.device_id = "grid"
+        case = case9()
+        build = build_opf_multistep(
+            case,
+            pd.DataFrame(np.tile(case["bus"][:, 2], (2, 1))),
+            pd.DataFrame(np.tile(case["bus"][:, 3], (2, 1))),
+            T=2,
+            formulation="ac",
+            temporal_assembly=assembly,
+            hvdc=[link],
+            df_hvdc_min=pd.DataFrame({"grid": [0., -2.]}),
+            df_hvdc_max=pd.DataFrame({"grid": [0., -2.]}),
+        )
+        p_in = build.variables["p_hvdc_in"]
+        if assembly == "stepwise":
+            for variable, sent in zip(p_in, (0., 2.), strict=True):
+                variable.value = [-sent]
+        else:
+            p_in.value = np.array([[0., -2.]])
+        assert build.expressions["hvdc_cost"].value == pytest.approx(expected)
+
+    @pytest.mark.parametrize(("limits", "coeffs", "reason"), [
+        ((1, 10), [-3, 1], "negative native"),
+        ((-10, -1), [3, 1], "negative native"),
+        ((-10, 10), [3, 1], "two-way flow"),
+        ((1, 10), [-5, 3, 1], "negative native"),
+        ((0, 0), [-5, -3, 1], "negative native"),
+        ((0, 0), [-3, 1], "negative native"),
+    ])
+    def test_rejects_unrepresentable_signed_cost(self, limits, coeffs, reason):
+        row = np.array([[2, 0, 0, len(coeffs), *coeffs]])
+        with pytest.raises(ValueError, match=f"dclinecost row 0: .*{reason}"):
+            hvdc_from_dcline(self._line(*limits), row)
+
+    def test_rejects_pwl_at_original_active_row_after_inactive(self):
+        dcline, dclinecost = self._case_tables()
+        dclinecost[3, :8] = [1, 0, 0, 2, 0, 0, 10, 73]
+        with pytest.raises(ValueError, match="dclinecost row 3: MODEL=1"):
+            hvdc_from_dcline(dcline, dclinecost)
+
+    @pytest.mark.parametrize(("row", "reason"), [
+        ([2, 0, 0, 2, 3], "invalid NCOST=2"),
+        ([2, 0, 0, 1.5, 3, 0], "invalid NCOST=1.5"),
+        ([2, 0, 0, 1, np.nan], "coefficients must be finite"),
+    ])
+    def test_rejects_malformed_polynomial(self, row, reason):
+        with pytest.raises(ValueError, match=reason):
+            hvdc_from_dcline(self._line(), np.array([row]))
+
+    def test_more_than_three_coefficients_raises(self):
         dcline = np.array(
             [[1, 2, 1, 10.0, 9.0, 0, 0, 1, 1, 0, 20, 0, 0, 0, 0, 0.0, 0.0]]
         )
         cost_row = np.array([[2, 0, 0, 4, 1.0, 2.0, 3.0, 4.0]])
-        with pytest.raises(ValueError, match="degree 4"):
+        with pytest.raises(ValueError, match="NCOST=4"):
             hvdc_from_dcline(dcline, cost_row)
 
     def test_no_dclinecost_defaults_zero(self):
-        dcline = np.array(
-            [[1, 2, 1, 10.0, 9.0, 0, 0, 1, 1, 0, 20, 0, 0, 0, 0, 0.0, 0.0]]
-        )
-        links = hvdc_from_dcline(dcline, None)
+        links = hvdc_from_dcline(self._line(), None)
         assert links[0].cost_coeffs == (0.0, 0.0, 0.0)
+
+    def test_case9_terminal_laws_and_assembled_ac_balance_without_solve(self, monkeypatch):
+        def forbid_solve(*args, **kwargs):
+            pytest.fail("import and assembled-balance checks must not solve")
+
+        monkeypatch.setattr(OPFBuild, "solve", forbid_solve)
+        monkeypatch.setattr(cp.Problem, "solve", forbid_solve)
+        case = case9_dcline()
+        with pytest.warns(UserWarning):
+            links = hvdc_from_dcline(case["dcline"])
+        build = build_opf(case, formulation="ac", hvdc=links)
+        p_in, p_out, pg, p = (
+            build.variables[key] for key in ("p_hvdc_in", "p_hvdc_out", "Pg", "p")
+        )
+        # At assigned values, check the actual link and nodal balance rows,
+        # not the full nonlinear feasibility of this artificial dispatch.
+        p_in.value = [-10, -2, -10]
+        p_out.value = [9.9, 2, 9.5]  # Gross of the omitted 1 MW LOSS0 at bus 4.
+        pg.value = np.zeros(pg.shape)
+        by_bus = {30: -10, 4: 9.9, 7: -2, 5: -10, 9: 11.5}
+        expected = np.zeros(p.shape)
+        for bus, injection in by_bus.items():
+            expected[build.data["ext_to_int"][bus]] = injection
+        p.value = expected / case["baseMVA"] - build.data["Pd"]
+
+        terminal_ids = {p_in.id, p_out.id}
+        link_rows = [
+            row for row in build.prob.constraints
+            if {v.id for v in row.variables()} <= terminal_ids
+            and row.variables()
+        ]
+        balance, = [
+            row for row in build.prob.constraints
+            if {v.id for v in row.variables()} == terminal_ids | {p.id, pg.id}
+        ]
+        assert link_rows
+        for row in [*link_rows, balance]:
+            np.testing.assert_allclose(row.violation(), 0., atol=1e-12)
+        # Reversing the lossless 7 -> 9 point preserves its loss law but
+        # violates the from-injection box by 4 MW.
+        p_in.value, p_out.value = [-10, 2, -10], [9.9, -2, 9.5]
+        assert max(np.max(row.violation()) for row in link_rows) == pytest.approx(4.)
 
 
 class TestHVDCCostExpr:
@@ -1325,14 +1458,9 @@ class TestHVDCCase9DclineConsistency:
     dcline table and assert INTERNAL CONSISTENCY, not a value-match against
     the Pypower fixture.
 
-    Why not a value-match: cvxopf's HVDC MVP models a DC line as a unity-PF
-    real-power injection, whereas Pypower models it as two dummy generators at
-    PV buses with reactive bounds (voltage-regulating reactive sources). That
-    device-model difference reshapes the AC solution. AC-OPF is also nonconvex
-    (sin/cos power flow), so the two solvers may land on different local
-    optima. Either way objective/dispatch do not match (cvxopf ~5490 vs
-    fixture ~6446); see memories/case9-dcline-branch-limit-gap.md. Branch
-    limits and PWL cost were ruled out as causes.
+    The public import omits fixed converter loss and reactive/voltage control.
+    This is not a matched PYPOWER comparison; the previous cost-gap claim
+    was superseded (see plans/dcline-import-and-case9-comparison.md).
 
     Links import via hvdc_from_dcline(dcline) with NO cost table (Option A:
     matches the fixture script's del dclinecost; links are zero-cost).
@@ -1381,13 +1509,13 @@ class TestHVDCCase9DclineConsistency:
         np.testing.assert_allclose(p, Cg @ Pg - Pd + hvdc_inj, atol=1e-4)
 
     def test_loss_law_fixed_direction_links(self):
-        # All three imported links have positive from-bus grid injection.
+        # All three imported links withdraw power from their from buses.
         build, links = self._build()
         r = extract_results(build)
         for k, lk in enumerate(links):
             frac = lk.loss_percent / 100.0
             assert r["p_hvdc_out"][k] == pytest.approx(
-                -r["p_hvdc_in"][k] / (1.0 - frac), abs=1e-3
+                -(1.0 - frac) * r["p_hvdc_in"][k], abs=1e-3
             )
 
     def test_hvdc_loss_nonneg(self):

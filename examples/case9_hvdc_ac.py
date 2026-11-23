@@ -2,21 +2,17 @@
 """
 AC-OPF with HVDC transmission links on case9_dcline (single step).
 
-Demonstrates the HVDC MVP (Milestone 7) in the full AC formulation:
-  - HVDC links imported from a MATPOWER ``dcline`` table via
-    ``hvdc_from_dcline`` (the realistic entry point)
-  - Signed nodal injections ``p_hvdc_in`` (from-bus) / ``p_hvdc_out``
-    (to-bus), Convention B (positive = injection into the grid)
-  - Direction-specific proportional loss selected from the ``p_in`` box
+The three active links allow forward transfers as follows:
+  link 0:  bus 30 -> bus  4, 1–10 MW sent, 1% proportional loss
+  link 1:  bus  7 -> bus  9, 2–10 MW sent, lossless
+  link 2:  bus  5 -> bus  9, 0–10 MW sent, 5% proportional loss
 
-case9_dcline has three in-service DC links:
-  link 0:  bus 30 -> bus  4, box [1, 10] MW, 1% loss
-  link 1:  bus  7 -> bus  9, box [2, 10] MW, lossless
-  link 2:  bus  5 -> bus  9, box [0, 10] MW, 5% loss
+``hvdc_from_dcline`` converts these limits to from-bus injection bounds.
+The printed values are signed injections into the buses, in MW. Sending
+10 MW on the 5 -> 9 link gives -10 MW at bus 5 and +9.5 MW at bus 9.
 
-Note: a UserWarning is emitted at import time because link 0 carries a
-nonzero MATPOWER ``loss0`` (fixed converter loss), which the MVP drops.
-Full fixed-loss modelling is deferred to Milestone 15.
+The import warns about omitted converter terms, including the fixed loss
+on 30 -> 4 and reactive/voltage settings. The model uses unity power factor.
 
 Usage:
     uv run examples/case9_hvdc_ac.py
@@ -36,7 +32,7 @@ def main():
     ppc = case9_dcline()
 
     print("Importing HVDC links from the dcline table...")
-    print("(UserWarning expected: link 0 has a nonzero loss0, dropped by the MVP)")
+    print("Positive injection supplies a bus; negative injection draws from it.")
     print()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -57,14 +53,14 @@ def main():
     print()
 
     print(
-        f"{'Link':>4}  {'from->to':>10}  {'p_in (MW)':>10}  "
-        f"{'p_out (MW)':>11}  {'loss (MW)':>10}  {'loss %':>7}"
+        f"{'Link':>4}  {'from->to':>10}  {'From inj. (MW)':>15}  "
+        f"{'To inj. (MW)':>13}  {'loss (MW)':>10}  {'loss %':>7}"
     )
-    print("-" * 62)
+    print("-" * 69)
     for k, link in enumerate(links):
         print(
             f"{k:>4}  {f'{link.from_bus}->{link.to_bus}':>10}  "
-            f"{r['p_hvdc_in'][k]:>10.4f}  {r['p_hvdc_out'][k]:>11.4f}  "
+            f"{r['p_hvdc_in'][k]:>15.4f}  {r['p_hvdc_out'][k]:>13.4f}  "
             f"{r['hvdc_loss'][k]:>10.4f}  {link.loss_percent:>7.2f}"
         )
     print()
@@ -89,7 +85,7 @@ def main():
             expected_out = -r["p_hvdc_in"][k]
         residual = abs(r["p_hvdc_out"][k] - expected_out)
         print(
-            f"  link {k}: p_out={r['p_hvdc_out'][k]:.4f}  "
+            f"  link {k}: to-bus injection={r['p_hvdc_out'][k]:.4f} MW  "
             f"expected={expected_out:.4f}  residual={residual:.2e}"
         )
         assert residual <= 1e-6, (

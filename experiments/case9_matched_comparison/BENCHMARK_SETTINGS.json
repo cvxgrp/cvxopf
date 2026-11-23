@@ -1,0 +1,29 @@
+{
+  "cvxopf": {
+    "tol": 1e-7,
+    "constr_viol_tol": 1e-8,
+    "acceptable_iter": 0,
+    "max_iter": 3000,
+    "mu_strategy": "adaptive",
+    "bound_relax_factor": 0.0,
+    "hessian_approximation": "exact",
+    "derivative_test": "none",
+    "least_square_init_duals": "no",
+    "print_level": 5,
+    "sb": "yes"
+  },
+  "pypower": {
+    "feastol": 1e-8,
+    "gradtol": 1e-6,
+    "comptol": 1e-6,
+    "costtol": 1e-6,
+    "max_it": 150,
+    "max_red": 20,
+    "step_control": false,
+    "cost_mult": 1e-4,
+    "verbose": 2
+  },
+  "wall_seconds_per_worker": 300,
+  "poll_seconds": 0.25,
+  "material_cost_threshold": 1.0
+}

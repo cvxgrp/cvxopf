@@ -57,9 +57,9 @@ class HVDCLink:
     Attributes
     ----------
     from_bus : int
-        Sending-terminal bus ID (external MATPOWER numbering).
+        From-terminal bus ID (external MATPOWER numbering).
     to_bus : int
-        Receiving-terminal bus ID (external MATPOWER numbering).
+        To-terminal bus ID (external MATPOWER numbering).
     p_min_mw : float
         Lower bound on the from-bus injection p_in (MW). Must be <= p_max_mw.
         A degenerate box (p_min_mw == p_max_mw) pins p_in via coincident
@@ -462,17 +462,46 @@ def hvdc_cost_expr(links: list, p_in: cp.Variable) -> cp.Expression:
 _FBUS = 0
 _TBUS = 1
 _STATUS = 2
-_PF = 3  # sending-terminal scheduled setpoint (MW) — carried for reference only
 _PMIN = 9
 _PMAX = 10
-_LOSS0 = 15  # fixed converter loss (MW) — not modelled in MVP
+_REACTIVE_COLUMNS = [5, 6, 11, 12, 13, 14]  # QF, QT and both terminal Q boxes
+_VOLTAGE_COLUMNS = slice(7, 9)  # VF, VT
+_LOSS0 = 15  # fixed converter loss (MW) — not modeled
 _LOSS1 = 16  # proportional loss fraction (per-unit)
+
+
+def _dcline_magnitude_cost(
+    row: np.ndarray, row_idx: int, p_min: float, p_max: float,
+) -> tuple[float, float, float]:
+    """Convert a signed PF polynomial to the native magnitude cost."""
+    label = f"dclinecost row {row_idx}"
+    if row[0] != 2:
+        raise ValueError(f"{label}: MODEL={row[0]:g} is unsupported; expected MODEL=2")
+    n = row[3]
+    if n not in (1, 2, 3) or len(row) < 4 + n:
+        raise ValueError(f"{label}: invalid NCOST={n:g}; expected 1 to 3 polynomial coefficients")
+    coeffs = [float(c) for c in row[4:4 + int(n)][::-1]]
+    if not np.all(np.isfinite(coeffs)):
+        raise ValueError(f"{label}: polynomial coefficients must be finite")
+    c0, c1, c2 = coeffs + [0.0] * (3 - len(coeffs))
+
+    # Here p_min and p_max are the external limits. Reverse imports are
+    # lossless, so PF = PT there and the native magnitude is -PF. A
+    # zero-pinned row uses the forward cost convention, retaining the
+    # polynomial for a later native time-series override.
+    if p_min < 0.0 and p_max <= 0.0:
+        c1 = -c1
+    elif p_min < 0.0 and c1 != 0.0:
+        raise ValueError(f"{label}: signed linear cost cannot be imported for two-way flow")
+    if c1 < 0.0 or c2 < 0.0:
+        raise ValueError(f"{label}: signed PF cost needs a negative native magnitude coefficient")
+    return c0, c1, c2
 
 
 def hvdc_from_dcline(
     dcline_table: np.ndarray,
     dclinecost: np.ndarray | None = None,
-) -> list:
+) -> list[HVDCLink]:
     """
     Build a list of HVDCLink objects from a MATPOWER dcline table.
 
@@ -480,39 +509,54 @@ def hvdc_from_dcline(
       fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT
       loss0 loss1
 
-    Inactive rows (status == 0) are skipped.
-    Reactive (Qf, Qt, QminF, QmaxF, QminT, QmaxT) and voltage (Vf, Vt)
-    columns are dropped — MVP is unity power factor, no HVDC voltage control.
+    Positive external PF is MW drawn from the from bus. Native p_in is
+    the signed injection into that bus, so p_in = -PF. PYPOWER applies
+    nonnegative bounds to PF and negative bounds to PT at the to bus.
+    For forward-only rows, the native box is [-PMAX, -PMIN]; for lossless
+    rows PT = PF, so the same mapping applies in reverse and both ways.
+    Reverse and two-way rows with nonzero losses are rejected because
+    the external signed loss law does not match the native passive model.
+    PF and PT entries are reference values, not a prescribed OPF dispatch.
 
-    loss0 (fixed converter loss) is dropped; a UserWarning is emitted if any
-    active row has loss0 != 0. Full fixed-loss modelling is Milestone 15.
+    The native import uses proportional loss and unity power factor. Sending
+    10 MW forward with LOSS1=0.05 gives (p_in, p_out)=(-10, 9.5) MW.
+    Fixed loss (LOSS0), reactive power and converter voltage control are
+    not modeled. A UserWarning identifies affected active rows and omissions.
 
-    [Pmin, Pmax] map directly to p_min_mw/p_max_mw (the canonical box bounds).
-    Pf is dropped (non-binding reference only in the MVP optimizer context).
-
-    dclinecost rows are model-2 polynomial, highest-power-first (same layout
-    as gencost). HVDCLink.cost_coeffs is lowest-first (c0, c1, c2) — this
-    function reverses the order. The reversal is n-dependent:
-      n=2 (linear):    [..., c1, c0]  -> (c0, c1, 0.0)
-      n=3 (quadratic): [..., c2, c1, c0] -> (c0, c1, c2)
-    n > 3 raises ValueError (higher-order terms unsupported).
+    Optional active dclinecost rows must have MODEL=2 (constant, linear or
+    quadratic in signed PF, highest-power-first). A row is rejected if its
+    cost cannot be represented by the native nonnegative linear/quadratic
+    coefficients on |p_in|. A zero-pinned row uses the forward cost
+    convention and retains its coefficients. Time-series overrides use
+    the imported native magnitude cost, not a new signed PF tariff.
+    Use original, not manually sign-flipped, tables.
 
     Parameters
     ----------
-    dcline_table : np.ndarray, shape (ndc, 17)
-    dclinecost : np.ndarray or None, shape (ndc, >=7) model-2 rows
+    dcline_table : np.ndarray, shape (ndc, at least 17)
+    dclinecost : np.ndarray or None, one row per original dcline row
 
     Returns
     -------
     list[HVDCLink]
-        One entry per active (status != 0) dcline row.
+        One entry per active (status > 0) dcline row, in input order.
     """
-    links = []
-    loss0_nonzero = False
+    if dcline_table.ndim != 2 or dcline_table.shape[1] <= _LOSS1:
+        raise ValueError("dcline must be a two-dimensional table with at least 17 columns")
+    if dclinecost is not None and (
+        dclinecost.ndim != 2 or dclinecost.shape[0] != dcline_table.shape[0]
+        or dclinecost.shape[1] < 4
+    ):
+        raise ValueError("dclinecost requires one cost row per dcline row and at least 4 columns")
 
-    for row_idx in range(dcline_table.shape[0]):
-        row = dcline_table[row_idx]
-        if int(row[_STATUS]) == 0:
+    links = []
+    omissions = []
+
+    for row_idx, row in enumerate(dcline_table):
+        status = row[_STATUS]
+        if not np.isfinite(status):
+            raise ValueError(f"dcline row {row_idx}: status must be finite")
+        if status <= 0:
             continue
 
         fbus = int(row[_FBUS])
@@ -521,47 +565,47 @@ def hvdc_from_dcline(
         p_max = float(row[_PMAX])
         loss0 = float(row[_LOSS0])
         loss1 = float(row[_LOSS1])
+        label = f"dcline row {row_idx} ({fbus} -> {tbus})"
+        if not np.isfinite([p_min, p_max]).all() or p_min > p_max:
+            raise ValueError(f"{label}: require finite PMIN <= PMAX")
+        if not np.isfinite(loss0) or loss0 < 0.0 or not 0.0 <= loss1 < 1.0:
+            raise ValueError(f"{label}: require finite LOSS0 >= 0 and 0 <= LOSS1 < 1")
+        if p_min < 0.0 and (loss0 != 0.0 or loss1 != 0.0):
+            raise ValueError(
+                f"{label}: reverse or two-way flow with nonzero losses is not "
+                "equivalent to the native passive loss model"
+            )
 
-        if loss0 != 0.0:
-            loss0_nonzero = True
-
-        # dclinecost: model-2 polynomial, highest-power-first
-        # Layout: [model, startup, shutdown, n, c_{n-1}, ..., c_1, c_0]
-        # HVDCLink.cost_coeffs is (c0, c1, c2), lowest-first.
         cost = (0.0, 0.0, 0.0)
         if dclinecost is not None:
-            crow = dclinecost[row_idx]
-            n = int(crow[3])
-            if n > 3:
-                raise ValueError(
-                    f"dclinecost row {row_idx}: polynomial degree {n} > 3 "
-                    f"(higher-order terms unsupported)"
-                )
-            # coefficients start at index 4, stored highest-power-first
-            coeffs_hi_first = [float(crow[4 + j]) for j in range(n)]
-            # reverse to lowest-first; pad to length 3
-            coeffs_lo_first = list(reversed(coeffs_hi_first))
-            while len(coeffs_lo_first) < 3:
-                coeffs_lo_first.append(0.0)
-            cost = tuple(coeffs_lo_first[:3])
+            cost = _dcline_magnitude_cost(dclinecost[row_idx], row_idx, p_min, p_max)
 
+        features = []
+        if loss0 != 0.0:
+            features.append(f"fixed converter loss (LOSS0={loss0:g} MW)")
+        if np.any(row[_REACTIVE_COLUMNS] != 0.0):
+            features.append("reactive power (terminal Q setpoints or limits)")
+        if np.any(row[_VOLTAGE_COLUMNS] != 0.0):
+            features.append("converter voltage setpoints (VF/VT)")
+        if features:
+            omissions.append(f"{label}: {', '.join(features)}")
+
+        # Nonnegative limits apply at PF. Negative limits apply at PT,
+        # and those imports are admitted only when PT = PF.
         links.append(
             HVDCLink(
                 from_bus=fbus,
                 to_bus=tbus,
-                p_min_mw=p_min,
-                p_max_mw=p_max,
+                p_min_mw=-p_max,
+                p_max_mw=-p_min,
                 loss_percent=loss1 * 100.0,
                 cost_coeffs=cost,
             )
         )
 
-    if loss0_nonzero:
+    if omissions:
         warnings.warn(
-            "hvdc_from_dcline: one or more active dcline rows have loss0 != 0. "
-            "Fixed converter loss (LOSS0) is not modelled in the MVP; the imported "
-            "model will not match Pypower exactly. Full fixed-loss modelling is "
-            "deferred to Milestone 15.",
+            "hvdc_from_dcline omitted unsupported converter terms: " + "; ".join(omissions),
             UserWarning,
             stacklevel=2,
         )

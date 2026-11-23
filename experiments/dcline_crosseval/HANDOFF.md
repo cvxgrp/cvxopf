@@ -1,5 +1,9 @@
 # Handoff: Milestone 7 (HVDC) + case9_dcline cross-eval investigation
 
+> Historical record. The HVDC feasibility and cost-gap conclusions below
+> are superseded by the [dcline repair plan](../../plans/dcline-import-and-case9-comparison.md).
+> Do not use them as evidence of a solver advantage.
+
 ## A. Milestone 7 HVDC status (committed, branch `dcline`)
 
 Done and committed:
