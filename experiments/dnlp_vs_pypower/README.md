@@ -6,7 +6,8 @@
 > with PYPOWER's limits. Neither the reported cost gaps nor the routing-versus-loss
 > explanation establishes a solver advantage. The no-HVDC controls are not
 > affected by these defects. See the
-> [repair plan](../../plans/dcline-import-and-case9-comparison.md).
+> [corrected four-case benchmark results](../case9_matched_comparison/REPORT.md)
+> and the [repair plan](../../plans/dcline-import-and-case9-comparison.md).
 
 This folder contains a written report (`REPORT.tex`, LaTeX source) and a demo
 (`demo.py`) retained as historical evidence. The demo now stops before solving

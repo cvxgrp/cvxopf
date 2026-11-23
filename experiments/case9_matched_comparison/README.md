@@ -2,7 +2,8 @@
 
 Use this harness to check that CVXOPF and PYPOWER represent the same four
 Case9-derived AC problems before comparing optimization results. See the
-[protocol](PROTOCOL.md) for the model choices and limitations.
+[protocol](PROTOCOL.md) for the model choices and limitations and the
+[benchmark report](REPORT.md) for the four-case results.
 
 From the repository root, supply a Python interpreter with `PYPOWER==5.1.19`,
 `numpy==2.2.6` and `scipy==1.18.0`. PYPOWER runs in that separate environment;
