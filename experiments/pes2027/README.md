@@ -33,19 +33,17 @@ or rewrite historical evidence. Their regression tests remain under `tests/`.
 
 ## Reproduction levels
 
-| Task | Required material | Optimization |
-| --- | --- | --- |
-| Inspect methods and compact evidence | Repository, appendix and linked protocols | None |
-| Regenerate inputs | Repository and pinned owner-provided Tracy CSV | None |
-| Reconstruct paper metrics and figures | Retained joint, transfer and rollout archives, input identities and preparation references | None |
-| Repeat numerical comparisons | Complete inputs/reference fixtures, compatible solver environment, clean reviewed source and newly approved resource/launch records | New solves |
+The methods, protocols and compact evidence are in Git. The Tracy CSV and raw
+runs are not. Ask the author for the package that matches what you want to do:
 
-Raw runs and the Tracy source CSV are Git-ignored. A fresh clone contains the
-code, protocols, Stage A review tables and selected certificate evidence, but
-does not contain every dependency needed to regenerate the paper figures.
-Obtain the retained archive package from the author before attempting that
-workflow. The following instructions describe reproduction; they do not
-authorize a new numerical run or reuse of an earlier execution authorization.
+| Goal | Package to request | Instructions |
+| --- | --- | --- |
+| Run one published 24-hour case | `pes2027-tracy-input.zip` (Tracy CSV only) | [Install and check the data, then solve one case](TRACY_DATA_README.md) |
+| Rerun the full study: 24 joint solutions, 18 fixed-power transfers and 24 energy-signpost rollouts | `pes2027-reproduction-inputs.zip` (CSV and nine prerequisite records; no joint solutions) | [Start from a fresh clone and use your own joint solutions](REPRODUCTION_INPUTS.md) |
+| Reconstruct the published figures and metrics without solving | Retained-evidence archive, `pes2027-case118-tracy.zip` | [Verify the archive and rebuild the figures](handoff/README.md#verify-then-reconstruct-without-solving) |
+
+For a new numerical run, review the resource limits and authorize that run;
+the original execution authorization does not carry over.
 
 ## Environment and inputs
 
