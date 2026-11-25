@@ -4,7 +4,11 @@ import cvxpy as cp
 import numpy as np
 import pandas as pd
 import pytest
+from cvxpy.reductions.solvers.nlp_solvers.nlp_solver import Oracles
+from cvxpy.reductions.solvers.nlp_solving_chain import _build_nlp_chain
+from scipy import sparse
 
+from cvxopf._cvxpy_dispatch import sparse_dispatch_policy
 from cvxopf.ac_problem import _make_branch_terminal_flow
 from cvxopf.generator import DispatchableGenerator
 from cvxopf.network import make_branch_admittance, reindex_case_to_consecutive
@@ -47,22 +51,214 @@ def _independent_terminal_power(build, case):
     admittance = make_branch_admittance(reindexed)
     voltage = build.variables["v"].value.flatten()
     angle = build.variables["theta"].value.flatten()
+    from_power, to_power = _complex_terminal_power(admittance, voltage, angle)
+    scale = build.data["baseMVA"]
+    return scale * from_power, scale * to_power
+
+
+def _complex_terminal_power(admittance, voltage, angle):
     complex_voltage = voltage * np.exp(1j * angle)
     from_voltage = complex_voltage[admittance.from_bus]
     to_voltage = complex_voltage[admittance.to_bus]
+    coefficients = (admittance.yff, admittance.yft, admittance.ytt, admittance.ytf)
+    yff, yft, ytt, ytf = (
+        coefficients if voltage.ndim == 1 else tuple(a[:, None] for a in coefficients)
+    )
     from_current = (
-        admittance.yff * from_voltage
-        + admittance.yft * to_voltage
+        yff * from_voltage
+        + yft * to_voltage
     )
     to_current = (
-        admittance.ytf * from_voltage
-        + admittance.ytt * to_voltage
+        ytf * from_voltage
+        + ytt * to_voltage
     )
-    scale = build.data["baseMVA"]
-    return (
-        scale * from_voltage * np.conj(from_current),
-        scale * to_voltage * np.conj(to_current),
-    )
+    return from_voltage * np.conj(from_current), to_voltage * np.conj(to_current)
+
+
+def _branch_batch_case():
+    case = case9()
+    branch = case["branch"]
+    branch[1, 8:10] = (1.07, 11.0)  # tap and phase shift on a charged line
+    branch[2, 10] = 0  # interior offline row with an otherwise positive rating
+    branch[3, 5] = 0  # online but unrated
+    parallel = branch[1].copy()
+    parallel[:2] = parallel[:2][::-1]
+    parallel[8:10] = (0.95, -7.0)
+    case["branch"] = np.vstack((branch, parallel))
+    return case
+
+
+def _terminal_state(nb, steps):
+    bus = np.arange(nb)[:, None]
+    step = np.arange(steps)
+    return 0.97 + 0.006 * bus + 0.01 * step, 0.01 * bus - 0.004 * bus * step
+
+
+def _terminal_channels(f, t):
+    return f.real, f.imag, t.real, t.imag
+
+
+class TestACBranchBatching:
+
+    @pytest.mark.parametrize("assembly,steps", [
+        ("single", 1), ("stepwise", 2), ("vectorized", 1), ("vectorized", 2),
+    ])
+    @pytest.mark.parametrize("sparse_pq", [True, False])
+    @pytest.mark.parametrize("vectorize_pq", [True, False])
+    def test_public_definitions_and_reporting_at_assigned_states(
+        self, assembly, steps, sparse_pq, vectorize_pq,
+    ):
+        case = _branch_batch_case()
+        options = OPFOptions(sparse_pq=sparse_pq, vectorize_pq=vectorize_pq)
+        if assembly == "single":
+            build = build_opf(case, options=options)
+        else:
+            df_p, df_q = _flat_case9_load(steps)
+            build = build_opf_multistep(
+                case, df_p, df_q, T=steps, options=options, temporal_assembly=assembly,
+            )
+        internal, _ = reindex_case_to_consecutive(case)
+        admittance = make_branch_admittance(internal)
+        np.testing.assert_array_equal(
+            build.data["constrained_branch_indices"],
+            np.flatnonzero(admittance.status & (admittance.rate_a_mva > 0)),
+        )
+        voltage, angle = _terminal_state(build.data["nb"], steps)
+        from_power, to_power = _complex_terminal_power(admittance, voltage, angle)
+
+        for name, state in (("v", voltage), ("theta", angle)):
+            variables = build.variables[name]
+            if assembly == "stepwise":
+                for hour, var in enumerate(variables):
+                    var.value = state[:, hour:hour + 1]
+            else:
+                variables.value = state
+
+        for name, power in zip(
+            ("branch_p_from_pu", "branch_q_from_pu", "branch_p_to_pu", "branch_q_to_pu"),
+            _terminal_channels(from_power, to_power), strict=True,
+        ):
+            expressions = build.expressions[name]
+            if assembly == "stepwise":
+                pairs = zip(expressions, power.T, strict=True)
+            else:
+                pairs = [(expressions, power if assembly == "vectorized" else power[:, 0])]
+            for variable, expected in pairs:
+                (definition,) = (
+                    c for c in build.prob.constraints if c.args[0] is variable
+                )
+                np.testing.assert_allclose(definition.args[1].value, expected, atol=1e-12, rtol=1e-12)
+                np.testing.assert_array_equal(definition.args[1].value[~admittance.status], 0.0)
+                variable.value = expected + 0.125
+                np.testing.assert_allclose(definition.expr.value, 0.125, atol=1e-12, rtol=0)
+                variable.value = expected
+
+        results = extract_results(build)
+        for name, expected in zip(
+            ("branch_p_from", "branch_q_from", "branch_p_to", "branch_q_to",
+             "branch_s_from", "branch_s_to"),
+            (*_terminal_channels(from_power, to_power), np.abs(from_power), np.abs(to_power)),
+            strict=True,
+        ):
+            output = expected[:, 0] if assembly == "single" else expected.T
+            np.testing.assert_allclose(results[name], case["baseMVA"] * output, atol=1e-9, rtol=1e-12)
+
+    def test_thermal_slack_uses_the_original_row_mask_and_both_lifted_ends(self):
+        build = build_opf(_branch_batch_case())
+        from_p = build.expressions["branch_p_from_pu"]
+        to_p = build.expressions["branch_p_to_pu"]
+        from_q = build.expressions["branch_q_from_pu"]
+        to_q = build.expressions["branch_q_to_pu"]
+        rates = build.data["branch_rate_a_mva"] / build.data["baseMVA"]
+        from_factor = np.where(np.arange(len(rates)) % 2 == 0, 0.5, 1.5)
+        to_factor = 2.0 - from_factor
+        from_p.value, to_p.value = rates * from_factor, rates * to_factor
+        from_q.value = to_q.value = np.zeros_like(rates)
+        lift_ids = {expr.id for expr in (from_p, from_q, to_p, to_q)}
+        modeled_slack = [
+            -c.expr.value for c in build.prob.constraints
+            if isinstance(c, cp.constraints.Inequality) and any(v.id in lift_ids for v in c.variables())
+        ]
+        active_rated = build.data["branch_status"] & (rates > 0)
+        expected = 1.0 - np.column_stack((from_factor, to_factor))[active_rated]**2
+        np.testing.assert_allclose(modeled_slack, expected.ravel(), atol=1e-12, rtol=0)
+
+    @pytest.mark.parametrize("horizon", [None, 2])
+    @pytest.mark.parametrize("has_active", [False, True])
+    def test_zero_or_one_active_row(self, horizon, has_active):
+        case = _branch_batch_case()
+        case["branch"][:, 10] = 0
+        if has_active:
+            case["branch"][1, 10] = 1
+        internal, _ = reindex_case_to_consecutive(case)
+        admittance = make_branch_admittance(internal)
+        voltage, angle = _terminal_state(len(case["bus"]), horizon or 1)
+        v, theta = cp.Variable(voltage.shape), cp.Variable(angle.shape)
+        _, definitions = _make_branch_terminal_flow(theta, v, admittance, suffix="", horizon_steps=horizon)
+        if has_active:
+            v.value, theta.value = voltage, angle
+        expected = _terminal_channels(*_complex_terminal_power(admittance, voltage, angle))
+        for constraint, channel in zip(definitions, expected, strict=True):
+            direct = constraint.args[1]
+            if not has_active:
+                assert direct.is_constant()
+            np.testing.assert_array_equal(direct.value[~admittance.status], 0.0)
+            np.testing.assert_allclose(direct.value, channel[:, 0] if horizon is None else channel,
+                                       atol=1e-12, rtol=1e-12)
+
+    @pytest.mark.parametrize("horizon", [None, 2])
+    def test_compiled_derivatives_against_complex_reference(self, horizon):
+        internal, _ = reindex_case_to_consecutive(_branch_batch_case())
+        admittance = make_branch_admittance(internal)
+        voltage, angle = _terminal_state(len(internal["bus"]), horizon or 1)
+        v, theta = cp.Variable(voltage.shape), cp.Variable(angle.shape)
+        v.value, theta.value = voltage, angle
+
+        with sparse_dispatch_policy(False):
+            flow, definitions = _make_branch_terminal_flow(
+                theta, v, admittance, suffix="", horizon_steps=horizon,
+            )
+            lifts = (flow.p_from, flow.q_from, flow.p_to, flow.q_to)
+            for i, lift in enumerate(lifts):
+                lift.value = np.full(lift.shape, 0.1 * (i + 1))
+            problem = cp.Problem(cp.Minimize(0), definitions)
+            chain, _ = _build_nlp_chain(problem, cp.IPOPT, {})
+            data, inverse = chain.apply(problem)
+            oracle = Oracles(data["problem"], verbose=False)
+
+        x0 = data["x0"]
+        n, m = x0.size, len(data["cl"])
+
+        def value(x, var):
+            start = inverse[-1].var_offsets[var.id]
+            return x[start:start + var.size].reshape(var.shape, order="F")
+
+        def residual(x):
+            expected = _terminal_channels(*_complex_terminal_power(
+                admittance, value(x, v), value(x, theta),
+            ))
+            return np.concatenate([
+                (value(x, lift) - (channel[:, 0] if horizon is None else channel)).ravel(order="F")
+                for lift, channel in zip(lifts, expected, strict=True)
+            ])
+
+        rng = np.random.default_rng(113)
+        direction, probe = rng.normal(size=(2, n))
+        dual = rng.normal(size=m)
+        oracle.objective(x0)
+        np.testing.assert_allclose(oracle.constraints(x0), residual(x0), atol=1e-12, rtol=1e-12)
+        jac = sparse.coo_matrix((oracle.jacobian(x0), oracle.jacobianstructure()), shape=(m, n))
+        eps = 1e-6
+        expected_jac_action = (residual(x0 + eps * direction) - residual(x0 - eps * direction)) / (2 * eps)
+        np.testing.assert_allclose(jac @ direction, expected_jac_action, atol=1e-7, rtol=1e-8)
+
+        lower = sparse.coo_matrix((oracle.hessian(x0, dual, 0.0), oracle.hessianstructure()), shape=(n, n))
+        hess = lower + lower.T - sparse.diags(lower.diagonal())
+        eps = 1e-4
+        plus, minus = eps * (direction + probe), eps * (direction - probe)
+        mixed = (residual(x0 + plus) + residual(x0 - plus)
+                 - residual(x0 + minus) - residual(x0 - minus)) / (4 * eps**2)
+        np.testing.assert_allclose(probe @ (hess @ direction), dual @ mixed, atol=1e-5, rtol=1e-7)
 
 
 class TestACBranchBuildContract:
