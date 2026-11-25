@@ -7,6 +7,9 @@ only: baseline `812aa7d62` versus batched `6ab39dac7`. No changes to thermal
 limits, nodal balances, numerical preparation, or physical inputs between
 the two arms of a case.
 
+See the [completed benchmark report](REPORT.md) for setup, derivative evaluation,
+solve timing, memory, and physical audit results.
+
 ## Cases
 
 | Case | Horizon | Source hours |
