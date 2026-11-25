@@ -120,9 +120,18 @@ and revision. Attempts, logs, sampled RSS, publication receipts, and outcomes
 live under this experiment's ignored `results/` directory. A requested stop
 leaves the interrupted unit pending at the same start. Loss of required
 resource monitoring stops the run for review, not as an observed RSS breach.
-Wall timeouts and RSS exits are terminal censored attempts with distinct
-reasons. An exit must be observed before the wall deadline to count as on
-time. An authorized same-settings resume reuses completed records and
+When a sample goes missing as a worker exits, the supervisor checks for exit
+for up to 250 ms without extending the whole-worker deadline. The result
+still needs exit code zero, a prior valid RSS sample, and intact publication
+receipts. If the worker is still live, the supervisor closes its watchdog
+pipe and attempts bounded cleanup. If signaling the group fails, it signals
+the owned child directly. The receipt records cleanup errors separately from
+the stop reason; the supervisor stops launching work if it cannot confirm
+that the child exited. Wall timeouts and RSS exits remain censored, even if
+cleanup fails. Once the exclusive lock is clear, resume skips those censored
+units and retries work stopped only for lost monitoring. An exit must be
+observed before the wall deadline to count as on time. An authorized
+same-settings resume reuses completed records and
 does not repeat terminal attempts, including numerical rejection. Before
 launch, use non-solving workers to rehearse stop/resume, publication recovery,
 and resuming after an RSS exit without retrying that work unit.
@@ -178,11 +187,33 @@ write to the run. They read hash-checked worker audit receipts, not fresh
 independent audits. Peak RSS is sampled, not a continuous high-water mark;
 thermal telemetry is not collected by this runner.
 
+For an approved supervisor-only repair of a stopped run, bind a new sibling
+directory; do not resume with the old digest or rewrite its attempt records:
+
+```sh
+continued="${study}_continuation_001"
+bench bind "$continued" --continue-from "$study" --predecessor-sha256 ORIGINAL_BINDING_SHA256
+bench status "$continued"
+# After separate approval of the new digest:
+bench start "$continued" --authorize-execution CONTINUATION_BINDING_SHA256
+```
+
+The continuation uses the same inputs, model revisions, starts, environment,
+settings and limits. It reads completed work from the predecessor and starts
+at the first pending unit; attempt numbering and effort carry across both
+directories. A predecessor archive without supervision remains uncounted.
+Use the normal stop and resume commands on the continuation thereafter.
+
 For the non-solving rehearsals, run:
 
 ```sh
 uv run --no-sync --extra dev python -m pytest -q experiments/ac_spatial_vectorization
 ```
+
+Run the two opt-in `real_host_rss` rehearsals with
+`CVXOPF_TEST_HOST_PROCESS=1` and the same host process permissions used for
+the benchmark. They use disposable fake children, including injected missing
+RSS and group-signal denial. No OPF solve runs in either rehearsal.
 
 Review the build-only profiles before deciding whether to batch thermal
 limits. Nothing in this protocol authorizes numerical execution.

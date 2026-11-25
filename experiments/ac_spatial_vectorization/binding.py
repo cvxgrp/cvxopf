@@ -1,6 +1,7 @@
 """Solver-free admission for the fixed fixture population and source pair."""
 
 import ctypes
+import fcntl
 import importlib
 import importlib.metadata
 import io
@@ -13,12 +14,19 @@ import sys
 import tarfile
 
 from .preflight import CASE500, CASE500_SHA256, benchmark_inputs, e3
-from .run import ROOT, THREADS, atomic_immutable_json, read, sha256_path, utc
+from .run import (
+    ROOT, THREADS, atomic_immutable_json, predecessor_evidence, predecessor_root,
+    predecessor_status, read, sha256_path, utc,
+)
 
 
 REVISIONS = dict(baseline="812aa7d62de6ea9d9e936be90ce8aac853658c3a",
                  batched="6ab39dac7e55d4e3991557ed6c5e8f7bce1264c5")
 PACKAGES = ("cvxpy", "cyipopt", "sparsediffpy", "numpy", "pandas", "scipy")
+SUPERVISOR_REPAIR_FILES = {
+    "experiments/ac_spatial_vectorization/binding.py",
+    "experiments/ac_spatial_vectorization/run.py",
+}
 
 
 def git(*args):
@@ -193,4 +201,33 @@ def bind(root, settings_path, case500_path=None):
         revisions=REVISIONS, source_hashes=snapshots, harness=harness_sources(),
         environment=environment(), settings=settings, fixtures=fixtures, fixture_order=order, work=work_matrix(order),
     ))
+    return sha256_path(root / "binding.json")
+
+
+def bind_continuation(root, old, expected):
+    """Bind a supervisor-only change, retaining the original study and receipts."""
+    if predecessor_root(root, old.name) != old:
+        raise ValueError("The predecessor and continuation must be siblings")
+    with (old / "supervisor.lock").open("rb") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        evidence = predecessor_evidence(old)
+        if evidence["binding.json"] != expected:
+            raise ValueError("Predecessor binding SHA-256 differs from the requested digest")
+        prior = read(old / "binding.json")
+        if "predecessor" in prior or read(old / "outcome.json")["outcome"] == "complete":
+            raise ValueError("A stopped original run is required for this supervisor repair")
+        current = harness_sources()
+        changed = {name for name in current.keys() | prior["harness"].keys()
+                   if current.get(name) != prior["harness"].get(name)}
+        if not changed <= SUPERVISOR_REPAIR_FILES:
+            raise ValueError(f"Continuation changes scientific execution code: {sorted(changed)}")
+        binding = dict(prior, created_utc=utc(), harness=current,
+                       harness_commit=git("rev-parse", "HEAD").decode().strip(),
+                       predecessor=dict(directory=old.name, evidence=evidence))
+        predecessor_status(root, binding)
+        verify_context(old, binding)
+        root.mkdir(exist_ok=False)
+        shutil.copyfile(old / "case500.m", root / "case500.m")
+        shutil.copytree(old / "sources", root / "sources", ignore=shutil.ignore_patterns("__pycache__"))
+        atomic_immutable_json(root / "binding.json", binding)
     return sha256_path(root / "binding.json")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import fcntl
 import gzip
@@ -18,7 +19,7 @@ import tempfile
 import time
 from uuid import uuid4
 
-from experiments.case118_annual_hierarchy.run_s4 import _child_rss_mib, _terminate
+from experiments.case118_annual_hierarchy.run_s4 import _child_rss_mib
 from experiments.case118_annual_hierarchy.streaming_schema import (
     atomic_gzip_json, atomic_immutable_json, atomic_json, sha256_path,
 )
@@ -31,8 +32,11 @@ PACKAGE = "experiments.ac_spatial_vectorization"
 THREADS = dict.fromkeys(
     ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"), "1",
 )
-TERMINAL = {"accepted", "measured", "native_rejection", "audit_rejection", "wall_limit", "rss_limit"}
-WORKER_REPORTS = TERMINAL - {"wall_limit", "rss_limit"}
+RESOURCE_LIMITS = {"wall_limit", "rss_limit"}
+WORKER_REPORTS = {"accepted", "measured", "native_rejection", "audit_rejection"}
+TERMINAL = WORKER_REPORTS | RESOURCE_LIMITS
+RSS_EXIT_GRACE_SECONDS = .25
+CLEANUP_WAIT_SECONDS = 2.
 
 
 def utc():
@@ -118,6 +122,35 @@ def read_rss(pid):
     return float(sample.stdout) / 1024. if sample.returncode == 0 and sample.stdout.strip() else None
 
 
+def stop_owned_child(process, record):
+    """Called after closing the watchdog pipe. Bound both signaling and reaping."""
+    errors = []
+    returncode = None
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        returncode = process.poll()
+        if returncode is not None:
+            break
+        try:
+            os.killpg(process.pid, sig)
+        except OSError as exc:
+            errors.append(f"group {sig.name}: {type(exc).__name__}: {exc}")
+            try:
+                process.send_signal(sig)
+            except OSError as exc:
+                errors.append(f"child {sig.name}: {type(exc).__name__}: {exc}")
+        try:
+            returncode = process.wait(timeout=CLEANUP_WAIT_SECONDS)
+        except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+            errors.append(f"wait after {sig.name}: {type(exc).__name__}: {exc}")
+        else:
+            break
+    if returncode is None:
+        returncode = process.poll()
+    record.update(returncode=returncode, child_reaped=returncode is not None)
+    if errors:
+        record["cleanup_errors"] = errors
+
+
 def supervise(command, directory, root, limits, env, lock_fd, *, rss_reader=read_rss):
     """Run one child. As in E3, log to disk and reap before publishing supervision."""
     began = time.monotonic()
@@ -150,18 +183,30 @@ def supervise(command, directory, root, limits, env, lock_fd, *, rss_reader=read
                         if process.poll() is not None:
                             continue  # classify the finished child before honoring the stop
                         raise KeyboardInterrupt
+                    error = None
                     try:
                         rss = rss_reader(process.pid)
                     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-                        record["monitoring_error"] = str(exc)
+                        error = f"{type(exc).__name__}: {exc}"
                         rss = None
+                    if rss is None or not math.isfinite(rss) or rss <= 0:
+                        remaining = deadline - time.monotonic()
+                        gap = dict(utc=utc(), error=error or "No positive finite RSS sample")
+                        record["monitoring_gap"] = gap
+                        if remaining > 0 and process.poll() is None:
+                            try:
+                                process.wait(timeout=min(RSS_EXIT_GRACE_SECONDS, remaining))
+                            except subprocess.TimeoutExpired:
+                                pass
+                        exited = process.poll() is not None
+                        gap["observed_exit"] = exited
+                        if time.monotonic() >= deadline:
+                            record["disposition"] = "wall_limit"
+                        else:
+                            record["disposition"] = "exited" if exited else "monitoring_failure"
+                        break
                     if time.monotonic() >= deadline:
                         record["disposition"] = "wall_limit"
-                        break
-                    if rss is None or not math.isfinite(rss) or rss <= 0:
-                        if process.poll() is not None:
-                            continue
-                        record["disposition"] = "monitoring_failure"
                         break
                     print(json.dumps(dict(utc=utc(), elapsed=time.monotonic()-began, rss_mib=rss)),
                           file=stream, flush=True)
@@ -179,10 +224,11 @@ def supervise(command, directory, root, limits, env, lock_fd, *, rss_reader=read
         os.close(read_fd)
         os.close(write_fd)
         if process is not None:
-            if process.poll() is None:
-                _terminate(process)
-            record["returncode"] = process.wait()
+            stop_owned_child(process, record)
         record.update(ended_utc=utc(), worker_seconds=time.monotonic() - began)
+        if record.get("child_reaped") is False:
+            record.update(worker_seconds=max(record["worker_seconds"], limits["wall_seconds"]),
+                          unknown_effort=True, accounting="at_least_attempt_ceiling_not_measured")
         atomic_immutable_json(directory / "supervision.json", record)
     return record
 
@@ -201,12 +247,51 @@ def reserve(root, ordinal, request):
     return directory
 
 
-def status(root):
+def predecessor_evidence(root):
+    """Freeze the stopped run, not caches or model copies used only by its worker."""
+    paths = [root / name for name in ("binding.json", "outcome.json")]
+    paths.extend(p for directory in directories(root) for p in directory.iterdir() if p.is_file())
+    return {str(p.relative_to(root)): sha256_path(p) for p in paths}
+
+
+def predecessor_root(root, name):
+    old = root.parent / name
+    if (Path(name).name != name or not name.startswith("benchmark_") or
+            old.resolve() != old or old == root):
+        raise ValueError("Continuation requires a distinct, direct benchmark sibling")
+    return old
+
+
+def predecessor_status(root, binding):
+    reference = binding.get("predecessor")
+    if reference is None:
+        return [], {}
+    name = reference["directory"]
+    old = predecessor_root(root, name)
+    if predecessor_evidence(old) != reference["evidence"]:
+        raise ValueError("Predecessor evidence changed")
+    old_binding = read(old / "binding.json")
+    if "predecessor" in old_binding:
+        raise ValueError("This continuation must reference an original benchmark")
+    earlier = status(old)
+    attempts = []
+    for attempt in earlier["attempts"]:
+        entry = dict(attempt, inherited=True, path=f"../{name}/{attempt['path']}")
+        if entry["disposition"] == "pending":
+            entry.update(disposition="interrupted_supervisor", unknown_effort=True,
+                         worker_seconds=binding["settings"]["limits"]["wall_seconds"],
+                         accounting="charged_attempt_ceiling_not_measured")
+        attempts.append(entry)
+    return attempts, {a["id"]: a for a in attempts if a["disposition"] in TERMINAL}
+
+
+def status(root, *, inherited=None):
     """Project immutable receipts; progress.json is only a convenience copy."""
     binding = read(root / "binding.json")
     binding_sha = sha256_path(root / "binding.json")
     work = {u["id"]: u for u in binding["work"]}
-    attempts, terminal = [], {}
+    previous, previous_terminal = predecessor_status(root, binding) if inherited is None else inherited
+    attempts, terminal = list(previous), dict(previous_terminal)
     for directory in directories(root):
         request_path = directory / "request.json"
         if not request_path.exists():
@@ -222,7 +307,11 @@ def status(root):
         if supervision.exists():
             sup = read(supervision)
             attempt.update(sup)
-            if sup["disposition"] == "exited":
+            if sup.get("child_reaped") is False:
+                attempt["cleanup_failed"] = True
+                if sup["disposition"] not in RESOURCE_LIMITS:
+                    attempt.update(disposition="cleanup_failure", supervisor_disposition=sup["disposition"])
+            elif sup["disposition"] == "exited":
                 if sup["returncode"] == 0 and sup["samples"] > 0 and (directory / "completion.json").exists():
                     result = check_publication(directory, unit["phase"])
                     attempt.update(disposition=result["outcome"], metrics=result["metrics"])
@@ -269,7 +358,8 @@ def reconcile(root, limits):
 
 def execute(root, expected, *, resume, command_for, validate, rss_reader=read_rss, after=None):
     """Run/reconcile under a single supervisor lock; command injection is test-only."""
-    with (root / "supervisor.lock").open("a") as lock:
+    with ExitStack() as locks:
+        lock = locks.enter_context((root / "supervisor.lock").open("a"))
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         prior_stops = stop_requests(root) if resume else []
         binding = read(root / "binding.json")
@@ -277,7 +367,12 @@ def execute(root, expected, *, resume, command_for, validate, rss_reader=read_rs
             raise ValueError("Execution authorization does not match binding SHA-256")
         if directories(root) and not resume:
             raise ValueError("Use explicit resume for a started run")
+        if reference := binding.get("predecessor"):
+            old = predecessor_root(root, reference["directory"])
+            old_lock = locks.enter_context((old / "supervisor.lock").open("rb"))
+            fcntl.flock(old_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         validate(binding)
+        inherited = predecessor_status(root, binding)
         limits = binding["settings"]["limits"]
         if resume:
             reconcile(root, limits)
@@ -289,7 +384,7 @@ def execute(root, expected, *, resume, command_for, validate, rss_reader=read_rs
         diagnostic = {}
         try:
             while True:
-                progress = status(root)
+                progress = status(root, inherited=inherited)
                 atomic_json(root / "progress.json", progress)
                 if not progress["pending"] or stop_requests(root):
                     outcome = "complete" if not progress["pending"] else "operator_stop"
@@ -309,11 +404,15 @@ def execute(root, expected, *, resume, command_for, validate, rss_reader=read_rs
                 sup = supervise(command, directory, root, limits, env, lock.fileno(), rss_reader=rss_reader)
                 if after is not None:
                     after(directory)
-                progress = status(root)
+                progress = status(root, inherited=inherited)
                 atomic_json(root / "progress.json", progress)
+                if sup.get("child_reaped") is False:
+                    outcome = "cleanup_failure"
+                    diagnostic = dict(attempt=directory.name, supervisor_disposition=sup["disposition"],
+                                      cleanup_errors=sup.get("cleanup_errors", []))
+                    break
                 if unit["id"] not in progress["terminal"]:
-                    outcome = ("operator_stop" if sup["disposition"] == "operator_stop"
-                               else progress["attempts"][-1]["disposition"])
+                    outcome = progress["attempts"][-1]["disposition"]
                     break
         except KeyboardInterrupt:
             outcome = "operator_stop"
@@ -340,16 +439,23 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--case500", type=Path)
+    parser.add_argument("--continue-from", type=Path)
+    parser.add_argument("--predecessor-sha256")
     parser.add_argument("--authorize-execution", metavar="BINDING_SHA256")
     args = parser.parse_args()
     root = args.output.resolve()
     if root.parent != RESULTS.resolve() or not root.name.startswith("benchmark_"):
         parser.error("use a benchmark_* directory under this experiment's results/")
     if args.action == "bind":
-        from .binding import bind
-        if args.settings is None:
-            parser.error("bind requires --settings")
-        print(bind(root, args.settings, args.case500))
+        from .binding import bind, bind_continuation
+        if args.continue_from is not None:
+            if args.predecessor_sha256 is None or args.settings is not None or args.case500 is not None:
+                parser.error("continuation bind requires --predecessor-sha256 and inherits settings and inputs")
+            print(bind_continuation(root, args.continue_from.resolve(), args.predecessor_sha256))
+        else:
+            if args.settings is None or args.predecessor_sha256 is not None:
+                parser.error("fresh bind requires --settings without continuation options")
+            print(bind(root, args.settings, args.case500))
     elif args.action == "stop":
         if not (root / "binding.json").exists():
             parser.error("unknown run")
