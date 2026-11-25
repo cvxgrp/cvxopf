@@ -1,7 +1,8 @@
 # Large-case AC spatial vectorization
 
-**Status:** draft for review. This plan does not authorize implementation,
-benchmark execution, or OPF solves.
+**Status:** first slice implemented and reviewed (`6ab39dac7`). The PR includes
+build-only profiling and matched AC solves. Cases, settings, and limits for
+new benchmark runs still need approval before launch.
 
 ## Starting evidence
 
@@ -29,7 +30,7 @@ tested spatial batching of **Ybus P/Q equations**, alongside time
 vectorization. It did not batch physical branch terminals. Its results do not
 predict the benefit of this change.
 
-## What the current builder does
+## What the baseline builder did
 
 Source inspection at `841d764e2` on `vectorize`. The semantic groups below are
 leads from the 243-bus report, not a verified mapping of all eight warning
@@ -150,16 +151,30 @@ Retain failures or memory-limit outcomes and report matched-result and timing
 evidence separately. Compare counts by role; object counts can shrink while
 scalar constraints are unchanged, and canonical ordering can differ.
 
-Fewer expression nodes or faster compilation does not establish shorter
-IPOPT iterations, higher acceptance, or identical local solutions. A later
-solve study, if requested, needs its own approved case/limit selection and
-matched starts, original-unit feasibility checks and cost comparisons. No
-solve study or default change is part of this draft.
+## Matched AC solves
 
-## Decisions before implementation
+Run baseline and candidate through `build.solve()` to see whether the setup
+gains carry through to an accepted AC solution. Use an agreed small control
+and larger fixture, with single-step and bounded multistep cases as the
+common resource limits allow. Use the same case data, starting physical values,
+effective solver and preparation settings, threads, and resource limits in
+both arms. Compare the original builder with the PR candidate; if another
+slice is added, use the preceding checkpoint to isolate its effect.
+
+Measure end-to-end wall time from public model construction through result
+extraction, and report native IPOPT time and iterations separately. Recompute
+the objective and check feasibility in physical units using criteria agreed
+before running. Report all outcomes, including timeouts, failures, and
+solutions that fail the audit. Report speedup ratios only for pairs where
+both arms pass. If accepted local solutions differ materially in cost or
+dispatch, report that difference rather than treating them as interchangeable.
+
+## Decisions before benchmarking
 
 - Can we recover the original smoke artifact and use its case locally? If
   not, choose the replacement and agree what compact evidence may be retained.
-- Approve the terminal-definition-only first slice and the bounded no-solve
-  comparison. Review those results before expanding into terminal limits or
-  sparse network maps.
+- Agree on the solve fixtures and horizons, starting states, solver settings,
+  time and memory limits, and acceptance criteria before launch.
+- Review the build-only measurements before expanding into thermal limits or
+  nodal balances. Propose sparse network maps separately if the memory
+  measurements justify it.
