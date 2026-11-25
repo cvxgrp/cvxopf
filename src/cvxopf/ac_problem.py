@@ -102,28 +102,32 @@ class _BranchTerminalFlow:
 def _terminal_power_expression(
     theta,
     v,
-    i: int,
-    j: int,
-    yii: complex,
-    yij: complex,
+    i: np.ndarray,
+    j: np.ndarray,
+    yii: np.ndarray,
+    yij: np.ndarray,
     *,
     vectorized: bool = False,
 ) -> tuple[cp.Expression, cp.Expression]:
-    """Construct one oriented branch-terminal complex-power expression."""
+    """Batch one terminal orientation over the active branch rows."""
     ti, tj = (theta[i, :], theta[j, :]) if vectorized else (theta[i, 0], theta[j, 0])
     vi, vj = (v[i, :], v[j, :]) if vectorized else (v[i, 0], v[j, 0])
-    cosine = cp.nlp.cos(ti - tj)
-    sine = cp.nlp.sin(ti - tj)
-    self_p = float(yii.real) * cp.square(vi)
-    self_q = -float(yii.imag) * cp.square(vi)
+    if vectorized:
+        yii, yij = yii[:, None], yij[:, None]
+    angle_difference = ti - tj
+    cosine = cp.nlp.cos(angle_difference)
+    sine = cp.nlp.sin(angle_difference)
+    vi_squared = cp.square(vi)
     cross_scale = cp.multiply(vi, vj)
     cross_p = cp.multiply(cross_scale, (
-        float(yij.real) * cosine + float(yij.imag) * sine
+        cp.multiply(yij.real, cosine) + cp.multiply(yij.imag, sine)
     ))
     cross_q = cp.multiply(cross_scale, (
-        float(yij.real) * sine - float(yij.imag) * cosine
+        cp.multiply(yij.real, sine) - cp.multiply(yij.imag, cosine)
     ))
-    return self_p + cross_p, self_q + cross_q
+    p = cp.multiply(yii.real, vi_squared) + cross_p
+    q = cp.multiply(-yii.imag, vi_squared) + cross_q
+    return p, q
 
 
 def _make_branch_terminal_flow(
@@ -140,42 +144,33 @@ def _make_branch_terminal_flow(
         empty = cp.Constant(np.empty(0))
         return _BranchTerminalFlow(empty, empty, empty, empty), []
 
-    p_from_direct = []
-    q_from_direct = []
-    p_to_direct = []
-    q_to_direct = []
-    for e in range(nl):
-        if not admittance.status[e]:
-            zero = cp.Constant(0.0 if horizon_steps is None else np.zeros(horizon_steps))
-            p_from_direct.append(zero)
-            q_from_direct.append(zero)
-            p_to_direct.append(zero)
-            q_to_direct.append(zero)
-            continue
-
-        f = int(admittance.from_bus[e])
-        t = int(admittance.to_bus[e])
+    shape = (nl,) if horizon_steps is None else (nl, horizon_steps)
+    active = np.flatnonzero(admittance.status)
+    if not active.size:
+        zero = cp.Constant(np.zeros(shape))
+        direct = _BranchTerminalFlow(zero, zero, zero, zero)
+    else:
+        f, t = admittance.from_bus[active], admittance.to_bus[active]
         pf, qf = _terminal_power_expression(
-            theta, v, f, t, admittance.yff[e], admittance.yft[e],
+            theta, v, f, t, admittance.yff[active], admittance.yft[active],
             vectorized=horizon_steps is not None,
         )
         pt, qt = _terminal_power_expression(
-            theta, v, t, f, admittance.ytt[e], admittance.ytf[e],
+            theta, v, t, f, admittance.ytt[active], admittance.ytf[active],
             vectorized=horizon_steps is not None,
         )
-        p_from_direct.append(pf)
-        q_from_direct.append(qf)
-        p_to_direct.append(pt)
-        q_to_direct.append(qt)
+        if active.size != nl:
+            # Route offline rows to one constant zero row, without reading their voltages.
+            order = np.full(nl, active.size)
+            order[active] = np.arange(active.size)
 
-    stack = cp.hstack if horizon_steps is None else cp.vstack
-    shape = (nl,) if horizon_steps is None else (nl, horizon_steps)
-    direct = _BranchTerminalFlow(
-        stack(p_from_direct),
-        stack(q_from_direct),
-        stack(p_to_direct),
-        stack(q_to_direct),
-    )
+            def expand(expression: cp.Expression) -> cp.Expression:
+                if horizon_steps is None:
+                    return cp.hstack([expression, 0.0])[order]
+                return cp.vstack([expression, np.zeros((1, horizon_steps))])[order, :]
+
+            pf, qf, pt, qt = (expand(item) for item in (pf, qf, pt, qt))
+        direct = _BranchTerminalFlow(pf, qf, pt, qt)
     lifted = _BranchTerminalFlow(
         cp.Variable(shape, name=f"branch_p_from_pu{suffix}"),
         cp.Variable(shape, name=f"branch_q_from_pu{suffix}"),
