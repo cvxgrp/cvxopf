@@ -171,10 +171,11 @@ dispatch, report that difference rather than treating them as interchangeable.
 
 ## Decisions before benchmarking
 
-- Can we recover the original smoke artifact and use its case locally? If
-  not, choose the replacement and agree what compact evidence may be retained.
-- Agree on the solve fixtures and horizons, starting states, solver settings,
-  time and memory limits, and acceptance criteria before launch.
+- Use the six published 24-hour PES2027 Case118/Tracy joint AC cases. Replace
+  the unidentified smoke case with the published PGLib 500-bus GOC snapshot
+  at one step, as a new benchmark. See the [case list and preflight](../experiments/ac_spatial_vectorization/README.md).
+- Agree on starting states, solver settings, time and memory limits, and
+  acceptance criteria before launch.
 - Review the build-only measurements before expanding into thermal limits or
   nodal balances. Propose sparse network maps separately if the memory
   measurements justify it.
