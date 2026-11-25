@@ -38,3 +38,16 @@ def test_rejects_missing_or_changed_case500_before_resolving_tracy(tmp_path):
     source.write_text("function mpc = pglib_opf_case500_goc\n")
     with pytest.raises(ValueError, match="PGLib case SHA-256 mismatch"):
         next(check.preflight(source))
+
+
+def test_workers_only_load_the_assigned_fixture(monkeypatch, tmp_path):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Loaded an unrelated benchmark fixture")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(check, "tracy_inputs", unexpected)
+        scoped.setattr(check, "load_case500", lambda path: {"source": path})
+        assert check.fixture_inputs("pglib-500-goc", tmp_path)[2]["case"] == {"source": tmp_path}
+    monkeypatch.setattr(check, "load_case500", unexpected)
+    monkeypatch.setattr(check, "tracy_inputs", lambda names: iter(names))
+    assert check.fixture_inputs("deficit-depletion", tmp_path) == "deficit-depletion"

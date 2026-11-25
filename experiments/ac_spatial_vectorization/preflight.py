@@ -76,18 +76,33 @@ def load_case500(path: Path) -> dict:
     return case
 
 
-def benchmark_inputs(case500_path: Path):
-    """Yield the fixture ID, selection metadata, and exact public build inputs."""
-    case500 = load_case500(case500_path)
+def tracy_inputs(fixtures=None):
     selection = json.loads(SELECTION.read_text())
     ids = selection["storage_device_ids"]
     cases = select_pes_arms(selection)
     prepared = e3_prepared.verified_inputs()
-    for name, arm in cases.items():
+    for name in cases if fixtures is None else fixtures:
+        arm = cases[name]
         model = e3_plus if name == "forced-shedding" else e3_prepared
         kwargs = model.kwargs_for_arm(prepared, arm, ids, role="primary", assembly="component_first")
         yield name, {"start": arm["start"], "stop": arm["stop"], "T": 24}, kwargs
-    yield "pglib-500-goc", {"T": 1}, {"case": case500, "formulation": "ac"}
+
+
+def snapshot_inputs(case500_path):
+    return "pglib-500-goc", {"T": 1}, {"case": load_case500(case500_path), "formulation": "ac"}
+
+
+def benchmark_inputs(case500_path: Path):
+    """Yield all seven cases for solver-free binding and input checks."""
+    snapshot = snapshot_inputs(case500_path)
+    yield from tracy_inputs()
+    yield snapshot
+
+
+def fixture_inputs(name, case500_path):
+    if name == "pglib-500-goc":
+        return snapshot_inputs(case500_path)
+    return next(tracy_inputs((name,)))
 
 
 def preflight(case500_path: Path):

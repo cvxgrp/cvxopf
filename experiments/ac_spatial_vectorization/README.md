@@ -92,7 +92,8 @@ measure compilation or solve time.
    iterations from the native log and record peak RSS separately. If a native
    statistic is unavailable (for example, after interruption), leave it
    missing. Any timer around the CVXPY adapter is a separate diagnostic: it
-   can include derivative setup and is not an IPOPT time.
+   can include derivative setup and is not an IPOPT time. Retain the native
+   options as applied by the adapter, separate from the explicit input options.
 
 ### Accepting and comparing solutions
 
@@ -107,25 +108,81 @@ Agree on numerical tolerances before launch.
 
 Report objective and dispatch deltas and the worst physical residuals. Show
 timings for failed and censored attempts separately; compute speedup ratios
-only for pairs with two accepted solutions. A single solve pair describes
+only for pairs with two accepted solutions and matching verified physical
+starts and native options. A single solve pair describes
 those runs, not the variance of solve time; consider repeats if the result is
 close or erratic.
 
 ### Stops and resume
 
-Build the numerical runner separately. Reuse the serial supervision and
-durable publication/reconciliation patterns from the matched numerical
-preparation runner, without carrying over its scientific settings. Use one
-stable work ID per case, phase, repeat and revision; retain attempts, logs,
-measured effort and terminal dispositions in this experiment's ignored
-`results/` directory. A requested stop leaves the interrupted unit pending
-at the same start. Loss of required resource monitoring stops the run for
-review and is recorded as a monitoring failure, not an observed RSS breach.
+The serial runner retains a separate work ID for each case, phase, repeat,
+and revision. Attempts, logs, sampled RSS, publication receipts, and outcomes
+live under this experiment's ignored `results/` directory. A requested stop
+leaves the interrupted unit pending at the same start. Loss of required
+resource monitoring stops the run for review, not as an observed RSS breach.
 Wall timeouts and RSS exits are terminal censored attempts with distinct
-reasons. An authorized same-settings resume reuses completed records and
+reasons. An exit must be observed before the wall deadline to count as on
+time. An authorized same-settings resume reuses completed records and
 does not repeat terminal attempts, including numerical rejection. Before
 launch, use non-solving workers to rehearse stop/resume, publication recovery,
 and resuming after an RSS exit without retrying that work unit.
+
+## Commands
+
+From the repository root, with the input checks above complete:
+
+```sh
+bench() { uv run --no-sync --extra dev python -m experiments.ac_spatial_vectorization.run "$@"; }
+study=experiments/ac_spatial_vectorization/results/benchmark_001
+bench bind "$study" --settings /path/to/approved-settings.json
+bench status "$study"
+```
+
+`bind` builds cold graphs to check the named starts, but does not compile or
+solve. It prints the binding SHA-256 and saves the original case tables,
+settings, and two Git source snapshots in the new run directory. Pass
+`--case500 PATH` to use a different copy of the same pinned bytes. The
+[example settings](settings.example.json) are proposals, not approval. The
+snapshot tolerances are in MW/MVAr/MVA (`power`), per unit (`voltage`), degrees
+(`angle`), and objective units (`cost_abs` plus `cost_rel` times the magnitude
+of the recomputed cost). The Tracy audits keep their existing tolerances.
+
+After separate execution approval for the printed SHA-256:
+
+```sh
+bench start "$study" --authorize-execution APPROVED_BINDING_SHA256
+# From another terminal when needed:
+bench status "$study"
+bench stop "$study"
+# After the old supervisor and its child have exited, when resume is approved:
+bench resume "$study" --authorize-execution APPROVED_BINDING_SHA256
+bench report "$study"
+```
+
+Start and resume verify the bound execution dependencies. Execution helpers
+are checked again before each launch, while report code is separate and can
+change without invalidating the binding. The worker checks its AC assembly
+source, the loaded IPOPT library, and only its assigned fixture. A completed
+solve retains both the actual handoff and a verification of that start in
+physical coordinates, including fixed-coordinate and cost-scaling maps.
+A fresh process is used for every arm. Resume acknowledges only stop requests
+already present when it starts. A stop does not discard an in-budget worker
+that has already exited, and a source check that refuses launch does not
+reserve or charge worker time. Resume honors completed work even if the
+progress file was not updated. A worker-only
+archive without final supervision is retained but not counted as complete;
+if the supervisor lost the end of an attempt, its effort is reported as a
+ceiling charge, not a measured duration. Changes to settings or relevant
+source require a new binding. Status and report do not compile, solve, or
+write to the run. They read hash-checked worker audit receipts, not fresh
+independent audits. Peak RSS is sampled, not a continuous high-water mark;
+thermal telemetry is not collected by this runner.
+
+For the non-solving rehearsals, run:
+
+```sh
+uv run --no-sync --extra dev python -m pytest -q experiments/ac_spatial_vectorization
+```
 
 Review the build-only profiles before deciding whether to batch thermal
 limits. Nothing in this protocol authorizes numerical execution.

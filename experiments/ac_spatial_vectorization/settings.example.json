@@ -1,0 +1,11 @@
+{
+  "limits": {"poll_seconds": 1.0, "rss_mib": 16384.0, "wall_seconds": 3600.0},
+  "ipopt": {"max_iter": 3000, "mu_strategy": "adaptive", "tol": 1e-7},
+  "snapshot_tolerances": {
+    "angle": 1e-6,
+    "cost_abs": 1e-4,
+    "cost_rel": 1e-8,
+    "power": 1e-4,
+    "voltage": 1e-6
+  }
+}
